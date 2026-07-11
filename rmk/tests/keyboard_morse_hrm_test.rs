@@ -10,1770 +10,2168 @@
 /// Hand config: [Left, Left, Right, Right, Right]
 pub mod common;
 
-use embassy_time::Duration;
-use rmk::config::{BehaviorConfig, CombosConfig, Hand, MorsesConfig, PositionalConfig};
-use rmk::keyboard::Keyboard;
-use rmk::keyboard::combo::{Combo, ComboConfig};
-use rmk::types::action::{Action, KeyAction};
-use rmk::types::keycode::{HidKeyCode, KeyCode};
-use rmk::types::modifier::ModifierCombination;
+use rmk::sim::{KeymapOverride, SimKeyboard, SimKeyboardSetup, SimMorseSetup};
+
+use rmk::config::Hand;
 use rmk::{a, k, mo};
 use rmk_types::morse::{MorseMode, MorseProfile};
 
-use crate::common::morse::create_morse_keyboard;
-use crate::common::{KC_LGUI, KC_LSHIFT, wrap_keymap};
+use crate::common::morse::{MORSE_2_KEY_COMBOS, MORSE_3_KEY_COMBOS, MORSE_KEYMAP, TEST_MORSE_PATTERNS};
+use crate::common::{KC_LGUI, KC_LSHIFT, TEST_KEYMAP};
 
-fn create_hrm_keyboard() -> Keyboard<'static> {
-    let hand = [[Hand::Left, Hand::Left, Hand::Right, Hand::Right, Hand::Right]];
-    create_morse_keyboard(
-        BehaviorConfig {
-            // All unknown hand, not home row
-            morse: MorsesConfig {
-                enable_flow_tap: true,
-                prior_idle_time: Duration::from_millis(120),
-                default_profile: MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(250), Some(250)),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        hand,
-    )
-}
-
-fn create_hrm_keyboard_with_combo() -> Keyboard<'static> {
-    let combo_key = KeyAction::TapHold(
-        Action::Key(KeyCode::Hid(HidKeyCode::B)),
-        Action::Modifier(ModifierCombination::LSHIFT),
-        Default::default(),
+const HRM_PROFILE: MorseProfile =
+    MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(250u16), Some(250u16));
+const HRM_NORMAL_PROFILE: MorseProfile =
+    MorseProfile::new(Some(true), Some(MorseMode::Normal), Some(250u16), Some(250u16));
+const HRM_SETUP: SimKeyboardSetup<1, 5> = SimKeyboardSetup::new()
+    .hands([[Hand::Left, Hand::Left, Hand::Right, Hand::Right, Hand::Right]])
+    .morse(
+        SimMorseSetup::new()
+            .patterns(&TEST_MORSE_PATTERNS)
+            .profile(HRM_PROFILE)
+            .flow_tap(true)
+            .prior_idle_ms(120),
     );
-    let combo_key_2 = KeyAction::TapHold(
-        Action::Key(KeyCode::Hid(HidKeyCode::C)),
-        Action::Modifier(ModifierCombination::LGUI),
-        Default::default(),
+const HRM_NORMAL_SETUP: SimKeyboardSetup<1, 5> = SimKeyboardSetup::new()
+    .hands([[Hand::Left, Hand::Left, Hand::Right, Hand::Right, Hand::Right]])
+    .morse(
+        SimMorseSetup::new()
+            .patterns(&TEST_MORSE_PATTERNS)
+            .profile(HRM_NORMAL_PROFILE),
     );
-    let combo_key_3 = KeyAction::TapHold(
-        Action::Key(KeyCode::Hid(HidKeyCode::D)),
-        Action::LayerOn(1),
-        Default::default(),
-    );
-
-    let hand = [[Hand::Left, Hand::Left, Hand::Right, Hand::Right, Hand::Right]];
-
-    create_morse_keyboard(
-        BehaviorConfig {
-            //hrm = MorseMode::PermissiveHold, true
-            morse: MorsesConfig {
-                enable_flow_tap: true,
-                prior_idle_time: Duration::from_millis(120),
-                default_profile: MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(250), Some(250)),
-                ..Default::default()
-            },
-            combo: CombosConfig {
-                combos: [
-                    Some(Combo::new(ComboConfig::new([combo_key, combo_key_2], k!(X), None))),
-                    Some(Combo::new(ComboConfig::new([k!(A), combo_key], k!(Y), None))),
-                    Some(Combo::new(ComboConfig::new(
-                        [combo_key, combo_key_2, combo_key_3],
-                        k!(Z),
-                        None,
-                    ))),
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                ],
-                timeout: Duration::from_millis(50),
-                prior_idle_time: None,
-            },
-            ..BehaviorConfig::default()
-        },
-        hand,
-    )
-}
-
-fn create_release_remap_keyboard(morse_mode: MorseMode) -> Keyboard<'static> {
-    let keymap = [[[mo!(1), a!(No), k!(A)]], [[a!(Transparent), k!(B), a!(Transparent)]]];
-
-    let behavior_config = BehaviorConfig {
-        morse: MorsesConfig {
-            enable_flow_tap: false,
-            default_profile: MorseProfile::new(Some(false), Some(morse_mode), Some(250u16), Some(250u16)),
-            ..Default::default()
-        },
-        ..BehaviorConfig::default()
-    };
-
-    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
-    let per_key_config: &'static PositionalConfig<1, 3> = Box::leak(Box::new(PositionalConfig::default()));
-    Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
-}
+const RELEASE_REMAP_KEY_OVERRIDES: [KeymapOverride; 6] = [
+    KeymapOverride::new(0, 0, 0, mo!(1)),
+    KeymapOverride::new(0, 0, 1, a!(No)),
+    KeymapOverride::new(0, 0, 2, k!(A)),
+    KeymapOverride::new(1, 0, 0, a!(Transparent)),
+    KeymapOverride::new(1, 0, 1, k!(B)),
+    KeymapOverride::new(1, 0, 2, a!(Transparent)),
+];
+const RELEASE_REMAP_SETUP: SimKeyboardSetup<5, 14> = SimKeyboardSetup::new().keys(&RELEASE_REMAP_KEY_OVERRIDES);
+const RELEASE_REMAP_NORMAL_PROFILE: MorseProfile =
+    MorseProfile::new(Some(false), Some(MorseMode::Normal), Some(250u16), Some(250u16));
+const RELEASE_REMAP_PERMISSIVE_HOLD_PROFILE: MorseProfile =
+    MorseProfile::new(Some(false), Some(MorseMode::PermissiveHold), Some(250u16), Some(250u16));
+const RELEASE_REMAP_HOLD_ON_OTHER_PROFILE: MorseProfile = MorseProfile::new(
+    Some(false),
+    Some(MorseMode::HoldOnOtherPress),
+    Some(250u16),
+    Some(250u16),
+);
+const RELEASE_REMAP_NORMAL_SETUP: SimKeyboardSetup<5, 14> =
+    RELEASE_REMAP_SETUP.morse_profile(RELEASE_REMAP_NORMAL_PROFILE);
+const RELEASE_REMAP_PERMISSIVE_HOLD_SETUP: SimKeyboardSetup<5, 14> =
+    RELEASE_REMAP_SETUP.morse_profile(RELEASE_REMAP_PERMISSIVE_HOLD_PROFILE);
+const RELEASE_REMAP_HOLD_ON_OTHER_SETUP: SimKeyboardSetup<5, 14> =
+    RELEASE_REMAP_SETUP.morse_profile(RELEASE_REMAP_HOLD_ON_OTHER_PROFILE);
 
 #[test]
 fn test_tap() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150],  // Press mt!(B, LShift)
-            // Release before hold timeout
-            [0, 1, false, 100], // Release B
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
-            [0, [0, 0, 0, 0, 0, 0]], // Release B
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(100)
+            .release(0, 1) // Release B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release B
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_hold() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150],  // Press mt!(B, LShift)
-            [0, 1, false, 300], // Release B after hold timeout
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
-            [0, [0, 0, 0, 0, 0, 0]], // All released
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(300)
+            .release(0, 1) // Release B after hold timeout
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Hold LShift
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_1() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 0, true, 10], // Press A -> unilateral tap
-            [0, 0, false, 10], // Release A
-            [0, 1, false, 10], // Release mt!(B, LShift)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Unilateral tap
-            [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(10)
+            .press(0, 0) // Press A -> unilateral tap
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Unilateral tap
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_1_1() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 3, true, 10], // Press lt!(1, D) -> Flow tap won't be triggered because the previous morse key is not resolved yet.
-            [0, 3, false, 10], // Release lt!(1, D) -> Permissive hold triggered
-            [0, 1, false, 10], // Release mt!(B, LShift)
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Permissive hold
-            [KC_LSHIFT, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Release D
-            [0, [0, 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D) -> Flow tap won't be triggered because the previous morse key is not resolved yet.
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D) -> Permissive hold triggered
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Permissive hold
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release D
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_2() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 0, true, 10], // Press A -> Unilateral tap
-            [0, 1, false, 10], // Release mt!(B, LShift)
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
-            [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]], // Press A
-            [0, [0, kc_to_u8!(A), 0, 0, 0, 0]], // Release B
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(10)
+            .press(0, 0) // Press A -> Unilateral tap
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(A), 0, 0, 0, 0])) // Release B
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_2_1() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 3, true, 10], // Press lt!(1, D)
-            [0, 1, false, 10], // Release mt!(B, LShift)
-            [0, 3, false, 10], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
-            [0, [0, 0, 0, 0, 0, 0]], // Release B
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
-            [0, [0, 0, 0, 0, 0, 0]], // Release D
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release D
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_2_2() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 2, true, 150], // Press mt!(C, LGui)
-            [0, 3, true, 10], // Press lt!(1, D)
-            [0, 2, false, 10], // Release mt!(C, LGui)
-            [0, 3, false, 10], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Press C
-            [0, [0, 0, 0, 0, 0, 0]], // Release C
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
-            [0, [0, 0, 0, 0, 0, 0]], // Release D
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .release(0, 2) // Release mt!(C, LGui)
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // Press C
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release C
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release D
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_2_3() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 2, true, 150], // Press mt!(C, LGui)
-            [0, 3, true, 10], // Press lt!(1, D) -> Unilateral tap
-            [0, 3, false, 10], // Release lt!(1, D)
-            [0, 2, false, 10], // Release mt!(C, LGui)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Press C
-            [0, [kc_to_u8!(C), kc_to_u8!(D), 0, 0, 0, 0]], // Press D
-            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Release D
-            [0, [0, 0, 0, 0, 0, 0]], // Release C
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D) -> Unilateral tap
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(10)
+            .release(0, 2) // Release mt!(C, LGui)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // Press C
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), kc_to_u8!(D), 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // Release D
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release C
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_3() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
-            [0, 0, false, 10], // Release A
-            [0, 1, false, 10], // Release mt!(B, LShift)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0]], // Press B
-            [0, [0, kc_to_u8!(B), 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]], // Release B
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .press(0, 1) // Press mt!(B, LShift) -> Flow Tap
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(B), 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release B
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_4() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 1, true, 10], // Press mt!(B, LShift)
-            [0, 1, false, 10], // Release mt!(B, LShift)
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0]], // Press B
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release B
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release B
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_5() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 0, false, 10], // Release A
-            [0, 1, true, 10], // Press mt!(B, LShift)
-            [0, 1, false, 10], // Release mt!(B, LShift)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
-            [0, [0, 0, 0, 0, 0, 0]], // Release B
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(10)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release B
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_6() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 1, false, 10], // Release mt!(B, LShift)
-            [0, 0, true, 10], // Press A
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
-            [0, [0, 0, 0, 0, 0, 0]], // Release B
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_timeout_1() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 0, true, 10], // Press A
-            [0, 0, false, 260], // Release A -> Timeout
-            [0, 1, false, 10], // Release mt!(B, LShift)
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Timeout
-            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(260)
+            .release(0, 0) // Release A -> Timeout
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Timeout
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_timeout_1_1() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 2, true, 150], // Press mt!(C, LGui)
-            [0, 3, true, 10], // Press lt!(1, D)
-            [0, 3, false, 260], // Release lt!(1, D)
-            [0, 2, false, 10], // Release mt!(C, LGui)
-        ],
-        expected_reports: [
-            [KC_LGUI, [0, 0, 0, 0, 0, 0]], // Timeout
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(260)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(10)
+            .release(0, 2) // Release mt!(C, LGui)
+            .expect_keyboard_report(crate::common::report(KC_LGUI, [0, 0, 0, 0, 0, 0])) // Timeout
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_timeout_1_2() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 2, true, 150], // Press mt!(C, LGui)
-            [0, 3, true, 10], // Press lt!(1, D)
-            [0, 3, false, 10], // Release lt!(1, D) -> Unilateral tap
-            [0, 2, false, 260], // Release mt!(C, LGui)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Press C
-            [0, [kc_to_u8!(C), kc_to_u8!(D), 0, 0, 0, 0]], // Press D
-            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Release D
-            [0, [0, 0, 0, 0, 0, 0]], // Release C
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D) -> Unilateral tap
+            .delay(260)
+            .release(0, 2) // Release mt!(C, LGui)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // Press C
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), kc_to_u8!(D), 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // Release D
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release C
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_timeout_2() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 0, true, 10], // Press A
-            [0, 1, false, 260], // Release mt!(B, LShift)
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Timeout
-            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(260)
+            .release(0, 1) // Release mt!(B, LShift)
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Timeout
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_timeout_2_1() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 2, true, 150], // Press mt!(C, LGui)
-            [0, 3, true, 10], // Press lt!(1, D)
-            [0, 2, false, 260], // Release mt!(C, LGui)
-            [0, 3, false, 10], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [KC_LGUI, [0, 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(260)
+            .release(0, 2) // Release mt!(C, LGui)
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(KC_LGUI, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_timeout_3() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
-            [0, 0, false, 260], // Release A
-            [0, 1, false, 10], // Release mt!(B, LShift)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0]], // Press B
-            [0, [0, kc_to_u8!(B), 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]], // Release B
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .press(0, 1) // Press mt!(B, LShift) -> Flow Tap
+            .delay(260)
+            .release(0, 0) // Release A
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(B), 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release B
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_timeout_4() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
-            [0, 1, false, 260], // Release mt!(B, LShift)
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0]], // Press B
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release B
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .press(0, 1) // Press mt!(B, LShift) -> Flow Tap
+            .delay(260)
+            .release(0, 1) // Release mt!(B, LShift)
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release B
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_timeout_5() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 0, false, 10], // Release A
-            [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
-            [0, 1, false, 260], // Release mt!(B, LShift)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press mt!(B, LShift)
-            [0, [0, 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(10)
+            .press(0, 1) // Press mt!(B, LShift) -> Flow Tap
+            .delay(260)
+            .release(0, 1) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_timeout_6() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 1, false, 260], // Release mt!(B, LShift)
-            [0, 0, true, 10], // Press A
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Press mt!(B, LShift)
-            [0, [0, 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(260)
+            .release(0, 1) // Release mt!(B, LShift)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Press mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_timeout_7() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
-            [0, 0, false, 10], // Release A
-            [0, 1, false, 260], // Release mt!(B, LShift)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0]], // Press B
-            [0, [0, kc_to_u8!(B), 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .press(0, 1) // Press mt!(B, LShift) -> Flow Tap
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(260)
+            .release(0, 1) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(B), 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_timeout_8() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 0, true, 10], // Press A -> Unilateral tap
-            [0, 0, false, 10], // Release A
-            [0, 1, false, 260], // Release mt!(B, LShift)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Unilateral tap
-            [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(10)
+            .press(0, 0) // Press A -> Unilateral tap
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(260)
+            .release(0, 1) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Unilateral tap
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_timeout_8_1() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 2, true, 150], // Press mt!(C, LGui)
-            [0, 0, true, 10], // Press A
-            [0, 0, false, 10], // Release A
-            [0, 2, false, 260], // Release mt!(C, LGui)
-        ],
-        expected_reports: [
-            [KC_LGUI, [0, 0, 0, 0, 0, 0]],  // Permissive hold
-            [KC_LGUI, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [KC_LGUI, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]], // Release mt!(C, LGui)
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(260)
+            .release(0, 2) // Release mt!(C, LGui)
+            .expect_keyboard_report(crate::common::report(KC_LGUI, [0, 0, 0, 0, 0, 0])) // Permissive hold
+            .expect_keyboard_report(crate::common::report(KC_LGUI, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(KC_LGUI, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(C, LGui)
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_timeout_9() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 0, true, 260], // Press A
-            [0, 0, false, 10], // Release A
-            [0, 1, false, 10], // Release mt!(B, LShift)
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Timeout
-            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(260)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Timeout
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_timeout_10() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 0, true, 260], // Press A
-            [0, 1, false, 10], // Release mt!(B, LShift)
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Timeout
-            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release mt!(B, LShift)
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(260)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Timeout
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_1() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 3, true, 150], // Press lt!(1, D)
-            [0, 0, true, 10], // Press A
-            [0, 0, false, 10], // Release A
-            [0, 3, false, 10], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press Kp1
-            [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Press Kp1
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp1
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_2() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 3, true, 150], // Press lt!(1, D)
-            [0, 0, true, 10], // Press A
-            [0, 3, false, 10], // Release lt!(1, D)
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
-            [0, [kc_to_u8!(D), kc_to_u8!(A), 0, 0, 0, 0]], // Press A
-            [0, [0, kc_to_u8!(A), 0, 0, 0, 0]], // Release D
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), kc_to_u8!(A), 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(A), 0, 0, 0, 0])) // Release D
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_3() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 3, true, 10], // Press lt!(1, D) -> Flow Tap
-            [0, 0, false, 10], // Release A
-            [0, 3, false, 10], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0]], // Press D
-            [0, [0, kc_to_u8!(D), 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]], // Release D
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D) -> Flow Tap
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(D), 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release D
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_4() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 3, true, 10], // Press lt!(1, D) -> Flow Tap
-            [0, 3, false, 10], // Release lt!(1, D)
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0]], // Press D
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release D
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D) -> Flow Tap
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release D
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_5() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 0, false, 10], // Release A
-            [0, 3, true, 10], // Press lt!(1, D) -> Flow Tap
-            [0, 3, false, 10], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
-            [0, [0, 0, 0, 0, 0, 0]], // Release D
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D) -> Flow Tap
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release D
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_6() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 3, true, 150], // Press lt!(1, D)
-            [0, 3, false, 10], // Release lt!(1, D)
-            [0, 0, true, 10], // Press A
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
-            [0, [0, 0, 0, 0, 0, 0]], // Release D
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release D
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_timeout_1() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 3, true, 150], // Press lt!(1, D)
-            [0, 0, true, 10], // Press A
-            [0, 0, false, 260], // Release A -> timeout, trigger Kp1 on layer 1
-            [0, 3, false, 10], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press Kp1
-            [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(260)
+            .release(0, 0) // Release A -> timeout, trigger Kp1 on layer 1
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Press Kp1
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp1
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_timeout_2() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 3, true, 150], // Press lt!(1, D)
-            [0, 0, true, 10], // Press A
-            [0, 3, false, 260], // Release lt!(1, D) -> timeout, trigger Kp1 on layer 1
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press Kp1
-            [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(260)
+            .release(0, 3) // Release lt!(1, D) -> timeout, trigger Kp1 on layer 1
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Press Kp1
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp1
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_timeout_3() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 3, true, 10], // Press lt!(1, D) -> Flow Tap
-            [0, 0, false, 260], // Release A
-            [0, 3, false, 10], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0]], // Press D
-            [0, [0, kc_to_u8!(D), 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D) -> Flow Tap
+            .delay(260)
+            .release(0, 0) // Release A
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(D), 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_timeout_4() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 3, true, 10], // Press lt!(1, D) -> Flow Tap
-            [0, 3, false, 260], // Release lt!(1, D)
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0]], // Press D
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release D
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D) -> Flow Tap
+            .delay(260)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release D
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_timeout_5() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 0, false, 10], // Release A
-            [0, 3, true, 10], // Press lt!(1, D) -> Flow tap
-            [0, 3, false, 260], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
-            [0, [0, 0, 0, 0, 0, 0]], // Release D
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D) -> Flow tap
+            .delay(260)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release D
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_timeout_5_1() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 0, false, 200], // Release A -> Longer than `prior-idle-time`
-            [0, 3, true, 10], // Press lt!(1, D)
-            [0, 3, false, 260], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(200)
+            .release(0, 0) // Release A -> Longer than `prior-idle-time`
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(260)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_timeout_6() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 3, true, 150], // Press lt!(1, D)
-            [0, 3, false, 270], // Release lt!(1, D)
-            [0, 0, true, 10], // Press A
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(270)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_timeout_7() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150], // Press A
-            [0, 3, true, 10], // Press lt!(1, D) -> Flow Tap
-            [0, 0, false, 10], // Release A
-            [0, 3, false, 260], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0]], // Press D
-            [0, [0, kc_to_u8!(D), 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]], // Release D
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D) -> Flow Tap
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(260)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(D), 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release D
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_timeout_8() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 3, true, 150], // Press lt!(1, D)
-            [0, 0, true, 10], // Press A -> permisshive hold: Kp1 on layer 1
-            [0, 0, false, 10], // Release A
-            [0, 3, false, 260], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .press(0, 0) // Press A -> permisshive hold: Kp1 on layer 1
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(260)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_timeout_9() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 3, true, 150], // Press lt!(1, D)
-            [0, 0, true, 260], // Press A -> Kp1 on layer 1
-            [0, 0, false, 10], // Release A
-            [0, 3, false, 10], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press Kp1 on layer 1
-            [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(260)
+            .press(0, 0) // Press A -> Kp1 on layer 1
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Press Kp1 on layer 1
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp1
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_morse_lt_timeout_10() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 3, true, 150], // Press lt!(1, D)
-            [0, 0, true, 260], // Press A -> Kp1 on layer 1
-            [0, 3, false, 10], // Release lt!(1, D)
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Press Kp1 on layer 1
-            [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(260)
+            .press(0, 0) // Press A -> Kp1 on layer 1
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Press Kp1 on layer 1
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp1
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_trigger() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 0, true, 50],  // Press A -> Unilateral tap
-            [0, 0, false, 10], // Release A
-            [0, 1, false, 100], // Release mt!(B, LShift)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
-            [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]], // All released
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(50)
+            .press(0, 0) // Press A -> Unilateral tap
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(100)
+            .release(0, 1) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_with_combo_1() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard_with_combo(),
-        sequence: [
-            [0, 1, true, 200],  // Press mt!(B, LShift)
-            [0, 2, true, 60],  // Press mt!(C, LGui)
-            [0, 2, false, 10], // Release C
-            [0, 1, false, 300], // Release B
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP)
+            .setup(HRM_SETUP)
+            .combos_global(MORSE_2_KEY_COMBOS)
+            .combos_global(MORSE_3_KEY_COMBOS)
+            .combo_timeout_ms(50)
+            .build()
+            .await;
+
+        keyboard
+            .delay(200)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(60)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(10)
+            .release(0, 2) // Release C
+            .delay(300)
+            .release(0, 1) // Release B
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_with_combo_2() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard_with_combo(),
-        sequence: [
-            [0, 1, true, 200],  // Press mt!(B, LShift)
-            [0, 2, true, 20],  // Press mt!(C, LGui)
-            [0, 2, false, 10], // Release C
-            [0, 1, false, 300], // Release B
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP)
+            .setup(HRM_SETUP)
+            .combos_global(MORSE_2_KEY_COMBOS)
+            .combos_global(MORSE_3_KEY_COMBOS)
+            .combo_timeout_ms(50)
+            .build()
+            .await;
+
+        keyboard
+            .delay(200)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(20)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(10)
+            .release(0, 2) // Release C
+            .delay(300)
+            .release(0, 1) // Release B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(X), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_with_combo_3() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard_with_combo(),
-        sequence: [
-            [0, 1, true, 200],  // Press mt!(B, LShift)
-            [0, 2, true, 20],  // Press mt!(C, LGui)
-            [0, 1, false, 20], // Release B
-            [0, 2, false, 10], // Release C
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP)
+            .setup(HRM_SETUP)
+            .combos_global(MORSE_2_KEY_COMBOS)
+            .combos_global(MORSE_3_KEY_COMBOS)
+            .combo_timeout_ms(50)
+            .build()
+            .await;
+
+        keyboard
+            .delay(200)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(20)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(20)
+            .release(0, 1) // Release B
+            .delay(10)
+            .release(0, 2) // Release C
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(X), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_with_combo_4() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard_with_combo(),
-        sequence: [
-            [0, 1, true, 200],  // Press mt!(B, LShift)
-            [0, 2, true, 60],  // Press mt!(C, LGui)
-            [0, 1, false, 20], // Release B
-            [0, 2, false, 10], // Release C
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP)
+            .setup(HRM_SETUP)
+            .combos_global(MORSE_2_KEY_COMBOS)
+            .combos_global(MORSE_3_KEY_COMBOS)
+            .combo_timeout_ms(50)
+            .build()
+            .await;
+
+        keyboard
+            .delay(200)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(60)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(20)
+            .release(0, 1) // Release B
+            .delay(10)
+            .release(0, 2) // Release C
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_with_combo_5() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard_with_combo(),
-        sequence: [
-            [0, 1, true, 200],  // Press mt!(B, LShift)
-            [0, 2, true, 20],  // Press mt!(C, LGui)
-            [0, 1, false, 20], // Release B
-            [0, 2, false, 10], // Release C
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(X), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP)
+            .setup(HRM_SETUP)
+            .combos_global(MORSE_2_KEY_COMBOS)
+            .combos_global(MORSE_3_KEY_COMBOS)
+            .combo_timeout_ms(50)
+            .build()
+            .await;
+
+        keyboard
+            .delay(200)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(20)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(20)
+            .release(0, 1) // Release B
+            .delay(10)
+            .release(0, 2) // Release C
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(X), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_with_combo_6() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard_with_combo(),
-        sequence: [
-            [0, 1, true, 200],  // Press mt!(B, LShift)
-            [0, 3, true, 20],  // Press lt!(1, D)
-            [0, 2, true, 60],  // Press mt!(C, LGui)
-            [0, 1, false, 20], // Release B
-            [0, 3, false, 10], // Release D
-            [0, 2, false, 10], // Release C
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
-            // [0, [kc_to_u8!(D), kc_to_u8!(C), 0, 0, 0, 0]],
-            // [0, [0, kc_to_u8!(C), 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP)
+            .setup(HRM_SETUP)
+            .combos_global(MORSE_2_KEY_COMBOS)
+            .combos_global(MORSE_3_KEY_COMBOS)
+            .combo_timeout_ms(50)
+            .build()
+            .await;
+
+        keyboard
+            .delay(200)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(20)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(60)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(20)
+            .release(0, 1) // Release B
+            .delay(10)
+            .release(0, 3) // Release D
+            .delay(10)
+            .release(0, 2) // Release C
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_with_combo_7() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard_with_combo(),
-        sequence: [
-            [0, 1, true, 200],  // Press mt!(B, LShift)
-            [0, 3, true, 20],  // Press lt!(1, D)
-            [0, 2, true, 20],  // Press mt!(C, LGui)
-            [0, 1, false, 20], // Release B
-            [0, 2, false, 10], // Release C
-            [0, 3, false, 10], // Release D
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(Z), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP)
+            .setup(HRM_SETUP)
+            .combos_global(MORSE_2_KEY_COMBOS)
+            .combos_global(MORSE_3_KEY_COMBOS)
+            .combo_timeout_ms(50)
+            .build()
+            .await;
+
+        keyboard
+            .delay(200)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(20)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(20)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(20)
+            .release(0, 1) // Release B
+            .delay(10)
+            .release(0, 2) // Release C
+            .delay(10)
+            .release(0, 3) // Release D
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Z), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_with_combo_8() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard_with_combo(),
-        sequence: [
-            [0, 1, true, 200],  // Press mt!(B, LShift)
-            [0, 3, true, 20],  // Press lt!(1, D)
-            [0, 2, true, 60],  // Press mt!(C, LGui)
-            [0, 1, false, 20], // Release B
-            [0, 2, false, 10], // Release C  -> Unilateral tap of lt!(1, D) is triggered, before the mt!(B, LShift) is released and triggered
-            [0, 3, false, 10], // Release D
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(D), kc_to_u8!(C), 0, 0, 0, 0]],
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP)
+            .setup(HRM_SETUP)
+            .combos_global(MORSE_2_KEY_COMBOS)
+            .combos_global(MORSE_3_KEY_COMBOS)
+            .combo_timeout_ms(50)
+            .build()
+            .await;
+
+        keyboard
+            .delay(200)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(20)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(60)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(20)
+            .release(0, 1) // Release B
+            .delay(10)
+            .release(0, 2) // Release C  -> Unilateral tap of lt!(1, D) is triggered, before the mt!(B, LShift) is released and triggered
+            .delay(10)
+            .release(0, 3) // Release D
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), kc_to_u8!(C), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_with_combo_8_1() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard_with_combo(),
-        sequence: [
-            [0, 1, true, 200],  // Press mt!(B, LShift)
-            [0, 3, true, 200],  // Press lt!(1, D)
-            [0, 2, true, 60],  // Press mt!(C, LGui)
-            [0, 1, false, 20], // Release B
-            [0, 2, false, 10], // Release C -> Unilateral tap of lt!(1, D) is triggered, before the mt!(B, LShift) is released and triggered
-            [0, 3, false, 10], // Release D
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(D), kc_to_u8!(C), 0, 0, 0, 0]],
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP)
+            .setup(HRM_SETUP)
+            .combos_global(MORSE_2_KEY_COMBOS)
+            .combos_global(MORSE_3_KEY_COMBOS)
+            .combo_timeout_ms(50)
+            .build()
+            .await;
+
+        keyboard
+            .delay(200)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(200)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(60)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(20)
+            .release(0, 1) // Release B
+            .delay(10)
+            .release(0, 2) // Release C -> Unilateral tap of lt!(1, D) is triggered, before the mt!(B, LShift) is released and triggered
+            .delay(10)
+            .release(0, 3) // Release D
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), kc_to_u8!(C), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_timeout() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 0, true, 260],  // Press A after hold timeout
-            [0, 0, false, 100], // Release A
-            [0, 1, false, 100], // Release B
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
-            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]], // All released
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(260)
+            .press(0, 0) // Press A after hold timeout
+            .delay(100)
+            .release(0, 0) // Release A
+            .delay(100)
+            .release(0, 1) // Release B
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Hold LShift
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_quick_tap() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150],  // Press A
-            [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
-            [0, 1, false, 100], // Release B
-            [0, 0, false, 100], // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0]], // Press B
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release B
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .press(0, 1) // Press mt!(B, LShift) -> Flow Tap
+            .delay(100)
+            .release(0, 1) // Release B
+            .delay(100)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release B
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_multi_tap() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150],  // Press A
-            [0, 0, false, 120], // Release A
-            [0, 1, true, 10], // Press mt!(B, LShift)
-            [0, 2, true, 60], // Press mt!(C, LGui)
-            [0, 1, false, 60], // Release mt!(B, LShift)
-            [0, 2, false, 60], // Release mt!(C, LGui)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
-            [0, [0, 0, 0, 0, 0, 0]], // Release B
-            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Release C
-            [0, [0, 0, 0, 0, 0, 0]], // Release C
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(120)
+            .release(0, 0) // Release A
+            .delay(10)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(60)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(60)
+            .release(0, 1) // Release mt!(B, LShift)
+            .delay(60)
+            .release(0, 2) // Release mt!(C, LGui)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // Release C
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release C
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_multi_tap_2() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150],  // Press A
-            [0, 0, false, 10], // Release A
-            [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
-            [0, 2, true, 200], // Press mt!(C, LGui)
-            [0, 1, false, 60], // Release mt!(B, LShift)
-            [0, 2, false, 60], // Release mt!(C, LGui)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
-            [0, [0, 0, 0, 0, 0, 0]], // Release B
-            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Release C
-            [0, [0, 0, 0, 0, 0, 0]], // Release C
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(10)
+            .press(0, 1) // Press mt!(B, LShift) -> Flow Tap
+            .delay(200)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(60)
+            .release(0, 1) // Release mt!(B, LShift)
+            .delay(60)
+            .release(0, 2) // Release mt!(C, LGui)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // Release C
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release C
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_multi_tap_3() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150],  // Press A
-            [0, 0, false, 10], // Release A
-            [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
-            [0, 2, true, 40], // Press mt!(C, LGui) -> Flow Tap
-            [0, 1, false, 60], // Release mt!(B, LShift)
-            [0, 2, false, 60], // Release mt!(C, LGui)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
-            [0, [kc_to_u8!(B), kc_to_u8!(C), 0, 0, 0, 0]], // Press C
-            [0, [0, kc_to_u8!(C), 0, 0, 0, 0]], // Release B
-            [0, [0, 0, 0, 0, 0, 0]], // Release C
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(10)
+            .press(0, 1) // Press mt!(B, LShift) -> Flow Tap
+            .delay(40)
+            .press(0, 2) // Press mt!(C, LGui) -> Flow Tap
+            .delay(60)
+            .release(0, 1) // Release mt!(B, LShift)
+            .delay(60)
+            .release(0, 2) // Release mt!(C, LGui)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), kc_to_u8!(C), 0, 0, 0, 0])) // Press C
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(C), 0, 0, 0, 0])) // Release B
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release C
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_layer_tap() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 3, true, 150], // Press lt!(1, D)
-            [0, 1, true, 10], // Press mt!(B, LShift)
-            [0, 1, false, 100], // Release B
-            [0, 3, false, 10], // Release lt!(1, D)
-            [0, 0, true, 10], // Press A
-            [0, 0, false, 10], // Release A
-            [0, 3, true, 10], // Press lt!(1, D) -> Flow Tap after A
-            [0, 1, true, 50], // Press mt!(B, LShift) -> Flow Tap
-            [0, 1, false, 100], // Release B
-            [0, 3, false, 10], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0]], // Press Kp2 on layer 1
-            [0, [0, 0, 0, 0, 0, 0]], // Release Kp2
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Press D
-            [0, [kc_to_u8!(D), kc_to_u8!(B), 0, 0, 0, 0]], // Press B
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // Release B
-            [0, [0, 0, 0, 0, 0, 0]], // Release D
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(100)
+            .release(0, 1) // Release B
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D) -> Flow Tap after A
+            .delay(50)
+            .press(0, 1) // Press mt!(B, LShift) -> Flow Tap
+            .delay(100)
+            .release(0, 1) // Release B
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0])) // Press Kp2 on layer 1
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp2
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), kc_to_u8!(B), 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // Release B
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release D
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_rolling_with_layer_tap() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 3, true, 150], // Press lt!(1, D)
-            [0, 0, true, 10], // Press A
-            [0, 3, false, 10], // Release lt!(1, D)
-            [0, 0, false, 10], // Release A
-            [0, 3, true, 250], // Press lt!(1, D)
-            [0, 0, true, 10], // Press A
-            [0, 0, false, 10], // Release A
-            [0, 3, false, 100], // Release lt!(1, D)
-            [0, 3, true, 250], // Press lt!(1, D)
-            [0, 0, true, 10], // Press A
-            [0, 3, false, 100], // Release lt!(1, D)
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // D
-            [0, [kc_to_u8!(D), kc_to_u8!(A), 0, 0, 0, 0]], // D + A
-            [0, [0, kc_to_u8!(A), 0, 0, 0, 0]], // Release D
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]], // Kp1 on layer 1
-            [0, [0, 0, 0, 0, 0, 0]], // Release Kp1
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // D
-            [0, [kc_to_u8!(D), kc_to_u8!(A), 0, 0, 0, 0]], // D + A
-            [0, [0, kc_to_u8!(A), 0, 0, 0, 0]], // Release D
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    }
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(250)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(100)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(250)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(100)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // D
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), kc_to_u8!(A), 0, 0, 0, 0])) // D + A
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(A), 0, 0, 0, 0])) // Release D
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Kp1 on layer 1
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp1
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // D
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), kc_to_u8!(A), 0, 0, 0, 0])) // D + A
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(A), 0, 0, 0, 0])) // Release D
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_timeout_rolled_release() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 0, true, 260],  // Press A after hold timeout
-            [0, 1, false, 100], // Release B
-            [0, 0, false, 100], // Release A
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
-            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]], // All released
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(260)
+            .press(0, 0) // Press A after hold timeout
+            .delay(100)
+            .release(0, 1) // Release B
+            .delay(100)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Hold LShift
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_timeout_rolled_release_2() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 0, true, 10],  // Press A
-            [0, 1, false, 300], // Release B
-            [0, 0, false, 10], // Release A
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Timeout B
-            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Release A
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(300)
+            .release(0, 1) // Release B
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Timeout B
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_timeout_and_release() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 0, true, 20],  // Press A
-            [0, 0, false, 260], // Release A
-            [0, 1, false, 100], // Release B
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]], // All released
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(20)
+            .press(0, 0) // Press A
+            .delay(260)
+            .release(0, 0) // Release A
+            .delay(100)
+            .release(0, 1) // Release B
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_timeout_and_release_with_other_morse_key() {
-    key_sequence_test! {
-    keyboard: create_hrm_keyboard(),
-    sequence: [
-        [0, 1, true, 150], // Press mt!(B, LShift)
-        [0, 2, true, 200],  // Press mt!(C, LGui)
-        [0, 2, false, 100], // Release C  <-- Release C after "permissive hold" interval, but also after the hold-timeout
-        [0, 1, false, 100], // Release B
-    ],
-    expected_reports: [
-        [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Hold LShift
-        [KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // Press C
-        [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Release C
-        [0, [0, 0, 0, 0, 0, 0]], // All released
-    ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(200)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(100)
+            .release(0, 2) // Release C  <-- Release C after "permissive hold" interval, but also after the hold-timeout
+            .delay(100)
+            .release(0, 1) // Release B
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Hold LShift
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // Press C
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release C
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_rolling_release_order() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 2, true, 30], // Press mt!(C, LGui)
-            [0, 0, true, 30], // Press A
-            [0, 1, false, 50], // Release mt!(B, LShift)
-            [0, 2, false, 100], // Release mt!(C, LGui)
-            [0, 0, false, 100],  // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // FIXME: Maybe B-C-A is the expected order
-            [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]],
-            [0, [0, kc_to_u8!(A), 0, 0, 0, 0]],
-            [0, [kc_to_u8!(C), kc_to_u8!(A), 0, 0, 0, 0]],
-            [0, [0, kc_to_u8!(A), 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(30)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(30)
+            .press(0, 0) // Press A
+            .delay(50)
+            .release(0, 1) // Release mt!(B, LShift)
+            .delay(100)
+            .release(0, 2) // Release mt!(C, LGui)
+            .delay(100)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // FIXME: Maybe B-C-A is the expected order
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(A), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), kc_to_u8!(A), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(A), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_rolling_release_order_2() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 2, true, 30], // Press mt!(C, LGui)
-            [0, 0, true, 30], // Press A
-            [0, 2, false, 100], // Release C -> Permissive hold for mt!(B, LShift)
-            [0, 1, false, 50], // Release B
-            [0, 0, false, 100],  // Release A
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [kc_to_u8!(C), kc_to_u8!(A), 0, 0, 0, 0]],
-            [KC_LSHIFT, [0, kc_to_u8!(A), 0, 0, 0, 0]],
-            [0, [0, kc_to_u8!(A), 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(30)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(30)
+            .press(0, 0) // Press A
+            .delay(100)
+            .release(0, 2) // Release C -> Permissive hold for mt!(B, LShift)
+            .delay(50)
+            .release(0, 1) // Release B
+            .delay(100)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(
+                KC_LSHIFT,
+                [kc_to_u8!(C), kc_to_u8!(A), 0, 0, 0, 0],
+            ))
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, kc_to_u8!(A), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(A), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_rolling_release_order_3() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 2, true, 30], // Press mt!(C, LGui)
-            [0, 0, true, 30], // Press A
-            [0, 2, false, 100], // Release C -> Permissive hold for mt!(B, LShift)
-            [0, 0, false, 100],  // Release A
-            [0, 1, false, 50], // Release B
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [kc_to_u8!(C), kc_to_u8!(A), 0, 0, 0, 0]],
-            [KC_LSHIFT, [0, kc_to_u8!(A), 0, 0, 0, 0]],
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(30)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(30)
+            .press(0, 0) // Press A
+            .delay(100)
+            .release(0, 2) // Release C -> Permissive hold for mt!(B, LShift)
+            .delay(100)
+            .release(0, 0) // Release A
+            .delay(50)
+            .release(0, 1) // Release B
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(
+                KC_LSHIFT,
+                [kc_to_u8!(C), kc_to_u8!(A), 0, 0, 0, 0],
+            ))
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, kc_to_u8!(A), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_multiple_permissive_hold() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 150], // Press mt!(B, LShift)
-            [0, 2, true, 30], // Press mt!(C, LGui)
-            [0, 0, true, 30], // Press A -> Unilateral tap for mt!(B, LShift)
-            [0, 0, false, 100], // Release A -> Permissive hold triggered of mt!(C, LGui)
-            [0, 1, false, 50], // Release B
-            [0, 2, false, 100], // Release C
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-            [KC_LGUI, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-            [KC_LGUI, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]],
-            [KC_LGUI, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-            [KC_LGUI, [0, 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(30)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(30)
+            .press(0, 0) // Press A -> Unilateral tap for mt!(B, LShift)
+            .delay(100)
+            .release(0, 0) // Release A -> Permissive hold triggered of mt!(C, LGui)
+            .delay(50)
+            .release(0, 1) // Release B
+            .delay(100)
+            .release(0, 2) // Release C
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LGUI, [kc_to_u8!(B), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LGUI, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LGUI, [kc_to_u8!(B), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LGUI, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_complex_rolling() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 160], // Press A
-            [0, 1, true, 10], // Press mt!(B, LShift) -> Flow Tap
-            [0, 0, false, 10], // Release A
-            [0, 3, true, 30], // Press lt!(1, D) -> Flow Tap
-            [0, 2, true, 30], // Press mt!(C, LGui) -> Flow Tap
-            [0, 3, false, 100], // Release D
-            [0, 1, false, 50], // Release B
-            [0, 2, false, 10], // Release C
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0]],
-            [0, [0, kc_to_u8!(B), 0, 0, 0, 0]],
-            [0, [kc_to_u8!(D), kc_to_u8!(B), 0, 0, 0, 0]],
-            [0, [kc_to_u8!(D), kc_to_u8!(B), kc_to_u8!(C), 0, 0, 0]],
-            [0, [0, kc_to_u8!(B), kc_to_u8!(C), 0, 0, 0]],
-            [0, [0, 0, kc_to_u8!(C), 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(160)
+            .press(0, 0) // Press A
+            .delay(10)
+            .press(0, 1) // Press mt!(B, LShift) -> Flow Tap
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(30)
+            .press(0, 3) // Press lt!(1, D) -> Flow Tap
+            .delay(30)
+            .press(0, 2) // Press mt!(C, LGui) -> Flow Tap
+            .delay(100)
+            .release(0, 3) // Release D
+            .delay(50)
+            .release(0, 1) // Release B
+            .delay(10)
+            .release(0, 2) // Release C
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(B), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), kc_to_u8!(B), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(
+                0,
+                [kc_to_u8!(D), kc_to_u8!(B), kc_to_u8!(C), 0, 0, 0],
+            ))
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(B), kc_to_u8!(C), 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, kc_to_u8!(C), 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_flow_tap() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150],  // Press A
-            [0, 0, false, 30], // Release A
-            [0, 1, true, 20],  // Press mt!(B, LShift) -> Flow Tap
-            [0, 2, true, 10],  // Press mt!(C, LGui) -> Flow Tap
-            [0, 1, false, 40], // Release B
-            [0, 2, false, 10], // Release C
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Press B
-            [0, [kc_to_u8!(B), kc_to_u8!(C), 0, 0, 0, 0]], // Press C
-            [0, [0, kc_to_u8!(C), 0, 0, 0, 0]], // Release B
-            [0, [0, 0, 0, 0, 0, 0]], // Release C
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(30)
+            .release(0, 0) // Release A
+            .delay(20)
+            .press(0, 1) // Press mt!(B, LShift) -> Flow Tap
+            .delay(10)
+            .press(0, 2) // Press mt!(C, LGui) -> Flow Tap
+            .delay(40)
+            .release(0, 1) // Release B
+            .delay(10)
+            .release(0, 2) // Release C
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), kc_to_u8!(C), 0, 0, 0, 0])) // Press C
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(C), 0, 0, 0, 0])) // Release B
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release C
+            .run()
+            .await;
+    });
 }
 
 // Ref: https://github.com/HaoboGu/rmk/pull/496
 #[test]
 fn test_previous_rolling_keypress() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 0, true, 150],  // Press A
-            [0, 3, true, 150],  // Press lt!(1, D)
-            [0, 0, false, 30], // Release A
-            [0, 1, true, 150], // Press Kp2 on layer 1
-            [0, 1, false, 40], // Release Kp2 on layer 1
-            [0, 3, false, 10], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Press A
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-            [0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0]], // Press Kp2
-            [0, [0, 0, 0, 0, 0, 0]], // Release Kp2
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 0) // Press A
+            .delay(150)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(30)
+            .release(0, 0) // Release A
+            .delay(150)
+            .press(0, 1) // Press Kp2 on layer 1
+            .delay(40)
+            .release(0, 1) // Release Kp2 on layer 1
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0])) // Press Kp2
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp2
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_multi_hold_cross_hand() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 2, true, 150], // Press mt!(C, LGui)
-            [0, 3, true, 150], // Press lt!(1, D)
-            [0, 0, true, 10], // Press A
-            [0, 0, false, 10], // Release A -> Permisive hold
-            [0, 2, false, 40], // Release Kp2 on layer 1
-            [0, 3, false, 10], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [KC_LGUI, [0, 0, 0, 0, 0, 0]],
-            [KC_LGUI, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]],
-            [KC_LGUI, [0, 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]], // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(150)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .press(0, 0) // Press A
+            .delay(10)
+            .release(0, 0) // Release A -> Permisive hold
+            .delay(40)
+            .release(0, 2) // Release Kp2 on layer 1
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(KC_LGUI, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LGUI, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LGUI, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_flow_tap_misorder() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 2, true, 150], // Press mt!(C, LGui)
-            [0, 3, true, 120], // Press lt!(1, D)
-            [0, 2, false, 10], // Release mt!(C, LGui)
-            [0, 4, true, 10], // Press td!(0) -> Flow Tap triggered
-            [0, 3, false, 10], // Release lt!(1, D)
-            [0, 4, false, 10], // Release td!(0)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(D), kc_to_u8!(E), 0, 0, 0, 0]],
-            [0, [0, kc_to_u8!(E), 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 2) // Press mt!(C, LGui)
+            .delay(120)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(10)
+            .release(0, 2) // Release mt!(C, LGui)
+            .delay(10)
+            .press(0, 4) // Press td!(0) -> Flow Tap triggered
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(10)
+            .release(0, 4) // Release td!(0)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), kc_to_u8!(E), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(E), 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_mt_lt_combination() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 1, true, 130], // Press mt!(B, LShift)
-            [0, 3, true, 130], // Press lt!(1, D)
-            [0, 0, true, 130], // Press Kp4 on layer1
-            [0, 0, false, 130], // Release Kp4 on layer1
-            [0, 3, false, 200], // Release lt!(1, D)
-            [0, 1, false, 10], // Release mt!(C, LGui)
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(130)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(130)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(130)
+            .press(0, 0) // Press Kp4 on layer1
+            .delay(130)
+            .release(0, 0) // Release Kp4 on layer1
+            .delay(200)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(10)
+            .release(0, 1) // Release mt!(C, LGui)
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_lt_opposite_hand_roll_permissive_hold() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 3, true, 130], // Press lt!(1, D)
-            [0, 0, true, 20], // Press Kp1 on layer1
-            [0, 1, true, 20], // Press Kp2 on layer1
-            [0, 0, false, 20], // Release Kp1 on layer1
-            [0, 1, false, 20], // Release Kp2 on layer1
-            [0, 3, false, 10], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(130)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(20)
+            .press(0, 0) // Press Kp1 on layer1
+            .delay(20)
+            .press(0, 1) // Press Kp2 on layer1
+            .delay(20)
+            .release(0, 0) // Release Kp1 on layer1
+            .delay(20)
+            .release(0, 1) // Release Kp2 on layer1
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_lt_opposite_hand_sequence_permissive_hold() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 3, true, 130], // Press lt!(1, D)
-            [0, 0, true, 20], // Press Kp1 on layer1
-            [0, 0, false, 20], // Release Kp1 on layer1
-            [0, 1, true, 20], // Press Kp2 on layer1
-            [0, 1, false, 20], // Release Kp2 on layer1
-            [0, 3, false, 10], // Release lt!(1, D)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(130)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(20)
+            .press(0, 0) // Press Kp1 on layer1
+            .delay(20)
+            .release(0, 0) // Release Kp1 on layer1
+            .delay(20)
+            .press(0, 1) // Press Kp2 on layer1
+            .delay(20)
+            .release(0, 1) // Release Kp2 on layer1
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_lt_opposite_hand_roll_permissive_hold_early_modifier_release() {
-    key_sequence_test! {
-        keyboard: create_hrm_keyboard(),
-        sequence: [
-            [0, 3, true, 130], // Press lt!(1, D)
-            [0, 0, true, 20], // Press Kp1 on layer1
-            [0, 1, true, 20], // Press Kp2 on layer1
-            [0, 0, false, 20], // Release Kp1 on layer1
-            [0, 3, false, 10], // Release lt!(1, D)
-            [0, 1, false, 20], // Release B
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_SETUP).build().await;
+
+        keyboard
+            .delay(130)
+            .press(0, 3) // Press lt!(1, D)
+            .delay(20)
+            .press(0, 0) // Press Kp1 on layer1
+            .delay(20)
+            .press(0, 1) // Press Kp2 on layer1
+            .delay(20)
+            .release(0, 0) // Release Kp1 on layer1
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D)
+            .delay(20)
+            .release(0, 1) // Release B
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_release_morse_keeps_pressed_layer_no_action_after_layer_off_normal() {
-    key_sequence_test! {
-        // Timeout is not expired - no layer switching here, just results in No action
-        keyboard: create_release_remap_keyboard(MorseMode::Normal),
-        sequence: [
-            [0, 0, true, 10],   // Press mo!(1) and activate layer 1 - after timeout
-            [0, 1, true, 10],   // Press a!(No) from layer 0
-            [0, 0, false, 10],  // Release mo!(1), layer 1 is now off (didn't activate)
-            [0, 1, false, 10],  // Release a!(No)
-        ],
-        expected_reports: [
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+            .setup(RELEASE_REMAP_NORMAL_SETUP)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(0, 0) // Press mo!(1) and activate layer 1 - after timeout
+            .delay(10)
+            .press(0, 1) // Press a!(No) from layer 0
+            .delay(10)
+            .release(0, 0) // Release mo!(1), layer 1 is now off (didn't activate)
+            .delay(10)
+            .release(0, 1) // Release a!(No)
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_release_morse_keeps_pressed_layer_no_action_after_layer_off_normal_timeout() {
-    key_sequence_test! {
-        // Timeout is not expired - no layer switching here, just results in No action
-        keyboard: create_release_remap_keyboard(MorseMode::Normal),
-        sequence: [
-            [0, 0, true, 10],   // Press mo!(1) and activate layer 1 - after timeout
-            [0, 1, true, 10],   // Press k!(B) from layer 1
-            [0, 0, false, 240],  // Release mo!(1), layer 1 is now off
-            [0, 1, false, 10],  // Release k!(B)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Tap B down
-            [0, [0, 0, 0, 0, 0, 0]],            // Tap B up
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+            .setup(RELEASE_REMAP_NORMAL_SETUP)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(0, 0) // Press mo!(1) and activate layer 1 - after timeout
+            .delay(10)
+            .press(0, 1) // Press k!(B) from layer 1
+            .delay(240)
+            .release(0, 0) // Release mo!(1), layer 1 is now off
+            .delay(10)
+            .release(0, 1) // Release k!(B)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Tap B down
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Tap B up
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_release_morse_keeps_pressed_layer_no_action_after_layer_off_permissive_hold() {
-    key_sequence_test! {
-        // With PermissiveHold the layer switch shouldn't happen
-        keyboard: create_release_remap_keyboard(MorseMode::PermissiveHold),
-        sequence: [
-            [0, 0, true, 10],   // Press mo!(1) and activate layer 1
-            [0, 1, true, 10],   // Press k!(B) from layer 1
-            [0, 0, false, 10],  // Release mo!(1), layer 1 is now off
-            [0, 1, false, 10],  // Release k!(B)
-        ],
-        expected_reports: [
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+            .setup(RELEASE_REMAP_PERMISSIVE_HOLD_SETUP)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(0, 0) // Press mo!(1) and activate layer 1
+            .delay(10)
+            .press(0, 1) // Press k!(B) from layer 1
+            .delay(10)
+            .release(0, 0) // Release mo!(1), layer 1 is now off
+            .delay(10)
+            .release(0, 1) // Release k!(B)
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_release_morse_keeps_pressed_layer_no_action_after_layer_off_hold_on_other_press() {
-    key_sequence_test! {
-        // With HoldOnOtherPress the action should be triggered immediatelly
-        keyboard: create_release_remap_keyboard(MorseMode::HoldOnOtherPress),
-        sequence: [
-            [0, 0, true, 10],   // Press mo!(1) and activate layer 1
-            [0, 1, true, 10],   // Press k!(B) from layer 1
-            [0, 0, false, 10],  // Release mo!(1), layer 1 is now off
-            [0, 1, false, 10],  // Release k!(B)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // Tap B down
-            [0, [0, 0, 0, 0, 0, 0]],            // Tap B up
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+            .setup(RELEASE_REMAP_HOLD_ON_OTHER_SETUP)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(0, 0) // Press mo!(1) and activate layer 1
+            .delay(10)
+            .press(0, 1) // Press k!(B) from layer 1
+            .delay(10)
+            .release(0, 0) // Release mo!(1), layer 1 is now off
+            .delay(10)
+            .release(0, 1) // Release k!(B)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Tap B down
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Tap B up
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_release_morse_keeps_pressed_layer_transparent_action_after_layer_off_normal() {
-    key_sequence_test! {
-        // In normal mode the hole timeout is not expired, hence this registers just as normal A press
-        keyboard: create_release_remap_keyboard(MorseMode::Normal),
-        sequence: [
-            [0, 0, true, 10],   // Press mo!(1) and activate layer 1
-            [0, 2, true, 10],   // Press k!(A) from layer 0
-            [0, 0, false, 10],  // Release mo!(1), layer 1 is now off
-            [0, 2, false, 10],  // Release k!(A) from layer 0
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap A down
-            [0, [0, 0, 0, 0, 0, 0]],            // Tap A up
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+            .setup(RELEASE_REMAP_NORMAL_SETUP)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(0, 0) // Press mo!(1) and activate layer 1
+            .delay(10)
+            .press(0, 2) // Press k!(A) from layer 0
+            .delay(10)
+            .release(0, 0) // Release mo!(1), layer 1 is now off
+            .delay(10)
+            .release(0, 2) // Release k!(A) from layer 0
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Tap A down
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Tap A up
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_release_morse_keeps_pressed_layer_transparent_action_after_layer_off_permissive_hold() {
-    key_sequence_test! {
-        // With PermissiveHold the layer switch shouldn't happen - normal A press
-        keyboard: create_release_remap_keyboard(MorseMode::PermissiveHold),
-        sequence: [
-            [0, 0, true, 10],   // Press mo!(1) and activate layer 1
-            [0, 2, true, 10],   // Press a!(Transparent) from layer 1
-            [0, 0, false, 10],  // Release mo!(1), layer 1 is now off
-            [0, 2, false, 10],  // Release a!(Transparent)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap A down
-            [0, [0, 0, 0, 0, 0, 0]],            // Tap A up
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+            .setup(RELEASE_REMAP_PERMISSIVE_HOLD_SETUP)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(0, 0) // Press mo!(1) and activate layer 1
+            .delay(10)
+            .press(0, 2) // Press a!(Transparent) from layer 1
+            .delay(10)
+            .release(0, 0) // Release mo!(1), layer 1 is now off
+            .delay(10)
+            .release(0, 2) // Release a!(Transparent)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Tap A down
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Tap A up
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_release_morse_keeps_pressed_layer_transparent_action_after_layer_off_hold_on_other_press() {
-    key_sequence_test! {
-        // With HoldOnOtherPress the action should be triggered immediatelly - but the key is trasparent - A press
-        keyboard: create_release_remap_keyboard(MorseMode::HoldOnOtherPress),
-        sequence: [
-            [0, 0, true, 10],   // Press mo!(1) and activate layer 1
-            [0, 2, true, 10],   // Press a!(Transparent) from layer 1
-            [0, 0, false, 10],  // Release mo!(1), layer 1 is now off
-            [0, 2, false, 10],  // Release a!(Transparent)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // Tap A down
-            [0, [0, 0, 0, 0, 0, 0]],            // Tap A up
-        ]
-    };
-}
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+            .setup(RELEASE_REMAP_HOLD_ON_OTHER_SETUP)
+            .build()
+            .await;
 
-fn create_normal_unilateral_keyboard() -> Keyboard<'static> {
-    let hand = [[Hand::Left, Hand::Left, Hand::Right, Hand::Right, Hand::Right]];
-    create_morse_keyboard(
-        BehaviorConfig {
-            morse: MorsesConfig {
-                enable_flow_tap: false,
-                default_profile: MorseProfile::new(
-                    Some(true),              // unilateral_tap enabled
-                    Some(MorseMode::Normal), // Normal (timeout-only) hold
-                    Some(250),
-                    Some(250),
-                ),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        hand,
-    )
+        keyboard
+            .delay(10)
+            .press(0, 0) // Press mo!(1) and activate layer 1
+            .delay(10)
+            .press(0, 2) // Press a!(Transparent) from layer 1
+            .delay(10)
+            .release(0, 0) // Release mo!(1), layer 1 is now off
+            .delay(10)
+            .release(0, 2) // Release a!(Transparent)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Tap A down
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Tap A up
+            .run()
+            .await;
+    });
 }
 
 /// Same-hand roll in Normal mode: mt!(B, LShift) (col 1, Left) then A (col 0, Left).
@@ -1782,19 +2180,23 @@ fn create_normal_unilateral_keyboard() -> Keyboard<'static> {
 /// plain key to fire first (wrong order).
 #[test]
 fn test_normal_mode_same_hand_roll_order() {
-    key_sequence_test! {
-        keyboard: create_normal_unilateral_keyboard(),
-        sequence: [
-            [0, 1, true,  10],  // Press mt!(B, LShift) — HRM, Left hand
-            [0, 0, true,  10],  // Press A — plain key, Left hand (same-hand roll)
-            [0, 0, false, 10],  // Release A
-            [0, 1, false, 10],  // Release mt!(B, LShift)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],              // B fires first (unilateral tap on press)
-            [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]],   // A fires after
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],               // A released
-            [0, [0, 0, 0, 0, 0, 0]],                          // B released
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(HRM_NORMAL_SETUP).build().await;
+
+        keyboard
+            .delay(10)
+            .press(0, 1) // Press mt!(B, LShift) — HRM, Left hand
+            .delay(10)
+            .press(0, 0) // Press A — plain key, Left hand (same-hand roll)
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // B fires first (unilateral tap on press)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0])) // A fires after
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // A released
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // B released
+            .run()
+            .await;
+    });
 }

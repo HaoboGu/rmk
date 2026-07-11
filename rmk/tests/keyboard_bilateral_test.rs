@@ -14,116 +14,119 @@
 ///   - Cols 2-4 are Right hand
 pub mod common;
 
-use embassy_time::Duration;
-use rmk::config::{BehaviorConfig, Hand, MorsesConfig};
-use rmk::keyboard::Keyboard;
+use rmk::sim::{SimKeyboard, SimKeyboardSetup, SimMorseSetup};
+
+use rmk::config::Hand;
 use rmk_types::morse::{MorseMode, MorseProfile};
 
 use crate::common::KC_LSHIFT;
-use crate::common::morse::create_morse_keyboard;
+use crate::common::morse::{MORSE_KEYMAP, TEST_MORSE_PATTERNS};
 
-/// Create a keyboard with col 0 marked as Bilateral in the layout map.
-/// Hand: [Bilateral, Left, Right, Right, Right]
-fn create_bilateral_keyboard() -> Keyboard<'static> {
-    let hand = [[Hand::Bilateral, Hand::Left, Hand::Right, Hand::Right, Hand::Right]];
-    create_morse_keyboard(
-        BehaviorConfig {
-            morse: MorsesConfig {
-                enable_flow_tap: true,
-                prior_idle_time: Duration::from_millis(120),
-                default_profile: MorseProfile::new(
-                    Some(true), // unilateral_tap enabled
-                    Some(MorseMode::PermissiveHold),
-                    Some(250u16),
-                    Some(250u16),
-                ),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        hand,
-    )
-}
+const BILATERAL_PROFILE: MorseProfile =
+    MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(250u16), Some(250u16));
+const BILATERAL_SETUP: SimKeyboardSetup<1, 5> = SimKeyboardSetup::new()
+    .hands([[Hand::Bilateral, Hand::Left, Hand::Right, Hand::Right, Hand::Right]])
+    .morse(
+        SimMorseSetup::new()
+            .patterns(&TEST_MORSE_PATTERNS)
+            .profile(BILATERAL_PROFILE)
+            .flow_tap(true)
+            .prior_idle_ms(120),
+    );
 
 /// mt!(B, LShift) (col 1, Left) + A (col 0, Bilateral) should NOT trigger unilateral tap
 /// because Bilateral keys have a different Hand value than Left/Right.
 /// Instead, permissive hold should activate because A is released before mt!(B, LShift).
 #[test]
 fn test_bilateral_exempts_from_unilateral_tap() {
-    key_sequence_test! {
-        keyboard: create_bilateral_keyboard(),
-        sequence: [
-            [0, 1, true, 150],  // Press mt!(B, LShift) on Left hand
-            [0, 0, true, 10],   // Press A on Left hand (bilateral) -> should NOT trigger unilateral tap
-            [0, 0, false, 10],  // Release A -> permissive hold triggers for mt!(B, LShift)
-            [0, 1, false, 10],  // Release mt!(B, LShift)
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],                  // Permissive hold (LShift held)
-            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],      // Press A with shift
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],                  // Release A
-            [0, [0, 0, 0, 0, 0, 0]],                          // Release mt!(B, LShift)
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(BILATERAL_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift) on Left hand
+            .delay(10)
+            .press(0, 0) // Press A on Left hand (bilateral) -> should NOT trigger unilateral tap
+            .delay(10)
+            .release(0, 0) // Release A -> permissive hold triggers for mt!(B, LShift)
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Permissive hold (LShift held)
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A with shift
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .run()
+            .await;
+    });
 }
 
 /// Cross-hand press should still use permissive hold (bilateral doesn't change cross-hand behavior).
 /// mt!(B, LShift) (col 1, Left) + mt!(C, LGui) (col 2, Right) = cross-hand -> permissive hold.
 #[test]
 fn test_bilateral_cross_hand_unchanged() {
-    key_sequence_test! {
-        keyboard: create_bilateral_keyboard(),
-        sequence: [
-            [0, 1, true, 150],  // Press mt!(B, LShift) on Left hand
-            [0, 2, true, 10],   // Press mt!(C, LGui) on Right hand -> cross-hand, no unilateral tap
-            [0, 2, false, 10],  // Release mt!(C, LGui) -> permissive hold
-            [0, 1, false, 10],  // Release mt!(B, LShift)
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],                  // Permissive hold (LShift)
-            [KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0]],      // Press C with shift
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],                  // Release C
-            [0, [0, 0, 0, 0, 0, 0]],                          // Release mt!(B, LShift)
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(BILATERAL_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift) on Left hand
+            .delay(10)
+            .press(0, 2) // Press mt!(C, LGui) on Right hand -> cross-hand, no unilateral tap
+            .delay(10)
+            .release(0, 2) // Release mt!(C, LGui) -> permissive hold
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift)
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Permissive hold (LShift)
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // Press C with shift
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release C
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .run()
+            .await;
+    });
 }
 
 /// Same-hand press with a NON-bilateral key should still trigger unilateral tap.
 /// mt!(C, LGui) (col 2, Right) + lt!(1, D) (col 3, Right, NOT bilateral) = same hand, unilateral tap.
 #[test]
 fn test_non_bilateral_same_hand_still_unilateral() {
-    key_sequence_test! {
-        keyboard: create_bilateral_keyboard(),
-        sequence: [
-            [0, 2, true, 150],  // Press mt!(C, LGui) on Right hand
-            [0, 3, true, 10],   // Press lt!(1, D) on Right hand -> Flow tap won't be triggered because the previous morse key is not resolved yet.
-            [0, 3, false, 10],  // Release lt!(1, D) -> Unilateral tap still applies since col 3 is NOT bilateral
-            [0, 2, false, 10],  // Release mt!(C, LGui)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],              // Unilateral tap for mt!(C, LGui)
-            [0, [kc_to_u8!(C), kc_to_u8!(D), 0, 0, 0, 0]],   // Press D
-            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],               // Release D
-            [0, [0, 0, 0, 0, 0, 0]],                          // Release mt!(C, LGui)
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(BILATERAL_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 2) // Press mt!(C, LGui) on Right hand
+            .delay(10)
+            .press(0, 3) // Press lt!(1, D) on Right hand -> Flow tap won't be triggered because the previous morse key is not resolved yet.
+            .delay(10)
+            .release(0, 3) // Release lt!(1, D) -> Unilateral tap still applies since col 3 is NOT bilateral
+            .delay(10)
+            .release(0, 2) // Release mt!(C, LGui)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // Unilateral tap for mt!(C, LGui)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), kc_to_u8!(D), 0, 0, 0, 0])) // Press D
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // Release D
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(C, LGui)
+            .run()
+            .await;
+    });
 }
 
 /// Bilateral key with hold timeout: mt!(B, LShift) held past timeout should still activate hold.
 /// Bilateral only affects unilateral_tap decision, not the hold timeout.
 #[test]
 fn test_bilateral_hold_timeout_unchanged() {
-    key_sequence_test! {
-        keyboard: create_bilateral_keyboard(),
-        sequence: [
-            [0, 1, true, 150],  // Press mt!(B, LShift)
-            [0, 1, false, 300], // Release after hold timeout
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],  // Hold LShift
-            [0, [0, 0, 0, 0, 0, 0]],           // Release
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(BILATERAL_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift)
+            .delay(300)
+            .release(0, 1) // Release after hold timeout
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Hold LShift
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release
+            .run()
+            .await;
+    });
 }
 
 /// Bilateral key with reversed release order:
@@ -133,19 +136,23 @@ fn test_bilateral_hold_timeout_unchanged() {
 /// However, releasing mt key first still resolves it as tap (B) via normal morse tap prediction.
 #[test]
 fn test_bilateral_reversed_release() {
-    key_sequence_test! {
-        keyboard: create_bilateral_keyboard(),
-        sequence: [
-            [0, 1, true, 150],  // Press mt!(B, LShift) on Left hand
-            [0, 0, true, 10],   // Press A on Left hand (bilateral)
-            [0, 1, false, 10],  // Release mt!(B, LShift) first -> resolves as tap (B)
-            [0, 0, false, 10],  // Release A
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],              // Tap B (mod-tap released first)
-            [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]],   // Press A
-            [0, [0, kc_to_u8!(A), 0, 0, 0, 0]],               // Release B
-            [0, [0, 0, 0, 0, 0, 0]],                          // Release A
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(MORSE_KEYMAP).setup(BILATERAL_SETUP).build().await;
+
+        keyboard
+            .delay(150)
+            .press(0, 1) // Press mt!(B, LShift) on Left hand
+            .delay(10)
+            .press(0, 0) // Press A on Left hand (bilateral)
+            .delay(10)
+            .release(0, 1) // Release mt!(B, LShift) first -> resolves as tap (B)
+            .delay(10)
+            .release(0, 0) // Release A
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Tap B (mod-tap released first)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0])) // Press A
+            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(A), 0, 0, 0, 0])) // Release B
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .run()
+            .await;
+    });
 }

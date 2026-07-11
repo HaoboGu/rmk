@@ -2,24 +2,19 @@ pub mod common;
 
 mod macro_test {
     use heapless::Vec;
-    use rmk::config::{BehaviorConfig, PositionalConfig};
-    use rmk::keyboard::Keyboard;
     use rmk::keyboard_macros::{MacroOperation, define_macro_sequences, to_macro_sequence};
+    use rmk::sim::{KeymapOverride, SimKeyboard, SimKeyboardSetup};
     use rmk::types::action::{Action, KeyAction};
     use rmk_types::keycode::HidKeyCode;
 
-    use crate::common::{KC_LSHIFT, wrap_keymap};
-    use crate::{kc_to_u8, key_sequence_test};
+    use crate::common::{KC_LSHIFT, TEST_KEYMAP};
+    use crate::kc_to_u8;
 
-    fn create_simple_macro_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'static> {
-        let keymap = [[[
-            KeyAction::Single(Action::TriggerMacro(0)),
-            KeyAction::Single(Action::TriggerMacro(1)),
-        ]]];
-        let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
-        let per_key_config: &'static PositionalConfig<1, 2> = Box::leak(Box::new(PositionalConfig::default()));
-        Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
-    }
+    const MACRO_KEY_OVERRIDES: [KeymapOverride; 2] = [
+        KeymapOverride::new(0, 0, 0, KeyAction::Single(Action::TriggerMacro(0))),
+        KeymapOverride::new(0, 0, 1, KeyAction::Single(Action::TriggerMacro(1))),
+    ];
+    const MACRO_SETUP: SimKeyboardSetup<5, 14> = SimKeyboardSetup::new().keys(&MACRO_KEY_OVERRIDES);
 
     #[test]
     fn test_macro_key_a_press_release() {
@@ -30,22 +25,24 @@ mod macro_test {
         .expect("too many elements")];
 
         let macro_data = define_macro_sequences(macro_sequences);
-        let mut config = BehaviorConfig::default();
-        config.keyboard_macros.macro_sequences = macro_data;
 
-        let keyboard = create_simple_macro_keyboard(config);
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+                .setup(MACRO_SETUP)
+                .macro_sequences(macro_data)
+                .build()
+                .await;
 
-        key_sequence_test!(
-            keyboard: keyboard,
-            sequence: [
-                [0, 0, true, 0],   // press Macro0
-                [0, 0, false, 100], // release Macro0
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // press A
-                [0, [0, 0, 0, 0, 0, 0]],            // release A
-            ]
-        );
+            keyboard
+                .delay(0)
+                .press(0, 0) // press Macro0
+                .delay(100)
+                .release(0, 0) // release Macro0
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // press A
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release A
+                .run()
+                .await;
+        });
     }
 
     // Macros fire on key *press* (matching QMK/ZMK), not release: the macro key is pressed and
@@ -81,44 +78,46 @@ mod macro_test {
         let macro_sequences = &[to_macro_sequence("AbCd123456")];
 
         let macro_data = define_macro_sequences(macro_sequences);
-        let mut config = BehaviorConfig::default();
-        config.keyboard_macros.macro_sequences = macro_data;
 
-        let keyboard = create_simple_macro_keyboard(config);
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+                .setup(MACRO_SETUP)
+                .macro_sequences(macro_data)
+                .build()
+                .await;
 
-        key_sequence_test!(
-            keyboard: keyboard,
-            sequence: [
-                [0, 0, true, 0],   // press Macro0
-                [0, 0, false, 100], // release Macro0
-            ],
-            expected_reports: [
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],            // press shift
-                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // press A + shift
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],            // release A
-                [0, [0, 0, 0, 0, 0, 0]],            // release shift
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // press B
-                [0, [0, 0, 0, 0, 0, 0]],            // release B
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],            // press shift
-                [KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // press C + shift
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],            // release C
-                [0, [0, 0, 0, 0, 0, 0]],            // release shift
-                [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]], // press D
-                [0, [0, 0, 0, 0, 0, 0]],            // release D
-                [0, [kc_to_u8!(Kc1), 0, 0, 0, 0, 0]], // press 1
-                [0, [0, 0, 0, 0, 0, 0]],            // release 1
-                [0, [kc_to_u8!(Kc2), 0, 0, 0, 0, 0]], // press 2
-                [0, [0, 0, 0, 0, 0, 0]],            // release 2
-                [0, [kc_to_u8!(Kc3), 0, 0, 0, 0, 0]], // press 3
-                [0, [0, 0, 0, 0, 0, 0]],            // release 3
-                [0, [kc_to_u8!(Kc4), 0, 0, 0, 0, 0]], // press 4
-                [0, [0, 0, 0, 0, 0, 0]],            // release 4
-                [0, [kc_to_u8!(Kc5), 0, 0, 0, 0, 0]], // press 5
-                [0, [0, 0, 0, 0, 0, 0]],            // release 5
-                [0, [kc_to_u8!(Kc6), 0, 0, 0, 0, 0]], // press 6
-                [0, [0, 0, 0, 0, 0, 0]],            // release 6
-            ]
-        );
+            keyboard
+                .delay(0)
+                .press(0, 0) // press Macro0
+                .delay(100)
+                .release(0, 0) // release Macro0
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // press shift
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // press A + shift
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // release A
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release shift
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // press B
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release B
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // press shift
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // press C + shift
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // release C
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release shift
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // press D
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release D
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kc1), 0, 0, 0, 0, 0])) // press 1
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release 1
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kc2), 0, 0, 0, 0, 0])) // press 2
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release 2
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kc3), 0, 0, 0, 0, 0])) // press 3
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release 3
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kc4), 0, 0, 0, 0, 0])) // press 4
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release 4
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kc5), 0, 0, 0, 0, 0])) // press 5
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release 5
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kc6), 0, 0, 0, 0, 0])) // press 6
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release 6
+                .run()
+                .await;
+        });
     }
 
     #[test]
@@ -126,22 +125,24 @@ mod macro_test {
         let macro_sequences = &[Vec::from_slice(&[MacroOperation::Tap(HidKeyCode::A)]).expect("too many elements")];
 
         let macro_data = define_macro_sequences(macro_sequences);
-        let mut config = BehaviorConfig::default();
-        config.keyboard_macros.macro_sequences = macro_data;
 
-        let keyboard = create_simple_macro_keyboard(config);
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+                .setup(MACRO_SETUP)
+                .macro_sequences(macro_data)
+                .build()
+                .await;
 
-        key_sequence_test!(
-            keyboard: keyboard,
-            sequence: [
-                [0, 0, true, 0],   // press Macro0
-                [0, 0, false, 100], // release Macro0
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // press A
-                [0, [0, 0, 0, 0, 0, 0]],            // release A
-            ]
-        );
+            keyboard
+                .delay(0)
+                .press(0, 0) // press Macro0
+                .delay(100)
+                .release(0, 0) // release Macro0
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // press A
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release A
+                .run()
+                .await;
+        });
     }
 
     #[test]
@@ -155,26 +156,28 @@ mod macro_test {
         .expect("too many elements")];
 
         let macro_data = define_macro_sequences(macro_sequences);
-        let mut config = BehaviorConfig::default();
-        config.keyboard_macros.macro_sequences = macro_data;
 
-        let keyboard = create_simple_macro_keyboard(config);
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+                .setup(MACRO_SETUP)
+                .macro_sequences(macro_data)
+                .build()
+                .await;
 
-        key_sequence_test!(
-            keyboard: keyboard,
-            sequence: [
-                [0, 0, true, 0],   // press macro0
-                [0, 0, false, 100], // release macro0
-            ],
-            expected_reports: [
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],        // press shift
-                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // press shift + A
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],        // release A
-                [0, [0, 0, 0, 0, 0, 0]],           // release shift
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // press B
-                [0, [0, 0, 0, 0, 0, 0]],           // release B
-            ]
-        );
+            keyboard
+                .delay(0)
+                .press(0, 0) // press macro0
+                .delay(100)
+                .release(0, 0) // release macro0
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // press shift
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // press shift + A
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // release A
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release shift
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // press B
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release B
+                .run()
+                .await;
+        });
     }
 
     #[test]
@@ -187,25 +190,26 @@ mod macro_test {
         .expect("too many elements")];
 
         let macro_data = define_macro_sequences(macro_sequences);
-        let mut config = BehaviorConfig::default();
-        config.keyboard_macros.macro_sequences = macro_data;
 
-        let keyboard = create_simple_macro_keyboard(config);
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+                .setup(MACRO_SETUP)
+                .macro_sequences(macro_data)
+                .build()
+                .await;
 
-        key_sequence_test!(
-            keyboard: keyboard,
-            sequence: [
-                [0, 0, true, 0],
-                [0, 0, false, 100],
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // press A
-                [0, [0, 0, 0, 0, 0, 0]],            // release A
-                // Delay 50 ms
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // press B
-                [0, [0, 0, 0, 0, 0, 0]],            // release B
-            ]
-        );
+            keyboard
+                .delay(0)
+                .press(0, 0)
+                .delay(100)
+                .release(0, 0)
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // press A
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release A
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // press B
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release B
+                .run()
+                .await;
+        });
     }
 
     // A 16-bit Vial keycode (LCtrl(A) = 0x0104) used as a macro TAP action is serialized as

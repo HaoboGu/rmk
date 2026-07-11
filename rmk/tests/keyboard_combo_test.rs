@@ -11,6 +11,7 @@ use rmk::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEvent};
 use rmk::hid::Report;
 use rmk::keyboard::Keyboard;
 use rmk::keyboard::combo::{Combo, ComboConfig};
+use rmk::sim::SimKeyboard;
 use rmk::state::set_usb_state;
 use rmk::types::action::KeyAction;
 use rmk::types::connection::UsbState;
@@ -22,338 +23,349 @@ use rmk_types::morse::{MorseMode, MorseProfile};
 use crate::common::test_block_on::test_block_on;
 use crate::common::{KC_LCTRL, KC_LSHIFT, create_test_keyboard_with_config, wrap_keymap};
 
-// Get tested combo config
-pub fn get_combos_config() -> CombosConfig {
-    // Define the function to return the appropriate combo configuration
-    CombosConfig {
-        combos: [
-            Some(Combo::new(ComboConfig::new(
-                [
-                    k!(V), //3,4
-                    k!(B), //3,5
-                ]
-                .to_vec(),
-                k!(LShift),
-                Some(0),
-            ))),
-            Some(Combo::new(ComboConfig::new(
-                [
-                    k!(R), //1,4
-                    k!(T), //1,5
-                ]
-                .to_vec(),
-                k!(LAlt),
-                Some(0),
-            ))),
-            Some(Combo::new(ComboConfig::new(
-                [
-                    k!(E), //1,3
-                    k!(T), //1,5
-                ]
-                .to_vec(),
-                osm!(ModifierCombination::new_from(false, false, false, true, false)), // one-shot LShift
-                Some(0),
-            ))),
-            Some(Combo::new(ComboConfig::new(
-                [
-                    k!(E), //1,3
-                    k!(R), //1,4
-                ]
-                .to_vec(),
-                k!(A), // A
-                Some(0),
-            ))),
-            Some(Combo::new(ComboConfig::new(
-                [
-                    k!(E), //1,3
-                    k!(R), //1,4
-                    k!(T), //1,5
-                ]
-                .to_vec(),
-                k!(Space),
-                Some(0),
-            ))),
-            Some(Combo::new(ComboConfig::new(
-                [
-                    k!(V), //3,4
-                    k!(B), //3,5
-                    k!(T), //1,5
-                ]
-                .to_vec(),
-                k!(Space),
-                Some(0),
-            ))),
-            None,
-            None,
-        ],
-        timeout: Duration::from_millis(100),
-        prior_idle_time: None,
-    }
-}
+const STANDARD_2_KEY_COMBOS: [([KeyAction; 2], KeyAction); 4] = [
+    ([k!(V), k!(B)], k!(LShift)),
+    ([k!(R), k!(T)], k!(LAlt)),
+    (
+        [k!(E), k!(T)],
+        osm!(ModifierCombination::new_from(false, false, false, true, false)),
+    ),
+    ([k!(E), k!(R)], k!(A)),
+];
+
+const STANDARD_3_KEY_COMBOS: [([KeyAction; 3], KeyAction); 2] =
+    [([k!(E), k!(R), k!(T)], k!(Space)), ([k!(V), k!(B), k!(T)], k!(Space))];
 
 #[test]
 fn test_single_key_in_combo() {
-    key_sequence_test! {
-        keyboard: create_test_keyboard_with_config(BehaviorConfig {
-            combo: get_combos_config(),
-            ..Default::default()
-        }),
-        sequence: [
-            [1, 3, true, 10],
-            [1, 3, false, 50],
-            [1, 4, true, 10],
-            [1, 4, false, 50],
-            [1, 5, true, 10],
-            [1, 5, false, 10],
-        ],
-        expected_reports: [
-            [0, [HidKeyCode::E as u8, 0, 0, 0, 0, 0]],
-            [0, [0; 6]],
-            [0, [HidKeyCode::R as u8, 0, 0, 0, 0, 0]],
-            [0, [0; 6]],
-            [0, [HidKeyCode::T as u8, 0, 0, 0, 0, 0]],
-            [0, [0; 6]],
-        ]
-    }
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
+            .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
+            .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
+            .combo_timeout_ms(100)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(1, 3)
+            .delay(50)
+            .release(1, 3)
+            .delay(10)
+            .press(1, 4)
+            .delay(50)
+            .release(1, 4)
+            .delay(10)
+            .press(1, 5)
+            .delay(10)
+            .release(1, 5)
+            .expect_keyboard_report(crate::common::report(0, [HidKeyCode::E as u8, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .expect_keyboard_report(crate::common::report(0, [HidKeyCode::R as u8, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .expect_keyboard_report(crate::common::report(0, [HidKeyCode::T as u8, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .run()
+            .await;
+    });
 }
 #[test]
 fn test_combo_timeout_and_ignore() {
-    key_sequence_test! {
-        keyboard: create_test_keyboard_with_config(BehaviorConfig {
-            combo: get_combos_config(),
-            ..Default::default()
-        }),
-        sequence: [
-            [3, 4, true, 10],
-            [3, 4, false, 100],
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(V), 0, 0, 0, 0, 0]],
-        ]
-    }
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
+            .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
+            .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
+            .combo_timeout_ms(100)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(3, 4)
+            .delay(100)
+            .release(3, 4)
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(V), 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_combo_with_mod_then_mod_timeout() {
-    key_sequence_test! {
-        keyboard: create_test_keyboard_with_config(BehaviorConfig {
-            combo: get_combos_config(),
-            ..Default::default()
-        }),
-        sequence: [
-            [3, 4, true, 10], // Press V
-            [3, 5, true, 10], // Press B
-            [1, 4, true, 50], // Press R
-            [1, 4, false, 90], // Release R
-            [3, 4, false, 150], // Release V
-            [3, 5, false, 170], // Release B
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0; 6]], // V + B = LShift
-            [KC_LSHIFT, [HidKeyCode::R as u8, 0, 0, 0, 0, 0]], // Press R
-            [KC_LSHIFT, [0; 6]], // Release R
-            [0, [0; 6]], // Release V + B
-        ]
-    }
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
+            .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
+            .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
+            .combo_timeout_ms(100)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(3, 4) // Press V
+            .delay(10)
+            .press(3, 5) // Press B
+            .delay(50)
+            .press(1, 4) // Press R
+            .delay(90)
+            .release(1, 4) // Release R
+            .delay(150)
+            .release(3, 4) // Release V
+            .delay(170)
+            .release(3, 5) // Release B
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0; 6])) // V + B = LShift
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [HidKeyCode::R as u8, 0, 0, 0, 0, 0])) // Press R
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0; 6])) // Release R
+            .expect_keyboard_report(crate::common::report(0, [0; 6])) // Release V + B
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_combo_with_one_shot_modifier() {
-    key_sequence_test! {
-        keyboard: create_test_keyboard_with_config(BehaviorConfig {
-            combo: get_combos_config(),
-            one_shot: OneShotConfig {
-                timeout: Duration::from_millis(300),
-                ..Default::default()
-            },
-            ..Default::default()
-        }),
-        sequence: [
-            [1, 3, true, 10],
-            [1, 5, true, 10],
-            [1, 3, false, 50],
-            [1, 5, false, 70],
-            [1, 3, true, 50],
-            [1, 3, false, 110],
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [HidKeyCode::E as u8, 0, 0, 0, 0, 0]],
-            [0, [0; 6]],
-        ]
-    }
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
+            .one_shot_timeout_ms(300)
+            .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
+            .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
+            .combo_timeout_ms(100)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(1, 3)
+            .delay(10)
+            .press(1, 5)
+            .delay(50)
+            .release(1, 3)
+            .delay(70)
+            .release(1, 5)
+            .delay(50)
+            .press(1, 3)
+            .delay(110)
+            .release(1, 3)
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [HidKeyCode::E as u8, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_combo_with_mod() {
-    key_sequence_test! {
-        keyboard: create_test_keyboard_with_config(BehaviorConfig {
-            combo: get_combos_config(),
-            ..Default::default()
-        }),
-        sequence: [
-            [3, 4, true, 10], // V
-            [3, 5, true, 10], // B
-            [3, 6, true, 50], // N, trigger V + B = LShift
-            [3, 6, false, 70],
-            [3, 4, false, 100],
-            [3, 5, false, 110],
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [0; 6]],
-            [KC_LSHIFT, [HidKeyCode::N as u8, 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [0; 6]],
-            [0, [0; 6]],
-        ]
-    }
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
+            .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
+            .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
+            .combo_timeout_ms(100)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(3, 4) // V
+            .delay(10)
+            .press(3, 5) // B
+            .delay(50)
+            .press(3, 6) // N, trigger V + B = LShift
+            .delay(70)
+            .release(3, 6)
+            .delay(100)
+            .release(3, 4)
+            .delay(110)
+            .release(3, 5)
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0; 6]))
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [HidKeyCode::N as u8, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0; 6]))
+            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_fully_overlapped_combo_timeout() {
-    key_sequence_test! {
-        keyboard: create_test_keyboard_with_config(BehaviorConfig {
-            combo: get_combos_config(),
-            ..Default::default()
-        }),
-        sequence: [
-            [1, 3, true, 10], // E
-            [1, 4, true, 10], // T
-            [1, 3, false, 170], // Timeout, should trigger E+T = A because E+T are triggered within the timeout window
-            [1, 4, false, 10],
-        ],
-        expected_reports: [
-            [0, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]],
-            [0, [0; 6]],
-        ]
-    }
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
+            .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
+            .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
+            .combo_timeout_ms(100)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(1, 3) // E
+            .delay(10)
+            .press(1, 4) // T
+            .delay(170)
+            .release(1, 3) // Timeout, should trigger E+T = A because E+T are triggered within the timeout window
+            .delay(10)
+            .release(1, 4)
+            .expect_keyboard_report(crate::common::report(0, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_fully_overlapped_combo_trigger_smaller() {
-    key_sequence_test! {
-        keyboard: create_test_keyboard_with_config(BehaviorConfig {
-            combo: get_combos_config(),
-            ..Default::default()
-        }),
-        sequence: [
-            [1, 3, true, 10], // E
-            [1, 4, true, 10], // T
-            [1, 3, false, 10],
-            [1, 4, false, 10],
-        ],
-        expected_reports: [
-            [0, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]],
-            [0, [0; 6]],
-        ]
-    }
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
+            .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
+            .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
+            .combo_timeout_ms(100)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(1, 3) // E
+            .delay(10)
+            .press(1, 4) // T
+            .delay(10)
+            .release(1, 3)
+            .delay(10)
+            .release(1, 4)
+            .expect_keyboard_report(crate::common::report(0, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_fully_overlapped_combo() {
-    key_sequence_test! {
-        keyboard: create_test_keyboard_with_config(BehaviorConfig {
-            combo: get_combos_config(),
-            ..Default::default()
-        }),
-        sequence: [
-            [1, 3, true, 10], // E
-            [1, 5, true, 10], // T
-            [1, 4, true, 10], // R
-            [1, 3, false, 50],
-            [1, 5, false, 10],
-            [1, 4, false, 50],
-            [1, 3, true, 10], // E
-            [1, 5, true, 10], // T
-            [1, 3, false, 50],
-            [1, 5, false, 10],
-            [1, 3, true, 10], // E
-            [1, 4, true, 10], // R
-            [1, 3, false, 50],
-            [1, 4, false, 50],
-            [1, 3, true, 10], // E
-            [1, 5, true, 10], // T
-            [1, 4, true, 10], // R
-            [1, 3, false, 50],
-            [1, 5, false, 10],
-            [1, 4, false, 50],
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
+            .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
+            .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
+            .combo_timeout_ms(100)
+            .build()
+            .await;
 
-        ],
-        expected_reports: [
-            [0, [HidKeyCode::Space as u8, 0, 0, 0, 0, 0]],
-            [0, [0; 6]],
-            [KC_LSHIFT, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]],
-            [0, [0; 6]],
-            [0, [HidKeyCode::Space as u8, 0, 0, 0, 0, 0]],
-            [0, [0; 6]],
-        ]
-    }
+        keyboard
+            .delay(10)
+            .press(1, 3) // E
+            .delay(10)
+            .press(1, 5) // T
+            .delay(10)
+            .press(1, 4) // R
+            .delay(50)
+            .release(1, 3)
+            .delay(10)
+            .release(1, 5)
+            .delay(50)
+            .release(1, 4)
+            .delay(10)
+            .press(1, 3) // E
+            .delay(10)
+            .press(1, 5) // T
+            .delay(50)
+            .release(1, 3)
+            .delay(10)
+            .release(1, 5)
+            .delay(10)
+            .press(1, 3) // E
+            .delay(10)
+            .press(1, 4) // R
+            .delay(50)
+            .release(1, 3)
+            .delay(50)
+            .release(1, 4)
+            .delay(10)
+            .press(1, 3) // E
+            .delay(10)
+            .press(1, 5) // T
+            .delay(10)
+            .press(1, 4) // R
+            .delay(50)
+            .release(1, 3)
+            .delay(10)
+            .release(1, 5)
+            .delay(50)
+            .release(1, 4)
+            .expect_keyboard_report(crate::common::report(0, [HidKeyCode::Space as u8, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .expect_keyboard_report(crate::common::report(0, [HidKeyCode::Space as u8, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_overlapped_combo() {
-    key_sequence_test! {
-        keyboard: create_test_keyboard_with_config(BehaviorConfig {
-            combo: get_combos_config(),
-            ..Default::default()
-        }),
-        sequence: [
-            [1, 3, true, 10],
-            [1, 5, true, 10],
-            [1, 3, false, 50],
-            [1, 5, false, 10],
-            [1, 4, true, 100],
-            [1, 3, true, 10],
-            [1, 4, false, 50],
-            [1, 3, false, 10],
-        ],
-        expected_reports: [
-            [KC_LSHIFT, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]],
-            [0, [0; 6]],
-        ]
-    }
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
+            .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
+            .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
+            .combo_timeout_ms(100)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(1, 3)
+            .delay(10)
+            .press(1, 5)
+            .delay(50)
+            .release(1, 3)
+            .delay(10)
+            .release(1, 5)
+            .delay(100)
+            .press(1, 4)
+            .delay(10)
+            .press(1, 3)
+            .delay(50)
+            .release(1, 4)
+            .delay(10)
+            .release(1, 3)
+            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn test_taphold_with_combo() {
-    key_sequence_test! {
-        keyboard: {
-            let behavior_config = BehaviorConfig {
-                morse: MorsesConfig {
-                    default_profile: MorseProfile::new(
-                        Some(false),
-                        Some(MorseMode::PermissiveHold),
-                        Some(250u16),
-                        Some(250u16)
-                    ),
-                    ..Default::default()
-                },
-                combo: CombosConfig {
-                    combos: [
-                        Some(Combo::new(ComboConfig::new(
-                            [th!(A, LShift), th!(S, LGui), th!(Z, LAlt)],
-                            k!(C),
-                            None,
-                        ))), None, None, None, None, None, None, None
-                    ],
-                    timeout: Duration::from_millis(50),
-                    prior_idle_time: None,
-                },
-                ..Default::default()
-            };
-            create_test_keyboard_with_config(behavior_config)
-        },
-        sequence: [
-            [2, 1, true, 20],  // Press th!(A,shift)
-            [2, 2, true, 20],  // Press th!(S,LGui)
-            [3, 1, true, 20],  // Press th!(Z,LAlt)
-            [2, 1, false, 10], // Release A
-            [2, 2, false, 10], // Release S
-            [3, 1, false, 10], // Release Z
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
+            .morse_default_profile(MorseProfile::new(
+                Some(false),
+                Some(MorseMode::PermissiveHold),
+                Some(250u16),
+                Some(250u16),
+            ))
+            .combo_global([th!(A, LShift), th!(S, LGui), th!(Z, LAlt)], k!(C))
+            .combo_timeout_ms(50)
+            .build()
+            .await;
+
+        keyboard
+            .delay(20)
+            .press(2, 1) // Press th!(A,shift)
+            .delay(20)
+            .press(2, 2) // Press th!(S,LGui)
+            .delay(20)
+            .press(3, 1) // Press th!(Z,LAlt)
+            .delay(10)
+            .release(2, 1) // Release A
+            .delay(10)
+            .release(2, 2) // Release S
+            .delay(10)
+            .release(3, 1) // Release Z
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .run()
+            .await;
+    });
 }
 // Reproduces a single-combo stuck-key bug: re-pressing a combo key while the
 // combo is still held (one key of the chord was released, same key pressed
@@ -362,42 +374,31 @@ fn test_taphold_with_combo() {
 // release couldn't find its slot, leaving the re-pressed key stuck.
 #[test]
 fn test_re_press_combo_key_while_triggered_does_not_leak_to_hid() {
-    let combos = CombosConfig {
-        combos: [
-            Some(Combo::new(ComboConfig::new(
-                [k!(Comma), k!(Dot)].to_vec(),
-                k!(Backspace),
-                Some(0),
-            ))),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        ],
-        timeout: Duration::from_millis(40),
-        prior_idle_time: None,
-    };
-    key_sequence_test! {
-        keyboard: create_test_keyboard_with_config(BehaviorConfig {
-            combo: combos,
-            ..Default::default()
-        }),
-        sequence: [
-            [3, 8, true, 10],   // Comma press
-            [3, 9, true, 10],   // Dot press -> `,+.` triggers -> Backspace pressed
-            [3, 9, false, 10],  // Dot release (partial release, swallowed)
-            [3, 9, true, 10],   // Dot re-press while combo still held
-            [3, 9, false, 10],  // Dot re-release (still part of combo)
-            [3, 8, false, 10],  // Comma release -> combo fully releases -> Backspace released
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(Backspace), 0, 0, 0, 0, 0]],
-            [0, [0; 6]],
-        ]
-    }
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
+            .combo_on_layer(0, [k!(Comma), k!(Dot)], k!(Backspace))
+            .combo_timeout_ms(40)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(3, 8) // Comma press
+            .delay(10)
+            .press(3, 9) // Dot press -> `,+.` triggers -> Backspace pressed
+            .delay(10)
+            .release(3, 9) // Dot release (partial release, swallowed)
+            .delay(10)
+            .press(3, 9) // Dot re-press while combo still held
+            .delay(10)
+            .release(3, 9) // Dot re-release (still part of combo)
+            .delay(10)
+            .release(3, 8) // Comma release -> combo fully releases -> Backspace released
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Backspace), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .run()
+            .await;
+    });
 }
 
 // Reproduces a stuck combo-output bug on overlapping triggered combos.
@@ -415,51 +416,37 @@ fn test_re_press_combo_key_while_triggered_does_not_leak_to_hid() {
 // re-pressing Comma.
 #[test]
 fn test_overlapping_triggered_combos_release_all_outputs() {
-    let combos = CombosConfig {
-        combos: [
-            Some(Combo::new(ComboConfig::new(
-                [k!(M), k!(Comma)].to_vec(),
-                k!(RightBracket),
-                Some(0),
-            ))),
-            Some(Combo::new(ComboConfig::new(
-                [k!(Comma), k!(Dot)].to_vec(),
-                k!(Equal),
-                Some(0),
-            ))),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        ],
-        timeout: Duration::from_millis(40),
-        prior_idle_time: None,
-    };
-    key_sequence_test! {
-        keyboard: create_test_keyboard_with_config(BehaviorConfig {
-            combo: combos,
-            ..Default::default()
-        }),
-        sequence: [
-            [3, 9, true, 10],   // Dot press
-            [3, 8, true, 10],   // Comma press -> `,+.` triggers -> Equal pressed
-            [3, 9, false, 10],  // Dot release (partial release of triggered combo)
-            [3, 7, true, 10],   // M press -> `M+,` triggers (stale Comma bit) -> RightBracket pressed
-            [3, 7, false, 10],  // M release (partial release of triggered combo)
-            [3, 8, false, 10],  // Comma release -> must release BOTH combo outputs
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(Equal), 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(Equal), kc_to_u8!(RightBracket), 0, 0, 0, 0]],
-            // Releasing Comma fully unwinds both triggered combos.
-            // Order of the two release reports depends on combo iteration order;
-            // `M+,` is index 0 so its output (RightBracket) releases first.
-            [0, [kc_to_u8!(Equal), 0, 0, 0, 0, 0]],
-            [0, [0; 6]],
-        ]
-    }
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
+            .combo_on_layer(0, [k!(M), k!(Comma)], k!(RightBracket))
+            .combo_on_layer(0, [k!(Comma), k!(Dot)], k!(Equal))
+            .combo_timeout_ms(40)
+            .build()
+            .await;
+
+        keyboard
+            .delay(10)
+            .press(3, 9) // Dot press
+            .delay(10)
+            .press(3, 8) // Comma press -> `,+.` triggers -> Equal pressed
+            .delay(10)
+            .release(3, 9) // Dot release (partial release of triggered combo)
+            .delay(10)
+            .press(3, 7) // M press -> `M+,` triggers (stale Comma bit) -> RightBracket pressed
+            .delay(10)
+            .release(3, 7) // M release (partial release of triggered combo)
+            .delay(10)
+            .release(3, 8) // Comma release -> must release BOTH combo outputs
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Equal), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(
+                0,
+                [kc_to_u8!(Equal), kc_to_u8!(RightBracket), 0, 0, 0, 0],
+            ))
+            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Equal), 0, 0, 0, 0, 0]))
+            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .run()
+            .await;
+    });
 }
 
 #[test]

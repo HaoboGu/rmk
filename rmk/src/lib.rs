@@ -34,6 +34,8 @@ compile_error!(
 
 // Re-export self as ::rmk for macro-generated code to work both inside and outside the crate
 extern crate self as rmk;
+#[cfg(feature = "std")]
+extern crate std;
 
 include!(concat!(env!("OUT_DIR"), "/constants.rs"));
 
@@ -104,6 +106,10 @@ pub mod storage;
 pub mod usb;
 #[cfg(feature = "watchdog")]
 pub mod watchdog;
+
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub mod sim;
 
 // Test-only helper that drives `embassy-time/mock-driver` from the
 // `#[cfg(test)]` modules under `src/`. Mirrors the same helper at

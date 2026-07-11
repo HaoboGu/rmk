@@ -1,63 +1,54 @@
 pub mod common;
 
-use embassy_time::Duration;
-use rmk::config::{BehaviorConfig, OneShotModifiersConfig};
+use rmk::sim::{KeymapOverride, SimKeyboard, SimKeyboardSetup};
+
 use rmk::types::modifier::ModifierCombination;
 
 mod one_shot_test {
-    use rmk::config::{OneShotConfig, PositionalConfig};
-    use rmk::keyboard::Keyboard;
-    use rmk::types::action::KeyAction;
     use rmk::{k, osl, osm, th, wm};
 
     use super::*;
-    use crate::common::{KC_LCTRL, KC_LGUI, KC_LSHIFT, wrap_keymap};
+    use crate::common::{KC_LCTRL, KC_LGUI, KC_LSHIFT, TEST_KEYMAP};
 
-    // KEYMAP
+    // Keys
     // Layer 0: OSM(LShift)        OSL(1)  A  TH(B)  OSM(LCtrl)  WM(B)
     // Layer 1: OSM(LShift|LCtrl)  No      C  D      E           F
 
-    const KEYMAP: [[[KeyAction; 6]; 1]; 2] = [
-        [[
-            // Layer 0
-            osm!(ModifierCombination::new_from(false, false, false, true, false)), // OSM LShift
-            osl!(1),                                                               // OSL Layer 1
-            k!(A),                                                                 // Regular key A
-            th!(B, C),                                                             // Tap-hold key B, C
-            osm!(ModifierCombination::new_from(false, false, false, false, true)), // OSM LCtrl
-            wm!(B, ModifierCombination::new_from(false, true, false, false, false)), // WM B with LGUI
-        ]],
-        [[
-            // Layer 1
-            osm!(ModifierCombination::new_from(false, false, false, true, true)), // OSM LShift + LCtrl
-            k!(No),                                                               // No action
-            k!(C),                                                                // Layer 1 key C
-            k!(D),                                                                // Layer 1 key D
-            k!(E),                                                                // Layer 1 key E
-            k!(F),                                                                // Layer 1 key F
-        ]],
+    const ONE_SHOT_KEY_OVERRIDES: [KeymapOverride; 12] = [
+        KeymapOverride::new(
+            0,
+            0,
+            0,
+            osm!(ModifierCombination::new_from(false, false, false, true, false)),
+        ),
+        KeymapOverride::new(0, 0, 1, osl!(1)),
+        KeymapOverride::new(0, 0, 2, k!(A)),
+        KeymapOverride::new(0, 0, 3, th!(B, C)),
+        KeymapOverride::new(
+            0,
+            0,
+            4,
+            osm!(ModifierCombination::new_from(false, false, false, false, true)),
+        ),
+        KeymapOverride::new(
+            0,
+            0,
+            5,
+            wm!(B, ModifierCombination::new_from(false, true, false, false, false)),
+        ),
+        KeymapOverride::new(
+            1,
+            0,
+            0,
+            osm!(ModifierCombination::new_from(false, false, false, true, true)),
+        ),
+        KeymapOverride::new(1, 0, 1, k!(No)),
+        KeymapOverride::new(1, 0, 2, k!(C)),
+        KeymapOverride::new(1, 0, 3, k!(D)),
+        KeymapOverride::new(1, 0, 4, k!(E)),
+        KeymapOverride::new(1, 0, 5, k!(F)),
     ];
-
-    fn create_test_keyboard() -> Keyboard<'static> {
-        let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
-        let per_key_config: &'static PositionalConfig<1, 6> = Box::leak(Box::new(PositionalConfig::default()));
-        Keyboard::new(wrap_keymap(KEYMAP, per_key_config, behavior_config))
-    }
-
-    fn create_test_keyboard_with_behavior_config(config: BehaviorConfig) -> Keyboard<'static> {
-        let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(config));
-        let per_key_config: &'static PositionalConfig<1, 6> = Box::leak(Box::new(PositionalConfig::default()));
-        Keyboard::new(wrap_keymap(KEYMAP, per_key_config, behavior_config))
-    }
-
-    fn create_test_keyboard_with_one_shot_modifiers_config(config: OneShotModifiersConfig) -> Keyboard<'static> {
-        let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
-            one_shot_modifiers: config,
-            ..BehaviorConfig::default()
-        }));
-        let per_key_config: &'static PositionalConfig<1, 6> = Box::leak(Box::new(PositionalConfig::default()));
-        Keyboard::new(wrap_keymap(KEYMAP, per_key_config, behavior_config))
-    }
+    const ONE_SHOT_SETUP: SimKeyboardSetup<5, 14> = SimKeyboardSetup::new().keys(&ONE_SHOT_KEY_OVERRIDES);
 
     /// OSM Test Case 1
     ///
@@ -74,21 +65,23 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_basic_single_behavior() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard(),
-            sequence: [
-                // Press and Release OSM LShift
-                [0, 0, true, 10],
-                [0, 0, false, 10],
-                // Press and Release A
-                [0, 2, true, 10],
-                [0, 2, false, 10],
-            ],
-            expected_reports: [
-                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
+
+            keyboard
+                .delay(10)
+                .press(0, 0)
+                .delay(10)
+                .release(0, 0)
+                .delay(10)
+                .press(0, 2)
+                .delay(10)
+                .release(0, 2)
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // A with LShift
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     /// OSM Test Case 2
@@ -106,29 +99,27 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_timeout() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard_with_behavior_config(
-                BehaviorConfig {
-                    one_shot: OneShotConfig {
-                        timeout: Duration::from_millis(100),
-                        ..OneShotConfig::default()
-                    },
-                    ..BehaviorConfig::default()
-                }
-            ),
-            sequence: [
-                // Press and Release OSM LShift
-                [0, 0, true, 10],
-                [0, 0, false, 10],
-                // Press and Release A after timeout (delay > 100ms)
-                [0, 2, true, 150],
-                [0, 2, false, 10],
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A without LShift (timeout)
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+                .setup(ONE_SHOT_SETUP)
+                .one_shot_timeout_ms(100)
+                .build()
+                .await;
+
+            keyboard
+                .delay(10)
+                .press(0, 0)
+                .delay(10)
+                .release(0, 0)
+                .delay(150)
+                .press(0, 2)
+                .delay(10)
+                .release(0, 2)
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // A without LShift (timeout)
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     /// OSM Test Case 3
@@ -149,20 +140,24 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_held_behavior() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard(),
-            sequence: [
-                [0, 0, true, 10],   // Press OSM LShift
-                [0, 2, true, 10],   // Press A while OSM is held
-                [0, 2, false, 10],  // Release A
-                [0, 0, false, 10],  // Release OSM LShift
-            ],
-            expected_reports: [
-                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // Still holding LShift
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
+
+            keyboard
+                .delay(10)
+                .press(0, 0) // Press OSM LShift
+                .delay(10)
+                .press(0, 2) // Press A while OSM is held
+                .delay(10)
+                .release(0, 2) // Release A
+                .delay(10)
+                .release(0, 0) // Release OSM LShift
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // A with LShift
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Still holding LShift
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     /// OSM Test Case 4
@@ -183,26 +178,29 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_multiple_keys() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard(),
-            sequence: [
-                // Press and Release OSM LShift
-                [0, 0, true, 10],
-                [0, 0, false, 10],
-                // Press and Release A
-                [0, 2, true, 10],
-                [0, 2, false, 10],
-                // Press and Release B
-                [0, 3, true, 10],
-                [0, 3, false, 10],
-            ],
-            expected_reports: [
-                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // B without LShift
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
+
+            keyboard
+                .delay(10)
+                .press(0, 0)
+                .delay(10)
+                .release(0, 0)
+                .delay(10)
+                .press(0, 2)
+                .delay(10)
+                .release(0, 2)
+                .delay(10)
+                .press(0, 3)
+                .delay(10)
+                .release(0, 3)
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // A with LShift
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // B without LShift
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     /// OSM Test Case 5
@@ -222,19 +220,23 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_rolling_with_tap_hold() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard(),
-            sequence: [
-                [0, 0, true, 10],   // Press OSM LShift
-                [0, 3, true, 10],   // Press B
-                [0, 0, false, 10],  // Release OSM LShift
-                [0, 3, false, 10],  // Release B
-            ],
-            expected_reports: [
-                [KC_LSHIFT, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // B with LShift
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
+
+            keyboard
+                .delay(10)
+                .press(0, 0) // Press OSM LShift
+                .delay(10)
+                .press(0, 3) // Press B
+                .delay(10)
+                .release(0, 0) // Release OSM LShift
+                .delay(10)
+                .release(0, 3) // Release B
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // B with LShift
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     /// OSM Test Case 6
@@ -253,24 +255,30 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_combined_modifiers() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard(),
-            sequence: [
-                // Press and Release OSM LShift
-                [0, 0, true, 10],
-                [0, 0, false, 10],
-                // Press and Release OSM LCtrl
-                [0, 4, true, 10],
-                [0, 4, false, 10],
-                // Press and Release A
-                [0, 2, true, 10],
-                [0, 2, false, 10],
-            ],
-            expected_reports: [
-                [KC_LSHIFT | KC_LCTRL, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift+LCtrl
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
+
+            keyboard
+                .delay(10)
+                .press(0, 0)
+                .delay(10)
+                .release(0, 0)
+                .delay(10)
+                .press(0, 4)
+                .delay(10)
+                .release(0, 4)
+                .delay(10)
+                .press(0, 2)
+                .delay(10)
+                .release(0, 2)
+                .expect_keyboard_report(crate::common::report(
+                    KC_LSHIFT | KC_LCTRL,
+                    [kc_to_u8!(A), 0, 0, 0, 0, 0],
+                )) // A with LShift+LCtrl
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     /// OSM Test Case 7
@@ -289,24 +297,30 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_multiple_osm_with_wm() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard(),
-            sequence: [
-                // Press and Release OSM LShift
-                [0, 0, true, 10],
-                [0, 0, false, 10],
-                // Press and Release OSM LCtrl
-                [0, 4, true, 10],
-                [0, 4, false, 10],
-                // Press and Release WM(B, LGui)
-                [0, 5, true, 10],
-                [0, 5, false, 10],
-            ],
-            expected_reports: [
-                [KC_LSHIFT | KC_LCTRL | KC_LGUI, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // B with LShift + LCtrl + LGui
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
+
+            keyboard
+                .delay(10)
+                .press(0, 0)
+                .delay(10)
+                .release(0, 0)
+                .delay(10)
+                .press(0, 4)
+                .delay(10)
+                .release(0, 4)
+                .delay(10)
+                .press(0, 5)
+                .delay(10)
+                .release(0, 5)
+                .expect_keyboard_report(crate::common::report(
+                    KC_LSHIFT | KC_LCTRL | KC_LGUI,
+                    [kc_to_u8!(B), 0, 0, 0, 0, 0],
+                )) // B with LShift + LCtrl + LGui
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     /// OSM Test Case 8
@@ -327,23 +341,28 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_activate_on_keypress() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
-                activate_on_keypress: true,
-                ..OneShotModifiersConfig::default()
-            }),
-            sequence: [
-                [0, 0, true, 10],   // Press OSM LShift
-                [0, 0, false, 10],  // Release OSM LShift
-                [0, 2, true, 10],   // Press A
-                [0, 2, false, 10],  // Release A
-            ],
-            expected_reports: [
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // LShift is sent from the start
-                [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        }
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+                .setup(ONE_SHOT_SETUP)
+                .one_shot_activate_on_keypress(true)
+                .build()
+                .await;
+
+            keyboard
+                .delay(10)
+                .press(0, 0) // Press OSM LShift
+                .delay(10)
+                .release(0, 0) // Release OSM LShift
+                .delay(10)
+                .press(0, 2) // Press A
+                .delay(10)
+                .release(0, 2) // Release A
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // LShift is sent from the start
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // A with LShift
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     /// OSM Test Case 9
@@ -364,181 +383,213 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_combined_modifiers_with_activate_on_keypress() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard_with_one_shot_modifiers_config(OneShotModifiersConfig {
-                activate_on_keypress: true,
-                ..OneShotModifiersConfig::default()
-            }),
-            sequence: [
-                // Press and Release OSM LShift
-                [0, 0, true, 10],
-                [0, 0, false, 10],
-                // Press and Release OSM LCtrl
-                [0, 4, true, 10],
-                [0, 4, false, 10],
-                // Press and Release A
-                [0, 2, true, 10],
-                [0, 2, false, 10],
-            ],
-            expected_reports: [
-                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]], // LShift is sent first
-                [KC_LSHIFT | KC_LCTRL, [0, 0, 0, 0, 0, 0]], // LCtrl is added to combination
-                [KC_LSHIFT | KC_LCTRL, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A with LShift+LCtrl
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+                .setup(ONE_SHOT_SETUP)
+                .one_shot_activate_on_keypress(true)
+                .build()
+                .await;
+
+            keyboard
+                .delay(10)
+                .press(0, 0)
+                .delay(10)
+                .release(0, 0)
+                .delay(10)
+                .press(0, 4)
+                .delay(10)
+                .release(0, 4)
+                .delay(10)
+                .press(0, 2)
+                .delay(10)
+                .release(0, 2)
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // LShift is sent first
+                .expect_keyboard_report(crate::common::report(KC_LSHIFT | KC_LCTRL, [0, 0, 0, 0, 0, 0])) // LCtrl is added to combination
+                .expect_keyboard_report(crate::common::report(
+                    KC_LSHIFT | KC_LCTRL,
+                    [kc_to_u8!(A), 0, 0, 0, 0, 0],
+                )) // A with LShift+LCtrl
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     // OSL Tests
     #[test]
     fn test_osl_basic_single_behavior() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard(),
-            sequence: [
-                [0, 1, true, 10],   // Press OSL Layer 1
-                [0, 1, false, 10],  // Release OSL Layer 1
-                [0, 2, true, 10],   // Press key at (0,2), should get C from layer 1
-                [0, 2, false, 10],  // Release key
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // C from layer 1
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
+
+            keyboard
+                .delay(10)
+                .press(0, 1) // Press OSL Layer 1
+                .delay(10)
+                .release(0, 1) // Release OSL Layer 1
+                .delay(10)
+                .press(0, 2) // Press key at (0,2), should get C from layer 1
+                .delay(10)
+                .release(0, 2) // Release key
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // C from layer 1
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     #[test]
     fn test_osl_held_behavior() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard(),
-            sequence: [
-                [0, 1, true, 10],   // Press OSL Layer 1
-                [0, 2, true, 10],   // Press key at (0,2) while OSL is held
-                [0, 2, false, 10],  // Release key
-                [0, 1, false, 10],  // Release OSL Layer 1
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // C from layer 1
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
+
+            keyboard
+                .delay(10)
+                .press(0, 1) // Press OSL Layer 1
+                .delay(10)
+                .press(0, 2) // Press key at (0,2) while OSL is held
+                .delay(10)
+                .release(0, 2) // Release key
+                .delay(10)
+                .release(0, 1) // Release OSL Layer 1
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // C from layer 1
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     #[test]
     fn test_osl_timeout() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard_with_behavior_config(
-                BehaviorConfig {
-                    one_shot: OneShotConfig {
-                        timeout: Duration::from_millis(100),
-                        ..OneShotConfig::default()
-                    },
-                    one_shot_modifiers: OneShotModifiersConfig {
-                        ..OneShotModifiersConfig::default()
-                    },
-                    ..BehaviorConfig::default()
-                }
-            ),
-            sequence: [
-                [0, 1, true, 10],   // Press OSL Layer 1
-                [0, 1, false, 10],  // Release OSL Layer 1
-                [0, 2, true, 150],  // Press key at (0,2) after timeout (delay > 100ms)
-                [0, 2, false, 10],  // Release key
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A from layer 0 (timeout)
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+                .setup(ONE_SHOT_SETUP)
+                .one_shot_timeout_ms(100)
+                .build()
+                .await;
+
+            keyboard
+                .delay(10)
+                .press(0, 1) // Press OSL Layer 1
+                .delay(10)
+                .release(0, 1) // Release OSL Layer 1
+                .delay(150)
+                .press(0, 2) // Press key at (0,2) after timeout (delay > 100ms)
+                .delay(10)
+                .release(0, 2) // Release key
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // A from layer 0 (timeout)
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     #[test]
     fn test_osl_multiple_keys() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard(),
-            sequence: [
-                [0, 1, true, 10],   // Press OSL Layer 1
-                [0, 1, false, 10],  // Release OSL Layer 1
-                [0, 2, true, 10],   // Press key at (0,2), should get C from layer 1
-                [0, 2, false, 10],  // Release key
-                [0, 3, true, 10],   // Press key at (0,3), should get B from layer 0
-                [0, 3, false, 10],  // Release key
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // C from layer 1
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-                [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // B from layer 0
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
+
+            keyboard
+                .delay(10)
+                .press(0, 1) // Press OSL Layer 1
+                .delay(10)
+                .release(0, 1) // Release OSL Layer 1
+                .delay(10)
+                .press(0, 2) // Press key at (0,2), should get C from layer 1
+                .delay(10)
+                .release(0, 2) // Release key
+                .delay(10)
+                .press(0, 3) // Press key at (0,3), should get B from layer 0
+                .delay(10)
+                .release(0, 3) // Release key
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // C from layer 1
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // B from layer 0
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     #[test]
     fn test_osm_then_osl() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard(),
-            sequence: [
-                [0, 0, true, 10],   // Press OSM LShift
-                [0, 0, false, 10],  // Release OSM LShift
-                [0, 1, true, 10],   // Press OSL Layer 1
-                [0, 1, false, 10],  // Release OSL Layer 1
-                [0, 2, true, 10],   // Press key at (0,2), should get C from layer 1 with shift
-                [0, 2, false, 10],  // Release key
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // C from layer 1 with LShift
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
+
+            keyboard
+                .delay(10)
+                .press(0, 0) // Press OSM LShift
+                .delay(10)
+                .release(0, 0) // Release OSM LShift
+                .delay(10)
+                .press(0, 1) // Press OSL Layer 1
+                .delay(10)
+                .release(0, 1) // Release OSL Layer 1
+                .delay(10)
+                .press(0, 2) // Press key at (0,2), should get C from layer 1 with shift
+                .delay(10)
+                .release(0, 2) // Release key
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // C from layer 1 with LShift
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     #[test]
     fn test_osl_then_osm() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard(),
-            sequence: [
-                [0, 1, true, 10],   // Press OSL Layer 1
-                [0, 1, false, 10],  // Release OSL Layer 1
-                [0, 0, true, 10],   // Press OSM LShift (from layer 1, but No action)
-                [0, 0, false, 10],  // Release OSM LShift (gets from layer 0 due to transparent)
-                [0, 2, true, 10],   // Press key at (0,2), should get A from layer 0 with shift + ctrl
-                [0, 2, false, 10],  // Release key
-            ],
-            expected_reports: [
-                [KC_LSHIFT | KC_LCTRL, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A from layer 0 with shift + ctrl
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
+
+            keyboard
+                .delay(10)
+                .press(0, 1) // Press OSL Layer 1
+                .delay(10)
+                .release(0, 1) // Release OSL Layer 1
+                .delay(10)
+                .press(0, 0) // Press OSM LShift (from layer 1, but No action)
+                .delay(10)
+                .release(0, 0) // Release OSM LShift (gets from layer 0 due to transparent)
+                .delay(10)
+                .press(0, 2) // Press key at (0,2), should get A from layer 0 with shift + ctrl
+                .delay(10)
+                .release(0, 2) // Release key
+                .expect_keyboard_report(crate::common::report(
+                    KC_LSHIFT | KC_LCTRL,
+                    [kc_to_u8!(A), 0, 0, 0, 0, 0],
+                )) // A from layer 0 with shift + ctrl
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     #[test]
     fn test_osm_and_osl_timeout() {
-        key_sequence_test! {
-            keyboard: create_test_keyboard_with_behavior_config(
-                BehaviorConfig {
-                    one_shot: OneShotConfig {
-                        timeout: Duration::from_millis(100),
-                        ..OneShotConfig::default()
-                    },
-                    one_shot_modifiers: OneShotModifiersConfig {
-                        ..OneShotModifiersConfig::default()
-                    },
-                    ..BehaviorConfig::default()
-                }
-            ),
-            sequence: [
-                [0, 0, true, 10],   // Press OSM LShift
-                [0, 0, false, 10],  // Release OSM LShift
-                [0, 1, true, 10],   // Press OSL Layer 1
-                [0, 1, false, 10],  // Release OSL Layer 1
-                [0, 2, true, 200], // Press key at (0,2) after timeout (delay > 100ms)
-                [0, 2, false, 10],  // Release key
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A from layer 0 (both timeout)
-                [0, [0, 0, 0, 0, 0, 0]], // All released
-            ]
-        };
+        crate::common::test_block_on::test_block_on(async {
+            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+                .setup(ONE_SHOT_SETUP)
+                .one_shot_timeout_ms(100)
+                .build()
+                .await;
+
+            keyboard
+                .delay(10)
+                .press(0, 0) // Press OSM LShift
+                .delay(10)
+                .release(0, 0) // Release OSM LShift
+                .delay(10)
+                .press(0, 1) // Press OSL Layer 1
+                .delay(10)
+                .release(0, 1) // Release OSL Layer 1
+                .delay(200)
+                .press(0, 2) // Press key at (0,2) after timeout (delay > 100ms)
+                .delay(10)
+                .release(0, 2) // Release key
+                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // A from layer 0 (both timeout)
+                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .run()
+                .await;
+        });
     }
 
     /// Chain mode (quick_release = false): modifier released on key RELEASE

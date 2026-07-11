@@ -21,7 +21,7 @@ use embassy_time::{Duration, MockDriver};
 ///
 /// 100 µs is fine enough that timer-driven decisions never miss a deadline
 /// (a 50 ms inter-event delay resolves in 500 polls; the 5 s outer kill
-/// timer in `run_key_sequence_test` resolves in 50 000 polls — both are
+/// timer in `SimKeyboard::run` resolves in 50 000 polls — both are
 /// CPU-trivial). `MockDriver` doesn't expose the queue's next-expiration
 /// time, so a fixed step is the simplest correct choice.
 const STEP: Duration = Duration::from_micros(100);
@@ -39,8 +39,7 @@ const MAX_ITERS: usize = 60_000_000;
 /// Resets the global `MockDriver` to virtual time 0 and an empty wake queue
 /// before the first poll, so each `test_block_on` invocation starts from a
 /// known state. Nextest already isolates tests by process; this is an extra
-/// guarantee for repeated calls within the same process (e.g. the macro's
-/// inner `block_on` plus `wrap_keymap`'s).
+/// guarantee for repeated calls within the same process.
 pub fn test_block_on<F: Future>(fut: F) -> F::Output {
     MockDriver::get().reset();
 
