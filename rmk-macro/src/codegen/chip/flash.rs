@@ -121,8 +121,21 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                 }
             }
             }
-            ChipSeries::Esp32 => quote! {
-                let flash = ::rmk::storage::async_flash_wrapper(::esp_storage::FlashStorage::new(p.FLASH));
+            ChipSeries::Esp32 => {
+                // ESP32 and ESP32-S3 are dual-core. Flash writes must auto-park it to avoid
+                // `FlashStorageError::OtherCoreRunning`.
+                let chip_name = hardware.chip.chip.to_lowercase();
+                if chip_name == "esp32s3"{
+                    quote! {
+                        let flash = ::rmk::storage::async_flash_wrapper(
+                            ::esp_storage::FlashStorage::new(p.FLASH).multicore_auto_park()
+                        );
+                    }
+                } else {
+                    quote! {
+                        let flash = ::rmk::storage::async_flash_wrapper(::esp_storage::FlashStorage::new(p.FLASH));
+                    }
+                }
             },
         }
     );

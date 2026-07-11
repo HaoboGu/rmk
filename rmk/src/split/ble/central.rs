@@ -70,9 +70,9 @@ pub async fn scan_peripherals<
         if need_scan {
             let scanning_fut = async {
                 loop {
-                    let central = stack.central();
+                    let mut central = stack.central();
                     wait_for_stack_started().await;
-                    let mut scanner = Scanner::new(central);
+                    let mut scanner = Scanner::new(&mut central);
                     let scan_config = ScanConfig {
                         active: false,
                         ..Default::default()

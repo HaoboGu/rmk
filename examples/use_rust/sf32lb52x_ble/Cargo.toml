@@ -54,10 +54,10 @@ embassy-executor = { version = "0.10", features = [
 embassy-futures = { version = "0.1" }
 embassy-sync = { version = "0.8" }
 cortex-m-rt = { version = "0.7.3", features = ["set-sp", "set-vtor"] }
-portable-atomic = { version = "1.11" }
-defmt = "1.0"
-defmt-rtt = "1.0"
-panic-probe = { version = "1.0", features = ["print-defmt"] }
+portable-atomic = { version = "1" }
+defmt = "1"
+defmt-rtt = "1"
+panic-probe = { version = "1", features = ["print-defmt"] }
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 static_cell = "2"
 embedded-graphics = "0.8"

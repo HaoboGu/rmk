@@ -1030,18 +1030,22 @@ impl<'a> Keyboard<'a> {
             self.process_key_action(&action, new_event, true, Instant::now()).await;
             debug!("[Combo] {:?} triggered", action);
             embassy_time::Timer::after_millis(20).await;
-            // Reset other combos' state
-            self.reset_combo(key_action);
+            // Reset other combos shadowed by the one that just fired.
+            self.reset_shadowed_combos(&combo_actions);
         }
     }
 
-    // Reset combos that contain a key_action but not triggered yet
-    fn reset_combo(&mut self, key_action: &KeyAction) {
-        // Reset other sub-combo states
+    // Reset combos shadowed by a just-triggered combo: any *other* combo that is
+    // fully pressed but not yet triggered and shares at least one key with the
+    // triggered combo.
+    fn reset_shadowed_combos(&mut self, triggered_actions: &[KeyAction]) {
         self.keymap.with_combos_mut(|combos| {
             combos.iter_mut().filter_map(|c| c.as_mut()).for_each(|c| {
-                if c.is_all_pressed() && !c.is_triggered() && c.config.contains(key_action) {
-                    info!("Resetting combo: {:?}", c,);
+                if c.is_all_pressed()
+                    && !c.is_triggered()
+                    && c.config.actions.iter().any(|a| triggered_actions.contains(a))
+                {
+                    info!("Resetting shadowed combo: {:?}", c,);
                     c.reset();
                 }
             });
@@ -1126,22 +1130,22 @@ impl<'a> Keyboard<'a> {
             ));
 
             // Only one combo is updated, and triggered
-            let next_action = self.keymap.with_combos_mut(|combos| {
+            let triggered = self.keymap.with_combos_mut(|combos| {
                 combos.iter_mut().filter_map(|c| c.as_mut()).find_map(|c| {
                     if c.is_all_pressed() && !c.is_triggered() && c.size() == max_size {
-                        Some(c.trigger())
+                        Some((c.trigger(), c.config.actions.clone()))
                     } else {
                         None
                     }
                 })
             });
 
-            if let Some(next_action) = next_action {
+            if let Some((next_action, triggered_actions)) = triggered {
                 debug!("[Combo] {:?} triggered", next_action);
                 self.held_buffer
                     .keys
                     .retain(|item| item.state != KeyState::WaitingCombo);
-                self.reset_combo(key_action);
+                self.reset_shadowed_combos(&triggered_actions);
                 return (Some(next_action), true);
             }
             (None, false)

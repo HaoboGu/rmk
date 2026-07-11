@@ -156,12 +156,6 @@ impl Keyboard<'_> {
             }
         } else {
             // SK released.
-            if !matches!(
-                self.sticky_key_state,
-                StickyKeyState::Active { source, .. } if source == event.pos
-            ) {
-                return;
-            }
             if let StickyKeyState::Active { pressed, .. } = &mut self.sticky_key_state {
                 *pressed = false;
             }

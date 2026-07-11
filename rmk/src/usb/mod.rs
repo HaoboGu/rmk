@@ -432,8 +432,10 @@ impl RequestHandler for UsbRequestHandler {
 }
 
 pub(crate) struct UsbDeviceHandler {
-    /// State to restore on resume. Captured at suspend so an Enabled-but-not-yet-Configured
-    /// device that suspends/resumes doesn't get incorrectly upgraded to Configured.
+    /// State to restore on resume. Only a Configured device is ever published as
+    /// Suspended (see `suspended()`), so this always holds Configured while the
+    /// device is suspended; kept as a snapshot rather than a hardcoded value so
+    /// resume stays correct if another pre-suspend state becomes publishable.
     pre_suspend: UsbState,
 }
 
@@ -475,21 +477,26 @@ impl Handler for UsbDeviceHandler {
     }
 
     fn suspended(&mut self, suspended: bool) {
-        // When no logging feature is enabled, `info!` expands to a no-op and
-        // both arms collapse to identical empty blocks — suppress the lint.
-        #[allow(clippy::if_same_then_else)]
         if suspended {
-            // Snapshot the live state so resume can restore it. Skip the snapshot
-            // if a stray duplicate `suspended(true)` ever fires while we're already
-            // Suspended — otherwise we'd lose the original pre-suspend state.
+            // Only publish Suspended when the device was configured before the
+            // suspend. `usb_ready()` deliberately treats Suspended as routable
+            // (a suspended host must stay reachable for remote wakeup), but that
+            // only holds for a device the host has actually enumerated. A
+            // never-configured device also sees bus-idle suspends — a charge-only
+            // cable or wall charger leaves D+/D- idle, which e.g. on nRF52840
+            // raises SUSPEND ~3 ms after enable — and publishing Suspended there
+            // would route reports to endpoints that were never configured,
+            // silently dropping keystrokes that BLE could have delivered.
             let live = current_usb_state();
-            if live != UsbState::Suspended {
+            if live == UsbState::Configured {
                 self.pre_suspend = live;
+                set_usb_state(UsbState::Suspended);
+                info!(
+                    "Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
+                );
+            } else if live != UsbState::Suspended {
+                info!("Bus suspended before enumeration (charger or charge-only cable?), USB stays inactive");
             }
-            set_usb_state(UsbState::Suspended);
-            info!(
-                "Device suspended, the Vbus current limit is 500µA (or 2.5mA for high-power devices with remote wakeup enabled)."
-            );
         } else {
             // Only restore from Suspended; if we're somehow not in Suspended (out-of-order
             // callbacks), don't overwrite — `configured()`/`enabled()` will resync.
@@ -504,5 +511,82 @@ impl Handler for UsbDeviceHandler {
 
     fn remote_wakeup_enabled(&mut self, enabled: bool) {
         info!("Remote wakeup enabled state: {}", enabled);
+    }
+}
+
+// These tests mutate the process-global CONNECTION_STATUS; cargo-nextest's
+// per-test process isolation keeps them from racing each other (plain
+// `cargo test` is rejected at startup by `test_support::require_nextest`).
+#[cfg(test)]
+mod tests {
+    use embassy_usb::Handler;
+    use rmk_types::connection::UsbState;
+
+    use super::UsbDeviceHandler;
+    use crate::state::{current_usb_state, set_usb_state};
+
+    /// A charge-only cable / wall charger enables the device (VBUS present) but
+    /// never enumerates it; the bus-idle suspend that follows must not publish
+    /// Suspended, otherwise `usb_ready()` would route reports to endpoints that
+    /// were never configured while a BLE host could have received them.
+    #[test]
+    fn suspend_without_enumeration_stays_enabled() {
+        let mut handler = UsbDeviceHandler::new();
+        handler.enabled(true);
+        assert_eq!(current_usb_state(), UsbState::Enabled);
+
+        handler.suspended(true);
+        assert_eq!(current_usb_state(), UsbState::Enabled);
+
+        // Spurious resume (bus activity without enumeration) changes nothing.
+        handler.suspended(false);
+        assert_eq!(current_usb_state(), UsbState::Enabled);
+
+        // A host showing up later still enumerates normally.
+        handler.configured(true);
+        assert_eq!(current_usb_state(), UsbState::Configured);
+    }
+
+    /// A genuinely suspended (previously enumerated) host keeps the Suspended
+    /// state so it stays routable for remote wakeup, and resume restores
+    /// Configured.
+    #[test]
+    fn suspend_after_configured_publishes_suspended_and_resume_restores() {
+        let mut handler = UsbDeviceHandler::new();
+        handler.enabled(true);
+        handler.configured(true);
+
+        handler.suspended(true);
+        assert_eq!(current_usb_state(), UsbState::Suspended);
+
+        handler.suspended(false);
+        assert_eq!(current_usb_state(), UsbState::Configured);
+    }
+
+    /// A stray duplicate `suspended(true)` while already Suspended must not
+    /// clobber the pre-suspend snapshot that resume restores.
+    #[test]
+    fn duplicate_suspend_preserves_pre_suspend_state() {
+        let mut handler = UsbDeviceHandler::new();
+        handler.enabled(true);
+        handler.configured(true);
+
+        handler.suspended(true);
+        handler.suspended(true);
+        assert_eq!(current_usb_state(), UsbState::Suspended);
+
+        handler.suspended(false);
+        assert_eq!(current_usb_state(), UsbState::Configured);
+    }
+
+    /// Out-of-order resume while not suspended must not overwrite the live
+    /// state.
+    #[test]
+    fn resume_without_suspend_is_a_no_op() {
+        let mut handler = UsbDeviceHandler::new();
+        set_usb_state(UsbState::Configured);
+
+        handler.suspended(false);
+        assert_eq!(current_usb_state(), UsbState::Configured);
     }
 }

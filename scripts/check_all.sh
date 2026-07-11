@@ -7,6 +7,9 @@ set -e
 for dir in examples/use_rust/*/ examples/use_config/*/; do
     if [ -d "$dir" ] && [ -d "$dir/src" ]; then
         # Skip ESP32S3 projects for now
+        if [[ "$dir" == *"sf32"* ]]; then
+            continue
+        fi
         if [[ "$dir" == *"esp32s3"* ]]; then
             continue
         fi

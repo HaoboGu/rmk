@@ -121,6 +121,58 @@ cargo run --release
 Then the command configured in `.cargo/config.toml` will be executed. The firmware will be flashed
 to your microcontroller and run automatically, yay!
 
+## Use esptool
+
+Many of the Espressif ESP32 based controllers have a physical USB port, but cannot be used as a
+USB keyboard. The USB port should support USB JTAG/serial debug, and this can be used to flash
+the RMK firmware.
+
+There are several tools able to do this, but we recommend [espflash](https://github.com/esp-rs/espflash)
+Serial flasher utility for Espressif SoCs and modules. This knows about the typical secondary
+boot loader and appropriate address within the flash to save the RMK application.
+
+This can be installed with `cargo` (recommended if you are compiling your RMK firmware
+locally) or get the pre-compiled binary from their latest release (recommended if you are
+not compiling your RMK firmware locally and don't have `cargo` setup).
+
+If you plug in the controller the operating system should recognise the USB serial device,
+and on Linux or macOS it should appear under `/dev/` - like `/dev/cu.usbmodem31201` in this
+example:
+
+```shell
+$ espflash flash --monitor <keyboard-name>-central.elf --port /dev/cu.usbmodem31201
+[2026-07-07T08:11:58Z INFO ] Serial port: '/dev/cu.usbmodem31201'
+[2026-07-07T08:11:58Z INFO ] Connecting...
+[2026-07-07T08:11:58Z INFO ] Using flash stub
+Chip type:         esp32h2 (revision v0.1)
+Crystal frequency: 32 MHz
+Flash size:        4MB
+Features:          BLE
+MAC address:       48:31:b7:c2:9a:ca
+App/part. size:    1,098,048/4,128,768 bytes, 26.60%
+[00:00:07] [========================================]      38/38      0x10000  Verifying... OK!                                                         [2026-07-07T08:12:07Z INFO ] Flashing has completed!
+Commands:
+    CTRL+R    Reset chip
+    CTRL+C    Exit
+...
+```
+
+The tool can often infer the USB port automatically, but it is wise to be explicit
+and extra careful if you have more than one such device connected! You can also set
+the chip type etc explicitly, but that shoud be detected automatically.
+
+Assuming it flashes, the controller should reset and start running RMK and advertise
+on Bluetooth. The `espflash` tool will stay connected over USB serial, and monitor the
+keyboard. You should see additional `INFO` (and perhaps `WARN` or `ERROR`) logging at
+the terminal until you press control+c to exit from `espflash`.
+
+You can also run the monitoring directly, which can be useful during testing/debugging:
+
+```shell
+❯ espflash monitor --port /dev/cu.usbmodem31201
+...
+```
+
 ## Next Steps
 
 Now you've finished the RMK's user guide. For the next steps, you can checkout features that RMK

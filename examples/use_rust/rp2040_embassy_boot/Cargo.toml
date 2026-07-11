@@ -27,10 +27,10 @@ embassy-executor = { version = "0.10", features = [
     "executor-thread",
 ] }
 cortex-m-rt = { version = "0.7.5", features = ["set-vtor"] } # <-- set-vtor necessary for embassy-boot
-portable-atomic = { version = "1.11", features = ["critical-section"] }
-defmt = "1.0"
-defmt-rtt = "1.0"
-panic-probe = { version = "1.0", features = ["print-defmt"] }
+portable-atomic = { version = "1", features = ["critical-section"] }
+defmt = "1"
+defmt-rtt = "1"
+panic-probe = { version = "1", features = ["print-defmt"] }
 
 [build-dependencies]
 xz2 = "0.1.7"

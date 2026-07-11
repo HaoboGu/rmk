@@ -110,7 +110,7 @@ impl KeyboardTomlConfig {
                             if sequence_number >= sequence_to_grid.len() {
                                 return Err(format!(
                                     "keyboard.toml: {} layer #{} contains too many entries (must match layout.matrix_map)",
-                                    &layer.name.clone().unwrap_or_default(),
+                                    layer.name.clone().unwrap_or_default(),
                                     layer_number
                                 ));
                             }

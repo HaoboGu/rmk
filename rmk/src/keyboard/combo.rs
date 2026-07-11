@@ -111,10 +111,6 @@ impl Combo {
             return self.config.output;
         }
 
-        if self.config.output.is_empty() {
-            return self.config.output;
-        }
-
         if self.is_all_pressed() {
             self.is_triggered = true;
         }
@@ -144,5 +140,44 @@ impl Combo {
     pub(crate) fn reset(&mut self) {
         self.state = 0;
         self.is_triggered = false;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rmk_types::action::Action;
+    use rmk_types::keycode::{HidKeyCode, KeyCode};
+
+    use super::*;
+
+    fn hid(k: HidKeyCode) -> KeyAction {
+        KeyAction::Single(Action::Key(KeyCode::Hid(k)))
+    }
+
+    // A combo whose output is empty (`KC_NO`) must still mark itself triggered
+    // once all its keys are pressed. `is_triggered` is what makes the release
+    // path consume the combo keys' releases (see `process_combo`). Without it a
+    // combo swallows the presses but forwards the releases, leaving a stateful
+    // key such as a mouse wheel with an unpaired release that repeats forever.
+    #[test]
+    fn empty_output_combo_still_triggers_so_releases_are_consumed() {
+        let mut combo = Combo::new(ComboConfig::new(
+            [hid(HidKeyCode::A), hid(HidKeyCode::B)],
+            KeyAction::No,
+            None,
+        ));
+        let a = hid(HidKeyCode::A);
+        let b = hid(HidKeyCode::B);
+
+        assert!(combo.update(&a, KeyboardEvent::key(0, 0, true), 0));
+        assert!(combo.update(&b, KeyboardEvent::key(0, 1, true), 0));
+        assert!(combo.is_all_pressed());
+
+        let output = combo.trigger();
+        assert_eq!(output, KeyAction::No, "empty-output combo still emits nothing");
+        assert!(
+            combo.is_triggered(),
+            "a KC_NO combo must trigger so the release path consumes the releases"
+        );
     }
 }

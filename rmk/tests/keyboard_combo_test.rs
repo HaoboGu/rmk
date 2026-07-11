@@ -1,14 +1,24 @@
 pub mod common;
 
-use embassy_time::Duration;
-use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, StickyKeyConfig};
+use embassy_futures::select::{Either, select};
+use embassy_time::{Duration, Instant, Timer};
+use rmk::channel::USB_REPORT_CHANNEL;
+use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, PositionalConfig, StickyKeyConfig};
+use rmk::core_traits::Runnable;
+use rmk::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEvent};
+use rmk::hid::Report;
+use rmk::keyboard::Keyboard;
 use rmk::keyboard::combo::{Combo, ComboConfig};
+use rmk::state::set_usb_state;
+use rmk::types::action::KeyAction;
+use rmk::types::connection::UsbState;
 use rmk::types::keycode::HidKeyCode;
 use rmk::types::modifier::ModifierCombination;
-use rmk::{k, sk_mod, th};
+use rmk::{a, k, layer, sk_mod, th, wm};
 use rmk_types::morse::{MorseMode, MorseProfile};
 
-use crate::common::{KC_LSHIFT, create_test_keyboard_with_config};
+use crate::common::test_block_on::test_block_on;
+use crate::common::{KC_LCTRL, KC_LSHIFT, create_test_keyboard_with_config, wrap_keymap};
 
 // Get tested combo config
 pub fn get_combos_config() -> CombosConfig {
@@ -505,4 +515,281 @@ fn test_overlapped_combo_quick_release() {
             [0, [0; 6]],
         ]
     }
+}
+
+// Regression check for the overlapping subset combos bug.
+//
+//   W + E     -> F2
+//   E + R     -> F4
+//   W + E + R -> Ctrl + Shift + R   (output *contains* R, itself a trigger key)
+//
+// Before the fix, firing W+E+R left the `W+E` subset combo "all-pressed" and it
+// later fired as a phantom `F2`, tangling the release of `Ctrl+Shift+R` into
+// `[R, F2]` instead of a clean release — stranding R/modifiers on the host.
+// `reset_shadowed_combos` now clears every fully-pressed, not-triggered combo
+// that shares a key with the one that fired.
+//
+// Positions in the test keymap (tests/common/mod.rs): W=[1,2] E=[1,3] R=[1,4]
+fn subset_combos() -> CombosConfig {
+    CombosConfig {
+        combos: [
+            Some(Combo::new(ComboConfig::new([k!(W), k!(E)].to_vec(), k!(F2), Some(0)))),
+            Some(Combo::new(ComboConfig::new([k!(E), k!(R)].to_vec(), k!(F4), Some(0)))),
+            Some(Combo::new(ComboConfig::new(
+                [k!(W), k!(E), k!(R)].to_vec(),
+                wm!(R, ModifierCombination::new_from(false, false, false, true, true)),
+                Some(0),
+            ))),
+            None,
+            None,
+            None,
+            None,
+            None,
+        ],
+        timeout: Duration::from_millis(50),
+        prior_idle_time: None,
+    }
+}
+
+// Fire W+E+R, release everything, then press R alone. The combo must emit
+// exactly Ctrl+Shift+R down then a clean release (no phantom F2, no stranded R),
+// and the following lone R must still register.
+#[test]
+fn test_subset_combo_wer_then_r_alone() {
+    key_sequence_test! {
+        keyboard: create_test_keyboard_with_config(BehaviorConfig {
+            combo: subset_combos(),
+            ..Default::default()
+        }),
+        sequence: [
+            [1, 2, true, 10],   // W press
+            [1, 3, true, 10],   // E press
+            [1, 4, true, 10],   // R press -> W+E+R triggers -> Ctrl+Shift+R
+            [1, 2, false, 30],  // W release
+            [1, 3, false, 10],  // E release
+            [1, 4, false, 10],  // R release -> combo fully released
+            [1, 4, true, 80],   // R press alone (past the 50ms combo timeout)
+            [1, 4, false, 80],  // R release
+        ],
+        expected_reports: [
+            [KC_LCTRL | KC_LSHIFT, [HidKeyCode::R as u8, 0, 0, 0, 0, 0]], // combo output
+            [0, [0; 6]],                                                  // clean release
+            [0, [HidKeyCode::R as u8, 0, 0, 0, 0, 0]],                    // lone R press
+            [0, [0; 6]],                                                  // lone R release
+        ]
+    }
+}
+
+// Same, but releasing R first (rolling off the chord) — the ordering that most
+// obviously exposed the stranded-R behaviour before the fix.
+#[test]
+fn test_subset_combo_wer_release_r_first() {
+    key_sequence_test! {
+        keyboard: create_test_keyboard_with_config(BehaviorConfig {
+            combo: subset_combos(),
+            ..Default::default()
+        }),
+        sequence: [
+            [1, 2, true, 10],   // W press
+            [1, 3, true, 10],   // E press
+            [1, 4, true, 10],   // R press -> W+E+R triggers -> Ctrl+Shift+R
+            [1, 4, false, 30],  // R release first
+            [1, 3, false, 10],  // E release
+            [1, 2, false, 10],  // W release -> combo fully released
+            [1, 4, true, 80],   // R press alone
+            [1, 4, false, 80],  // R release
+        ],
+        expected_reports: [
+            [KC_LCTRL | KC_LSHIFT, [HidKeyCode::R as u8, 0, 0, 0, 0, 0]], // combo output
+            [0, [0; 6]],                                                  // clean release
+            [0, [HidKeyCode::R as u8, 0, 0, 0, 0, 0]],                    // lone R press
+            [0, [0; 6]],                                                  // lone R release
+        ]
+    }
+}
+
+// Regression for the stuck mouse-wheel bug, end to end.
+//
+// Combo `MouseAccel2 + MouseWheelUp -> No` (a mouse key as a combo trigger).
+// When the combo fires it discards the buffered WheelUp *press*, so the mouse
+// layer never sees it. The combo must therefore also consume the WheelUp
+// *release* — otherwise the mouse gets an unpaired release and the wheel
+// auto-repeats forever ("Mouse Wheel Up stucks"). This drives the full
+// keyboard and asserts the wheel is silent once every key is up.
+//
+// MouseWheelUp = [0,0], MouseAccel2 = [0,1].
+fn wheel_combo_keyboard() -> Keyboard<'static> {
+    let keymap: [[[KeyAction; 14]; 5]; 1] = [layer!([
+        [
+            k!(MouseWheelUp),
+            k!(MouseAccel2),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No)
+        ],
+        [
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No)
+        ],
+        [
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No)
+        ],
+        [
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No)
+        ],
+        [
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No),
+            a!(No)
+        ]
+    ])];
+    let combos = CombosConfig {
+        combos: [
+            Some(Combo::new(ComboConfig::new(
+                [k!(MouseAccel2), k!(MouseWheelUp)].to_vec(),
+                a!(No),
+                Some(0),
+            ))),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ],
+        timeout: Duration::from_millis(50),
+        prior_idle_time: None,
+    };
+    let config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
+        combo: combos,
+        ..Default::default()
+    }));
+    let per_key: &'static PositionalConfig<5, 14> = Box::leak(Box::new(PositionalConfig::default()));
+    Keyboard::new(wrap_keymap(keymap, per_key, config))
+}
+
+/// Run `seq`, let things settle (draining the transient press/stop reports),
+/// then count mouse reports still arriving. A healthy wheel is silent; a stuck
+/// one keeps repeating with no key held.
+fn ongoing_mouse_reports(seq: &'static [(u8, u8, bool, u64)]) -> u32 {
+    test_block_on(async move {
+        let mut keyboard = wheel_combo_keyboard();
+        let sender = KeyboardEvent::publisher_async();
+        sender.clear();
+        USB_REPORT_CHANNEL.clear();
+        set_usb_state(UsbState::Configured);
+
+        let mut count = 0;
+        select(keyboard.run(), async {
+            for &(r, c, p, d) in seq {
+                Timer::after(Duration::from_millis(d)).await;
+                sender.publish_async(KeyboardEvent::key(r, c, p)).await;
+            }
+            let settle_end = Instant::now() + Duration::from_millis(250);
+            loop {
+                match select(Timer::at(settle_end), USB_REPORT_CHANNEL.receive()).await {
+                    Either::First(_) => break,
+                    Either::Second(_) => {}
+                }
+            }
+            for _ in 0..6 {
+                match select(Timer::after(Duration::from_millis(50)), USB_REPORT_CHANNEL.receive()).await {
+                    Either::First(_) => {}
+                    Either::Second(Report::MouseReport(_)) => count += 1,
+                    Either::Second(_) => {}
+                }
+            }
+        })
+        .await;
+        count
+    })
+}
+
+// Combo fires (WheelUp press swallowed, Accel2 completes it); after both keys
+// are up the wheel must be silent, not stuck repeating.
+#[test]
+fn test_mouse_key_combo_does_not_stick_wheel() {
+    let seq: &[(u8, u8, bool, u64)] = &[
+        (0, 0, true, 10),  // MouseWheelUp press  -> buffered (WaitingCombo)
+        (0, 1, true, 10),  // MouseAccel2 press   -> completes combo -> No
+        (0, 0, false, 30), // MouseWheelUp release
+        (0, 1, false, 10), // MouseAccel2 release -> all keys up
+    ];
+    let n = ongoing_mouse_reports(seq);
+    assert_eq!(
+        n, 0,
+        "wheel kept emitting {n} reports after all keys released (stuck scroll)"
+    );
+}
+
+// Control: a plain WheelUp tap (combo never completes) dispatches on timeout,
+// the release balances it, and the wheel goes quiet — guards against the combo
+// fix wrongly swallowing a legitimate mouse press/release pair.
+#[test]
+fn test_mouse_wheel_tap_settles() {
+    let seq: &[(u8, u8, bool, u64)] = &[
+        (0, 0, true, 10),   // WheelUp press (combo times out; no Accel2)
+        (0, 0, false, 120), // WheelUp release, well after the 50ms timeout
+    ];
+    let n = ongoing_mouse_reports(seq);
+    assert_eq!(n, 0, "wheel still emitting {n} reports after release");
 }

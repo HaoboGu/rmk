@@ -1874,7 +1874,7 @@ dependencies = [
  "sequential-storage",
  "serde",
  "static_cell",
- "trouble-host",
+ "trouble-host 0.7.0 (git+https://github.com/embassy-rs/trouble?rev=71fb54c217ab139c47f3f0dd54e5bac1b8941d31)",
  "usbd-hid",
 ]
 
@@ -1930,7 +1930,7 @@ dependencies = [
  "sifli-hal",
  "sifli-radio",
  "static_cell",
- "trouble-host",
+ "trouble-host 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "u8g2-fonts",
  "xz2",
 ]
@@ -2567,9 +2567,33 @@ dependencies = [
  "rand",
  "rand_chacha",
  "rand_core 0.6.4",
+ "static_cell",
+ "trouble-host-macros 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zerocopy",
+]
+
+[[package]]
+name = "trouble-host"
+version = "0.7.0"
+source = "git+https://github.com/embassy-rs/trouble?rev=71fb54c217ab139c47f3f0dd54e5bac1b8941d31#71fb54c217ab139c47f3f0dd54e5bac1b8941d31"
+dependencies = [
+ "aes",
+ "bt-hci 0.9.0",
+ "cmac",
+ "defmt 1.0.1",
+ "embassy-futures",
+ "embassy-sync 0.8.0",
+ "embassy-time",
+ "embedded-io 0.7.1",
+ "futures",
+ "heapless 0.9.2",
+ "p256",
+ "rand",
+ "rand_chacha",
+ "rand_core 0.6.4",
  "serde",
  "static_cell",
- "trouble-host-macros",
+ "trouble-host-macros 0.5.0 (git+https://github.com/embassy-rs/trouble?rev=71fb54c217ab139c47f3f0dd54e5bac1b8941d31)",
  "zerocopy",
 ]
 
@@ -2578,6 +2602,19 @@ name = "trouble-host-macros"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2562dc74f79ad12f7bf088da55c936d5eb1d022f2caac9849175326307a5eec1"
+dependencies = [
+ "convert_case 0.8.0",
+ "darling 0.20.11",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+ "uuid",
+]
+
+[[package]]
+name = "trouble-host-macros"
+version = "0.5.0"
+source = "git+https://github.com/embassy-rs/trouble?rev=71fb54c217ab139c47f3f0dd54e5bac1b8941d31#71fb54c217ab139c47f3f0dd54e5bac1b8941d31"
 dependencies = [
  "convert_case 0.8.0",
  "darling 0.20.11",
