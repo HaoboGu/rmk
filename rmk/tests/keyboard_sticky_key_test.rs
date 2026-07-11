@@ -705,6 +705,19 @@ fn create_test_keyboard_tap_sk() -> Keyboard<'static> {
     Keyboard::new(wrap_keymap(KEYMAP_TAP_SK, per_key_config, behavior_config))
 }
 
+// KEYMAP_TWO_TAP_SK: two tap-key SKs for verifying that a second physical key replaces the
+// first latch instead of reusing its key and modifiers.
+const KEYMAP_TWO_TAP_SK: [[[KeyAction; 2]; 1]; 1] = [[[
+    sk!(Tab, ModifierCombination::LALT),
+    sk!(Enter, ModifierCombination::LCTRL),
+]]];
+
+fn create_test_keyboard_two_tap_sk() -> Keyboard<'static> {
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
+    let per_key_config: &'static PositionalConfig<1, 2> = Box::leak(Box::new(PositionalConfig::default()));
+    Keyboard::new(wrap_keymap(KEYMAP_TWO_TAP_SK, per_key_config, behavior_config))
+}
+
 /// StickyKey Test 17: Timeout fires while SK is still physically held (Pressed phase).
 ///
 /// The guard in `release_sticky_key_if_active()` must prevent the latch from being
@@ -757,6 +770,29 @@ fn test_tap_sk_timeout_while_held() {
         expected_reports: [
             [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],
             [KC_LALT, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+/// StickyKey Test 17c: A second physical tap-key gets its own state.
+///
+/// The second key replaces the first active latch, so it uses LCtrl+Enter rather than the
+/// first key's LAlt+Tab state. Releasing the displaced first key must not affect the second.
+#[test]
+fn test_second_tap_sk_replaces_first_while_held() {
+    key_sequence_test! {
+        keyboard: create_test_keyboard_two_tap_sk(),
+        sequence: [
+            [0, 0, true,  0], // Press SK(Tab, LAlt)
+            [0, 1, true,  0], // Press SK(Enter, LCtrl) while first is held
+            [0, 0, false, 0], // Release displaced first SK
+            [0, 1, false, 0], // Release active second SK
+        ],
+        expected_reports: [
+            [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [KC_LCTRL, [kc_to_u8!(Enter), 0, 0, 0, 0, 0]],
+            [KC_LCTRL, [0, 0, 0, 0, 0, 0]],
         ]
     };
 }
