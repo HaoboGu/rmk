@@ -642,6 +642,15 @@ pub(crate) struct AutoMouseLayerConfig {
     /// Minimum absolute axis delta required to be considered as motion.
     /// Defaults to `1` (any motion). Helpful to filter out sensor noise.
     pub threshold: Option<u16>,
+    /// When `true`, non-mouse key presses deactivate `target_layer` immediately (mouse HID keys and `extra_mouse_keys` excepted).
+    /// Macro-emitted keycodes, `Again`/`Repeat`, and `GraveEscape` cannot be classified and never deactivate the layer.
+    pub deactivate_on_key: Option<bool>,
+    /// Extra keycodes (e.g. modifiers) that do not trigger deactivation when `deactivate_on_key` is set.
+    /// Modifier keycodes listed here also exempt modifier-only actions containing them.
+    pub extra_mouse_keys: Option<Vec<String>>,
+    /// When `true`, key presses that do NOT deactivate `target_layer` extend the timeout deadline
+    /// (i.e. reset it to now + `timeout`) at the moment the key's action resolves.
+    pub reset_timeout_on_key: Option<bool>,
 }
 
 /// Per Key configurations profiles for morse, tap-hold, etc.
@@ -1244,7 +1253,7 @@ mod tests {
 
         assert_eq!(config.action.channel_size, 16);
         assert_eq!(config.action.pubs, 1);
-        assert_eq!(config.action.subs, 0);
+        assert_eq!(config.action.subs, 1);
     }
 
     #[test]

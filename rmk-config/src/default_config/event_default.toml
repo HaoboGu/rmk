@@ -85,7 +85,7 @@ subs = 0
 [event.action]
 channel_size = 16
 pubs = 1
-subs = 0
+subs = 1
 
 # DFU events
 [event.dfu_status]

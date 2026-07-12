@@ -116,6 +116,15 @@ impl crate::KeyboardTomlConfig {
                                 ));
                             }
                         }
+                        if let Some(exceptions) = &entry.extra_mouse_keys
+                            && exceptions.len() > crate::resolved::behavior::AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM
+                        {
+                            return Err(format!(
+                                "keyboard.toml: [[behavior.auto_mouse_layer]].extra_mouse_keys accepts at most {} entries, got {}",
+                                crate::resolved::behavior::AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM,
+                                exceptions.len()
+                            ));
+                        }
                         if seen_device_ids.contains(&entry.device_id) {
                             return Err(match entry.device_id {
                                 Some(id) => format!(

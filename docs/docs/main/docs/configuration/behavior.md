@@ -534,6 +534,20 @@ device_id = 1
 target_layer = 4
 timeout = "500ms"
 threshold = 5
+
+# Immediate deactivation on non-mouse key press, but keep the layer while
+# modifiers (Ctrl/Shift/Alt/Gui) are held so users can Ctrl-click, etc.
+[[behavior.auto_mouse_layer]]
+target_layer = 5
+deactivate_on_key = true
+extra_mouse_keys = ["LCtrl", "LShift", "LAlt", "LGui"]
+
+# Extend the timeout on any non-deactivating key press so users can continue clicking without cursor movement.
+[[behavior.auto_mouse_layer]]
+target_layer = 6
+deactivate_on_key = true
+extra_mouse_keys = ["LCtrl", "LShift", "LAlt", "LGui"]
+reset_timeout_on_key = true
 ```
 
 | Field          | Type    | Default | Description |
@@ -542,6 +556,9 @@ threshold = 5
 | `target_layer` | integer | —       | Layer index to activate (must be `< [layout.layers]`). |
 | `timeout`      | string  | `"500ms"`| Inactivity duration before deactivation (e.g., `"600ms"`, `"2s"`). |
 | `threshold`    | integer | `1`     | Minimum absolute X/Y delta to trigger motion (`>= 1`). Increase to filter sensor noise. |
+| `deactivate_on_key` | bool | `false` | When `true`, pressing any non-mouse key immediately deactivates `target_layer` (ignoring `timeout`). Mouse HID keys and keys listed in `extra_mouse_keys` do NOT trigger deactivation. Keys are classified by their **resolved** keycode; see the limitation note below. |
+| `extra_mouse_keys` | array of strings | `[]` | Extra keycodes (e.g. `"LCtrl"`, `"Space"`) treated like mouse keys for the purpose of `deactivate_on_key`. Up to 32 entries per auto-mouse-layer entry. |
+| `reset_timeout_on_key` | bool | `false` | When `true`, key presses that do NOT deactivate `target_layer` push the `timeout` deadline forward (reset it to *now + `timeout`*). When `deactivate_on_key` is `false`, every key press extends the timeout. |
 
 Up to `AUTO_MOUSE_LAYER_MAX_NUM` (4) entries are supported. With `keyboard.toml` a build error is raised if more are configured; via the Rust API any entries beyond the limit are silently dropped.
 
@@ -553,15 +570,26 @@ Entries that share the same `target_layer` cooperate: the layer stays active unt
 
 :::
 
+::: warning Limitation: keys that cannot be classified
+
+Some keys cannot be classified; they never trigger immediate deactivation (only `timeout` clears the layer) and extend the deadline when `reset_timeout_on_key` is set:
+
+- **Keys that emit no keycode**: layer keys (`MO`, `TG`, `TO`, `DF`, `TT`, `LM`, ...), one-shot modifiers/layers (`OSM`, `OSL`), user keys, and keyboard control keys (bootloader, reboot, ...).
+- **Macros**: keycodes emitted while a macro runs bypass action resolution; the trigger key itself is also unclassifiable.
+- **`Again` / `Repeat`**: the repeated keycode is unknown at classification time.
+- **`GraveEscape`**: resolves to Escape or Grave after classification.
+
+:::
+
 ::: note Event Configuration
 
-- **Subscriber Slots**: Increment both `[event.pointing].subs` and `[event.layer_change].subs` by `1` in your `keyboard.toml` to reserve slots for this task. See [Event Configuration](./event.md).
+- **Subscriber Slots**: Increment `[event.pointing].subs`, `[event.layer_change].subs`, and `[event.action].subs` by `1` each in your `keyboard.toml` to reserve slots for this task. See [Event Configuration](./event.md).
 - **Buffer Size**: If pointing events are dropped under high-frequency input, increase `[event.pointing].channel_size` (default `8`). `[event.layer_change].channel_size` defaults to `1` and only needs raising if you burst many layer changes faster than subscribers consume them.
 
 :::
 
 ::: note Rust API
-Configure the layer via `BehaviorConfig` and run the helper future alongside your other keyboard tasks. Subscriber slots are resolved from `keyboard.toml`'s `[event]` section at build time, so increment `[event.pointing].subs` and `[event.layer_change].subs` by `1` there as well.
+Configure the layer via `BehaviorConfig` and run the helper future alongside your other keyboard tasks. Subscriber slots are resolved from `keyboard.toml`'s `[event]` section at build time, so increment `[event.pointing].subs`, `[event.layer_change].subs`, and `[event.action].subs` by `1` there as well.
 
 ```rust
 use embassy_time::Duration;
@@ -584,6 +612,19 @@ let auto_mouse_layer = Vec::from_iter([
         Duration::from_millis(500),
         5,
     ),
+    // Immediate deactivation on non-mouse keypress, with modifiers exempted:
+    AutoMouseLayerConfig::new(None, 5, Duration::from_millis(600), 1)
+        .with_deactivate_on_key(&[
+            rmk::types::keycode::KeyCode::Hid(rmk::types::keycode::HidKeyCode::LCtrl),
+            rmk::types::keycode::KeyCode::Hid(rmk::types::keycode::HidKeyCode::LShift),
+        ]),
+    // Extend the timeout on any non-deactivating key press so the layer stays
+    // alive while the user is still interacting even without cursor motion.
+    AutoMouseLayerConfig::new(None, 6, Duration::from_millis(600), 1)
+        .with_deactivate_on_key(&[
+            rmk::types::keycode::KeyCode::Hid(rmk::types::keycode::HidKeyCode::LCtrl),
+        ])
+        .with_reset_timeout_on_key(),
 ]);
 let behavior_config = BehaviorConfig {
     auto_mouse_layer,

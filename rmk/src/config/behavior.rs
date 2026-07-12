@@ -1,12 +1,13 @@
 use embassy_time::Duration;
 use heapless::Vec;
 use rmk_types::fork::Fork;
+use rmk_types::keycode::KeyCode;
 use rmk_types::morse::{Morse, MorseMode, MorseProfile};
 
 use crate::keyboard::combo::Combo;
 use crate::{
-    AUTO_MOUSE_LAYER_MAX_NUM, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MOUSE_KEY_INTERVAL,
-    MOUSE_WHEEL_INTERVAL,
+    AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM, AUTO_MOUSE_LAYER_MAX_NUM, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE,
+    MORSE_MAX_NUM, MOUSE_KEY_INTERVAL, MOUSE_WHEEL_INTERVAL,
 };
 
 /// Config for configurable action behavior
@@ -36,7 +37,7 @@ pub struct BehaviorConfig {
 /// entries can be configured; for each incoming [`crate::event::PointingEvent`]
 /// the matching entry (or a fallback entry with `device_id == None`) drives the
 /// layer state.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct AutoMouseLayerConfig {
     /// Pointing device id this entry applies to. When `None`, the entry acts as
     /// a fallback for devices not covered by any other entry.
@@ -47,6 +48,30 @@ pub struct AutoMouseLayerConfig {
     pub timeout: Duration,
     /// Minimum absolute X/Y axis delta to be considered as motion (must be `>= 1`)
     pub threshold: u16,
+    /// When `true`, non-mouse key presses deactivate [`Self::target_layer`] immediately (mouse HID keys and [`Self::extra_mouse_keys`] excepted).
+    /// Keys are classified by their resolved action; macro-emitted keycodes, `Again`/`Repeat`,
+    /// and `GraveEscape` cannot be classified and never deactivate the layer.
+    /// Modifier-only actions (e.g. the hold side of `MT`) deactivate unless every contained
+    /// modifier is listed in [`Self::extra_mouse_keys`].
+    pub deactivate_on_key: bool,
+    /// Extra keycodes (e.g. modifiers) that do not trigger deactivation when [`Self::deactivate_on_key`] is set.
+    pub extra_mouse_keys: Vec<KeyCode, AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM>,
+    /// When `true`, key presses that do NOT deactivate [`Self::target_layer`] extend the timeout deadline.
+    pub reset_timeout_on_key: bool,
+}
+
+impl Default for AutoMouseLayerConfig {
+    fn default() -> Self {
+        Self {
+            device_id: None,
+            target_layer: 0,
+            timeout: Duration::from_millis(500),
+            threshold: 1,
+            deactivate_on_key: false,
+            extra_mouse_keys: Vec::new(),
+            reset_timeout_on_key: false,
+        }
+    }
 }
 
 impl AutoMouseLayerConfig {
@@ -61,7 +86,26 @@ impl AutoMouseLayerConfig {
             target_layer,
             timeout,
             threshold,
+            ..Self::default()
         }
+    }
+
+    /// Enable [`Self::deactivate_on_key`] with `exceptions` as additional non-deactivating keycodes.
+    pub fn with_deactivate_on_key(mut self, exceptions: &[KeyCode]) -> Self {
+        assert!(
+            exceptions.len() <= AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM,
+            "AutoMouseLayerConfig::with_deactivate_on_key: too many extra_mouse_keys (max {})",
+            AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM
+        );
+        self.deactivate_on_key = true;
+        self.extra_mouse_keys = Vec::from_slice(exceptions).unwrap();
+        self
+    }
+
+    /// Enable [`Self::reset_timeout_on_key`].
+    pub fn with_reset_timeout_on_key(mut self) -> Self {
+        self.reset_timeout_on_key = true;
+        self
     }
 }
 

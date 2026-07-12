@@ -80,6 +80,10 @@ fn generate_constants(bc: &BuildConstants) -> String {
         rmk_config::resolved::behavior::AUTO_MOUSE_LAYER_MAX_NUM
     ));
     lines.push(format!(
+        "pub const AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM: usize = {};",
+        rmk_config::resolved::behavior::AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM
+    ));
+    lines.push(format!(
         "pub const MAX_PATTERNS_PER_KEY: usize = {};",
         bc.max_patterns_per_key
     ));

@@ -495,12 +495,27 @@ fn expand_auto_mouse_layer(auto_mouse_layer: &[AutoMouseLayer]) -> proc_macro2::
             Some(id) => quote! { ::core::option::Option::Some(#id) },
             None => quote! { ::core::option::Option::None },
         };
+        let deactivate_on_key = cfg.deactivate_on_key;
+        let reset_timeout_on_key = cfg.reset_timeout_on_key;
+        let exception_idents: Vec<_> = cfg
+            .extra_mouse_keys
+            .iter()
+            .map(|k| get_key_with_alias(k.clone()))
+            .collect();
+        let exception_tokens = exception_idents.iter().map(|ident| {
+            quote! {
+                ::rmk::types::keycode::KeyCode::Hid(::rmk::types::keycode::HidKeyCode::#ident)
+            }
+        });
         quote! {
             ::rmk::config::AutoMouseLayerConfig {
                 device_id: #device_id,
                 target_layer: #target_layer,
                 timeout: ::embassy_time::Duration::from_millis(#timeout_ms),
                 threshold: #threshold,
+                deactivate_on_key: #deactivate_on_key,
+                extra_mouse_keys: ::rmk::heapless::Vec::from_iter([#(#exception_tokens),*]),
+                reset_timeout_on_key: #reset_timeout_on_key,
             }
         }
     });

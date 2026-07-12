@@ -17,6 +17,9 @@ pub struct AutoMouseLayer {
     pub target_layer: u8,
     pub timeout_ms: u64,
     pub threshold: u16,
+    pub deactivate_on_key: bool,
+    pub extra_mouse_keys: Vec<String>,
+    pub reset_timeout_on_key: bool,
 }
 
 /// Default idle timeout (in milliseconds) for [`AutoMouseLayer`] when not specified in `keyboard.toml`.
@@ -31,6 +34,12 @@ pub const DEFAULT_AUTO_MOUSE_LAYER_THRESHOLD: u16 = 1;
 /// constant emitted by `rmk-types/build.rs` and the `keyboard.toml` validation
 /// must both derive from this single definition.
 pub const AUTO_MOUSE_LAYER_MAX_NUM: usize = 4;
+
+/// Maximum `extra_mouse_keys` per `AutoMouseLayer` entry.
+///
+/// Single source of truth: `rmk-types/build.rs` emits `AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM`
+/// from this constant, and `keyboard.toml` validation reads it from here.
+pub const AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM: usize = 32;
 
 pub struct OneShot {
     pub activate_on_keypress: Option<bool>,
@@ -233,6 +242,9 @@ impl crate::KeyboardTomlConfig {
                 target_layer: a.target_layer,
                 timeout_ms: a.timeout.map(|t| t.0).unwrap_or(DEFAULT_AUTO_MOUSE_LAYER_TIMEOUT_MS),
                 threshold: a.threshold.unwrap_or(DEFAULT_AUTO_MOUSE_LAYER_THRESHOLD),
+                deactivate_on_key: a.deactivate_on_key.unwrap_or(false),
+                extra_mouse_keys: a.extra_mouse_keys.unwrap_or_default(),
+                reset_timeout_on_key: a.reset_timeout_on_key.unwrap_or(false),
             })
             .collect();
 
