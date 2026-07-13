@@ -39,7 +39,7 @@ pub const AUTO_MOUSE_LAYER_MAX_NUM: usize = 4;
 ///
 /// Single source of truth: `rmk-types/build.rs` emits `AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM`
 /// from this constant, and `keyboard.toml` validation reads it from here.
-pub const AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM: usize = 32;
+pub const AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM: usize = 8;
 
 pub struct OneShot {
     pub activate_on_keypress: Option<bool>,

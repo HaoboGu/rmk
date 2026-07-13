@@ -932,9 +932,9 @@ mod tests {
         // Fill the exceptions Vec to its capacity and verify every entry is
         // consulted (contains() must walk the whole list, not just prefix).
         use crate::AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM;
-        // HidKeyCode 0x04..=0x1D (A..Z, 26 codes) plus 0x1E..=0x23 (Kb1..Kb6, 6 codes) = 32 codes,
-        // all guaranteed valid, avoids relying on HidKeyCode::from() ranges that fall back to No.
-        let valid_codes: [HidKeyCode; AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM] = [
+        // HidKeyCode A..Z plus Kc1..Kc6: a pool of guaranteed-valid codes large enough
+        // to fill the Vec whatever the configured capacity is (up to 32).
+        let valid_codes = [
             HidKeyCode::A,
             HidKeyCode::B,
             HidKeyCode::C,
@@ -968,8 +968,9 @@ mod tests {
             HidKeyCode::Kc5,
             HidKeyCode::Kc6,
         ];
+        assert!(valid_codes.len() >= AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM);
         let mut exceptions: heapless::Vec<KeyCode, AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM> = heapless::Vec::new();
-        for code in valid_codes.iter() {
+        for code in valid_codes.iter().take(AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM) {
             exceptions.push(KeyCode::Hid(*code)).unwrap();
         }
         let last = *exceptions.last().unwrap();

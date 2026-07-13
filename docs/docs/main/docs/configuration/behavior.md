@@ -557,7 +557,7 @@ reset_timeout_on_key = true
 | `timeout`      | string  | `"500ms"`| Inactivity duration before deactivation (e.g., `"600ms"`, `"2s"`). |
 | `threshold`    | integer | `1`     | Minimum absolute X/Y delta to trigger motion (`>= 1`). Increase to filter sensor noise. |
 | `deactivate_on_key` | bool | `false` | When `true`, pressing any non-mouse key immediately deactivates `target_layer` (ignoring `timeout`). Mouse HID keys and keys listed in `extra_mouse_keys` do NOT trigger deactivation. Keys are classified by their **resolved** keycode; see the limitation note below. |
-| `extra_mouse_keys` | array of strings | `[]` | Extra keycodes (e.g. `"LCtrl"`, `"Space"`) treated like mouse keys for the purpose of `deactivate_on_key`. Up to 32 entries per auto-mouse-layer entry. |
+| `extra_mouse_keys` | array of strings | `[]` | Extra keycodes (e.g. `"LCtrl"`, `"Space"`) treated like mouse keys for the purpose of `deactivate_on_key`. Up to 8 entries per auto-mouse-layer entry. |
 | `reset_timeout_on_key` | bool | `false` | When `true`, key presses that do NOT deactivate `target_layer` push the `timeout` deadline forward (reset it to *now + `timeout`*). When `deactivate_on_key` is `false`, every key press extends the timeout. |
 
 Up to `AUTO_MOUSE_LAYER_MAX_NUM` (4) entries are supported. With `keyboard.toml` a build error is raised if more are configured; via the Rust API any entries beyond the limit are silently dropped.
