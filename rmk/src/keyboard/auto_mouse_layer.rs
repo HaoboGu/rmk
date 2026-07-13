@@ -13,7 +13,7 @@
 //! The `deactivate_on_key` / `reset_timeout_on_key` options are
 //! driven by [`ActionEvent`]s, published when a key action resolves. Tap-hold,
 //! morse, and tap dance keys are therefore classified by their final result;
-//! see [`resolve_action`] for the keys that cannot be classified.
+//! see [`keypress_step`] for the actions that cannot be classified.
 
 use embassy_time::{Duration, Instant};
 use heapless::Vec;
@@ -126,41 +126,9 @@ impl<'a, 'k> AutoMouseLayerRunner<'a, 'k> {
         if !self.entries.iter().any(|e| e.self_activated) {
             return;
         }
-        for layer in keypress_step(&mut self.entries, resolve_action(event.action), Instant::now()) {
+        for layer in keypress_step(&mut self.entries, event.action, Instant::now()) {
             self.keymap.deactivate_layer_if_active(layer);
         }
-    }
-}
-
-/// What a resolved [`Action`] emits, for the mouse/non-mouse classification in
-/// [`keypress_step`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ResolvedAction {
-    /// The action emits this single keycode.
-    Key(KeyCode),
-    /// The action emits only modifiers (e.g. the hold side of `MT`). Classified
-    /// against the modifier keycodes listed in `extra_mouse_keys`.
-    Modifiers(ModifierCombination),
-    /// Unclassifiable: never deactivates the layer (the timeout path clears it)
-    /// and extends the deadline when `reset_timeout_on_key` is set.
-    Unclassifiable,
-}
-
-/// Classify a resolved [`Action`]. Unclassifiable are:
-///
-/// - actions that emit no keycode (layer switches, one-shot modifiers/layers,
-///   user keys, keyboard controls, ...)
-/// - macros: keycodes emitted during execution bypass action resolution
-/// - `Again`/`Repeat`: the repeated keycode is substituted after the event is
-///   published; `Again` maps to `Unclassifiable` so a repeated mouse key is not
-///   misclassified as non-mouse
-/// - `GraveEscape`: resolves to Escape/Grave after publication
-fn resolve_action(action: Action) -> ResolvedAction {
-    match action {
-        Action::Key(KeyCode::Hid(HidKeyCode::Again)) => ResolvedAction::Unclassifiable,
-        Action::Key(kc) | Action::KeyWithModifier(kc, _) | Action::OneShotKey(kc) => ResolvedAction::Key(kc),
-        Action::Modifier(modifiers) => ResolvedAction::Modifiers(modifiers),
-        _ => ResolvedAction::Unclassifiable,
     }
 }
 
@@ -277,11 +245,11 @@ fn pointing_step(entries: &mut [EntryState], idx: usize, now: Instant, activated
 /// Handle a key press for opt-in entries: release entries whose layer should deactivate,
 /// or extend the deadline for entries opted into `reset_timeout_on_key`. Returns the
 /// layers that no sibling still holds after this step.
-fn keypress_step(
-    entries: &mut [EntryState],
-    resolved: ResolvedAction,
-    now: Instant,
-) -> Vec<u8, AUTO_MOUSE_LAYER_MAX_NUM> {
+///
+/// Actions that emit no single keycode/modifier set (layer switches, macros,
+/// `Again`/`Repeat`, `GraveEscape`, ...) are unclassifiable and never deactivate;
+/// the timeout path clears the layer instead.
+fn keypress_step(entries: &mut [EntryState], action: Action, now: Instant) -> Vec<u8, AUTO_MOUSE_LAYER_MAX_NUM> {
     let mut released: Vec<u8, AUTO_MOUSE_LAYER_MAX_NUM> = Vec::new();
     for i in 0..entries.len() {
         if !entries[i].self_activated {
@@ -291,13 +259,18 @@ fn keypress_step(
         // Classify: does this key press cause deactivation for this entry?
         // Only meaningful when `deactivate_on_key` is set.
         let causes_deactivation = cfg.deactivate_on_key
-            && match resolved {
-                ResolvedAction::Key(KeyCode::Hid(hid)) if hid.is_mouse_key() => false,
-                ResolvedAction::Key(kc) => !cfg.extra_mouse_keys.contains(&kc),
+            && match action {
+                // The repeated keycode is unknown here; treat as unclassifiable
+                // so a repeated mouse key is not misclassified as non-mouse.
+                Action::Key(KeyCode::Hid(HidKeyCode::Again)) => false,
+                Action::Key(kc) | Action::KeyWithModifier(kc, _) | Action::OneShotKey(kc) => match kc {
+                    KeyCode::Hid(hid) if hid.is_mouse_key() => false,
+                    _ => !cfg.extra_mouse_keys.contains(&kc),
+                },
                 // A modifier-only action (e.g. MT hold) deactivates unless every
                 // contained modifier is covered by a modifier keycode listed in
                 // `extra_mouse_keys` — mirroring how plain modifier keys behave.
-                ResolvedAction::Modifiers(modifiers) => {
+                Action::Modifier(modifiers) => {
                     let covered = cfg
                         .extra_mouse_keys
                         .iter()
@@ -307,9 +280,9 @@ fn keypress_step(
                         });
                     (modifiers & !covered).into_bits() != 0
                 }
-                // Unclassifiable action (see `resolve_action`): leave the
-                // layer intact (timeout path handles it).
-                ResolvedAction::Unclassifiable => false,
+                // Unclassifiable (layer switches, macros, Again/Repeat, GraveEscape, ...):
+                // leave the layer intact; the timeout path handles it.
+                _ => false,
             };
         if causes_deactivation {
             entries[i].self_activated = false;
@@ -736,7 +709,7 @@ mod tests {
         for hid in non_mouse_keys {
             let mut entries = [holding_entry_with_deactivate(3, &[])];
 
-            let released = keypress_step(&mut entries, ResolvedAction::Key(KeyCode::Hid(hid)), at(2000));
+            let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(hid)), at(2000));
 
             assert_eq!(released.as_slice(), &[3], "key {:?} should release layer", hid);
             assert!(!entries[0].self_activated, "key {:?} should clear self_activated", hid);
@@ -748,11 +721,7 @@ mod tests {
     fn keypress_step_keeps_layer_active_for_mouse_key() {
         let mut entries = [holding_entry_with_deactivate(3, &[])];
 
-        let released = keypress_step(
-            &mut entries,
-            ResolvedAction::Key(KeyCode::Hid(HidKeyCode::MouseBtn1)),
-            at(2000),
-        );
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::MouseBtn1)), at(2000));
 
         assert!(released.is_empty());
         assert!(entries[0].self_activated);
@@ -791,7 +760,7 @@ mod tests {
             );
             let mut entries = [holding_entry_with_deactivate(3, &[])];
 
-            let released = keypress_step(&mut entries, ResolvedAction::Key(KeyCode::Hid(hid)), at(2000));
+            let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(hid)), at(2000));
 
             assert!(
                 released.is_empty(),
@@ -811,11 +780,7 @@ mod tests {
         let exceptions = [KeyCode::Hid(HidKeyCode::LCtrl)];
         let mut entries = [holding_entry_with_deactivate(3, &exceptions)];
 
-        let released = keypress_step(
-            &mut entries,
-            ResolvedAction::Key(KeyCode::Hid(HidKeyCode::LCtrl)),
-            at(2000),
-        );
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::LCtrl)), at(2000));
 
         assert!(released.is_empty());
         assert!(entries[0].self_activated);
@@ -836,7 +801,7 @@ mod tests {
         for kc in non_hid_keys {
             let mut entries = [holding_entry_with_deactivate(3, &[])];
 
-            let released = keypress_step(&mut entries, ResolvedAction::Key(kc), at(2000));
+            let released = keypress_step(&mut entries, Action::Key(kc), at(2000));
 
             assert_eq!(released.as_slice(), &[3], "{:?} should release layer", kc);
             assert!(!entries[0].self_activated, "{:?} should clear self_activated", kc);
@@ -845,11 +810,11 @@ mod tests {
 
     #[test]
     fn keypress_step_keeps_layer_active_for_unresolvable_action() {
-        // Unclassifiable actions (layer switches, macros, Again/Repeat)
-        // resolve to `None`; timeout path handles clearing.
+        // Unclassifiable actions (layer switches, macros, Again/Repeat) never
+        // deactivate; the timeout path handles clearing.
         let mut entries = [holding_entry_with_deactivate(3, &[])];
 
-        let released = keypress_step(&mut entries, ResolvedAction::Unclassifiable, at(2000));
+        let released = keypress_step(&mut entries, Action::LayerOn(0), at(2000));
 
         assert!(released.is_empty());
         assert!(entries[0].self_activated);
@@ -864,7 +829,7 @@ mod tests {
         // deactivate_on_key stays false, even a non-mouse key press
         // must NOT release the layer for this entry.
 
-        let released = keypress_step(&mut entries, ResolvedAction::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
 
         assert!(released.is_empty());
         assert!(entries[0].self_activated);
@@ -878,7 +843,7 @@ mod tests {
         entries[1].self_activated = true;
         entries[1].deadline = Some(at(2000));
 
-        let released = keypress_step(&mut entries, ResolvedAction::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
 
         assert!(released.is_empty());
         assert!(!entries[0].self_activated);
@@ -895,7 +860,7 @@ mod tests {
         ];
         entries[1].config.device_id = Some(2);
 
-        let released = keypress_step(&mut entries, ResolvedAction::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
 
         assert_eq!(released.as_slice(), &[4]);
         assert!(!entries[0].self_activated);
@@ -915,7 +880,7 @@ mod tests {
         ];
         entries[1].config.device_id = Some(2);
 
-        let released = keypress_step(&mut entries, ResolvedAction::Key(ctrl), at(2000));
+        let released = keypress_step(&mut entries, Action::Key(ctrl), at(2000));
 
         // First entry deactivates (LCtrl not in its exceptions), but layer 4
         // must not be released because the second entry (with LCtrl in exceptions) still holds it.
@@ -931,7 +896,7 @@ mod tests {
         entries[0].self_activated = false;
         entries[0].deadline = None;
 
-        let released = keypress_step(&mut entries, ResolvedAction::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
 
         assert!(released.is_empty());
         assert!(!entries[0].self_activated);
@@ -952,7 +917,7 @@ mod tests {
         entries[3].self_activated = true;
         entries[3].deadline = Some(at(4000));
 
-        let released = keypress_step(&mut entries, ResolvedAction::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
 
         // Layer 5 stays because the non-opt-in entry still holds it; layer 6 is untouched.
         assert!(released.is_empty());
@@ -1010,60 +975,53 @@ mod tests {
         let last = *exceptions.last().unwrap();
         let mut entries = [holding_entry_with_deactivate(3, exceptions.as_slice())];
 
-        let released = keypress_step(&mut entries, ResolvedAction::Key(last), at(2000));
+        let released = keypress_step(&mut entries, Action::Key(last), at(2000));
 
         assert!(released.is_empty());
         assert!(entries[0].self_activated);
     }
 
-    // ── resolve_action ────────────────────────────────────────────────────
+    // ── unclassifiable actions ─────────────────────────────────────────────
 
     #[test]
-    fn resolve_action_extracts_keycode_from_key_actions() {
-        let a = KeyCode::Hid(HidKeyCode::A);
-        let btn = KeyCode::Hid(HidKeyCode::MouseBtn1);
-        assert_eq!(resolve_action(Action::Key(a)), ResolvedAction::Key(a));
-        assert_eq!(resolve_action(Action::Key(btn)), ResolvedAction::Key(btn));
-        assert_eq!(
-            resolve_action(Action::KeyWithModifier(a, ModifierCombination::new())),
-            ResolvedAction::Key(a)
-        );
-        assert_eq!(resolve_action(Action::OneShotKey(a)), ResolvedAction::Key(a));
+    fn keypress_step_keeps_layer_active_for_non_key_actions() {
+        // Layer switches, macros, and one-shot modifiers emit no keycode and
+        // must never deactivate; the timeout path handles clearing.
+        for action in [
+            Action::LayerOn(2),
+            Action::TriggerMacro(0),
+            Action::OneShotModifier(ModifierCombination::LCTRL),
+        ] {
+            let mut entries = [holding_entry_with_deactivate(3, &[])];
+            let released = keypress_step(&mut entries, action, at(2000));
+            assert!(released.is_empty(), "{:?} should not release layer", action);
+            assert!(
+                entries[0].self_activated,
+                "{:?} should not clear self_activated",
+                action
+            );
+        }
     }
 
     #[test]
-    fn resolve_action_extracts_modifiers_from_modifier_actions() {
-        let mods = ModifierCombination::LCTRL | ModifierCombination::LSHIFT;
-        assert_eq!(resolve_action(Action::Modifier(mods)), ResolvedAction::Modifiers(mods));
-    }
-
-    #[test]
-    fn resolve_action_is_unclassifiable_for_non_key_actions() {
-        assert_eq!(resolve_action(Action::LayerOn(2)), ResolvedAction::Unclassifiable);
-        assert_eq!(resolve_action(Action::TriggerMacro(0)), ResolvedAction::Unclassifiable);
-        assert_eq!(
-            resolve_action(Action::OneShotModifier(ModifierCombination::LCTRL)),
-            ResolvedAction::Unclassifiable
-        );
-    }
-
-    #[test]
-    fn resolve_action_treats_repeat_style_keys_as_unclassifiable() {
+    fn keypress_step_treats_repeat_style_keys_as_unclassifiable() {
         use rmk_types::keycode::SpecialKey;
         // The repeated keycode is unknown here; `Again` especially must not be
         // misclassified as a non-mouse key.
-        assert_eq!(
-            resolve_action(Action::Key(KeyCode::Hid(HidKeyCode::Again))),
-            ResolvedAction::Unclassifiable
-        );
-        assert_eq!(
-            resolve_action(Action::Special(SpecialKey::Repeat)),
-            ResolvedAction::Unclassifiable
-        );
-        assert_eq!(
-            resolve_action(Action::Special(SpecialKey::GraveEscape)),
-            ResolvedAction::Unclassifiable
-        );
+        for action in [
+            Action::Key(KeyCode::Hid(HidKeyCode::Again)),
+            Action::Special(SpecialKey::Repeat),
+            Action::Special(SpecialKey::GraveEscape),
+        ] {
+            let mut entries = [holding_entry_with_deactivate(3, &[])];
+            let released = keypress_step(&mut entries, action, at(2000));
+            assert!(released.is_empty(), "{:?} should not release layer", action);
+            assert!(
+                entries[0].self_activated,
+                "{:?} should not clear self_activated",
+                action
+            );
+        }
     }
 
     // ── modifier-only actions (e.g. MT hold) ─────────────────────────────
@@ -1072,11 +1030,7 @@ mod tests {
     fn keypress_step_releases_layer_for_modifier_action_not_in_exceptions() {
         let mut entries = [holding_entry_with_deactivate(3, &[])];
 
-        let released = keypress_step(
-            &mut entries,
-            ResolvedAction::Modifiers(ModifierCombination::LSHIFT),
-            at(2000),
-        );
+        let released = keypress_step(&mut entries, Action::Modifier(ModifierCombination::LSHIFT), at(2000));
 
         assert_eq!(released.as_slice(), &[3]);
         assert!(!entries[0].self_activated);
@@ -1089,7 +1043,7 @@ mod tests {
 
         let released = keypress_step(
             &mut entries,
-            ResolvedAction::Modifiers(ModifierCombination::LCTRL | ModifierCombination::LSHIFT),
+            Action::Modifier(ModifierCombination::LCTRL | ModifierCombination::LSHIFT),
             at(2000),
         );
 
@@ -1107,7 +1061,7 @@ mod tests {
 
         let released = keypress_step(
             &mut entries,
-            ResolvedAction::Modifiers(ModifierCombination::LCTRL | ModifierCombination::LSHIFT),
+            Action::Modifier(ModifierCombination::LCTRL | ModifierCombination::LSHIFT),
             at(2000),
         );
 
@@ -1121,11 +1075,7 @@ mod tests {
         let exceptions = [KeyCode::Hid(HidKeyCode::LCtrl)];
         let mut entries = [holding_entry_with_deactivate(3, &exceptions)];
 
-        let released = keypress_step(
-            &mut entries,
-            ResolvedAction::Modifiers(ModifierCombination::RCTRL),
-            at(2000),
-        );
+        let released = keypress_step(&mut entries, Action::Modifier(ModifierCombination::RCTRL), at(2000));
 
         assert_eq!(released.as_slice(), &[3]);
         assert!(!entries[0].self_activated);
@@ -1135,11 +1085,7 @@ mod tests {
     fn keypress_step_keeps_layer_active_for_empty_modifier_action() {
         let mut entries = [holding_entry_with_deactivate(3, &[])];
 
-        let released = keypress_step(
-            &mut entries,
-            ResolvedAction::Modifiers(ModifierCombination::new()),
-            at(2000),
-        );
+        let released = keypress_step(&mut entries, Action::Modifier(ModifierCombination::new()), at(2000));
 
         assert!(released.is_empty());
         assert!(entries[0].self_activated);
@@ -1152,11 +1098,7 @@ mod tests {
         e.config.timeout = embassy_time::Duration::from_millis(500);
         let mut entries = [e];
 
-        let released = keypress_step(
-            &mut entries,
-            ResolvedAction::Modifiers(ModifierCombination::LCTRL),
-            at(2000),
-        );
+        let released = keypress_step(&mut entries, Action::Modifier(ModifierCombination::LCTRL), at(2000));
 
         assert!(released.is_empty());
         assert!(entries[0].self_activated);
@@ -1182,7 +1124,7 @@ mod tests {
         // No `deactivate_on_key`: every key press must extend the deadline.
         let mut entries = [holding_entry_with_extend(3, 500)];
 
-        let released = keypress_step(&mut entries, ResolvedAction::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
 
         assert!(released.is_empty());
         assert!(entries[0].self_activated);
@@ -1196,11 +1138,7 @@ mod tests {
     fn keypress_step_extends_deadline_on_mouse_key_when_extend_opt_in() {
         let mut entries = [holding_entry_with_extend(3, 500)];
 
-        let released = keypress_step(
-            &mut entries,
-            ResolvedAction::Key(KeyCode::Hid(HidKeyCode::MouseBtn1)),
-            at(2000),
-        );
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::MouseBtn1)), at(2000));
 
         assert!(released.is_empty());
         assert!(entries[0].self_activated);
@@ -1215,7 +1153,7 @@ mod tests {
         // Unclassifiable actions leave the layer intact; extend still applies.
         let mut entries = [holding_entry_with_extend(3, 500)];
 
-        let released = keypress_step(&mut entries, ResolvedAction::Unclassifiable, at(2000));
+        let released = keypress_step(&mut entries, Action::LayerOn(0), at(2000));
 
         assert!(released.is_empty());
         assert!(entries[0].self_activated);
@@ -1234,11 +1172,7 @@ mod tests {
         e.config.timeout = embassy_time::Duration::from_millis(500);
         let mut entries = [e];
 
-        let released = keypress_step(
-            &mut entries,
-            ResolvedAction::Key(KeyCode::Hid(HidKeyCode::LCtrl)),
-            at(2000),
-        );
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::LCtrl)), at(2000));
 
         assert!(released.is_empty());
         assert!(entries[0].self_activated);
@@ -1257,7 +1191,7 @@ mod tests {
         e.config.timeout = embassy_time::Duration::from_millis(500);
         let mut entries = [e];
 
-        let released = keypress_step(&mut entries, ResolvedAction::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
 
         assert_eq!(released.as_slice(), &[3]);
         assert!(!entries[0].self_activated);
@@ -1271,7 +1205,7 @@ mod tests {
         // A pointing event pushed the deadline much further out than key-press would.
         entries[0].deadline = Some(at(10_000));
 
-        let released = keypress_step(&mut entries, ResolvedAction::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
 
         assert!(released.is_empty());
         assert!(entries[0].self_activated);
@@ -1284,7 +1218,7 @@ mod tests {
         entries[0].self_activated = false;
         entries[0].deadline = None;
 
-        let released = keypress_step(&mut entries, ResolvedAction::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
 
         assert!(released.is_empty());
         assert!(entries[0].deadline.is_none());
