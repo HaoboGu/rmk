@@ -86,6 +86,32 @@ macro_rules! wm {
 /// a!(No)           // KeyAction::No - empty action
 /// a!(Transparent)  // KeyAction::Transparent - pass through to next layer
 /// ```
+/// Create a `LatchTap` action: latch a modifier for the lifetime of the
+/// current layer and tap a key under it on each press.
+///
+/// This is useful for Alt/Ctrl/Gui-Tab style window switching: tap the key to
+/// send `modifier+key`, release it (the modifier stays latched), tap again to
+/// cycle `key` while the modifier is held, and the modifier is released when
+/// the layer is deactivated.
+///
+/// # Parameters
+/// - `$m`: A `ModifierCombination` expression
+/// - `$k`: The HID keycode identifier to tap
+///
+/// # Example
+/// ```ignore
+/// latchtap!(ModifierCombination::LCTRL, Tab)  // Ctrl+Tab, latched until layer exit
+/// ```
+#[macro_export]
+macro_rules! latchtap {
+    ($m: expr, $k: ident) => {
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::LatchTap(
+            $m,
+            $crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::$k),
+        ))
+    };
+}
+
 #[macro_export]
 macro_rules! a {
     ($a: ident) => {

@@ -251,6 +251,26 @@ fn parse_action(key: &str) -> TokenStream2 {
             );
         }
         return quote! { ::rmk::types::action::Action::LayerOnWithModifier(#layer, #modifiers) };
+    } else if lower.starts_with("latchtap(") {
+        let keys = split_top_level(strip_call(key));
+        if keys.len() != 2 {
+            panic!(
+                "\n\u{274c} keyboard.toml: LatchTap(modifier, key) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
+            );
+        }
+        let modifiers = parse_modifiers(&keys[0]);
+        if modifiers.is_empty() {
+            panic!(
+                "\n\u{274c} keyboard.toml: modifier in LatchTap(modifier, key) is not valid! Please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
+            );
+        }
+        let ident = get_key_with_alias(keys[1].clone());
+        return quote! {
+            ::rmk::types::action::Action::LatchTap(
+                #modifiers,
+                ::rmk::types::keycode::KeyCode::Hid(::rmk::types::keycode::HidKeyCode::#ident),
+            )
+        };
     } else if lower.starts_with("mo(") {
         let layer = parse_layer(key);
         return quote! { ::rmk::types::action::Action::LayerOn(#layer) };
@@ -514,6 +534,18 @@ mod tests {
         );
         assert!(squash(&expand("WM(C,LCtrl)")).contains("Action::KeyWithModifier"));
         assert!(squash(&expand("OSM(LShift)")).contains("Action::OneShotModifier"));
+    }
+
+    #[test]
+    fn latchtap_parses_modifier_and_key() {
+        let out = squash(&expand("LatchTap(LCtrl, Tab)"));
+        assert!(out.contains("Action::LatchTap("));
+        assert!(out.contains("ModifierCombination::new_from"));
+        assert!(out.contains("HidKeyCode::Tab"));
+        // Modifier first, key second (matches the Action variant order).
+        let (before, after) = out.split_once("Action::LatchTap(").unwrap();
+        assert!(before.ends_with("::rmk::types::action::"));
+        assert!(after.find("ModifierCombination").unwrap() < after.find("HidKeyCode::Tab").unwrap());
     }
 
     #[test]

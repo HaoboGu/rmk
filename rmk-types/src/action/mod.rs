@@ -45,6 +45,23 @@ pub enum Action {
     Modifier(ModifierCombination),
     /// Key stroke with modifier combination triggered.
     KeyWithModifier(KeyCode, ModifierCombination),
+    /// Latch a modifier for the lifetime of the current layer and tap a key
+    /// under it on each press.
+    ///
+    /// On the first press the modifier is latched (engaged and kept active) and
+    /// the key is sent together with it. On release the key is released but the
+    /// modifier stays latched. Subsequent presses send the key again while the
+    /// modifier remains engaged, so the key can be "cycled" (e.g. `Tab` for
+    /// Alt/Ctrl/Gui-Tab style window switching). The latched modifier is
+    /// released automatically when the layer it was engaged on is deactivated
+    /// (for example when the momentary layer key is released).
+    ///
+    /// Unlike [`Action::OneShotModifier`] the modifier is not released on the
+    /// next key press; unlike [`Action::LayerOnWithModifier`] the modifier is
+    /// not bound to the layer-switch key but to this dedicated key, allowing
+    /// several independent `LatchTap` keys (different modifiers/keys) on the
+    /// same layer.
+    LatchTap(ModifierCombination, KeyCode),
     /// Activate a layer
     LayerOn(u8),
     /// Activate a layer with modifier combination triggered.

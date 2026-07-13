@@ -207,6 +207,12 @@ pub struct Keyboard<'a> {
     /// Oneshot Modifier state
     osm_state: OneShotState<ModifierCombination>,
 
+    /// LatchTap state: a modifier latched by a `LatchTap` action and the layer
+    /// it was engaged on. The modifier stays engaged until that layer is
+    /// deactivated (see [`Keyboard::cleanup_latch_tap`]).
+    latched_modifiers: ModifierCombination,
+    latched_layer: Option<u8>,
+
     /// Caps Word state machine
     caps_word: CapsWordState,
 
@@ -260,6 +266,8 @@ impl<'a> Keyboard<'a> {
             last_press_time: Instant::now(),
             osl_state: OneShotState::default(),
             osm_state: OneShotState::default(),
+            latched_modifiers: ModifierCombination::default(),
+            latched_layer: None,
             caps_word: CapsWordState::default(),
             with_modifiers: ModifierCombination::default(),
             macro_texting: false,
@@ -377,6 +385,10 @@ impl<'a> Keyboard<'a> {
         } else {
             self.process_key_action(key_action, event, false, event_time).await
         }
+
+        // Release any latched LatchTap modifier whose layer was just deactivated
+        // (e.g. when the momentary layer key is released).
+        self.cleanup_latch_tap().await;
     }
 
     async fn process_key_action(
@@ -1310,6 +1322,7 @@ impl<'a> Keyboard<'a> {
                 self.update_osl(event);
             }
             Action::OneShotKey(_k) => warn!("One-shot key is not supported: {:?}", action),
+            Action::LatchTap(modifiers, key) => self.process_action_latch_tap(modifiers, key, event).await,
             Action::Light(_light_action) => warn!("Light controll is not supported"),
             Action::KeyboardControl(c) => self.process_action_keyboard_control(c, event).await,
             Action::Special(special_key) => self.process_action_special(special_key, event).await,
@@ -1362,7 +1375,7 @@ impl<'a> Keyboard<'a> {
     /// - one-shot modifiers
     pub fn resolve_explicit_modifiers(&self, pressed: bool) -> ModifierCombination {
         // if a one-shot modifier is active, decorate the hid report of keypress with those modifiers
-        let mut result = self.held_modifiers;
+        let mut result = self.held_modifiers | self.latched_modifiers;
 
         // OneShotState::Held keeps the temporary modifiers active until the key is released
         if pressed {
@@ -1585,6 +1598,48 @@ impl<'a> Keyboard<'a> {
             self.keymap.activate_layer(layer_num);
         } else {
             self.keymap.deactivate_layer(layer_num);
+        }
+    }
+
+    /// Process a `LatchTap` action: latch a modifier for the lifetime of the
+    /// current layer and tap `key` under it on each press.
+    ///
+    /// On press the modifier is engaged (or extended) and the key is sent
+    /// together with it. On release the key is released while the modifier
+    /// stays latched, so repeated presses cycle the key with the modifier held.
+    /// The latched modifier is released by [`Keyboard::cleanup_latch_tap`] when
+    /// the layer it was engaged on is deactivated.
+    ///
+    /// The latched modifier is folded into the resolved modifiers, so it
+    /// combines naturally with other modifiers (held keys, one-shot modifiers,
+    /// `KeyWithModifier`, ...): a `LatchTap(LCtrl, Tab)` tapped while an OSM
+    /// `LShift` is active reports `LCtrl+LShift+Tab`.
+    async fn process_action_latch_tap(&mut self, modifiers: ModifierCombination, key: KeyCode, event: KeyboardEvent) {
+        if event.pressed {
+            // Engage (or extend) the latched modifier, and remember the layer
+            // it belongs to so cleanup releases it when that layer goes away.
+            self.latched_modifiers |= modifiers;
+            self.latched_layer = Some(self.keymap.get_activated_layer());
+        }
+        // Sending the key through the normal path means the report already
+        // includes the latched modifier (plus any OSM/held modifiers). On
+        // release only the key is lifted; the latch is intentionally kept.
+        self.process_action_key(key, event).await;
+    }
+
+    /// Release any latched `LatchTap` modifier whose layer is no longer active.
+    ///
+    /// Called after every processed key event. When the layer a `LatchTap` was
+    /// engaged on is deactivated (e.g. the momentary layer key is released),
+    /// the latched modifier is dropped from the report so the host sees it as
+    /// released.
+    async fn cleanup_latch_tap(&mut self) {
+        if let Some(layer) = self.latched_layer {
+            if !self.keymap.is_layer_active(layer) {
+                self.latched_modifiers = ModifierCombination::default();
+                self.latched_layer = None;
+                self.send_keyboard_report_with_resolved_modifiers(false).await;
+            }
         }
     }
 
