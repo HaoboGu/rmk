@@ -5,6 +5,13 @@
 //! reports/protocol packets queued for USB/BLE writers. It does not emulate USB
 //! enumeration, BLE radio state, or real GPIO electrical behavior.
 
+use std::boxed::Box;
+#[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+use std::future::Future;
+#[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+use std::pin::Pin;
+use std::vec::Vec;
+
 #[cfg(any(not(feature = "_no_usb"), all(feature = "host", feature = "_ble")))]
 use embassy_futures::select::{Either, select};
 #[cfg(not(feature = "_no_usb"))]
@@ -14,6 +21,8 @@ use embassy_sync::signal::Signal;
 use embassy_time::Duration;
 #[cfg(any(not(feature = "_no_usb"), all(feature = "host", feature = "_ble")))]
 use embassy_time::Timer;
+#[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 #[cfg(not(feature = "_no_usb"))]
 use futures::join;
 #[cfg(feature = "host")]
@@ -26,10 +35,11 @@ use rmk_types::morse::{Morse, MorsePattern, MorseProfile};
 use rmk_types::protocol::rynk::{Cmd, RynkError, RynkMessage};
 #[cfg(feature = "vial")]
 use rmk_types::protocol::vial::{SettingKey, ViaCommand, VialCommand, VialDynamic};
-use std::{boxed::Box, vec::Vec};
 
 #[cfg(not(feature = "_no_usb"))]
 use crate::channel::USB_REPORT_CHANNEL;
+#[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+use crate::config::StorageConfig;
 use crate::config::{BehaviorConfig, CombosConfig, Hand, MorsesConfig, PositionalConfig};
 #[cfg(not(feature = "_no_usb"))]
 use crate::core_traits::Runnable;
@@ -45,8 +55,12 @@ use crate::keyboard::Keyboard;
 use crate::keyboard::combo::{Combo, ComboConfig};
 use crate::keymap::{KeyMap, KeymapData};
 use crate::state::{CONNECTION_STATUS, set_usb_state};
+#[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+use crate::storage::FLASH_OPERATION_FINISHED;
 #[cfg(all(feature = "storage", feature = "host"))]
 use crate::storage::FlashOperationMessage;
+#[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+use crate::storage::Storage;
 use crate::types::action::{Action, EncoderAction, KeyAction};
 #[cfg(feature = "vial")]
 use crate::{config::RmkConfig, host::via::keycode_convert::to_via_keycode};
@@ -99,6 +113,62 @@ async fn build_static_keymap_with_encoder<
     Box::leak(Box::new(keymap))
 }
 
+#[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+trait SimStorageRunner {
+    fn run_until<'s>(
+        &'s mut self,
+        done: &'s Signal<CriticalSectionRawMutex, ()>,
+        timeout: Duration,
+    ) -> Pin<Box<dyn Future<Output = ()> + 's>>;
+}
+
+#[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+impl<F, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> SimStorageRunner
+    for Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>
+where
+    F: AsyncNorFlash + 'static,
+{
+    fn run_until<'s>(
+        &'s mut self,
+        done: &'s Signal<CriticalSectionRawMutex, ()>,
+        timeout: Duration,
+    ) -> Pin<Box<dyn Future<Output = ()> + 's>> {
+        Box::pin(async move {
+            match select(Timer::after(timeout), select(self.run(), done.wait())).await {
+                Either::First(_) => panic!("simulator timed out while storage task was running"),
+                Either::Second(Either::First(_)) => unreachable!("storage task should never return"),
+                Either::Second(Either::Second(())) => {}
+            }
+        })
+    }
+}
+
+#[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+async fn build_static_keymap_with_storage<
+    F,
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
+>(
+    keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
+    encoder_map: [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
+    flash: F,
+    storage_config: StorageConfig,
+    behavior_config: BehaviorConfig,
+    positional_config: PositionalConfig<ROW, COL>,
+) -> (&'static KeyMap<'static>, Box<dyn SimStorageRunner>)
+where
+    F: AsyncNorFlash + 'static,
+{
+    let data = Box::leak(Box::new(KeymapData::new_with_encoder(keymap, encoder_map)));
+    let behavior_config = Box::leak(Box::new(behavior_config));
+    let positional_config = Box::leak(Box::new(positional_config));
+    let (keymap, storage) =
+        crate::initialize_keymap_and_storage(data, flash, &storage_config, behavior_config, positional_config).await;
+    (Box::leak(Box::new(keymap)), Box::new(storage))
+}
+
 pub struct SimKeyboardConfig<const ROW: usize, const COL: usize> {
     behavior_config: BehaviorConfig,
     positional_config: PositionalConfig<ROW, COL>,
@@ -122,6 +192,19 @@ impl KeymapOverride {
             col,
             action,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct HandOverride {
+    row: usize,
+    col: usize,
+    hand: Hand,
+}
+
+impl HandOverride {
+    pub const fn new(row: usize, col: usize, hand: Hand) -> Self {
+        Self { row, col, hand }
     }
 }
 
@@ -180,7 +263,9 @@ impl Default for SimMorseSetup {
 #[derive(Clone, Copy, Debug)]
 pub struct SimKeyboardSetup<const ROW: usize, const COL: usize> {
     key_overrides: &'static [KeymapOverride],
+    extra_key_overrides: &'static [KeymapOverride],
     hands: Option<[[Hand; COL]; ROW]>,
+    hand_overrides: &'static [HandOverride],
     morse: Option<SimMorseSetup>,
 }
 
@@ -188,7 +273,9 @@ impl<const ROW: usize, const COL: usize> SimKeyboardSetup<ROW, COL> {
     pub const fn new() -> Self {
         Self {
             key_overrides: &[],
+            extra_key_overrides: &[],
             hands: None,
+            hand_overrides: &[],
             morse: None,
         }
     }
@@ -198,8 +285,18 @@ impl<const ROW: usize, const COL: usize> SimKeyboardSetup<ROW, COL> {
         self
     }
 
+    pub const fn extra_keys(mut self, key_overrides: &'static [KeymapOverride]) -> Self {
+        self.extra_key_overrides = key_overrides;
+        self
+    }
+
     pub const fn hands(mut self, hands: [[Hand; COL]; ROW]) -> Self {
         self.hands = Some(hands);
+        self
+    }
+
+    pub const fn hand_overrides(mut self, hands: &'static [HandOverride]) -> Self {
+        self.hand_overrides = hands;
         self
     }
 
@@ -277,22 +374,37 @@ impl<const ROW: usize, const COL: usize> SimKeyboardConfig<ROW, COL> {
         self.rmk_config = Some(rmk_config);
         self
     }
+}
 
-    #[cfg(feature = "rynk")]
-    pub fn rynk(self) -> Self {
-        self
-    }
+pub struct NoSimStorage;
 
-    #[cfg(feature = "storage")]
-    pub fn storage(self) -> Self {
-        self
+#[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+pub struct SimStorage<F> {
+    flash: F,
+    config: StorageConfig,
+}
+
+#[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+impl<F> SimStorage<F> {
+    fn new(flash: F) -> Self {
+        Self {
+            flash,
+            config: StorageConfig::default(),
+        }
     }
 }
 
-pub struct SimKeyboardBuilder<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize> {
+pub struct SimKeyboardBuilder<
+    const ROW: usize,
+    const COL: usize,
+    const NUM_LAYER: usize,
+    const NUM_ENCODER: usize,
+    S = NoSimStorage,
+> {
     keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER],
     encoder_map: [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
     config: SimKeyboardConfig<ROW, COL>,
+    storage: S,
 }
 
 impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> SimKeyboardBuilder<ROW, COL, NUM_LAYER, 0> {
@@ -301,12 +413,13 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> SimKeyboardBuil
             keymap,
             encoder_map: [const { [] }; NUM_LAYER],
             config: SimKeyboardConfig::default(),
+            storage: NoSimStorage,
         }
     }
 }
 
-impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    SimKeyboardBuilder<ROW, COL, NUM_LAYER, NUM_ENCODER>
+impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize, S>
+    SimKeyboardBuilder<ROW, COL, NUM_LAYER, NUM_ENCODER, S>
 {
     pub fn behavior(mut self, behavior_config: BehaviorConfig) -> Self {
         self.config = self.config.behavior(behavior_config);
@@ -320,6 +433,29 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
 
     pub fn hands(mut self, hand: [[Hand; COL]; ROW]) -> Self {
         self.config = self.config.hands(hand);
+        self
+    }
+
+    pub fn hand(mut self, row: usize, col: usize, hand: Hand) -> Self {
+        self.config.positional_config.hand[row][col] = hand;
+        self
+    }
+
+    pub fn hand_override(self, hand: HandOverride) -> Self {
+        self.hand(hand.row, hand.col, hand.hand)
+    }
+
+    pub fn hand_overrides_slice(mut self, hands: &[HandOverride]) -> Self {
+        for hand in hands {
+            self = self.hand_override(*hand);
+        }
+        self
+    }
+
+    pub fn hand_overrides<const NUM_HAND: usize>(mut self, hands: [HandOverride; NUM_HAND]) -> Self {
+        for hand in hands {
+            self = self.hand_override(hand);
+        }
         self
     }
 
@@ -348,9 +484,11 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
 
     pub fn setup(mut self, setup: SimKeyboardSetup<ROW, COL>) -> Self {
         self = self.keymap_overrides_slice(setup.key_overrides);
+        self = self.keymap_overrides_slice(setup.extra_key_overrides);
         if let Some(hands) = setup.hands {
             self = self.hands(hands);
         }
+        self = self.hand_overrides_slice(setup.hand_overrides);
         if let Some(morse) = setup.morse {
             self = self.morse_setup(morse);
         }
@@ -568,11 +706,12 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
     pub fn encoders<const NEW_NUM_ENCODER: usize>(
         self,
         encoder_map: [[EncoderAction; NEW_NUM_ENCODER]; NUM_LAYER],
-    ) -> SimKeyboardBuilder<ROW, COL, NUM_LAYER, NEW_NUM_ENCODER> {
+    ) -> SimKeyboardBuilder<ROW, COL, NUM_LAYER, NEW_NUM_ENCODER, S> {
         SimKeyboardBuilder {
             keymap: self.keymap,
             encoder_map,
             config: self.config,
+            storage: self.storage,
         }
     }
 
@@ -588,18 +727,30 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
         self
     }
 
-    #[cfg(feature = "rynk")]
-    pub fn rynk(mut self) -> Self {
-        self.config = self.config.rynk();
-        self
+    #[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+    pub fn storage(
+        self,
+    ) -> SimKeyboardBuilder<ROW, COL, NUM_LAYER, NUM_ENCODER, SimStorage<flash::InMemoryFlash<8192>>> {
+        self.storage_flash(flash::InMemoryFlash::new())
     }
 
-    #[cfg(feature = "storage")]
-    pub fn storage(mut self) -> Self {
-        self.config = self.config.storage();
-        self
+    #[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+    pub fn storage_flash<F>(self, flash: F) -> SimKeyboardBuilder<ROW, COL, NUM_LAYER, NUM_ENCODER, SimStorage<F>>
+    where
+        F: AsyncNorFlash + 'static,
+    {
+        SimKeyboardBuilder {
+            keymap: self.keymap,
+            encoder_map: self.encoder_map,
+            config: self.config,
+            storage: SimStorage::new(flash),
+        }
     }
+}
 
+impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    SimKeyboardBuilder<ROW, COL, NUM_LAYER, NUM_ENCODER, NoSimStorage>
+{
     pub async fn build(self) -> SimKeyboard<'static> {
         let keymap = build_static_keymap_with_encoder(
             self.keymap,
@@ -621,10 +772,49 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
     }
 }
 
+#[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+impl<F, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
+    SimKeyboardBuilder<ROW, COL, NUM_LAYER, NUM_ENCODER, SimStorage<F>>
+where
+    F: AsyncNorFlash + 'static,
+{
+    pub fn storage_config(mut self, config: StorageConfig) -> Self {
+        self.storage.config = config;
+        self
+    }
+
+    pub async fn build(self) -> SimKeyboard<'static> {
+        let (keymap, storage) = build_static_keymap_with_storage(
+            self.keymap,
+            self.encoder_map,
+            self.storage.flash,
+            self.storage.config,
+            self.config.behavior_config,
+            self.config.positional_config,
+        )
+        .await;
+        #[cfg(feature = "vial")]
+        {
+            let mut keyboard = SimKeyboard::from_keymap(keymap).with_storage(storage);
+            keyboard.rmk_config = self.config.rmk_config;
+            keyboard
+        }
+        #[cfg(not(feature = "vial"))]
+        {
+            SimKeyboard::from_keymap(keymap).with_storage(storage)
+        }
+    }
+}
+
 #[derive(Debug)]
 enum SimStep {
     Event(KeyboardEvent),
     Delay(Duration),
+    #[cfg(not(feature = "_no_usb"))]
+    ExpectKeyboardState {
+        modifier: u8,
+        keycodes: Vec<u8>,
+    },
     #[cfg(not(feature = "_no_usb"))]
     ExpectReport(Report),
     #[cfg(not(feature = "_no_usb"))]
@@ -637,6 +827,7 @@ enum SimStep {
     #[cfg(feature = "host")]
     ExpectHostReply {
         transport: ConnectionType,
+        timeout: Duration,
         expected: HostReplyExpectation,
     },
     #[cfg(feature = "rynk")]
@@ -646,6 +837,8 @@ enum SimStep {
     },
     #[cfg(all(feature = "storage", feature = "host"))]
     ExpectFlashOperation(FlashExpectation),
+    #[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+    WaitStorage,
     #[cfg(feature = "passkey_entry")]
     BeginPasskeyEntry,
     #[cfg(feature = "passkey_entry")]
@@ -689,6 +882,8 @@ pub struct SimKeyboard<'a> {
     keyboard: Keyboard<'a>,
     timeout: Duration,
     steps: Vec<SimStep>,
+    #[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+    storage: Option<Box<dyn SimStorageRunner>>,
     #[cfg(feature = "vial")]
     rmk_config: Option<RmkConfig<'static>>,
 }
@@ -700,9 +895,17 @@ impl<'a> SimKeyboard<'a> {
             keyboard,
             timeout: DEFAULT_TIMEOUT,
             steps: Vec::new(),
+            #[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+            storage: None,
             #[cfg(feature = "vial")]
             rmk_config: None,
         }
+    }
+
+    #[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+    fn with_storage(mut self, storage: Box<dyn SimStorageRunner>) -> Self {
+        self.storage = Some(storage);
+        self
     }
 
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
@@ -781,33 +984,34 @@ impl<'a> SimKeyboard<'a> {
 
     #[cfg(not(feature = "_no_usb"))]
     pub fn expect_keys<const N: usize>(&mut self, keycodes: [HidKeyCode; N]) -> &mut Self {
-        let mut report = KeyboardReport::default();
-        for (idx, keycode) in keycodes.iter().take(6).enumerate() {
-            report.keycodes[idx] = *keycode as u8;
-        }
-        self.expect_keyboard_report(report)
+        self.expect_keys_with_mods(0, keycodes)
     }
 
     #[cfg(not(feature = "_no_usb"))]
-    pub fn expect_keycodes<const N: usize>(&mut self, keycodes: [u8; N]) -> &mut Self {
-        let mut report = KeyboardReport::default();
-        for (idx, keycode) in keycodes.iter().take(6).enumerate() {
-            report.keycodes[idx] = *keycode;
-        }
-        self.expect_keyboard_report(report)
+    pub fn expect_keys_with_mods<const N: usize>(&mut self, modifier: u8, keycodes: [HidKeyCode; N]) -> &mut Self {
+        let keycodes = keycodes.iter().map(|keycode| *keycode as u8).collect();
+        self.expect_keyboard_state(modifier, keycodes)
     }
 
     #[cfg(not(feature = "_no_usb"))]
-    pub fn expect_mods(&mut self, modifier: u8) -> &mut Self {
-        self.expect_keyboard_report(KeyboardReport {
-            modifier,
-            ..KeyboardReport::default()
-        })
+    fn expect_keyboard_state(&mut self, modifier: u8, keycodes: Vec<u8>) -> &mut Self {
+        assert!(
+            keycodes.len() <= KeyboardReport::default().keycodes.len(),
+            "keyboard HID reports can carry at most {} simultaneous keycodes",
+            KeyboardReport::default().keycodes.len()
+        );
+        self.steps.push(SimStep::ExpectKeyboardState { modifier, keycodes });
+        self
     }
 
     #[cfg(not(feature = "_no_usb"))]
-    pub fn expect_empty(&mut self) -> &mut Self {
-        self.expect_keyboard_report(KeyboardReport::default())
+    pub fn expect_only_mods(&mut self, modifier: u8) -> &mut Self {
+        self.expect_keyboard_state(modifier, Vec::new())
+    }
+
+    #[cfg(not(feature = "_no_usb"))]
+    pub fn expect_all_up(&mut self) -> &mut Self {
+        self.expect_keyboard_state(0, Vec::new())
     }
 
     #[cfg(not(feature = "_no_usb"))]
@@ -841,8 +1045,17 @@ impl<'a> SimKeyboard<'a> {
     }
 
     #[cfg(feature = "host")]
-    fn expect_host_reply(&mut self, transport: ConnectionType, expected: HostReplyExpectation) -> &mut Self {
-        self.steps.push(SimStep::ExpectHostReply { transport, expected });
+    fn expect_host_reply(
+        &mut self,
+        transport: ConnectionType,
+        timeout: Duration,
+        expected: HostReplyExpectation,
+    ) -> &mut Self {
+        self.steps.push(SimStep::ExpectHostReply {
+            transport,
+            timeout,
+            expected,
+        });
         self
     }
 
@@ -915,6 +1128,12 @@ impl<'a> SimKeyboard<'a> {
         self
     }
 
+    #[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+    pub fn wait_storage(&mut self) -> &mut Self {
+        self.steps.push(SimStep::WaitStorage);
+        self
+    }
+
     #[cfg(feature = "rynk")]
     fn rynk_packet(&mut self, request: Vec<u8>, expected: Vec<u8>) -> &mut Self {
         self.steps.push(SimStep::RynkPacket { request, expected });
@@ -926,6 +1145,8 @@ impl<'a> SimKeyboard<'a> {
         let keyboard_done = Signal::<CriticalSectionRawMutex, ()>::new();
         #[cfg(feature = "vial")]
         let host_done = Signal::<CriticalSectionRawMutex, ()>::new();
+        #[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+        let storage_done = Signal::<CriticalSectionRawMutex, ()>::new();
         let steps = core::mem::take(&mut self.steps);
         let timeout = self.timeout;
 
@@ -937,14 +1158,32 @@ impl<'a> SimKeyboard<'a> {
             let context = Box::leak(Box::new(KeyboardContext::new(keymap)));
             let mut service = crate::host::HostService::new(context, &rmk_config);
 
-            join!(
-                async {
-                    match select(Timer::after(timeout), select(self.keyboard.run(), keyboard_done.wait())).await {
-                        Either::First(_) => panic!("simulator timed out while keyboard task was running"),
-                        Either::Second(Either::First(_)) => unreachable!("keyboard task should never return"),
-                        Either::Second(Either::Second(())) => {}
+            #[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+            if let Some(storage) = self.storage.as_deref_mut() {
+                join!(
+                    Self::run_keyboard_until_done(&mut self.keyboard, &keyboard_done, timeout),
+                    async {
+                        match select(service.run(), host_done.wait()).await {
+                            Either::First(_) => unreachable!("host service should never return"),
+                            Either::Second(()) => {}
+                        }
+                    },
+                    storage.run_until(&storage_done, timeout),
+                    async {
+                        Self::run_steps(keymap, steps, timeout).await;
+                        keyboard_done.signal(());
+                        host_done.signal(());
+                        storage_done.signal(());
                     }
-                },
+                );
+
+                self.rmk_config = Some(rmk_config);
+                self.assert_clean();
+                return;
+            }
+
+            join!(
+                Self::run_keyboard_until_done(&mut self.keyboard, &keyboard_done, timeout),
                 async {
                     match select(service.run(), host_done.wait()).await {
                         Either::First(_) => unreachable!("host service should never return"),
@@ -965,14 +1204,24 @@ impl<'a> SimKeyboard<'a> {
 
         let keymap = self.keyboard.keymap;
 
-        join!(
-            async {
-                match select(Timer::after(timeout), select(self.keyboard.run(), keyboard_done.wait())).await {
-                    Either::First(_) => panic!("simulator timed out while keyboard task was running"),
-                    Either::Second(Either::First(_)) => unreachable!("keyboard task should never return"),
-                    Either::Second(Either::Second(())) => {}
+        #[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+        if let Some(storage) = self.storage.as_deref_mut() {
+            join!(
+                Self::run_keyboard_until_done(&mut self.keyboard, &keyboard_done, timeout),
+                storage.run_until(&storage_done, timeout),
+                async {
+                    Self::run_steps(keymap, steps, timeout).await;
+                    keyboard_done.signal(());
+                    storage_done.signal(());
                 }
-            },
+            );
+
+            self.assert_clean();
+            return;
+        }
+
+        join!(
+            Self::run_keyboard_until_done(&mut self.keyboard, &keyboard_done, timeout),
             async {
                 Self::run_steps(keymap, steps, timeout).await;
                 keyboard_done.signal(());
@@ -988,6 +1237,19 @@ impl<'a> SimKeyboard<'a> {
                 "leak after buffer cleanup, buffer contains {:?}",
                 self.keyboard.held_buffer
             );
+        }
+    }
+
+    #[cfg(not(feature = "_no_usb"))]
+    async fn run_keyboard_until_done(
+        keyboard: &mut Keyboard<'_>,
+        done: &Signal<CriticalSectionRawMutex, ()>,
+        timeout: Duration,
+    ) {
+        match select(Timer::after(timeout), select(keyboard.run(), done.wait())).await {
+            Either::First(_) => panic!("simulator timed out while keyboard task was running"),
+            Either::Second(Either::First(_)) => unreachable!("keyboard task should never return"),
+            Either::Second(Either::Second(())) => {}
         }
     }
 
@@ -1008,6 +1270,13 @@ impl<'a> SimKeyboard<'a> {
                 SimStep::Delay(duration) => {
                     Timer::after(duration).await;
                 }
+                SimStep::ExpectKeyboardState { modifier, keycodes } => {
+                    let actual = match select(Timer::after(timeout), USB_REPORT_CHANNEL.receive()).await {
+                        Either::First(_) => panic!("simulator timed out waiting for keyboard report at step #{idx}"),
+                        Either::Second(report) => report,
+                    };
+                    Self::assert_keyboard_state_eq(modifier, keycodes, actual, idx);
+                }
                 SimStep::ExpectReport(expected) => {
                     let actual = match select(Timer::after(timeout), USB_REPORT_CHANNEL.receive()).await {
                         Either::First(_) => panic!("simulator timed out waiting for HID report at step #{idx}"),
@@ -1025,10 +1294,16 @@ impl<'a> SimKeyboard<'a> {
                 }
                 #[cfg(feature = "host")]
                 SimStep::HostPacket { transport, data } => {
+                    #[cfg(feature = "storage")]
+                    FLASH_OPERATION_FINISHED.reset();
                     crate::channel::enqueue_host_request(transport, data).await;
                 }
                 #[cfg(feature = "host")]
-                SimStep::ExpectHostReply { transport, expected } => {
+                SimStep::ExpectHostReply {
+                    transport,
+                    timeout,
+                    expected,
+                } => {
                     let actual = Self::receive_host_reply(transport, timeout).await;
                     match expected {
                         HostReplyExpectation::Exact(expected) => {
@@ -1061,6 +1336,12 @@ impl<'a> SimKeyboard<'a> {
                     };
                     Self::assert_flash_operation_eq(expected, actual, idx);
                 }
+                #[cfg(all(feature = "storage", not(feature = "_no_usb")))]
+                SimStep::WaitStorage => match select(Timer::after(timeout), FLASH_OPERATION_FINISHED.wait()).await {
+                    Either::First(_) => panic!("simulator timed out waiting for storage write at step #{idx}"),
+                    Either::Second(true) => {}
+                    Either::Second(false) => panic!("storage write failed at step #{idx}"),
+                },
                 #[cfg(feature = "passkey_entry")]
                 SimStep::BeginPasskeyEntry => {
                     crate::ble::passkey::begin_passkey_entry_session();
@@ -1081,6 +1362,31 @@ impl<'a> SimKeyboard<'a> {
                     crate::ble::passkey::end_passkey_entry_session();
                 }
             }
+        }
+
+        // Give the keyboard task a chance to consume a final event even when
+        // the timeline has no following expectation, then reject output that
+        // the scenario did not explicitly assert.
+        Timer::after(Duration::from_millis(1)).await;
+        if let Ok(report) = USB_REPORT_CHANNEL.try_receive() {
+            panic!(
+                "unexpected trailing HID report after final simulator step: {:?}",
+                report
+            );
+        }
+        #[cfg(feature = "host")]
+        if let Ok(reply) = crate::channel::HOST_USB_REPLY.try_receive() {
+            panic!(
+                "unexpected trailing USB host reply after final simulator step: {:?}",
+                reply
+            );
+        }
+        #[cfg(all(feature = "host", feature = "_ble"))]
+        if let Ok(reply) = crate::channel::HOST_BLE_REPLY.try_receive() {
+            panic!(
+                "unexpected trailing BLE host reply after final simulator step: {:?}",
+                reply
+            );
         }
     }
 
@@ -1170,6 +1476,33 @@ impl<'a> SimKeyboard<'a> {
         );
     }
 
+    #[cfg(not(feature = "_no_usb"))]
+    fn assert_keyboard_state_eq(modifier: u8, mut keycodes: Vec<u8>, actual: Report, step_idx: usize) {
+        let actual = match actual {
+            Report::KeyboardReport(report) => report,
+            report => panic!("expected keyboard report at step #{step_idx}, actual {:?}", report),
+        };
+        let mut actual_keycodes: Vec<u8> = actual
+            .keycodes
+            .iter()
+            .copied()
+            .filter(|keycode| *keycode != 0)
+            .collect();
+        keycodes.sort_unstable();
+        actual_keycodes.sort_unstable();
+
+        assert_eq!(
+            modifier, actual.modifier,
+            "on keyboard report modifier at step #{step_idx}: expected keycodes {:?}, actual {:?}",
+            keycodes, actual
+        );
+        assert_eq!(
+            keycodes, actual_keycodes,
+            "on keyboard report keycodes at step #{step_idx}: actual {:?}",
+            actual
+        );
+    }
+
     #[cfg(all(feature = "host", not(feature = "_no_usb")))]
     async fn receive_host_reply(transport: ConnectionType, timeout: Duration) -> [u8; 32] {
         match transport {
@@ -1197,6 +1530,10 @@ impl<'a> SimKeyboard<'a> {
 impl SimKeyboard<'static> {
     pub fn from_keymap(keymap: &'static KeyMap<'static>) -> Self {
         SimKeyboard::new(Keyboard::new(keymap))
+    }
+
+    pub fn single_key(action: KeyAction) -> SimKeyboardBuilder<1, 1, 1, 0> {
+        Self::builder([[[action]]])
     }
 
     pub fn builder<const ROW: usize, const COL: usize, const NUM_LAYER: usize>(
@@ -1237,14 +1574,6 @@ impl Default for SimHost {
 
 #[cfg(feature = "host")]
 impl SimHost {
-    pub fn create() -> Self {
-        Self::default()
-    }
-
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn usb() -> Self {
         Self::default().with_transport(ConnectionType::Usb)
     }
@@ -1268,6 +1597,7 @@ impl SimHost {
         SimHostReply {
             keyboard,
             transport: self.transport,
+            timeout: self.timeout,
             command: Some(data[0]),
             data,
         }
@@ -1279,6 +1609,7 @@ impl SimHost {
         SimVial {
             keyboard,
             transport: self.transport,
+            timeout: self.timeout,
         }
     }
 
@@ -1292,6 +1623,7 @@ impl SimHost {
 pub struct SimHostReply<'k, 'a> {
     keyboard: &'k mut SimKeyboard<'a>,
     transport: ConnectionType,
+    timeout: Duration,
     command: Option<u8>,
     data: [u8; 32],
 }
@@ -1301,25 +1633,25 @@ impl<'k, 'a> SimHostReply<'k, 'a> {
     pub fn expect_ok(self) -> &'k mut SimKeyboard<'a> {
         let command = self.command.expect("host reply command expectation missing");
         self.keyboard
-            .expect_host_reply(self.transport, HostReplyExpectation::Command(command));
+            .expect_host_reply(self.transport, self.timeout, HostReplyExpectation::Command(command));
         self.keyboard
     }
 
     pub fn expect_echo(self) -> &'k mut SimKeyboard<'a> {
         self.keyboard
-            .expect_host_reply(self.transport, HostReplyExpectation::Exact(self.data));
+            .expect_host_reply(self.transport, self.timeout, HostReplyExpectation::Exact(self.data));
         self.keyboard
     }
 
     pub fn expect_command(self, command: u8) -> &'k mut SimKeyboard<'a> {
         self.keyboard
-            .expect_host_reply(self.transport, HostReplyExpectation::Command(command));
+            .expect_host_reply(self.transport, self.timeout, HostReplyExpectation::Command(command));
         self.keyboard
     }
 
     pub fn expect(self, reply: [u8; 32]) -> &'k mut SimKeyboard<'a> {
         self.keyboard
-            .expect_host_reply(self.transport, HostReplyExpectation::Exact(reply));
+            .expect_host_reply(self.transport, self.timeout, HostReplyExpectation::Exact(reply));
         self.keyboard
     }
 }
@@ -1328,6 +1660,7 @@ impl<'k, 'a> SimHostReply<'k, 'a> {
 pub struct SimVial<'k, 'a> {
     keyboard: &'k mut SimKeyboard<'a>,
     transport: ConnectionType,
+    timeout: Duration,
 }
 
 #[cfg(feature = "vial")]
@@ -1337,6 +1670,7 @@ impl<'k, 'a> SimVial<'k, 'a> {
         SimHostReply {
             keyboard: self.keyboard,
             transport: self.transport,
+            timeout: self.timeout,
             command: Some(data[0]),
             data,
         }
@@ -1357,6 +1691,7 @@ impl<'k, 'a> SimVial<'k, 'a> {
         SimVialKeyReply {
             keyboard: self.keyboard,
             transport: self.transport,
+            timeout: self.timeout,
             data,
         }
     }
@@ -1380,6 +1715,7 @@ impl<'k, 'a> SimVial<'k, 'a> {
         SimVialEncoderReply {
             keyboard: self.keyboard,
             transport: self.transport,
+            timeout: self.timeout,
             data,
         }
     }
@@ -1404,6 +1740,7 @@ impl<'k, 'a> SimVial<'k, 'a> {
         SimVialSetEncoderReply {
             keyboard: self.keyboard,
             transport: self.transport,
+            timeout: self.timeout,
             clockwise,
             counter_clockwise,
         }
@@ -1417,6 +1754,7 @@ impl<'k, 'a> SimVial<'k, 'a> {
         SimVialBehaviorSettingReply {
             keyboard: self.keyboard,
             transport: self.transport,
+            timeout: self.timeout,
             data,
         }
     }
@@ -1448,6 +1786,7 @@ impl<'k, 'a> SimVial<'k, 'a> {
         SimVialMorseReply {
             keyboard: self.keyboard,
             transport: self.transport,
+            timeout: self.timeout,
             data,
         }
     }
@@ -1474,6 +1813,7 @@ impl<'k, 'a> SimVial<'k, 'a> {
         SimVialDynamicSetReply {
             keyboard: self.keyboard,
             transport: self.transport,
+            timeout: self.timeout,
             data,
         }
     }
@@ -1487,6 +1827,7 @@ impl<'k, 'a> SimVial<'k, 'a> {
         SimVialComboReply {
             keyboard: self.keyboard,
             transport: self.transport,
+            timeout: self.timeout,
             data,
         }
     }
@@ -1517,6 +1858,7 @@ impl<'k, 'a> SimVial<'k, 'a> {
         SimVialDynamicSetReply {
             keyboard: self.keyboard,
             transport: self.transport,
+            timeout: self.timeout,
             data,
         }
     }
@@ -1534,6 +1876,7 @@ impl<'k, 'a> SimVial<'k, 'a> {
 pub struct SimVialKeyReply<'k, 'a> {
     keyboard: &'k mut SimKeyboard<'a>,
     transport: ConnectionType,
+    timeout: Duration,
     data: [u8; 32],
 }
 
@@ -1544,7 +1887,7 @@ impl<'k, 'a> SimVialKeyReply<'k, 'a> {
         expected[4..6].copy_from_slice(&to_via_keycode(action).to_be_bytes());
         self.keyboard.host_packet(self.transport, self.data);
         self.keyboard
-            .expect_host_reply(self.transport, HostReplyExpectation::Exact(expected));
+            .expect_host_reply(self.transport, self.timeout, HostReplyExpectation::Exact(expected));
         self.keyboard
     }
 }
@@ -1553,6 +1896,7 @@ impl<'k, 'a> SimVialKeyReply<'k, 'a> {
 pub struct SimVialEncoderReply<'k, 'a> {
     keyboard: &'k mut SimKeyboard<'a>,
     transport: ConnectionType,
+    timeout: Duration,
     data: [u8; 32],
 }
 
@@ -1564,7 +1908,7 @@ impl<'k, 'a> SimVialEncoderReply<'k, 'a> {
         expected[2..4].copy_from_slice(&to_via_keycode(action.clockwise).to_be_bytes());
         self.keyboard.host_packet(self.transport, self.data);
         self.keyboard
-            .expect_host_reply(self.transport, HostReplyExpectation::Exact(expected));
+            .expect_host_reply(self.transport, self.timeout, HostReplyExpectation::Exact(expected));
         self.keyboard
     }
 }
@@ -1573,6 +1917,7 @@ impl<'k, 'a> SimVialEncoderReply<'k, 'a> {
 pub struct SimVialSetEncoderReply<'k, 'a> {
     keyboard: &'k mut SimKeyboard<'a>,
     transport: ConnectionType,
+    timeout: Duration,
     clockwise: [u8; 32],
     counter_clockwise: [u8; 32],
 }
@@ -1581,11 +1926,17 @@ pub struct SimVialSetEncoderReply<'k, 'a> {
 impl<'k, 'a> SimVialSetEncoderReply<'k, 'a> {
     pub fn expect_ok(self) -> &'k mut SimKeyboard<'a> {
         self.keyboard.host_packet(self.transport, self.clockwise);
-        self.keyboard
-            .expect_host_reply(self.transport, HostReplyExpectation::Exact(self.clockwise));
+        self.keyboard.expect_host_reply(
+            self.transport,
+            self.timeout,
+            HostReplyExpectation::Exact(self.clockwise),
+        );
         self.keyboard.host_packet(self.transport, self.counter_clockwise);
-        self.keyboard
-            .expect_host_reply(self.transport, HostReplyExpectation::Exact(self.counter_clockwise));
+        self.keyboard.expect_host_reply(
+            self.transport,
+            self.timeout,
+            HostReplyExpectation::Exact(self.counter_clockwise),
+        );
         self.keyboard
     }
 }
@@ -1594,6 +1945,7 @@ impl<'k, 'a> SimVialSetEncoderReply<'k, 'a> {
 pub struct SimVialBehaviorSettingReply<'k, 'a> {
     keyboard: &'k mut SimKeyboard<'a>,
     transport: ConnectionType,
+    timeout: Duration,
     data: [u8; 32],
 }
 
@@ -1605,7 +1957,7 @@ impl<'k, 'a> SimVialBehaviorSettingReply<'k, 'a> {
         expected[1..3].copy_from_slice(&value.to_le_bytes());
         self.keyboard.host_packet(self.transport, self.data);
         self.keyboard
-            .expect_host_reply(self.transport, HostReplyExpectation::Exact(expected));
+            .expect_host_reply(self.transport, self.timeout, HostReplyExpectation::Exact(expected));
         self.keyboard
     }
 
@@ -1615,7 +1967,7 @@ impl<'k, 'a> SimVialBehaviorSettingReply<'k, 'a> {
         expected[1] = value as u8;
         self.keyboard.host_packet(self.transport, self.data);
         self.keyboard
-            .expect_host_reply(self.transport, HostReplyExpectation::Exact(expected));
+            .expect_host_reply(self.transport, self.timeout, HostReplyExpectation::Exact(expected));
         self.keyboard
     }
 }
@@ -1624,6 +1976,7 @@ impl<'k, 'a> SimVialBehaviorSettingReply<'k, 'a> {
 pub struct SimVialMorseReply<'k, 'a> {
     keyboard: &'k mut SimKeyboard<'a>,
     transport: ConnectionType,
+    timeout: Duration,
     data: [u8; 32],
 }
 
@@ -1646,7 +1999,7 @@ impl<'k, 'a> SimVialMorseReply<'k, 'a> {
         expected[9..11].copy_from_slice(&timeout_ms.to_le_bytes());
         self.keyboard.host_packet(self.transport, self.data);
         self.keyboard
-            .expect_host_reply(self.transport, HostReplyExpectation::Exact(expected));
+            .expect_host_reply(self.transport, self.timeout, HostReplyExpectation::Exact(expected));
         self.keyboard
     }
 }
@@ -1655,6 +2008,7 @@ impl<'k, 'a> SimVialMorseReply<'k, 'a> {
 pub struct SimVialComboReply<'k, 'a> {
     keyboard: &'k mut SimKeyboard<'a>,
     transport: ConnectionType,
+    timeout: Duration,
     data: [u8; 32],
 }
 
@@ -1676,7 +2030,7 @@ impl<'k, 'a> SimVialComboReply<'k, 'a> {
         expected[output_start..output_start + 2].copy_from_slice(&to_via_keycode(output).to_le_bytes());
         self.keyboard.host_packet(self.transport, self.data);
         self.keyboard
-            .expect_host_reply(self.transport, HostReplyExpectation::Exact(expected));
+            .expect_host_reply(self.transport, self.timeout, HostReplyExpectation::Exact(expected));
         self.keyboard
     }
 }
@@ -1685,6 +2039,7 @@ impl<'k, 'a> SimVialComboReply<'k, 'a> {
 pub struct SimVialDynamicSetReply<'k, 'a> {
     keyboard: &'k mut SimKeyboard<'a>,
     transport: ConnectionType,
+    timeout: Duration,
     data: [u8; 32],
 }
 
@@ -1695,7 +2050,7 @@ impl<'k, 'a> SimVialDynamicSetReply<'k, 'a> {
         expected[0] = 0;
         self.keyboard.host_packet(self.transport, self.data);
         self.keyboard
-            .expect_host_reply(self.transport, HostReplyExpectation::Exact(expected));
+            .expect_host_reply(self.transport, self.timeout, HostReplyExpectation::Exact(expected));
         self.keyboard
     }
 }

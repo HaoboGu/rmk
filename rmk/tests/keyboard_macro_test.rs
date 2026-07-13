@@ -8,7 +8,6 @@ mod macro_test {
     use rmk_types::keycode::HidKeyCode;
 
     use crate::common::{KC_LSHIFT, TEST_KEYMAP};
-    use crate::kc_to_u8;
 
     const MACRO_KEY_OVERRIDES: [KeymapOverride; 2] = [
         KeymapOverride::new(0, 0, 0, KeyAction::Single(Action::TriggerMacro(0))),
@@ -38,8 +37,8 @@ mod macro_test {
                 .press(0, 0) // press Macro0
                 .delay(100)
                 .release(0, 0) // release Macro0
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // press A
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release A
+                .expect_keys([HidKeyCode::A]) // press A
+                .expect_all_up() // release A
                 .run()
                 .await;
         });
@@ -91,30 +90,30 @@ mod macro_test {
                 .press(0, 0) // press Macro0
                 .delay(100)
                 .release(0, 0) // release Macro0
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // press shift
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // press A + shift
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // release A
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release shift
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // press B
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release B
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // press shift
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // press C + shift
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // release C
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release shift
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // press D
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release D
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kc1), 0, 0, 0, 0, 0])) // press 1
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release 1
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kc2), 0, 0, 0, 0, 0])) // press 2
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release 2
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kc3), 0, 0, 0, 0, 0])) // press 3
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release 3
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kc4), 0, 0, 0, 0, 0])) // press 4
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release 4
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kc5), 0, 0, 0, 0, 0])) // press 5
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release 5
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kc6), 0, 0, 0, 0, 0])) // press 6
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release 6
+                .expect_only_mods(KC_LSHIFT) // press shift
+                .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // press A + shift
+                .expect_only_mods(KC_LSHIFT) // release A
+                .expect_all_up() // release shift
+                .expect_keys([HidKeyCode::B]) // press B
+                .expect_all_up() // release B
+                .expect_only_mods(KC_LSHIFT) // press shift
+                .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::C]) // press C + shift
+                .expect_only_mods(KC_LSHIFT) // release C
+                .expect_all_up() // release shift
+                .expect_keys([HidKeyCode::D]) // press D
+                .expect_all_up() // release D
+                .expect_keys([HidKeyCode::Kc1]) // press 1
+                .expect_all_up() // release 1
+                .expect_keys([HidKeyCode::Kc2]) // press 2
+                .expect_all_up() // release 2
+                .expect_keys([HidKeyCode::Kc3]) // press 3
+                .expect_all_up() // release 3
+                .expect_keys([HidKeyCode::Kc4]) // press 4
+                .expect_all_up() // release 4
+                .expect_keys([HidKeyCode::Kc5]) // press 5
+                .expect_all_up() // release 5
+                .expect_keys([HidKeyCode::Kc6]) // press 6
+                .expect_all_up() // release 6
                 .run()
                 .await;
         });
@@ -138,8 +137,8 @@ mod macro_test {
                 .press(0, 0) // press Macro0
                 .delay(100)
                 .release(0, 0) // release Macro0
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // press A
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release A
+                .expect_keys([HidKeyCode::A]) // press A
+                .expect_all_up() // release A
                 .run()
                 .await;
         });
@@ -169,12 +168,12 @@ mod macro_test {
                 .press(0, 0) // press macro0
                 .delay(100)
                 .release(0, 0) // release macro0
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // press shift
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // press shift + A
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // release A
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release shift
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // press B
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release B
+                .expect_only_mods(KC_LSHIFT) // press shift
+                .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // press shift + A
+                .expect_only_mods(KC_LSHIFT) // release A
+                .expect_all_up() // release shift
+                .expect_keys([HidKeyCode::B]) // press B
+                .expect_all_up() // release B
                 .run()
                 .await;
         });
@@ -203,10 +202,10 @@ mod macro_test {
                 .press(0, 0)
                 .delay(100)
                 .release(0, 0)
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // press A
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release A
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // press B
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release B
+                .expect_keys([HidKeyCode::A]) // press A
+                .expect_all_up() // release A
+                .expect_keys([HidKeyCode::B]) // press B
+                .expect_all_up() // release B
                 .run()
                 .await;
         });

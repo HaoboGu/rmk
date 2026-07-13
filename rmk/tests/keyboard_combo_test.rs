@@ -59,12 +59,12 @@ fn test_single_key_in_combo() {
             .press(1, 5)
             .delay(10)
             .release(1, 5)
-            .expect_keyboard_report(crate::common::report(0, [HidKeyCode::E as u8, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0; 6]))
-            .expect_keyboard_report(crate::common::report(0, [HidKeyCode::R as u8, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0; 6]))
-            .expect_keyboard_report(crate::common::report(0, [HidKeyCode::T as u8, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .expect_keys([HidKeyCode::E])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::R])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::T])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -84,7 +84,8 @@ fn test_combo_timeout_and_ignore() {
             .press(3, 4)
             .delay(100)
             .release(3, 4)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(V), 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::V])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -113,10 +114,10 @@ fn test_combo_with_mod_then_mod_timeout() {
             .release(3, 4) // Release V
             .delay(170)
             .release(3, 5) // Release B
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0; 6])) // V + B = LShift
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [HidKeyCode::R as u8, 0, 0, 0, 0, 0])) // Press R
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0; 6])) // Release R
-            .expect_keyboard_report(crate::common::report(0, [0; 6])) // Release V + B
+            .expect_only_mods(KC_LSHIFT) // V + B = LShift
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::R]) // Press R
+            .expect_only_mods(KC_LSHIFT) // Release R
+            .expect_all_up() // Release V + B
             .run()
             .await;
     });
@@ -146,8 +147,8 @@ fn test_combo_with_one_shot_modifier() {
             .press(1, 3)
             .delay(110)
             .release(1, 3)
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [HidKeyCode::E as u8, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::E])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -176,10 +177,10 @@ fn test_combo_with_mod() {
             .release(3, 4)
             .delay(110)
             .release(3, 5)
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0; 6]))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [HidKeyCode::N as u8, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0; 6]))
-            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .expect_only_mods(KC_LSHIFT)
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::N])
+            .expect_only_mods(KC_LSHIFT)
+            .expect_all_up()
             .run()
             .await;
     });
@@ -204,8 +205,8 @@ fn test_fully_overlapped_combo_timeout() {
             .release(1, 3) // Timeout, should trigger E+T = A because E+T are triggered within the timeout window
             .delay(10)
             .release(1, 4)
-            .expect_keyboard_report(crate::common::report(0, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -230,8 +231,8 @@ fn test_fully_overlapped_combo_trigger_smaller() {
             .release(1, 3)
             .delay(10)
             .release(1, 4)
-            .expect_keyboard_report(crate::common::report(0, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -288,12 +289,12 @@ fn test_fully_overlapped_combo() {
             .release(1, 5)
             .delay(50)
             .release(1, 4)
-            .expect_keyboard_report(crate::common::report(0, [HidKeyCode::Space as u8, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0; 6]))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0; 6]))
-            .expect_keyboard_report(crate::common::report(0, [HidKeyCode::Space as u8, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .expect_keys([HidKeyCode::Space])
+            .expect_all_up()
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::Space])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -326,8 +327,8 @@ fn test_overlapped_combo() {
             .release(1, 4)
             .delay(10)
             .release(1, 3)
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [HidKeyCode::A as u8, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -361,8 +362,8 @@ fn test_taphold_with_combo() {
             .release(2, 2) // Release S
             .delay(10)
             .release(3, 1) // Release Z
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::C])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -394,8 +395,8 @@ fn test_re_press_combo_key_while_triggered_does_not_leak_to_hid() {
             .release(3, 9) // Dot re-release (still part of combo)
             .delay(10)
             .release(3, 8) // Comma release -> combo fully releases -> Backspace released
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Backspace), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .expect_keys([HidKeyCode::Backspace])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -437,13 +438,10 @@ fn test_overlapping_triggered_combos_release_all_outputs() {
             .release(3, 7) // M release (partial release of triggered combo)
             .delay(10)
             .release(3, 8) // Comma release -> must release BOTH combo outputs
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Equal), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(
-                0,
-                [kc_to_u8!(Equal), kc_to_u8!(RightBracket), 0, 0, 0, 0],
-            ))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Equal), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0; 6]))
+            .expect_keys([HidKeyCode::Equal])
+            .expect_keys([HidKeyCode::Equal, HidKeyCode::RightBracket])
+            .expect_keys([HidKeyCode::Equal])
+            .expect_all_up()
             .run()
             .await;
     });

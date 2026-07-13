@@ -1,7 +1,7 @@
 pub mod common;
 
 use rmk::sim::{KeymapOverride, SimKeyboard, SimKeyboardSetup};
-
+use rmk::types::keycode::HidKeyCode;
 use rmk::types::modifier::ModifierCombination;
 
 mod one_shot_test {
@@ -77,8 +77,8 @@ mod one_shot_test {
                 .press(0, 2)
                 .delay(10)
                 .release(0, 2)
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // A with LShift
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // A with LShift
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -115,8 +115,8 @@ mod one_shot_test {
                 .press(0, 2)
                 .delay(10)
                 .release(0, 2)
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // A without LShift (timeout)
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keys([HidKeyCode::A]) // A without LShift (timeout)
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -152,9 +152,9 @@ mod one_shot_test {
                 .release(0, 2) // Release A
                 .delay(10)
                 .release(0, 0) // Release OSM LShift
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // A with LShift
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Still holding LShift
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // A with LShift
+                .expect_only_mods(KC_LSHIFT) // Still holding LShift
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -194,10 +194,10 @@ mod one_shot_test {
                 .press(0, 3)
                 .delay(10)
                 .release(0, 3)
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // A with LShift
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // B without LShift
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // A with LShift
+                .expect_all_up() // All released
+                .expect_keys([HidKeyCode::B]) // B without LShift
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -232,8 +232,8 @@ mod one_shot_test {
                 .release(0, 0) // Release OSM LShift
                 .delay(10)
                 .release(0, 3) // Release B
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // B with LShift
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::B]) // B with LShift
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -271,11 +271,8 @@ mod one_shot_test {
                 .press(0, 2)
                 .delay(10)
                 .release(0, 2)
-                .expect_keyboard_report(crate::common::report(
-                    KC_LSHIFT | KC_LCTRL,
-                    [kc_to_u8!(A), 0, 0, 0, 0, 0],
-                )) // A with LShift+LCtrl
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keys_with_mods(KC_LSHIFT | KC_LCTRL, [HidKeyCode::A]) // A with LShift+LCtrl
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -313,11 +310,8 @@ mod one_shot_test {
                 .press(0, 5)
                 .delay(10)
                 .release(0, 5)
-                .expect_keyboard_report(crate::common::report(
-                    KC_LSHIFT | KC_LCTRL | KC_LGUI,
-                    [kc_to_u8!(B), 0, 0, 0, 0, 0],
-                )) // B with LShift + LCtrl + LGui
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keys_with_mods(KC_LSHIFT | KC_LCTRL | KC_LGUI, [HidKeyCode::B]) // B with LShift + LCtrl + LGui
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -357,9 +351,9 @@ mod one_shot_test {
                 .press(0, 2) // Press A
                 .delay(10)
                 .release(0, 2) // Release A
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // LShift is sent from the start
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // A with LShift
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_only_mods(KC_LSHIFT) // LShift is sent from the start
+                .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // A with LShift
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -403,13 +397,10 @@ mod one_shot_test {
                 .press(0, 2)
                 .delay(10)
                 .release(0, 2)
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // LShift is sent first
-                .expect_keyboard_report(crate::common::report(KC_LSHIFT | KC_LCTRL, [0, 0, 0, 0, 0, 0])) // LCtrl is added to combination
-                .expect_keyboard_report(crate::common::report(
-                    KC_LSHIFT | KC_LCTRL,
-                    [kc_to_u8!(A), 0, 0, 0, 0, 0],
-                )) // A with LShift+LCtrl
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_only_mods(KC_LSHIFT) // LShift is sent first
+                .expect_only_mods(KC_LSHIFT | KC_LCTRL) // LCtrl is added to combination
+                .expect_keys_with_mods(KC_LSHIFT | KC_LCTRL, [HidKeyCode::A]) // A with LShift+LCtrl
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -430,8 +421,8 @@ mod one_shot_test {
                 .press(0, 2) // Press key at (0,2), should get C from layer 1
                 .delay(10)
                 .release(0, 2) // Release key
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // C from layer 1
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keys([HidKeyCode::C]) // C from layer 1
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -451,8 +442,8 @@ mod one_shot_test {
                 .release(0, 2) // Release key
                 .delay(10)
                 .release(0, 1) // Release OSL Layer 1
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // C from layer 1
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keys([HidKeyCode::C]) // C from layer 1
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -476,8 +467,8 @@ mod one_shot_test {
                 .press(0, 2) // Press key at (0,2) after timeout (delay > 100ms)
                 .delay(10)
                 .release(0, 2) // Release key
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // A from layer 0 (timeout)
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keys([HidKeyCode::A]) // A from layer 0 (timeout)
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -501,10 +492,10 @@ mod one_shot_test {
                 .press(0, 3) // Press key at (0,3), should get B from layer 0
                 .delay(10)
                 .release(0, 3) // Release key
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // C from layer 1
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // B from layer 0
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keys([HidKeyCode::C]) // C from layer 1
+                .expect_all_up() // All released
+                .expect_keys([HidKeyCode::B]) // B from layer 0
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -528,8 +519,8 @@ mod one_shot_test {
                 .press(0, 2) // Press key at (0,2), should get C from layer 1 with shift
                 .delay(10)
                 .release(0, 2) // Release key
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // C from layer 1 with LShift
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keys([HidKeyCode::C]) // C from layer 1 with LShift
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -553,11 +544,8 @@ mod one_shot_test {
                 .press(0, 2) // Press key at (0,2), should get A from layer 0 with shift + ctrl
                 .delay(10)
                 .release(0, 2) // Release key
-                .expect_keyboard_report(crate::common::report(
-                    KC_LSHIFT | KC_LCTRL,
-                    [kc_to_u8!(A), 0, 0, 0, 0, 0],
-                )) // A from layer 0 with shift + ctrl
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keys_with_mods(KC_LSHIFT | KC_LCTRL, [HidKeyCode::A]) // A from layer 0 with shift + ctrl
+                .expect_all_up() // All released
                 .run()
                 .await;
         });
@@ -585,8 +573,8 @@ mod one_shot_test {
                 .press(0, 2) // Press key at (0,2) after timeout (delay > 100ms)
                 .delay(10)
                 .release(0, 2) // Release key
-                .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // A from layer 0 (both timeout)
-                .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+                .expect_keys([HidKeyCode::A]) // A from layer 0 (both timeout)
+                .expect_all_up() // All released
                 .run()
                 .await;
         });

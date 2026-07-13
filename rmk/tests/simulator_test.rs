@@ -1,9 +1,5 @@
 pub mod common;
 
-#[cfg(all(feature = "storage", feature = "host", not(feature = "_no_usb")))]
-use rmk::KeymapData;
-#[cfg(all(feature = "storage", feature = "host", not(feature = "_no_usb")))]
-use rmk::config::{BehaviorConfig, PositionalConfig, StorageConfig};
 #[cfg(feature = "vial")]
 use rmk::encoder;
 #[cfg(not(feature = "_no_usb"))]
@@ -52,17 +48,27 @@ fn simulator_in_memory_flash_persists_across_clones() {
 #[test]
 fn simulator_runs_keyboard_sequence() {
     common::test_block_on::test_block_on(async {
-        let keymap = [layer!([[k!(A)]])];
-        let mut keyboard = SimKeyboard::create(keymap).await;
+        let mut keyboard = SimKeyboard::single_key(k!(A)).build().await;
 
         keyboard
             .press(0, 0)
             .expect_keys([HidKeyCode::A])
             .delay(10)
             .release(0, 0)
-            .expect_empty()
+            .expect_all_up()
             .run()
             .await;
+    });
+}
+
+#[cfg(not(feature = "_no_usb"))]
+#[test]
+#[should_panic(expected = "unexpected trailing HID report")]
+fn simulator_rejects_unasserted_trailing_report() {
+    common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::single_key(k!(A)).build().await;
+
+        keyboard.press(0, 0).run().await;
     });
 }
 
@@ -70,8 +76,7 @@ fn simulator_runs_keyboard_sequence() {
 #[test]
 fn simulator_runs_via_host_transaction() {
     common::test_block_on::test_block_on(async {
-        let keymap = [layer!([[k!(A)]])];
-        let mut keyboard = SimKeyboard::builder(keymap).vial().build().await;
+        let mut keyboard = SimKeyboard::single_key(k!(A)).vial().build().await;
         let host = SimHost::usb();
         let mut expected = [0u8; 32];
         expected[0] = ViaCommand::GetProtocolVersion as u8;
@@ -87,8 +92,7 @@ fn simulator_runs_via_host_transaction() {
 #[test]
 fn simulator_combines_via_keymap_update_and_key_reports() {
     common::test_block_on::test_block_on(async {
-        let keymap = [layer!([[k!(A)]])];
-        let mut keyboard = SimKeyboard::builder(keymap).vial().build().await;
+        let mut keyboard = SimKeyboard::single_key(k!(A)).vial().build().await;
         let host = SimHost::usb();
 
         host.vial(&mut keyboard).get_key(0, 0, 0).expect(k!(A));
@@ -100,7 +104,7 @@ fn simulator_combines_via_keymap_update_and_key_reports() {
             .expect_keys([HidKeyCode::B])
             .delay(10)
             .release(0, 0)
-            .expect_empty()
+            .expect_all_up()
             .run()
             .await;
     });
@@ -110,9 +114,8 @@ fn simulator_combines_via_keymap_update_and_key_reports() {
 #[test]
 fn simulator_combines_vial_encoder_update_and_rotary_reports() {
     common::test_block_on::test_block_on(async {
-        let keymap = [layer!([[k!(A)]])];
         let encoder_action = encoder!(k!(C), k!(D));
-        let mut keyboard = SimKeyboard::builder(keymap)
+        let mut keyboard = SimKeyboard::single_key(k!(A))
             .encoders([[encoder!(k!(A), k!(B))]])
             .vial()
             .build()
@@ -128,10 +131,10 @@ fn simulator_combines_vial_encoder_update_and_rotary_reports() {
         keyboard
             .rotary_cw(0)
             .expect_keys([HidKeyCode::C])
-            .expect_empty()
+            .expect_all_up()
             .rotary_ccw(0)
             .expect_keys([HidKeyCode::D])
-            .expect_empty()
+            .expect_all_up()
             .run()
             .await;
     });
@@ -141,8 +144,7 @@ fn simulator_combines_vial_encoder_update_and_rotary_reports() {
 #[test]
 fn simulator_vial_negative_paths_are_timeline_steps() {
     common::test_block_on::test_block_on(async {
-        let keymap = [layer!([[k!(A)]])];
-        let mut keyboard = SimKeyboard::builder(keymap)
+        let mut keyboard = SimKeyboard::single_key(k!(A))
             .encoders([[encoder!(k!(A), k!(B))]])
             .vial()
             .build()
@@ -182,7 +184,7 @@ fn simulator_combines_vial_behavior_settings_and_key_output() {
             .expect_no_report(60)
             .expect_keys([HidKeyCode::A])
             .release(0, 0)
-            .expect_empty()
+            .expect_all_up()
             .run()
             .await;
     });
@@ -206,7 +208,7 @@ fn simulator_combines_vial_dynamic_combo_update_and_key_reports() {
             .expect_keys([HidKeyCode::C])
             .release(0, 0)
             .release(0, 1)
-            .expect_empty()
+            .expect_all_up()
             .run()
             .await;
     });
@@ -233,7 +235,7 @@ fn simulator_combines_vial_dynamic_morse_update_and_key_reports() {
             .delay(20)
             .release(0, 0)
             .expect_keys([HidKeyCode::A])
-            .expect_empty()
+            .expect_all_up()
             .run()
             .await;
     });
@@ -243,8 +245,7 @@ fn simulator_combines_vial_dynamic_morse_update_and_key_reports() {
 #[test]
 fn simulator_routes_vial_replies_to_ble_host() {
     common::test_block_on::test_block_on(async {
-        let keymap = [layer!([[k!(A)]])];
-        let mut keyboard = SimKeyboard::builder(keymap).vial().build().await;
+        let mut keyboard = SimKeyboard::single_key(k!(A)).vial().build().await;
         let host = SimHost::ble();
         let mut expected = [0u8; 32];
         expected[0] = ViaCommand::GetProtocolVersion as u8;
@@ -260,8 +261,7 @@ fn simulator_routes_vial_replies_to_ble_host() {
 #[test]
 fn simulator_vial_persistence_messages_are_observable() {
     common::test_block_on::test_block_on(async {
-        let keymap = [layer!([[k!(A)]])];
-        let mut keyboard = SimKeyboard::builder(keymap).vial().build().await;
+        let mut keyboard = SimKeyboard::single_key(k!(A)).vial().build().await;
         let host = SimHost::usb();
 
         host.vial(&mut keyboard).set_key(0, 0, 0, k!(B)).expect_ok();
@@ -336,46 +336,34 @@ fn simulator_reports_steno_hid_reports() {
     });
 }
 
-#[cfg(all(feature = "storage", feature = "host", not(feature = "_no_usb")))]
+#[cfg(all(feature = "storage", feature = "vial", feature = "host", not(feature = "_no_usb")))]
 #[test]
 fn simulator_storage_loaded_keymap_survives_restart() {
     common::test_block_on::test_block_on(async {
         let flash = rmk::sim::flash::InMemoryFlash::<4096, 256, 4>::new();
-        let storage_config = StorageConfig::default();
+        let host = SimHost::usb();
 
         {
-            let data = Box::leak(Box::new(KeymapData::new([layer!([[k!(B)]])])));
-            let behavior_config = Box::leak(Box::new(BehaviorConfig::default()));
-            let positional_config = Box::leak(Box::new(PositionalConfig::default()));
-            let (_keymap, _storage) = rmk::initialize_keymap_and_storage(
-                data,
-                flash.clone(),
-                &storage_config,
-                behavior_config,
-                positional_config,
-            )
-            .await;
+            let mut keyboard = SimKeyboard::single_key(k!(A))
+                .vial()
+                .storage_flash(flash.clone())
+                .build()
+                .await;
+
+            host.vial(&mut keyboard).set_key(0, 0, 0, k!(B)).expect_ok();
+            keyboard.wait_storage().run().await;
         }
 
-        let data = Box::leak(Box::new(KeymapData::new([layer!([[k!(A)]])])));
-        let behavior_config = Box::leak(Box::new(BehaviorConfig::default()));
-        let positional_config = Box::leak(Box::new(PositionalConfig::default()));
-        let (keymap, _storage) = rmk::initialize_keymap_and_storage(
-            data,
-            flash.clone(),
-            &storage_config,
-            behavior_config,
-            positional_config,
-        )
-        .await;
-        let keymap = Box::leak(Box::new(keymap));
-        let mut keyboard = SimKeyboard::from_keymap(keymap);
+        let mut keyboard = SimKeyboard::single_key(k!(A))
+            .storage_flash(flash.clone())
+            .build()
+            .await;
 
         keyboard
             .press(0, 0)
             .expect_keys([HidKeyCode::B])
             .release(0, 0)
-            .expect_empty()
+            .expect_all_up()
             .run()
             .await;
     });
@@ -385,8 +373,7 @@ fn simulator_storage_loaded_keymap_survives_restart() {
 #[test]
 fn simulator_runs_rynk_host_transaction() {
     common::test_block_on::test_block_on(async {
-        let keymap = [layer!([[k!(A)]])];
-        let mut keyboard = SimKeyboard::builder(keymap).rynk().build().await;
+        let mut keyboard = SimKeyboard::single_key(k!(A)).build().await;
         let host = SimHost::usb();
 
         host.rynk(&mut keyboard)
@@ -401,8 +388,7 @@ fn simulator_runs_rynk_host_transaction() {
 #[test]
 fn simulator_combines_rynk_keymap_update_and_key_reports() {
     common::test_block_on::test_block_on(async {
-        let keymap = [layer!([[k!(A)]])];
-        let mut keyboard = SimKeyboard::builder(keymap).rynk().build().await;
+        let mut keyboard = SimKeyboard::single_key(k!(A)).build().await;
         let host = SimHost::usb();
 
         host.rynk(&mut keyboard).set_key(0, 0, 0, k!(B)).expect_ok();
@@ -412,7 +398,7 @@ fn simulator_combines_rynk_keymap_update_and_key_reports() {
             .expect_keys([HidKeyCode::B])
             .delay(10)
             .release(0, 0)
-            .expect_empty()
+            .expect_all_up()
             .run()
             .await;
     });
@@ -422,11 +408,9 @@ fn simulator_combines_rynk_keymap_update_and_key_reports() {
 #[test]
 fn simulator_combines_rynk_encoder_update_and_rotary_reports() {
     common::test_block_on::test_block_on(async {
-        let keymap = [layer!([[k!(A)]])];
         let encoder_action = EncoderAction::new(k!(C), k!(D));
-        let mut keyboard = SimKeyboard::builder(keymap)
+        let mut keyboard = SimKeyboard::single_key(k!(A))
             .encoders([[EncoderAction::new(k!(A), k!(B))]])
-            .rynk()
             .build()
             .await;
         let host = SimHost::usb();
@@ -440,10 +424,10 @@ fn simulator_combines_rynk_encoder_update_and_rotary_reports() {
         keyboard
             .rotary_cw(0)
             .expect_keys([HidKeyCode::C])
-            .expect_empty()
+            .expect_all_up()
             .rotary_ccw(0)
             .expect_keys([HidKeyCode::D])
-            .expect_empty()
+            .expect_all_up()
             .run()
             .await;
     });

@@ -1,7 +1,6 @@
 pub mod common;
 
 use rmk::sim::{KeymapOverride, SimKeyboard, SimKeyboardSetup};
-
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk_types::modifier::ModifierCombination;
@@ -117,10 +116,10 @@ fn test_lm_release() {
             .release(0, 0)
             .delay(0)
             .release(0, 1)
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // press B
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // press B
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // press B
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // release B
+            .expect_only_mods(KC_LSHIFT) // press B
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::B]) // press B
+            .expect_only_mods(KC_LSHIFT) // press B
+            .expect_all_up() // release B
             .run()
             .await;
     });

@@ -192,8 +192,8 @@ fn test_tap() {
             .press(0, 1) // Press mt!(B, LShift)
             .delay(100)
             .release(0, 1) // Release B
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press B
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release B
+            .expect_keys([HidKeyCode::B]) // Press B
+            .expect_all_up() // Release B
             .run()
             .await;
     });
@@ -212,8 +212,8 @@ fn test_hold() {
             .press(0, 1) // Press mt!(B, LShift)
             .delay(300)
             .release(0, 1) // Release B after hold timeout
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Hold LShift
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+            .expect_only_mods(KC_LSHIFT) // Hold LShift
+            .expect_all_up() // All released
             .run()
             .await;
     });
@@ -236,10 +236,10 @@ fn test_mt_1() {
             .release(0, 0) // Release A
             .delay(10)
             .release(0, 1) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Permissive hold
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .expect_only_mods(KC_LSHIFT) // Permissive hold
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // Press A
+            .expect_only_mods(KC_LSHIFT) // Release A
+            .expect_all_up() // Release mt!(B, LShift)
             .run()
             .await;
     });
@@ -262,10 +262,10 @@ fn test_mt_2() {
             .release(0, 1) // Release mt!(B, LShift)
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Permissive hold
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_only_mods(KC_LSHIFT) // Permissive hold
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // Press A
+            .expect_keys([HidKeyCode::A]) // Release mt!(B, LShift)
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -288,10 +288,10 @@ fn test_mt_3() {
             .release(0, 0) // Release A
             .delay(10)
             .release(0, 1) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press B
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release B
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
+            .expect_keys([HidKeyCode::B]) // Press B
+            .expect_all_up() // Release B
             .run()
             .await;
     });
@@ -314,10 +314,10 @@ fn test_mt_4() {
             .release(0, 1) // Release mt!(B, LShift)
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0])) // Press B
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release B
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_keys([HidKeyCode::A, HidKeyCode::B]) // Press B
+            .expect_keys([HidKeyCode::A]) // Release B
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -340,10 +340,10 @@ fn test_mt_5() {
             .press(0, 1) // Press mt!(B, LShift)
             .delay(10)
             .release(0, 1) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press B
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release B
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
+            .expect_keys([HidKeyCode::B]) // Press B
+            .expect_all_up() // Release B
             .run()
             .await;
     });
@@ -366,10 +366,10 @@ fn test_mt_6() {
             .press(0, 0) // Press A
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0])) // Press B
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release B
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keys([HidKeyCode::B]) // Press B
+            .expect_all_up() // Release B
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -392,10 +392,10 @@ fn test_mt_timeout_1() {
             .release(0, 0) // Release A
             .delay(10)
             .release(0, 1) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Timeout
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .expect_only_mods(KC_LSHIFT) // Timeout
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // Press A
+            .expect_only_mods(KC_LSHIFT) // Release A
+            .expect_all_up() // Release mt!(B, LShift)
             .run()
             .await;
     });
@@ -418,10 +418,10 @@ fn test_mt_timeout_2() {
             .release(0, 1) // Release mt!(B, LShift)
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Timeout
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_only_mods(KC_LSHIFT) // Timeout
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // Press A
+            .expect_keys([HidKeyCode::A]) // Release mt!(B, LShift)
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -444,10 +444,10 @@ fn test_mt_timeout_3() {
             .release(0, 0) // Release A
             .delay(10)
             .release(0, 1) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Timeout
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // Timeout
+            .expect_only_mods(KC_LSHIFT) // Release A
+            .expect_all_up() // Release mt!(B, LShift)
             .run()
             .await;
     });
@@ -470,10 +470,10 @@ fn test_mt_timeout_4() {
             .release(0, 1) // Release mt!(B, LShift)
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Timeout
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // Timeout
+            .expect_keys([HidKeyCode::A]) // Release mt!(B, LShift)
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -496,10 +496,10 @@ fn test_mt_timeout_5() {
             .press(0, 1) // Press mt!(B, LShift)
             .delay(260)
             .release(0, 1) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Press mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
+            .expect_only_mods(KC_LSHIFT) // Press mt!(B, LShift)
+            .expect_all_up() // Release mt!(B, LShift)
             .run()
             .await;
     });
@@ -522,10 +522,10 @@ fn test_mt_timeout_6() {
             .press(0, 0) // Press A
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Press mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_only_mods(KC_LSHIFT) // Press mt!(B, LShift)
+            .expect_all_up() // Release mt!(B, LShift)
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -548,10 +548,10 @@ fn test_mt_timeout_7() {
             .release(0, 0) // Release A
             .delay(260)
             .release(0, 1) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Timeout
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
+            .expect_only_mods(KC_LSHIFT) // Timeout
+            .expect_all_up() // Release mt!(B, LShift)
             .run()
             .await;
     });
@@ -574,10 +574,10 @@ fn test_mt_timeout_8() {
             .release(0, 0) // Release A
             .delay(260)
             .release(0, 1) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Permissve hold
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .expect_only_mods(KC_LSHIFT) // Permissve hold
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // Press A
+            .expect_only_mods(KC_LSHIFT) // Release A
+            .expect_all_up() // Release mt!(B, LShift)
             .run()
             .await;
     });
@@ -600,10 +600,10 @@ fn test_mt_timeout_9() {
             .release(0, 0) // Release A
             .delay(10)
             .release(0, 1) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Timeout
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
+            .expect_only_mods(KC_LSHIFT) // Timeout
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // Press A
+            .expect_only_mods(KC_LSHIFT) // Release A
+            .expect_all_up() // Release mt!(B, LShift)
             .run()
             .await;
     });
@@ -626,10 +626,10 @@ fn test_mt_timeout_10() {
             .release(0, 1) // Release mt!(B, LShift)
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Timeout
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_only_mods(KC_LSHIFT) // Timeout
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // Press A
+            .expect_keys([HidKeyCode::A]) // Release mt!(B, LShift)
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -652,8 +652,8 @@ fn test_morse_lt_1() {
             .release(0, 0) // Release A
             .delay(10)
             .release(0, 3) // Release lt!(1, D)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Press Kp1
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp1
+            .expect_keys([HidKeyCode::Kp1]) // Press Kp1
+            .expect_all_up() // Release Kp1
             .run()
             .await;
     });
@@ -676,8 +676,8 @@ fn test_morse_lt_2() {
             .release(0, 3) // Release lt!(1, D)
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Press Kp1
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp1
+            .expect_keys([HidKeyCode::Kp1]) // Press Kp1
+            .expect_all_up() // Release Kp1
             .run()
             .await;
     });
@@ -700,10 +700,10 @@ fn test_morse_lt_3() {
             .release(0, 0) // Release A
             .delay(10)
             .release(0, 3) // Release lt!(1, D)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // Press D
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release D
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
+            .expect_keys([HidKeyCode::D]) // Press D
+            .expect_all_up() // Release D
             .run()
             .await;
     });
@@ -726,10 +726,10 @@ fn test_morse_lt_4() {
             .release(0, 3) // Release lt!(1, D)
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(D), 0, 0, 0, 0])) // Press D
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release D
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_keys([HidKeyCode::A, HidKeyCode::D]) // Press D
+            .expect_keys([HidKeyCode::A]) // Release D
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -752,10 +752,10 @@ fn test_morse_lt_5() {
             .press(0, 3) // Press lt!(1, D)
             .delay(10)
             .release(0, 3) // Release lt!(1, D)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // Press D
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release D
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
+            .expect_keys([HidKeyCode::D]) // Press D
+            .expect_all_up() // Release D
             .run()
             .await;
     });
@@ -778,10 +778,10 @@ fn test_morse_lt_6() {
             .press(0, 0) // Press A
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0])) // Press D
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release D
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keys([HidKeyCode::D]) // Press D
+            .expect_all_up() // Release D
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -804,8 +804,8 @@ fn test_morse_lt_timeout_1() {
             .release(0, 0) // Release A
             .delay(10)
             .release(0, 3) // Release lt!(1, D)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keys([HidKeyCode::Kp1]) // Press A
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -828,8 +828,8 @@ fn test_morse_lt_timeout_2() {
             .release(0, 3) // Release lt!(1, D)
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keys([HidKeyCode::Kp1]) // Press A
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -852,8 +852,8 @@ fn test_morse_lt_timeout_3() {
             .release(0, 0) // Release A
             .delay(10)
             .release(0, 3) // Release lt!(1, D)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -876,8 +876,8 @@ fn test_morse_lt_timeout_4() {
             .release(0, 3) // Release lt!(1, D)
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -900,8 +900,8 @@ fn test_morse_lt_timeout_5() {
             .press(0, 3) // Press lt!(1, D)
             .delay(260)
             .release(0, 3) // Release lt!(1, D)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -924,8 +924,8 @@ fn test_morse_lt_timeout_6() {
             .press(0, 0) // Press A
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -948,8 +948,8 @@ fn test_morse_lt_timeout_7() {
             .release(0, 0) // Release A
             .delay(260)
             .release(0, 3) // Release lt!(1, D)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -972,8 +972,8 @@ fn test_morse_lt_timeout_8() {
             .release(0, 0) // Release A
             .delay(260)
             .release(0, 3) // Release lt!(1, D)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::Kp1])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -996,8 +996,8 @@ fn test_morse_lt_timeout_9() {
             .release(0, 0) // Release A
             .delay(10)
             .release(0, 3) // Release lt!(1, D)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Press Kp1 on layer 1
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp1
+            .expect_keys([HidKeyCode::Kp1]) // Press Kp1 on layer 1
+            .expect_all_up() // Release Kp1
             .run()
             .await;
     });
@@ -1020,8 +1020,8 @@ fn test_morse_lt_timeout_10() {
             .release(0, 3) // Release lt!(1, D)
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Press Kp1 on layer 1
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp1
+            .expect_keys([HidKeyCode::Kp1]) // Press Kp1 on layer 1
+            .expect_all_up() // Release Kp1
             .run()
             .await;
     });
@@ -1044,10 +1044,10 @@ fn test_trigger() {
             .release(0, 0) // Release A
             .delay(100)
             .release(0, 1) // Release mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Hold LShift
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+            .expect_only_mods(KC_LSHIFT) // Hold LShift
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // Press A
+            .expect_only_mods(KC_LSHIFT) // Release A
+            .expect_all_up() // All released
             .run()
             .await;
     });
@@ -1073,10 +1073,10 @@ fn test_with_combo_1() {
             .release(0, 2) // Release C
             .delay(300)
             .release(0, 1) // Release B
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_only_mods(KC_LSHIFT)
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::C])
+            .expect_only_mods(KC_LSHIFT)
+            .expect_all_up()
             .run()
             .await;
     });
@@ -1102,8 +1102,8 @@ fn test_with_combo_2() {
             .release(0, 2) // Release C
             .delay(300)
             .release(0, 1) // Release B
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(X), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::X])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -1129,8 +1129,8 @@ fn test_with_combo_3() {
             .release(0, 1) // Release B
             .delay(10)
             .release(0, 2) // Release C
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(X), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::X])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -1156,10 +1156,10 @@ fn test_with_combo_4() {
             .release(0, 1) // Release B
             .delay(10)
             .release(0, 2) // Release C -> mt!(C, LGui) is resolved now
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_only_mods(KC_LSHIFT)
+            .expect_all_up()
+            .expect_keys([HidKeyCode::C])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -1185,8 +1185,8 @@ fn test_with_combo_5() {
             .release(0, 1) // Release B
             .delay(260)
             .release(0, 2) // Release C
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(X), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::X])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -1216,10 +1216,10 @@ fn test_with_combo_6() {
             .release(0, 3) // Release D
             .delay(10)
             .release(0, 2) // Release C
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(Kp3), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp3), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_only_mods(KC_LSHIFT)
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::Kp3])
+            .expect_keys([HidKeyCode::Kp3])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -1249,8 +1249,8 @@ fn test_with_combo_7() {
             .release(0, 2) // Release C
             .delay(10)
             .release(0, 3) // Release D
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Z), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::Z])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -1280,10 +1280,10 @@ fn test_with_combo_8() {
             .release(0, 2) // Release C
             .delay(10)
             .release(0, 3) // Release D
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(Kp3), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp3), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_only_mods(KC_LSHIFT)
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::Kp3])
+            .expect_keys([HidKeyCode::Kp3])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -1306,10 +1306,10 @@ fn test_timeout() {
             .release(0, 0) // Release A
             .delay(100)
             .release(0, 1) // Release B
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Hold LShift
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+            .expect_only_mods(KC_LSHIFT) // Hold LShift
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // Press A
+            .expect_only_mods(KC_LSHIFT) // Release A
+            .expect_all_up() // All released
             .run()
             .await;
     });
@@ -1332,10 +1332,10 @@ fn test_quick_tap() {
             .release(0, 1) // Release mt!(B, LShift)
             .delay(100)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), kc_to_u8!(B), 0, 0, 0, 0])) // Press B
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release B
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_keys([HidKeyCode::A, HidKeyCode::B]) // Press B
+            .expect_keys([HidKeyCode::A]) // Release B
+            .expect_all_up() // Release A
             .run()
             .await;
     });
@@ -1362,12 +1362,12 @@ fn test_multi_tap() {
             .release(0, 1) // Release mt!(B, LShift)
             .delay(60)
             .release(0, 2) // Release mt!(C, LGui)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release C
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // mt!(B, LShift)
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release C
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
+            .expect_only_mods(KC_LSHIFT) // mt!(B, LShift)
+            .expect_all_up() // Release C
+            .expect_keys([HidKeyCode::C]) // mt!(B, LShift)
+            .expect_all_up() // Release C
             .run()
             .await;
     });
@@ -1402,12 +1402,12 @@ fn test_layer_tap() {
             .release(0, 1) // Release B
             .delay(10)
             .release(0, 3) // Release lt!(1, D)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0])) // Press Kp2 on layer 1
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp2
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0])) // Press Kp2 on layer 1
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp2
+            .expect_keys([HidKeyCode::Kp2]) // Press Kp2 on layer 1
+            .expect_all_up() // Release Kp2
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
+            .expect_keys([HidKeyCode::Kp2]) // Press Kp2 on layer 1
+            .expect_all_up() // Release Kp2
             .run()
             .await;
     });
@@ -1446,12 +1446,12 @@ fn test_rolling_with_layer_tap() {
             .release(0, 3) // Release lt!(1, D)
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Kp1 on layer 1
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp1
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Kp1 on layer 1
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp1
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0])) // Kp1 on layer 1
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp1
+            .expect_keys([HidKeyCode::Kp1]) // Kp1 on layer 1
+            .expect_all_up() // Release Kp1
+            .expect_keys([HidKeyCode::Kp1]) // Kp1 on layer 1
+            .expect_all_up() // Release Kp1
+            .expect_keys([HidKeyCode::Kp1]) // Kp1 on layer 1
+            .expect_all_up() // Release Kp1
             .run()
             .await;
     });
@@ -1474,10 +1474,10 @@ fn test_timeout_rolled_release() {
             .release(0, 1) // Release B
             .delay(100)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Hold LShift
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+            .expect_only_mods(KC_LSHIFT) // Hold LShift
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // Press A
+            .expect_keys([HidKeyCode::A]) // Release A
+            .expect_all_up() // All released
             .run()
             .await;
     });
@@ -1500,10 +1500,10 @@ fn test_timeout_rolled_release_2() {
             .release(0, 1) // Release B after timeout
             .delay(10)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Hold LShift
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+            .expect_only_mods(KC_LSHIFT) // Hold LShift
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // Press A
+            .expect_keys([HidKeyCode::A]) // Release A
+            .expect_all_up() // All released
             .run()
             .await;
     });
@@ -1526,10 +1526,10 @@ fn test_timeout_and_release() {
             .release(0, 0) // Release A
             .delay(100)
             .release(0, 1) // Release B
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Hold LShift
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+            .expect_only_mods(KC_LSHIFT) // Hold LShift
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // Press A
+            .expect_only_mods(KC_LSHIFT) // Release A
+            .expect_all_up() // All released
             .run()
             .await;
     });
@@ -1552,10 +1552,10 @@ fn test_timeout_and_release_with_other_morse_key() {
             .release(0, 2) // Release C
             .delay(100)
             .release(0, 1) // Release B
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Hold LShift
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // Press C
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Release C
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // All released
+            .expect_only_mods(KC_LSHIFT) // Hold LShift
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::C]) // Press C
+            .expect_only_mods(KC_LSHIFT) // Release C
+            .expect_all_up() // All released
             .run()
             .await;
     });
@@ -1582,15 +1582,12 @@ fn test_rolling_release_order() {
             .release(0, 2) // Release mt!(C, LGui)
             .delay(100)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(
-                KC_LSHIFT | KC_LGUI,
-                [kc_to_u8!(A), 0, 0, 0, 0, 0],
-            ))
-            .expect_keyboard_report(crate::common::report(KC_LGUI, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_only_mods(KC_LSHIFT)
+            .expect_only_mods(KC_LSHIFT | KC_LGUI)
+            .expect_keys_with_mods(KC_LSHIFT | KC_LGUI, [HidKeyCode::A])
+            .expect_keys_with_mods(KC_LGUI, [HidKeyCode::A])
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -1617,15 +1614,12 @@ fn test_rolling_release_order_2() {
             .release(0, 1) // Release B
             .delay(100)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(
-                KC_LSHIFT | KC_LGUI,
-                [kc_to_u8!(A), 0, 0, 0, 0, 0],
-            ))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_only_mods(KC_LSHIFT)
+            .expect_only_mods(KC_LSHIFT | KC_LGUI)
+            .expect_keys_with_mods(KC_LSHIFT | KC_LGUI, [HidKeyCode::A])
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A])
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -1652,15 +1646,12 @@ fn test_rolling_release_order_3() {
             .release(0, 0) // Release A
             .delay(50)
             .release(0, 1) // Release B
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(
-                KC_LSHIFT | KC_LGUI,
-                [kc_to_u8!(A), 0, 0, 0, 0, 0],
-            ))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_only_mods(KC_LSHIFT)
+            .expect_only_mods(KC_LSHIFT | KC_LGUI)
+            .expect_keys_with_mods(KC_LSHIFT | KC_LGUI, [HidKeyCode::A])
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A])
+            .expect_only_mods(KC_LSHIFT)
+            .expect_all_up()
             .run()
             .await;
     });
@@ -1687,15 +1678,12 @@ fn test_multiple_mt_triggered() {
             .release(0, 1) // Release B
             .delay(100)
             .release(0, 2) // Release C
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(
-                KC_LSHIFT | KC_LGUI,
-                [kc_to_u8!(A), 0, 0, 0, 0, 0],
-            ))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT | KC_LGUI, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(KC_LGUI, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_only_mods(KC_LSHIFT)
+            .expect_only_mods(KC_LSHIFT | KC_LGUI)
+            .expect_keys_with_mods(KC_LSHIFT | KC_LGUI, [HidKeyCode::A])
+            .expect_only_mods(KC_LSHIFT | KC_LGUI)
+            .expect_only_mods(KC_LGUI)
+            .expect_all_up()
             .run()
             .await;
     });
@@ -1726,12 +1714,12 @@ fn test_complex_rolling() {
             .release(0, 1) // Release B
             .delay(10)
             .release(0, 2) // Release C
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [kc_to_u8!(Kp3), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp3), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .expect_only_mods(KC_LSHIFT)
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::Kp3])
+            .expect_keys([HidKeyCode::Kp3])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -1758,12 +1746,12 @@ fn test_flow_tap() {
             .release(0, 1) // Release B
             .delay(10)
             .release(0, 2) // Release C
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(KC_LSHIFT, [0, 0, 0, 0, 0, 0])) // Press B
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release B
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0])) // Press C
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release C
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
+            .expect_only_mods(KC_LSHIFT) // Press B
+            .expect_all_up() // Release B
+            .expect_keys([HidKeyCode::C]) // Press C
+            .expect_all_up() // Release C
             .run()
             .await;
     });
@@ -1904,10 +1892,10 @@ fn test_previous_rolling_keypress() {
             .release(0, 1) // Release Kp2 on layer 1
             .delay(10)
             .release(0, 3) // Release lt!(1, D)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0])) // Press A
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Kp2), 0, 0, 0, 0, 0])) // Press Kp2
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0])) // Release Kp2
+            .expect_keys([HidKeyCode::A]) // Press A
+            .expect_all_up() // Release A
+            .expect_keys([HidKeyCode::Kp2]) // Press Kp2
+            .expect_all_up() // Release Kp2
             .run()
             .await;
     });

@@ -18,16 +18,8 @@ pub const SIMPLE_MORSE_KEY_OVERRIDES: [KeymapOverride; 10] = [
     KeymapOverride::new(1, 0, 4, k!(Kp5)),
 ];
 
-pub const MORSE_KEYMAP: [[[KeyAction; 5]; 1]; 2] = [
-    [[
-        k!(A),
-        mt!(B, ModifierCombination::LSHIFT),
-        mt!(C, ModifierCombination::LGUI),
-        lt!(1, D),
-        mt!(E, ModifierCombination::LALT),
-    ]],
-    [[k!(Kp1), k!(Kp2), k!(Kp3), k!(Kp4), k!(Kp5)]],
-];
+pub const HRM_EXTRA_KEY_OVERRIDES: [KeymapOverride; 1] =
+    [KeymapOverride::new(0, 0, 4, mt!(E, ModifierCombination::LALT))];
 
 pub const TEST_MORSE_PATTERNS: [(u16, Action); 8] = [
     (0b1_01, Action::Key(KeyCode::Hid(HidKeyCode::A))),
@@ -43,6 +35,8 @@ pub const TEST_MORSE_PATTERNS: [(u16, Action); 8] = [
 pub const SIMPLE_MORSE_SETUP: SimKeyboardSetup<5, 14> = SimKeyboardSetup::new()
     .keys(&SIMPLE_MORSE_KEY_OVERRIDES)
     .morse(SimMorseSetup::new().patterns(&TEST_MORSE_PATTERNS));
+
+pub const HRM_MORSE_SETUP: SimKeyboardSetup<5, 14> = SIMPLE_MORSE_SETUP.extra_keys(&HRM_EXTRA_KEY_OVERRIDES);
 
 pub const MORSE_COMBO_KEY: KeyAction = KeyAction::TapHold(
     Action::Key(KeyCode::Hid(HidKeyCode::B)),

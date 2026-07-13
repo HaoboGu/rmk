@@ -4,9 +4,7 @@ pub mod rynk_hid_link;
 #[cfg(feature = "rynk")]
 pub mod rynk_link;
 pub mod test_block_on;
-pub mod test_macro;
 
-use rmk::hid::KeyboardReport;
 use rmk::types::action::KeyAction;
 use rmk::types::modifier::ModifierCombination;
 use rmk::{a, k, layer, lt, mo, shifted, th, wm};
@@ -45,23 +43,6 @@ pub const KC_LCTRL: u8 = 1 << 0;
 pub const KC_LSHIFT: u8 = 1 << 1;
 pub const KC_LALT: u8 = 1 << 2;
 pub const KC_LGUI: u8 = 1 << 3;
-
-#[derive(Debug, Clone)]
-pub struct TestKeyPress {
-    pub row: u8,
-    pub col: u8,
-    pub pressed: bool,
-    pub delay: u64, // Delay before this key event in milliseconds
-}
-
-pub const fn report(modifier: u8, keycodes: [u8; 6]) -> KeyboardReport {
-    KeyboardReport {
-        modifier,
-        keycodes,
-        leds: 0,
-        reserved: 0,
-    }
-}
 
 #[rustfmt::skip]
 pub const TEST_KEYMAP: [[[KeyAction; 14]; 5]; 2] =

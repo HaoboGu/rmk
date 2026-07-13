@@ -371,8 +371,8 @@ fn test_tap() {
             .press(0, 0) // Press td!(0)
             .delay(10)
             .release(0, 0) // Release td!(0)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -388,8 +388,8 @@ fn test_hold() {
             .press(0, 0) // Press td!(0)
             .delay(300)
             .release(0, 0) // Release td!(0)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::B])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -409,8 +409,8 @@ fn test_hold_after_tap() {
             .press(0, 0) // Press td!(0)
             .delay(300)
             .release(0, 0) // Release td!(0)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::C])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -430,8 +430,8 @@ fn test_double_tap() {
             .press(0, 0) // Press td!(0)
             .delay(200)
             .release(0, 0) // Release td!(0)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::D])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -451,10 +451,10 @@ fn test_tap_on_other_press() {
             .press(0, 3) // Press A
             .delay(10)
             .release(0, 3) // Press A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(X), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::X])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -474,10 +474,10 @@ fn test_hold_on_other_press() {
             .release(0, 3) // Press A
             .delay(10)
             .release(0, 1) // Release td!(1)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Y), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Y), kc_to_u8!(A), 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Y), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::Y])
+            .expect_keys([HidKeyCode::Y, HidKeyCode::A])
+            .expect_keys([HidKeyCode::Y])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -501,10 +501,10 @@ fn test_hold_after_tap_on_other_press() {
             .release(0, 3) // Press A
             .delay(10)
             .release(0, 1) // Release td!(1)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Z), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Z), kc_to_u8!(A), 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Z), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::Z])
+            .expect_keys([HidKeyCode::Z, HidKeyCode::A])
+            .expect_keys([HidKeyCode::Z])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -528,12 +528,12 @@ fn test_multiple_tap() {
             .press(0, 1) // Press td!(1)
             .delay(10)
             .release(0, 1) // Release td!(1)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(X), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::X])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -557,10 +557,10 @@ fn test_tap_after_double_tap() {
             .press(0, 0) // Press td!(0)
             .delay(10)
             .release(0, 0) // Release td!(0)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(D), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::D])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -584,10 +584,10 @@ fn test_rolling() {
             .release(0, 0) // Release td!(0)
             .delay(10)
             .release(0, 1) // Release td!(1)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(X), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::C])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::X])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -611,10 +611,10 @@ fn test_rolling_2() {
             .release(0, 0) // Release td!(0) -> td!(1) timeout
             .delay(10)
             .release(0, 1) // Release td!(1)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), kc_to_u8!(Y), 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, kc_to_u8!(Y), 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::C])
+            .expect_keys([HidKeyCode::C, HidKeyCode::Y])
+            .expect_keys([HidKeyCode::Y])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -638,10 +638,10 @@ fn test_rolling_3() {
             .release(0, 1) // Release td!(1) -> td(1) hold, gap -> tap "Y"
             .delay(260)
             .release(0, 0) // Release td!(0) -> release "C"
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), kc_to_u8!(Y), 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::C])
+            .expect_keys([HidKeyCode::C, HidKeyCode::Y])
+            .expect_keys([HidKeyCode::C])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -665,10 +665,10 @@ fn test_multiple_tap_dance_keys() {
             .release(0, 1) // Release td!(1)
             .delay(100)
             .release(0, 0) // Release td!(0)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(X), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::C])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::X])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -692,10 +692,10 @@ fn test_multiple_tap_dance_keys_2() {
             .release(0, 1) // Release td!(1)
             .delay(300)
             .release(0, 0) // Release td!(0) -> td!(1) Timeout!
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), kc_to_u8!(X), 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::C])
+            .expect_keys([HidKeyCode::C, HidKeyCode::X])
+            .expect_keys([HidKeyCode::C])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -719,10 +719,10 @@ fn test_multiple_tap_dance_keys_3() {
             .release(0, 1) // Release td!(1) -> td!(1) Timeout!
             .delay(10)
             .release(0, 0) // Release td!(0)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), kc_to_u8!(Y), 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(C), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::C])
+            .expect_keys([HidKeyCode::C, HidKeyCode::Y])
+            .expect_keys([HidKeyCode::C])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -745,17 +745,48 @@ fn test_early_fire_no_double_press_on_next_key() {
             .delay(50)
             .release(0, 4) // Release td!(0) quickly — early fire triggers Enter
             .delay(50)
-            .press(0, 4) // Re-press td!(0)
+            .press(0, 0) // Press A shortly after
+            .delay(10)
+            .release(0, 0) // Release A
+            .delay(50)
+            .press(0, 0) // Press A again before the early-fire gap expires
             .delay(300)
-            .release(0, 4) // Hold past timeout, then release — hold_after_tap fires Enter
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Enter), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Enter), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .release(0, 0) // Release A after the early-fire gap expires
+            .expect_keys([HidKeyCode::Enter])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
             .run()
             .await;
     });
 }
+
+/// Test that re-pressing an early-fired key and holding it resolves as hold-after-tap.
+#[test]
+fn test_early_fire_then_hold_after_tap() {
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(EARLY_FIRE_SETUP).build().await;
+
+        keyboard
+            .delay(10)
+            .press(0, 4) // Press td!(0) morse key
+            .delay(50)
+            .release(0, 4) // Release quickly; early fire triggers Enter
+            .delay(50)
+            .press(0, 4) // Re-press td!(0)
+            .delay(300)
+            .release(0, 4) // Hold past timeout; hold-after-tap triggers Enter
+            .expect_keys([HidKeyCode::Enter])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::Enter])
+            .expect_all_up()
+            .run()
+            .await;
+    });
+}
+
 /// Regression test for permissive hold key ordering bug.
 ///
 /// Scenario: Press morse key (td!(0)), press normal key (E), release morse key first, release E.
@@ -780,10 +811,10 @@ fn test_permissive_hold_morse_released_first_key_order() {
             .release(0, 0) // Release td!(0) — morse key released first
             .delay(300)
             .release(0, 1) // Release E after gap timeout
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(E), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::E])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -810,10 +841,10 @@ fn test_permissive_hold_normal_released_first() {
             .release(0, 1) // Release E — triggers permissive hold for td!(0)
             .delay(10)
             .release(0, 0) // Release td!(0)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), kc_to_u8!(E), 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(B), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::B])
+            .expect_keys([HidKeyCode::B, HidKeyCode::E])
+            .expect_keys([HidKeyCode::B])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -896,12 +927,12 @@ fn test_early_fire_then_fire_on_second_tap_with_no_double_tap_config() {
             .press(0, 0) // Press A after 300ms (early-fired key timeout fires, cleans buffer)
             .delay(20)
             .release(0, 0) // Release A
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(E), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(E), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::E])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::E])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
             .run()
             .await;
     });
@@ -965,12 +996,12 @@ fn test_flow_tap_after_early_fire_does_not_jam() {
             .press(0, 1)
             .delay(10)
             .release(0, 1)
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Backspace), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(Backspace), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [kc_to_u8!(A), 0, 0, 0, 0, 0]))
-            .expect_keyboard_report(crate::common::report(0, [0, 0, 0, 0, 0, 0]))
+            .expect_keys([HidKeyCode::Backspace])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::Backspace])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
             .run()
             .await;
     });
