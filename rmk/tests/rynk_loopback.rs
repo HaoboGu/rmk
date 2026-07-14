@@ -194,7 +194,11 @@ fn storage_reset_acks() {
         let r = client
             .request::<StorageResetMode, ()>(Cmd::StorageReset, 0x62, &StorageResetMode::Full)
             .await;
-        assert_eq!(r, Ok(()));
+        if cfg!(feature = "storage") {
+            assert_eq!(r, Ok(()));
+        } else {
+            assert_eq!(r, Err(RynkError::Unimplemented));
+        }
     });
 }
 

@@ -81,6 +81,9 @@ impl Handle<BootloaderJump> for RynkService<'_> {
 
 impl Handle<StorageReset> for RynkService<'_> {
     async fn handle(&self, mode: StorageResetMode) -> Result<(), RynkError> {
+        if !cfg!(feature = "storage") {
+            return Err(RynkError::Unimplemented);
+        }
         if mode != StorageResetMode::Full {
             // TODO: Reset required storage range
             return Err(RynkError::Unimplemented);
