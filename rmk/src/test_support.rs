@@ -36,7 +36,7 @@ fn require_nextest() {
 }
 
 const STEP: Duration = Duration::from_micros(100);
-const MAX_ITERS: usize = 60_000_000; // 60 s of virtual time
+const MAX_ITERS: usize = 600_000; // 60 s of virtual time
 
 pub(crate) fn test_block_on<F: Future>(fut: F) -> F::Output {
     MockDriver::get().reset();

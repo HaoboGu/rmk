@@ -10,13 +10,14 @@
 pub mod common;
 
 use heapless::Vec as HVec;
-use rmk::config::{BehaviorConfig, PositionalConfig, RmkConfig};
+use rmk::config::RmkConfig;
 #[cfg(feature = "_ble")]
 use rmk::event::BatteryStatusEvent;
 use rmk::event::{
     ConnectionStatusChangeEvent, LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent, publish_event,
 };
 use rmk::host::HostService as RynkService;
+use rmk::sim::SimKeyboard;
 use rmk::types::action::{Action, EncoderAction, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 #[cfg(feature = "_ble")]
@@ -31,12 +32,13 @@ use rmk_types::led_indicator::LedIndicator;
 use rmk_types::morse::{Morse, MorseMode, MorseProfile};
 use rmk_types::protocol::rynk::{
     BehaviorConfig as WireBehaviorConfig, Cmd, DeviceCapabilities, DeviceInfo, GetEncoderRequest, GetMacroRequest,
-    KeyPosition, LockStatus, MacroData, MatrixState, ProtocolVersion, RynkError, SetComboRequest, SetEncoderRequest,
-    SetForkRequest, SetKeyRequest, SetMacroRequest, SetMorseRequest, StorageResetMode,
+    KeyPosition, LayoutChunk, LockStatus, MacroData, MatrixState, ProtocolVersion, RYNK_BLE_CHUNK_SIZE,
+    RYNK_HEADER_SIZE, RynkError, SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetMacroRequest,
+    SetMorseRequest, StorageResetMode,
 };
 
 use crate::common::rynk_link::{RynkHostClient, link_session, link_two_sessions};
-use crate::common::{wrap_keymap, wrap_keymap_with_encoders};
+use crate::common::test_block_on::test_block_on;
 
 /// Leak an always-unlocked config so these cases exercise protocol mechanics.
 fn insecure_config() -> &'static RmkConfig<'static> {
@@ -47,50 +49,38 @@ fn insecure_config() -> &'static RmkConfig<'static> {
 
 /// Build a tiny 1-layer 2x2 service.
 fn service() -> RynkService<'static> {
-    let behavior: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
-    let per_key: &'static PositionalConfig<2, 2> = Box::leak(Box::new(PositionalConfig::default()));
-    let keymap = [[[KeyAction::No; 2]; 2]; 1];
-    let km = wrap_keymap(keymap, per_key, behavior);
-    RynkService::new(km, insecure_config())
+    let keyboard = test_block_on(SimKeyboard::builder([[[KeyAction::No; 2]; 2]; 1]).build());
+    RynkService::new(keyboard.keymap(), insecure_config())
 }
 
 /// 2-layer service so SetDefaultLayer can make an observable change.
 fn service_2_layers() -> RynkService<'static> {
-    let behavior: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
-    let per_key: &'static PositionalConfig<2, 2> = Box::leak(Box::new(PositionalConfig::default()));
-    let keymap = [[[KeyAction::No; 2]; 2]; 2];
-    let km = wrap_keymap(keymap, per_key, behavior);
-    RynkService::new(km, insecure_config())
+    let keyboard = test_block_on(SimKeyboard::builder([[[KeyAction::No; 2]; 2]; 2]).build());
+    RynkService::new(keyboard.keymap(), insecure_config())
 }
 
 /// Service with two encoders, making encoder endpoints reachable.
 fn service_with_encoders() -> RynkService<'static> {
-    let behavior: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
-    let per_key: &'static PositionalConfig<2, 2> = Box::leak(Box::new(PositionalConfig::default()));
-    let keymap = [[[KeyAction::No; 2]; 2]; 1];
-    let encoder_map = [[EncoderAction::default(); 2]; 1];
-    let km = wrap_keymap_with_encoders(keymap, encoder_map, per_key, behavior);
-    RynkService::new(km, insecure_config())
+    let keyboard = test_block_on(
+        SimKeyboard::builder([[[KeyAction::No; 2]; 2]; 1])
+            .encoders([[EncoderAction::default(); 2]])
+            .build(),
+    );
+    RynkService::new(keyboard.keymap(), insecure_config())
 }
 
 /// 3x4 service for bulk edge and row-wrap cases.
 fn service_3x4() -> RynkService<'static> {
-    let behavior: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
-    let per_key: &'static PositionalConfig<3, 4> = Box::leak(Box::new(PositionalConfig::default()));
-    let keymap = [[[KeyAction::No; 4]; 3]; 1];
-    let km = wrap_keymap(keymap, per_key, behavior);
+    let keyboard = test_block_on(SimKeyboard::builder([[[KeyAction::No; 4]; 3]; 1]).build());
     let config: &'static RmkConfig<'static> = Box::leak(Box::new(RmkConfig::default()));
-    RynkService::new(km, config)
+    RynkService::new(keyboard.keymap(), config)
 }
 
 /// 256-key service for full and over-budget bulk runs.
 fn service_4x8x8() -> RynkService<'static> {
-    let behavior: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
-    let per_key: &'static PositionalConfig<8, 4> = Box::leak(Box::new(PositionalConfig::default()));
-    let keymap = [[[KeyAction::No; 4]; 8]; 8];
-    let km = wrap_keymap(keymap, per_key, behavior);
+    let keyboard = test_block_on(SimKeyboard::builder([[[KeyAction::No; 4]; 8]; 8]).build());
     let config: &'static RmkConfig<'static> = Box::leak(Box::new(RmkConfig::default()));
-    RynkService::new(km, config)
+    RynkService::new(keyboard.keymap(), config)
 }
 
 /// Distinct action per bulk slot catches wrong-position writes.
@@ -153,6 +143,40 @@ fn get_device_info() {
         assert_eq!(info.rmk_version.major, env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap());
         assert_eq!(info.rmk_version.minor, env!("CARGO_PKG_VERSION_MINOR").parse().unwrap());
         assert_eq!(info.rmk_version.patch, env!("CARGO_PKG_VERSION_PATCH").parse().unwrap());
+    });
+}
+
+#[test]
+fn get_layout_pages_the_configured_blob() {
+    static LAYOUT: [u8; RYNK_BLE_CHUNK_SIZE + 2] = {
+        let mut bytes = [0; RYNK_BLE_CHUNK_SIZE + 2];
+        let mut index = 0;
+        while index < bytes.len() {
+            bytes[index] = index as u8;
+            index += 1;
+        }
+        bytes
+    };
+    let keyboard = test_block_on(SimKeyboard::single_key(KeyAction::No).build());
+    let mut config = RmkConfig::default();
+    config.lock_config.insecure = true;
+    config.layout_blob = &LAYOUT;
+    let service = RynkService::new(keyboard.keymap(), Box::leak(Box::new(config)));
+
+    link_session(&service, async |client| {
+        let first = client
+            .request::<_, LayoutChunk>(Cmd::GetLayout, 0x09, &0u32)
+            .await
+            .expect("first layout page");
+        assert_eq!(first.total_len, LAYOUT.len() as u32);
+        assert_eq!(first.bytes.as_slice(), &LAYOUT[..RYNK_BLE_CHUNK_SIZE]);
+
+        let second = client
+            .request::<_, LayoutChunk>(Cmd::GetLayout, 0x0A, &(RYNK_BLE_CHUNK_SIZE as u32))
+            .await
+            .expect("second layout page");
+        assert_eq!(second.total_len, LAYOUT.len() as u32);
+        assert_eq!(second.bytes.as_slice(), &LAYOUT[RYNK_BLE_CHUNK_SIZE..]);
     });
 }
 
@@ -666,7 +690,7 @@ fn keymap_bulk_clamps_and_rejects() {
 fn keymap_bulk_get_caps_page_at_budget() {
     use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, MAX_BULK_KEYS};
     // GET from 0 is capped by message budget, not keymap span.
-    assert!(MAX_BULK_KEYS < 256, "fixture must hold more than one full run");
+    const { assert!(BULK_KEYMAP_SIZE < 256, "fixture must hold more than one full run") };
     let service = service_4x8x8();
     link_session(&service, async |client| {
         let got = client

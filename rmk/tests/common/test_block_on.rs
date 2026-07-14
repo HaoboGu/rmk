@@ -32,7 +32,7 @@ const STEP: Duration = Duration::from_micros(100);
 /// legitimate test scenario. Hitting this almost certainly means the future
 /// is awaiting something that will never resolve (e.g. a channel that nobody
 /// publishes to), not a slow CPU.
-const MAX_ITERS: usize = 60_000_000;
+const MAX_ITERS: usize = 600_000;
 
 /// Drive `fut` to completion against the mock clock.
 ///

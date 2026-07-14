@@ -1,20 +1,14 @@
 pub mod common;
 
-use embassy_time::Duration;
-use heapless::Vec;
-use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, PositionalConfig};
-use rmk::keyboard::Keyboard;
-use rmk::keyboard::combo::{Combo, ComboConfig};
 use rmk::sim::{SimKeyboard, SimKeyboardSetup};
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
 use rmk::{a, k};
-use rmk_types::morse::{Morse, MorseMode, MorseProfile};
+use rmk_types::morse::{MorseMode, MorseProfile};
 
-use crate::common::{KC_LGUI, KC_LSHIFT, wrap_keymap};
 use crate::common::morse::SIMPLE_MORSE_SETUP;
-use crate::common::TEST_KEYMAP;
+use crate::common::{KC_LGUI, KC_LSHIFT, TEST_KEYMAP};
 
 const HOLD_ON_OTHER_PROFILE: MorseProfile = MorseProfile::new(
     Some(false),
@@ -50,134 +44,6 @@ const HOLD_ON_OTHER_3_KEY_COMBOS: [([KeyAction; 3], KeyAction); 1] = [(
     ],
     k!(Z),
 )];
-
-fn create_profile_flow_tap_keyboard(
-    global_enable_flow_tap: bool,
-    profile_enable_flow_tap: Option<bool>,
-) -> Keyboard<'static> {
-    let profile = MorseProfile::new(
-        Some(false),
-        Some(MorseMode::HoldOnOtherPress),
-        Some(250u16),
-        Some(250u16),
-    )
-    .with_enable_flow_tap(profile_enable_flow_tap);
-    let keymap = [[[
-        k!(A),
-        KeyAction::TapHold(
-            Action::Key(KeyCode::Hid(HidKeyCode::B)),
-            Action::Modifier(ModifierCombination::LSHIFT),
-            0u8,
-        ),
-    ]]];
-    let behavior_config = BehaviorConfig {
-        morse: MorsesConfig {
-            enable_flow_tap: global_enable_flow_tap,
-            prior_idle_time: Duration::from_millis(120),
-            default_profile: MorseProfile::new(
-                Some(false),
-                Some(MorseMode::HoldOnOtherPress),
-                Some(250u16),
-                Some(250u16),
-            ),
-            profiles: Vec::from_slice(&[profile]).unwrap(),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
-    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
-    let per_key_config: &'static PositionalConfig<1, 2> = Box::leak(Box::new(PositionalConfig::default()));
-    Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
-}
-
-fn create_profile_flow_tap_morse_keyboard(
-    global_enable_flow_tap: bool,
-    profile_enable_flow_tap: Option<bool>,
-) -> Keyboard<'static> {
-    let profile = MorseProfile::new(
-        Some(false),
-        Some(MorseMode::HoldOnOtherPress),
-        Some(250u16),
-        Some(250u16),
-    )
-    .with_enable_flow_tap(profile_enable_flow_tap);
-    let keymap = [[[k!(A), KeyAction::Morse(0)]]];
-    let behavior_config = BehaviorConfig {
-        morse: MorsesConfig {
-            enable_flow_tap: global_enable_flow_tap,
-            prior_idle_time: Duration::from_millis(120),
-            default_profile: MorseProfile::new(
-                Some(false),
-                Some(MorseMode::HoldOnOtherPress),
-                Some(250u16),
-                Some(250u16),
-            ),
-            morses: Vec::from_slice(&[Morse::new_from_vial(
-                Action::Key(KeyCode::Hid(HidKeyCode::B)),
-                Action::Modifier(ModifierCombination::LSHIFT),
-                Action::No,
-                Action::No,
-                profile,
-            )])
-            .unwrap(),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
-    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
-    let per_key_config: &'static PositionalConfig<1, 2> = Box::leak(Box::new(PositionalConfig::default()));
-    Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
-}
-
-fn create_flow_tap_layer_cache_keyboard() -> Keyboard<'static> {
-    let disabled_flow_profile = MorseProfile::new(
-        Some(false),
-        Some(MorseMode::HoldOnOtherPress),
-        Some(250u16),
-        Some(250u16),
-    )
-    .with_enable_flow_tap(Some(false));
-    let enabled_flow_profile = MorseProfile::new(
-        Some(false),
-        Some(MorseMode::HoldOnOtherPress),
-        Some(250u16),
-        Some(250u16),
-    )
-    .with_enable_flow_tap(Some(true));
-    let keymap = [
-        [[
-            k!(A),
-            KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::D)), Action::LayerOn(1), 0u8),
-            KeyAction::TapHold(
-                Action::Key(KeyCode::Hid(HidKeyCode::B)),
-                Action::Modifier(ModifierCombination::LSHIFT),
-                1u8,
-            ),
-        ]],
-        [[a!(Transparent), a!(Transparent), k!(Kp1)]],
-    ];
-    let behavior_config = BehaviorConfig {
-        morse: MorsesConfig {
-            enable_flow_tap: false,
-            prior_idle_time: Duration::from_millis(120),
-            default_profile: MorseProfile::new(
-                Some(false),
-                Some(MorseMode::HoldOnOtherPress),
-                Some(250u16),
-                Some(250u16),
-            ),
-            profiles: Vec::from_slice(&[disabled_flow_profile, enabled_flow_profile]).unwrap(),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
-    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
-    let per_key_config: &'static PositionalConfig<1, 3> = Box::leak(Box::new(PositionalConfig::default()));
-    Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
-}
 
 #[test]
 fn test_tap() {
@@ -1759,115 +1625,199 @@ fn test_flow_tap() {
 
 #[test]
 fn profile_flow_tap_true_overrides_global_false() {
-    key_sequence_test! {
-        keyboard: create_profile_flow_tap_keyboard(false, Some(true)),
-        sequence: [
-            [0, 0, true, 30],  // Press A
-            [0, 0, false, 30], // Release A
-            [0, 1, true, 20],  // Press mt!(B, LShift) -> profile Flow Tap
-            [0, 0, true, 10],  // Press A while B is flow-tapped
-            [0, 0, false, 10], // Release A
-            [0, 1, false, 10], // Release B
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]],
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let profile = HOLD_ON_OTHER_PROFILE.with_enable_flow_tap(Some(true));
+        let mut keyboard = SimKeyboard::builder([[[
+            k!(A),
+            KeyAction::TapHold(
+                Action::Key(KeyCode::Hid(HidKeyCode::B)),
+                Action::Modifier(ModifierCombination::LSHIFT),
+                profile,
+            ),
+        ]]])
+        .morse_default_profile(HOLD_ON_OTHER_PROFILE)
+        .morse_prior_idle_ms(120)
+        .morse_flow_tap(false)
+        .build()
+        .await;
+
+        keyboard
+            .delay(30)
+            .tap(0, 0, 30)
+            .delay(20)
+            .press(0, 1)
+            .delay(10)
+            .tap(0, 0, 10)
+            .delay(10)
+            .release(0, 1)
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::B])
+            .expect_keys([HidKeyCode::B, HidKeyCode::A])
+            .expect_keys([HidKeyCode::B])
+            .expect_all_up()
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn profile_flow_tap_false_overrides_global_true() {
-    key_sequence_test! {
-        keyboard: create_profile_flow_tap_keyboard(true, Some(false)),
-        sequence: [
-            [0, 0, true, 30],  // Press A
-            [0, 0, false, 30], // Release A
-            [0, 1, true, 20],  // Press mt!(B, LShift), profile disables Flow Tap
-            [0, 0, true, 10],  // Press A, causing hold-on-other-press
-            [0, 0, false, 10], // Release A
-            [0, 1, false, 10], // Release B
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let profile = HOLD_ON_OTHER_PROFILE.with_enable_flow_tap(Some(false));
+        let mut keyboard = SimKeyboard::builder([[[
+            k!(A),
+            KeyAction::TapHold(
+                Action::Key(KeyCode::Hid(HidKeyCode::B)),
+                Action::Modifier(ModifierCombination::LSHIFT),
+                profile,
+            ),
+        ]]])
+        .morse_default_profile(HOLD_ON_OTHER_PROFILE)
+        .morse_prior_idle_ms(120)
+        .morse_flow_tap(true)
+        .build()
+        .await;
+
+        keyboard
+            .delay(30)
+            .tap(0, 0, 30)
+            .delay(20)
+            .press(0, 1)
+            .delay(10)
+            .tap(0, 0, 10)
+            .delay(10)
+            .release(0, 1)
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .expect_only_mods(KC_LSHIFT)
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A])
+            .expect_only_mods(KC_LSHIFT)
+            .expect_all_up()
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn morse_profile_flow_tap_true_overrides_global_false() {
-    key_sequence_test! {
-        keyboard: create_profile_flow_tap_morse_keyboard(false, Some(true)),
-        sequence: [
-            [0, 0, true, 30],  // Press A
-            [0, 0, false, 30], // Release A
-            [0, 1, true, 20],  // Press TD(0) -> profile Flow Tap
-            [0, 0, true, 10],  // Press A while B is flow-tapped
-            [0, 0, false, 10], // Release A
-            [0, 1, false, 10], // Release TD(0)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(B), kc_to_u8!(A), 0, 0, 0, 0]],
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let profile = HOLD_ON_OTHER_PROFILE.with_enable_flow_tap(Some(true));
+        let mut keyboard = SimKeyboard::builder([[[k!(A), KeyAction::Morse(0)]]])
+            .morse_default_profile(HOLD_ON_OTHER_PROFILE)
+            .morse_prior_idle_ms(120)
+            .morse_flow_tap(false)
+            .morse_from_vial(
+                Action::Key(KeyCode::Hid(HidKeyCode::B)),
+                Action::Modifier(ModifierCombination::LSHIFT),
+                Action::No,
+                Action::No,
+                profile,
+            )
+            .build()
+            .await;
+
+        keyboard
+            .delay(30)
+            .tap(0, 0, 30)
+            .delay(20)
+            .press(0, 1)
+            .delay(10)
+            .tap(0, 0, 10)
+            .delay(10)
+            .release(0, 1)
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::B])
+            .expect_keys([HidKeyCode::B, HidKeyCode::A])
+            .expect_keys([HidKeyCode::B])
+            .expect_all_up()
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn morse_profile_flow_tap_false_overrides_global_true() {
-    key_sequence_test! {
-        keyboard: create_profile_flow_tap_morse_keyboard(true, Some(false)),
-        sequence: [
-            [0, 0, true, 30],  // Press A
-            [0, 0, false, 30], // Release A
-            [0, 1, true, 20],  // Press TD(0), profile disables Flow Tap
-            [0, 0, true, 10],  // Press A, causing hold-on-other-press
-            [0, 0, false, 10], // Release A
-            [0, 1, false, 10], // Release TD(0)
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-            [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let profile = HOLD_ON_OTHER_PROFILE.with_enable_flow_tap(Some(false));
+        let mut keyboard = SimKeyboard::builder([[[k!(A), KeyAction::Morse(0)]]])
+            .morse_default_profile(HOLD_ON_OTHER_PROFILE)
+            .morse_prior_idle_ms(120)
+            .morse_flow_tap(true)
+            .morse_from_vial(
+                Action::Key(KeyCode::Hid(HidKeyCode::B)),
+                Action::Modifier(ModifierCombination::LSHIFT),
+                Action::No,
+                Action::No,
+                profile,
+            )
+            .build()
+            .await;
+
+        keyboard
+            .delay(30)
+            .tap(0, 0, 30)
+            .delay(20)
+            .press(0, 1)
+            .delay(10)
+            .tap(0, 0, 10)
+            .delay(10)
+            .release(0, 1)
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .expect_only_mods(KC_LSHIFT)
+            .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A])
+            .expect_only_mods(KC_LSHIFT)
+            .expect_all_up()
+            .run()
+            .await;
+    });
 }
 
 #[test]
 fn flow_tap_rechecks_current_key_after_held_key_changes_layer() {
-    key_sequence_test! {
-        keyboard: create_flow_tap_layer_cache_keyboard(),
-        sequence: [
-            [0, 0, true, 30],  // Press A
-            [0, 0, false, 30], // Release A
-            [0, 1, true, 20],  // Press LT(1, D), profile disables Flow Tap
-            [0, 2, true, 10],  // Press flow-tap key, but held LT activates layer 1 first
-            [0, 2, false, 10], // Release Kp1 from layer 1
-            [0, 1, false, 10], // Release LT
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-            [0, [kc_to_u8!(Kp1), 0, 0, 0, 0, 0]],
-            [0, [0, 0, 0, 0, 0, 0]],
-        ]
-    };
+    crate::common::test_block_on::test_block_on(async {
+        let disabled_flow_profile = HOLD_ON_OTHER_PROFILE.with_enable_flow_tap(Some(false));
+        let enabled_flow_profile = HOLD_ON_OTHER_PROFILE.with_enable_flow_tap(Some(true));
+        let mut keyboard = SimKeyboard::builder([
+            [[
+                k!(A),
+                KeyAction::TapHold(
+                    Action::Key(KeyCode::Hid(HidKeyCode::D)),
+                    Action::LayerOn(1),
+                    disabled_flow_profile,
+                ),
+                KeyAction::TapHold(
+                    Action::Key(KeyCode::Hid(HidKeyCode::B)),
+                    Action::Modifier(ModifierCombination::LSHIFT),
+                    enabled_flow_profile,
+                ),
+            ]],
+            [[a!(Transparent), a!(Transparent), k!(Kp1)]],
+        ])
+        .morse_default_profile(HOLD_ON_OTHER_PROFILE)
+        .morse_prior_idle_ms(120)
+        .morse_flow_tap(false)
+        .build()
+        .await;
+
+        keyboard
+            .delay(30)
+            .tap(0, 0, 30)
+            .delay(20)
+            .press(0, 1)
+            .delay(10)
+            .tap(0, 2, 10)
+            .delay(10)
+            .release(0, 1)
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::Kp1])
+            .expect_all_up()
+            .run()
+            .await;
+    });
 }
 
 // Ref: https://github.com/HaoboGu/rmk/pull/496

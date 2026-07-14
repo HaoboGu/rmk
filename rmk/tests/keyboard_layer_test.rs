@@ -20,49 +20,33 @@ const LAYER_KEY_OVERRIDES: [KeymapOverride; 4] = [
 ];
 const LAYER_SETUP: SimKeyboardSetup<5, 14> = SimKeyboardSetup::new().keys(&LAYER_KEY_OVERRIDES);
 
-/// Base keymap: col0 switches the default layer, col1 differs per layer so the
-/// active base layer is observable from the emitted report.
-fn create_pdf_keyboard(behavior_config: BehaviorConfig) -> Keyboard<'static> {
-    let keymap = [
-        // Layer 0 (initial default): col0 = PDF(1), col1 = A
-        [[
-            KeyAction::Single(Action::PersistentDefaultLayer(1)),
-            KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A))),
-        ]],
-        // Layer 1: col1 = B
-        [[
-            KeyAction::Single(Action::No),
-            KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::B))),
-        ]],
-    ];
-    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(behavior_config));
-    let per_key_config: &'static PositionalConfig<1, 2> = Box::leak(Box::new(PositionalConfig::default()));
-    Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
-}
-
 #[test]
 fn test_pdf_sets_default_layer() {
-    let keyboard = create_pdf_keyboard(BehaviorConfig::default());
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder([
+            [[
+                KeyAction::Single(Action::PersistentDefaultLayer(1)),
+                KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A))),
+            ]],
+            [[
+                KeyAction::Single(Action::No),
+                KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::B))),
+            ]],
+        ])
+        .build()
+        .await;
 
-    // PDF emits no HID report itself; it changes the default (base) layer, so
-    // col1 resolves to A before the PDF press and to B afterwards.
-    key_sequence_test!(
-        keyboard: keyboard,
-        sequence: [
-            [0, 1, true, 10],  // col1 -> A (default layer 0)
-            [0, 1, false, 10],
-            [0, 0, true, 10],  // col0 -> PDF(1): default layer becomes 1
-            [0, 0, false, 10],
-            [0, 1, true, 10],  // col1 -> now B (default layer 1)
-            [0, 1, false, 10],
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // press col1 -> A
-            [0, [0, 0, 0, 0, 0, 0]],            // release
-            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // press col1 -> B
-            [0, [0, 0, 0, 0, 0, 0]],            // release
-        ]
-    );
+        keyboard
+            .tap(0, 1, 10)
+            .tap(0, 0, 10)
+            .tap(0, 1, 10)
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::B])
+            .expect_all_up()
+            .run()
+            .await;
+    });
 }
 
 #[test]
@@ -79,27 +63,20 @@ fn test_pdf_invalid_layer_is_ignored() {
             KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::B))),
         ]],
     ];
-    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
-    let per_key_config: &'static PositionalConfig<1, 2> = Box::leak(Box::new(PositionalConfig::default()));
-    let keyboard = Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config));
+    crate::common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(keymap).build().await;
 
-    key_sequence_test!(
-        keyboard: keyboard,
-        sequence: [
-            [0, 1, true, 10],  // col1 -> A (default layer 0)
-            [0, 1, false, 10],
-            [0, 0, true, 10],  // col0 -> PDF(5): out of range, ignored
-            [0, 0, false, 10],
-            [0, 1, true, 10],  // col1 -> still A (default layer unchanged)
-            [0, 1, false, 10],
-        ],
-        expected_reports: [
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // press col1 -> A
-            [0, [0, 0, 0, 0, 0, 0]],            // release
-            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // col1 -> still A (PDF(5) ignored)
-            [0, [0, 0, 0, 0, 0, 0]],            // release
-        ]
-    );
+        keyboard
+            .tap(0, 1, 10)
+            .tap(0, 0, 10)
+            .tap(0, 1, 10)
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .run()
+            .await;
+    });
 }
 
 #[test]

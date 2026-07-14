@@ -1,5 +1,7 @@
 pub mod common;
 
+#[cfg(all(feature = "rynk", not(feature = "_no_usb")))]
+use rmk::config::RmkConfig;
 #[cfg(feature = "vial")]
 use rmk::encoder;
 #[cfg(not(feature = "_no_usb"))]
@@ -14,7 +16,7 @@ use rmk::sim::SimKeyboard;
     all(feature = "rynk", not(feature = "_no_usb"))
 ))]
 use rmk::types::action::EncoderAction;
-#[cfg(all(feature = "steno", not(feature = "_no_usb")))]
+#[cfg(all(any(feature = "steno", feature = "rynk"), not(feature = "_no_usb")))]
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::HidKeyCode;
 #[cfg(not(feature = "_no_usb"))]
@@ -24,6 +26,21 @@ use rmk::types::protocol::vial::SettingKey;
 #[cfg(all(feature = "steno", not(feature = "_no_usb")))]
 use rmk::types::steno::StenoKey;
 use rmk::{k, layer};
+#[cfg(all(feature = "rynk", not(feature = "_no_usb")))]
+use rmk_types::combo::Combo;
+#[cfg(all(feature = "rynk", not(feature = "_no_usb")))]
+use rmk_types::fork::{Fork, StateBits};
+#[cfg(all(feature = "rynk", not(feature = "_no_usb")))]
+use rmk_types::modifier::ModifierCombination;
+#[cfg(all(feature = "rynk", not(feature = "_no_usb")))]
+use rmk_types::morse::{Morse, MorseMode, MorseProfile};
+#[cfg(all(feature = "rynk", not(feature = "_no_usb")))]
+use rmk_types::protocol::rynk::{
+    BehaviorConfig as RynkBehaviorConfig, LayoutChunk, MacroData, SetComboRequest, SetForkRequest, SetMacroRequest,
+    SetMorseRequest, command,
+};
+#[cfg(all(feature = "rynk", feature = "bulk", not(feature = "_no_usb")))]
+use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
 #[cfg(feature = "vial")]
 use rmk_types::protocol::vial::{VIA_PROTOCOL_VERSION, ViaCommand};
 #[cfg(not(feature = "_no_usb"))]
@@ -76,7 +93,7 @@ fn simulator_rejects_unasserted_trailing_report() {
 #[test]
 fn simulator_runs_via_host_transaction() {
     common::test_block_on::test_block_on(async {
-        let mut keyboard = SimKeyboard::single_key(k!(A)).vial().build().await;
+        let mut keyboard = SimKeyboard::single_key(k!(A)).build().await;
         let host = SimHost::usb();
         let mut expected = [0u8; 32];
         expected[0] = ViaCommand::GetProtocolVersion as u8;
@@ -92,7 +109,7 @@ fn simulator_runs_via_host_transaction() {
 #[test]
 fn simulator_combines_via_keymap_update_and_key_reports() {
     common::test_block_on::test_block_on(async {
-        let mut keyboard = SimKeyboard::single_key(k!(A)).vial().build().await;
+        let mut keyboard = SimKeyboard::single_key(k!(A)).build().await;
         let host = SimHost::usb();
 
         host.vial(&mut keyboard).get_key(0, 0, 0).expect(k!(A));
@@ -117,7 +134,6 @@ fn simulator_combines_vial_encoder_update_and_rotary_reports() {
         let encoder_action = encoder!(k!(C), k!(D));
         let mut keyboard = SimKeyboard::single_key(k!(A))
             .encoders([[encoder!(k!(A), k!(B))]])
-            .vial()
             .build()
             .await;
         let host = SimHost::usb();
@@ -146,7 +162,6 @@ fn simulator_vial_negative_paths_are_timeline_steps() {
     common::test_block_on::test_block_on(async {
         let mut keyboard = SimKeyboard::single_key(k!(A))
             .encoders([[encoder!(k!(A), k!(B))]])
-            .vial()
             .build()
             .await;
         let host = SimHost::usb();
@@ -165,7 +180,7 @@ fn simulator_vial_negative_paths_are_timeline_steps() {
 fn simulator_combines_vial_behavior_settings_and_key_output() {
     common::test_block_on::test_block_on(async {
         let keymap = [layer!([[k!(A), k!(B)]])];
-        let mut keyboard = SimKeyboard::builder(keymap).vial().build().await;
+        let mut keyboard = SimKeyboard::builder(keymap).build().await;
         let host = SimHost::usb();
 
         host.vial(&mut keyboard)
@@ -195,7 +210,7 @@ fn simulator_combines_vial_behavior_settings_and_key_output() {
 fn simulator_combines_vial_dynamic_combo_update_and_key_reports() {
     common::test_block_on::test_block_on(async {
         let keymap = [layer!([[k!(A), k!(B)]])];
-        let mut keyboard = SimKeyboard::builder(keymap).vial().build().await;
+        let mut keyboard = SimKeyboard::builder(keymap).build().await;
         let host = SimHost::usb();
 
         host.vial(&mut keyboard).set_combo(0, [k!(A), k!(B)], k!(C)).expect_ok();
@@ -219,7 +234,7 @@ fn simulator_combines_vial_dynamic_combo_update_and_key_reports() {
 fn simulator_combines_vial_dynamic_morse_update_and_key_reports() {
     common::test_block_on::test_block_on(async {
         let keymap = [layer!([[rmk::td!(0)]])];
-        let mut keyboard = SimKeyboard::builder(keymap).vial().build().await;
+        let mut keyboard = SimKeyboard::builder(keymap).build().await;
         let host = SimHost::usb();
 
         host.vial(&mut keyboard)
@@ -243,9 +258,9 @@ fn simulator_combines_vial_dynamic_morse_update_and_key_reports() {
 
 #[cfg(all(feature = "vial", feature = "_ble", not(feature = "_no_usb")))]
 #[test]
-fn simulator_routes_vial_replies_to_ble_host() {
+fn simulator_accepts_vial_transaction_from_ble_host() {
     common::test_block_on::test_block_on(async {
-        let mut keyboard = SimKeyboard::single_key(k!(A)).vial().build().await;
+        let mut keyboard = SimKeyboard::single_key(k!(A)).build().await;
         let host = SimHost::ble();
         let mut expected = [0u8; 32];
         expected[0] = ViaCommand::GetProtocolVersion as u8;
@@ -261,7 +276,7 @@ fn simulator_routes_vial_replies_to_ble_host() {
 #[test]
 fn simulator_vial_persistence_messages_are_observable() {
     common::test_block_on::test_block_on(async {
-        let mut keyboard = SimKeyboard::single_key(k!(A)).vial().build().await;
+        let mut keyboard = SimKeyboard::single_key(k!(A)).build().await;
         let host = SimHost::usb();
 
         host.vial(&mut keyboard).set_key(0, 0, 0, k!(B)).expect_ok();
@@ -345,7 +360,6 @@ fn simulator_storage_loaded_keymap_survives_restart() {
 
         {
             let mut keyboard = SimKeyboard::single_key(k!(A))
-                .vial()
                 .storage_flash(flash.clone())
                 .build()
                 .await;
@@ -427,6 +441,250 @@ fn simulator_combines_rynk_encoder_update_and_rotary_reports() {
             .expect_all_up()
             .rotary_ccw(0)
             .expect_keys([HidKeyCode::D])
+            .expect_all_up()
+            .run()
+            .await;
+    });
+}
+
+#[cfg(all(feature = "rynk", not(feature = "_no_usb")))]
+#[test]
+fn simulator_combines_rynk_default_layer_update_and_key_reports() {
+    common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder([[[k!(A)]], [[k!(B)]]]).build().await;
+        let host = SimHost::usb();
+
+        host.rynk(&mut keyboard)
+            .request::<command::SetDefaultLayer>(1)
+            .expect_ok();
+        host.rynk(&mut keyboard)
+            .request::<command::GetDefaultLayer>(())
+            .expect(1);
+
+        keyboard
+            .tap(0, 0, 10)
+            .expect_keys([HidKeyCode::B])
+            .expect_all_up()
+            .run()
+            .await;
+    });
+}
+
+#[cfg(all(feature = "rynk", not(feature = "_no_usb")))]
+#[test]
+fn simulator_combines_rynk_macro_update_and_key_reports() {
+    common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::single_key(KeyAction::Single(Action::TriggerMacro(0)))
+            .build()
+            .await;
+        let host = SimHost::usb();
+        let data = heapless::Vec::from_slice(&[1, 1, HidKeyCode::A as u8, 0]).unwrap();
+
+        host.rynk(&mut keyboard)
+            .request::<command::SetMacro>(SetMacroRequest {
+                offset: 0,
+                data: MacroData { data },
+            })
+            .expect_ok();
+
+        keyboard
+            .tap(0, 0, 10)
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .run()
+            .await;
+    });
+}
+
+#[cfg(all(feature = "rynk", not(feature = "_no_usb")))]
+#[test]
+fn simulator_combines_rynk_combo_and_behavior_updates_with_key_reports() {
+    common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder([[[k!(A), k!(B)]]]).build().await;
+        let host = SimHost::usb();
+        let combo = Combo::new([k!(A), k!(B)], k!(C), None);
+        let behavior = RynkBehaviorConfig {
+            combo_timeout_ms: 80,
+            oneshot_timeout_ms: 1000,
+            tap_interval_ms: 200,
+            tap_capslock_interval_ms: 250,
+        };
+
+        host.rynk(&mut keyboard)
+            .request::<command::SetCombo>(SetComboRequest {
+                index: 0,
+                config: combo,
+            })
+            .expect_ok();
+        host.rynk(&mut keyboard)
+            .request::<command::SetBehaviorConfig>(behavior)
+            .expect_ok();
+        host.rynk(&mut keyboard)
+            .request::<command::GetBehaviorConfig>(())
+            .expect(behavior);
+
+        keyboard
+            .delay(10)
+            .press(0, 0)
+            .expect_no_report(60)
+            .expect_keys([HidKeyCode::A])
+            .release(0, 0)
+            .expect_all_up()
+            .delay(20)
+            .press(0, 0)
+            .delay(10)
+            .press(0, 1)
+            .expect_keys([HidKeyCode::C])
+            .release(0, 0)
+            .release(0, 1)
+            .expect_all_up()
+            .run()
+            .await;
+    });
+}
+
+#[cfg(all(feature = "rynk", feature = "bulk", not(feature = "_no_usb")))]
+#[test]
+fn simulator_combines_rynk_bulk_keymap_update_and_key_reports() {
+    common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder([[[k!(A), k!(B)]]]).build().await;
+        let host = SimHost::usb();
+        let actions = heapless::Vec::from_slice(&[k!(C), k!(D)]).unwrap();
+
+        host.rynk(&mut keyboard)
+            .request::<command::SetKeymapBulk>(SetKeymapBulkRequest {
+                layer: 0,
+                start_row: 0,
+                start_col: 0,
+                actions: actions.clone(),
+            })
+            .expect_ok();
+        host.rynk(&mut keyboard)
+            .request::<command::GetKeymapBulk>(GetKeymapBulkRequest {
+                layer: 0,
+                start_row: 0,
+                start_col: 0,
+            })
+            .expect(GetKeymapBulkResponse { actions });
+
+        keyboard
+            .tap(0, 1, 10)
+            .expect_keys([HidKeyCode::D])
+            .expect_all_up()
+            .run()
+            .await;
+    });
+}
+
+#[cfg(all(feature = "rynk", not(feature = "_no_usb")))]
+#[test]
+fn simulator_combines_rynk_morse_update_and_key_reports() {
+    common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::single_key(KeyAction::Morse(0)).build().await;
+        let host = SimHost::usb();
+        let morse = Morse::new_from_vial(
+            Action::Key(rmk::types::keycode::KeyCode::Hid(HidKeyCode::A)),
+            Action::Key(rmk::types::keycode::KeyCode::Hid(HidKeyCode::B)),
+            Action::Key(rmk::types::keycode::KeyCode::Hid(HidKeyCode::C)),
+            Action::Key(rmk::types::keycode::KeyCode::Hid(HidKeyCode::D)),
+            MorseProfile::new(Some(false), Some(MorseMode::Normal), Some(80), Some(80)),
+        );
+
+        host.rynk(&mut keyboard)
+            .request::<command::SetMorse>(SetMorseRequest {
+                index: 0,
+                config: morse.clone(),
+            })
+            .expect_ok();
+        host.rynk(&mut keyboard).request::<command::GetMorse>(0).expect(morse);
+
+        keyboard
+            .delay(100)
+            .tap(0, 0, 20)
+            .expect_keys([HidKeyCode::A])
+            .expect_all_up()
+            .run()
+            .await;
+    });
+}
+
+#[cfg(all(feature = "rynk", not(feature = "_no_usb")))]
+#[test]
+fn simulator_combines_rynk_fork_update_and_key_reports() {
+    common::test_block_on::test_block_on(async {
+        let mut keyboard = SimKeyboard::single_key(k!(A)).build().await;
+        let host = SimHost::usb();
+        let fork = Fork::new(
+            k!(A),
+            k!(B),
+            k!(C),
+            StateBits {
+                modifiers: ModifierCombination::LSHIFT,
+                ..Default::default()
+            },
+            StateBits::default(),
+            ModifierCombination::default(),
+            true,
+        );
+
+        host.rynk(&mut keyboard)
+            .request::<command::SetFork>(SetForkRequest { index: 0, config: fork })
+            .expect_ok();
+        host.rynk(&mut keyboard).request::<command::GetFork>(0).expect(fork);
+
+        keyboard
+            .tap(0, 0, 10)
+            .expect_keys([HidKeyCode::B])
+            .expect_all_up()
+            .run()
+            .await;
+    });
+}
+
+#[cfg(all(feature = "rynk", not(feature = "_no_usb")))]
+#[test]
+fn simulator_reads_rynk_layout_from_keyboard_config() {
+    common::test_block_on::test_block_on(async {
+        static LAYOUT: &[u8] = &[1, 2, 3, 4, 5];
+        let config = RmkConfig {
+            layout_blob: LAYOUT,
+            ..Default::default()
+        };
+        let mut keyboard = SimKeyboard::single_key(k!(A)).host_config(config).build().await;
+        let host = SimHost::usb();
+
+        host.rynk(&mut keyboard)
+            .request::<command::GetLayout>(0)
+            .expect(LayoutChunk {
+                total_len: LAYOUT.len() as u32,
+                bytes: heapless::Vec::from_slice(LAYOUT).unwrap(),
+            });
+
+        keyboard.run().await;
+    });
+}
+
+#[cfg(all(feature = "rynk", feature = "storage", not(feature = "_no_usb")))]
+#[test]
+fn simulator_rynk_keymap_update_survives_restart() {
+    common::test_block_on::test_block_on(async {
+        let flash = rmk::sim::flash::InMemoryFlash::<4096, 256, 4>::new();
+        let host = SimHost::usb();
+
+        {
+            let mut keyboard = SimKeyboard::single_key(k!(A))
+                .storage_flash(flash.clone())
+                .build()
+                .await;
+
+            host.rynk(&mut keyboard).set_key(0, 0, 0, k!(B)).expect_ok();
+            keyboard.wait_storage().run().await;
+        }
+
+        let mut keyboard = SimKeyboard::single_key(k!(A)).storage_flash(flash).build().await;
+        keyboard
+            .tap(0, 0, 10)
+            .expect_keys([HidKeyCode::B])
             .expect_all_up()
             .run()
             .await;

@@ -10,25 +10,23 @@
 
 pub mod common;
 
-use rmk::config::{BehaviorConfig, PositionalConfig, RmkConfig};
+use rmk::config::RmkConfig;
 use rmk::event::{WpmUpdateEvent, publish_event};
 use rmk::host::HostService as RynkService;
+use rmk::sim::SimKeyboard;
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk_types::protocol::rynk::{Cmd, DeviceCapabilities, KeyPosition, ProtocolVersion, SetKeyRequest};
 
 use crate::common::rynk_hid_link::link_session_hid;
 use crate::common::rynk_link::RynkHostClient;
-use crate::common::wrap_keymap;
+use crate::common::test_block_on::test_block_on;
 
 /// A 2-layer 2×2 `RynkService`, leaked to `'static` (see `rynk_loopback.rs`).
 fn service() -> RynkService<'static> {
-    let behavior: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
-    let per_key: &'static PositionalConfig<2, 2> = Box::leak(Box::new(PositionalConfig::default()));
-    let keymap = [[[KeyAction::No; 2]; 2]; 1];
-    let km = wrap_keymap(keymap, per_key, behavior);
+    let keyboard = test_block_on(SimKeyboard::builder([[[KeyAction::No; 2]; 2]; 1]).build());
     let config: &'static RmkConfig<'static> = Box::leak(Box::new(RmkConfig::default()));
-    RynkService::new(km, config)
+    RynkService::new(keyboard.keymap(), config)
 }
 
 /// Smallest exchange: an empty request and an 8-byte response each fit one report.

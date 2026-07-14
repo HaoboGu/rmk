@@ -250,6 +250,15 @@ impl<'a> VialService<'a> {
 }
 
 impl VialService<'_> {
+    pub(crate) async fn process_packet(&self, data: [u8; 32]) -> [u8; 32] {
+        let mut report = ViaReport {
+            input_data: data,
+            output_data: data,
+        };
+        self.process_via_packet(&mut report).await;
+        report.input_data
+    }
+
     /// Drive one Vial session against `rx`/`tx` (32-byte request → 32-byte
     /// response, processed in place). Returns on any read/write error;
     /// transport-specific reconnect lives in the caller.
@@ -259,12 +268,8 @@ impl VialService<'_> {
             if rx.read_exact(&mut buf).await.is_err() {
                 return;
             }
-            let mut report = ViaReport {
-                input_data: buf,
-                output_data: buf,
-            };
-            self.process_via_packet(&mut report).await;
-            if tx.write_all(&report.input_data).await.is_err() {
+            let reply = self.process_packet(buf).await;
+            if tx.write_all(&reply).await.is_err() {
                 return;
             }
         }
