@@ -38,7 +38,7 @@ use rmk_types::protocol::rynk::{
 };
 
 use crate::common::rynk_link::{RynkHostClient, link_session, link_two_sessions};
-use crate::common::test_block_on::test_block_on;
+use crate::common::test_block_on;
 
 /// Leak an always-unlocked config so these cases exercise protocol mechanics.
 fn insecure_config() -> &'static RmkConfig<'static> {
@@ -157,7 +157,7 @@ fn get_layout_pages_the_configured_blob() {
         }
         bytes
     };
-    let keyboard = test_block_on(SimKeyboard::single_key(KeyAction::No).build());
+    let keyboard = test_block_on(SimKeyboard::create([[[KeyAction::No]]]));
     let mut config = RmkConfig::default();
     config.lock_config.insecure = true;
     config.layout_blob = &LAYOUT;

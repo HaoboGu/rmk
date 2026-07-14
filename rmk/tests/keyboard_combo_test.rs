@@ -26,7 +26,7 @@ const STANDARD_3_KEY_COMBOS: [([KeyAction; 3], KeyAction); 2] =
 
 #[test]
 fn test_single_key_in_combo() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
             .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
@@ -59,7 +59,7 @@ fn test_single_key_in_combo() {
 }
 #[test]
 fn test_combo_timeout_and_ignore() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
             .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
@@ -81,7 +81,7 @@ fn test_combo_timeout_and_ignore() {
 
 #[test]
 fn test_combo_with_mod_then_mod_timeout() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
             .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
@@ -113,7 +113,7 @@ fn test_combo_with_mod_then_mod_timeout() {
 
 #[test]
 fn test_combo_with_one_shot_modifier() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .one_shot_timeout_ms(300)
             .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
@@ -144,7 +144,7 @@ fn test_combo_with_one_shot_modifier() {
 
 #[test]
 fn test_combo_with_mod() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
             .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
@@ -176,7 +176,7 @@ fn test_combo_with_mod() {
 
 #[test]
 fn test_fully_overlapped_combo_timeout() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
             .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
@@ -202,7 +202,7 @@ fn test_fully_overlapped_combo_timeout() {
 
 #[test]
 fn test_fully_overlapped_combo_trigger_smaller() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
             .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
@@ -228,7 +228,7 @@ fn test_fully_overlapped_combo_trigger_smaller() {
 
 #[test]
 fn test_fully_overlapped_combo() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
             .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
@@ -290,7 +290,7 @@ fn test_fully_overlapped_combo() {
 
 #[test]
 fn test_overlapped_combo() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
             .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
@@ -324,7 +324,7 @@ fn test_overlapped_combo() {
 
 #[test]
 fn test_taphold_with_combo() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .morse_default_profile(MorseProfile::new(
                 Some(false),
@@ -363,7 +363,7 @@ fn test_taphold_with_combo() {
 // release couldn't find its slot, leaving the re-pressed key stuck.
 #[test]
 fn test_re_press_combo_key_while_triggered_does_not_leak_to_hid() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .combo_on_layer(0, [k!(Comma), k!(Dot)], k!(Backspace))
             .combo_timeout_ms(40)
@@ -405,7 +405,7 @@ fn test_re_press_combo_key_while_triggered_does_not_leak_to_hid() {
 // re-pressing Comma.
 #[test]
 fn test_overlapping_triggered_combos_release_all_outputs() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .combo_on_layer(0, [k!(M), k!(Comma)], k!(RightBracket))
             .combo_on_layer(0, [k!(Comma), k!(Dot)], k!(Equal))
@@ -437,7 +437,7 @@ fn test_overlapping_triggered_combos_release_all_outputs() {
 
 #[test]
 fn test_combo_with_one_shot_modifier_quick_release() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
             .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
@@ -470,7 +470,7 @@ fn test_combo_with_one_shot_modifier_quick_release() {
 
 #[test]
 fn test_overlapped_combo_quick_release() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .combos_on_layer(0, STANDARD_2_KEY_COMBOS)
             .combos_on_layer(0, STANDARD_3_KEY_COMBOS)
@@ -522,7 +522,7 @@ fn test_overlapped_combo_quick_release() {
 // and the following lone R must still register.
 #[test]
 fn test_subset_combo_wer_then_r_alone() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .combo_on_layer(0, [k!(W), k!(E)], k!(F2))
             .combo_on_layer(0, [k!(E), k!(R)], k!(F4))
@@ -565,7 +565,7 @@ fn test_subset_combo_wer_then_r_alone() {
 // obviously exposed the stranded-R behaviour before the fix.
 #[test]
 fn test_subset_combo_wer_release_r_first() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP)
             .combo_on_layer(0, [k!(W), k!(E)], k!(F2))
             .combo_on_layer(0, [k!(E), k!(R)], k!(F4))
@@ -618,7 +618,7 @@ fn test_subset_combo_wer_release_r_first() {
 // are up the wheel must be silent, not stuck repeating.
 #[test]
 fn test_mouse_key_combo_does_not_stick_wheel() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder([[[k!(MouseWheelUp), k!(MouseAccel2)]]])
             .combo_on_layer(0, [k!(MouseAccel2), k!(MouseWheelUp)], a!(No))
             .combo_timeout_ms(50)
@@ -645,7 +645,7 @@ fn test_mouse_key_combo_does_not_stick_wheel() {
 // fix wrongly swallowing a legitimate mouse press/release pair.
 #[test]
 fn test_mouse_wheel_tap_settles() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder([[[k!(MouseWheelUp), k!(MouseAccel2)]]])
             .combo_on_layer(0, [k!(MouseAccel2), k!(MouseWheelUp)], a!(No))
             .combo_timeout_ms(50)

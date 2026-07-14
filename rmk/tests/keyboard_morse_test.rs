@@ -11,7 +11,7 @@ use crate::common::{KC_LGUI, KC_LSHIFT, TEST_KEYMAP};
 
 #[test]
 fn test_morse_tap() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -31,7 +31,7 @@ fn test_morse_tap() {
 
 #[test]
 fn test_morse_hold() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -51,7 +51,7 @@ fn test_morse_hold() {
 
 #[test]
 fn test_morse_mt_1() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -77,7 +77,7 @@ fn test_morse_mt_1() {
 
 #[test]
 fn test_morse_mt_2() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -103,7 +103,7 @@ fn test_morse_mt_2() {
 
 #[test]
 fn test_morse_mt_3() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -129,7 +129,7 @@ fn test_morse_mt_3() {
 
 #[test]
 fn test_morse_mt_4() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -155,7 +155,7 @@ fn test_morse_mt_4() {
 
 #[test]
 fn test_morse_mt_5() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -181,7 +181,7 @@ fn test_morse_mt_5() {
 
 #[test]
 fn test_morse_mt_6() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -207,7 +207,7 @@ fn test_morse_mt_6() {
 
 #[test]
 fn test_morse_mt_timeout_1() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -233,7 +233,7 @@ fn test_morse_mt_timeout_1() {
 
 #[test]
 fn test_morse_mt_timeout_2() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -259,7 +259,7 @@ fn test_morse_mt_timeout_2() {
 
 #[test]
 fn test_morse_mt_timeout_3() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -285,7 +285,7 @@ fn test_morse_mt_timeout_3() {
 
 #[test]
 fn test_morse_mt_timeout_4() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -311,7 +311,7 @@ fn test_morse_mt_timeout_4() {
 
 #[test]
 fn test_morse_mt_timeout_5() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -337,7 +337,7 @@ fn test_morse_mt_timeout_5() {
 
 #[test]
 fn test_morse_mt_timeout_6() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -363,7 +363,7 @@ fn test_morse_mt_timeout_6() {
 
 #[test]
 fn test_morse_mt_timeout_7() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -389,7 +389,7 @@ fn test_morse_mt_timeout_7() {
 
 #[test]
 fn test_morse_mt_timeout_8() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -415,7 +415,7 @@ fn test_morse_mt_timeout_8() {
 
 #[test]
 fn test_morse_mt_timeout_9() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -441,7 +441,7 @@ fn test_morse_mt_timeout_9() {
 
 #[test]
 fn test_morse_mt_timeout_10() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -467,7 +467,7 @@ fn test_morse_mt_timeout_10() {
 
 #[test]
 fn test_morse_lt_1() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -493,7 +493,7 @@ fn test_morse_lt_1() {
 
 #[test]
 fn test_morse_lt_2() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -519,7 +519,7 @@ fn test_morse_lt_2() {
 
 #[test]
 fn test_morse_lt_3() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -545,7 +545,7 @@ fn test_morse_lt_3() {
 
 #[test]
 fn test_morse_lt_4() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -571,7 +571,7 @@ fn test_morse_lt_4() {
 
 #[test]
 fn test_morse_lt_5() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -597,7 +597,7 @@ fn test_morse_lt_5() {
 
 #[test]
 fn test_morse_lt_6() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -623,7 +623,7 @@ fn test_morse_lt_6() {
 
 #[test]
 fn test_morse_lt_timeout_1() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -647,7 +647,7 @@ fn test_morse_lt_timeout_1() {
 
 #[test]
 fn test_morse_lt_timeout_2() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -671,7 +671,7 @@ fn test_morse_lt_timeout_2() {
 
 #[test]
 fn test_morse_lt_timeout_3() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -695,7 +695,7 @@ fn test_morse_lt_timeout_3() {
 
 #[test]
 fn test_morse_lt_timeout_4() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -719,7 +719,7 @@ fn test_morse_lt_timeout_4() {
 
 #[test]
 fn test_morse_lt_timeout_5() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -743,7 +743,7 @@ fn test_morse_lt_timeout_5() {
 
 #[test]
 fn test_morse_lt_timeout_6() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -767,7 +767,7 @@ fn test_morse_lt_timeout_6() {
 
 #[test]
 fn test_morse_lt_timeout_7() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -791,7 +791,7 @@ fn test_morse_lt_timeout_7() {
 
 #[test]
 fn test_morse_lt_timeout_8() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -815,7 +815,7 @@ fn test_morse_lt_timeout_8() {
 
 #[test]
 fn test_morse_lt_timeout_9() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -839,7 +839,7 @@ fn test_morse_lt_timeout_9() {
 
 #[test]
 fn test_morse_lt_timeout_10() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -863,7 +863,7 @@ fn test_morse_lt_timeout_10() {
 
 #[test]
 fn test_morse_multi_hold() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -895,7 +895,7 @@ fn test_morse_multi_hold() {
 
 #[test]
 fn test_morse_hold_after_last_tapping() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -921,7 +921,7 @@ fn test_morse_hold_after_last_tapping() {
 
 #[test]
 fn test_morse_hold_after_last_tapping_timeout() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -948,7 +948,7 @@ fn test_morse_hold_after_last_tapping_timeout() {
 #[test]
 fn test_morse_rolling() {
     // For normal mode, each morse keys are independently resolved
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -986,7 +986,7 @@ fn test_morse_rolling() {
 
 #[test]
 fn test_morse_with_combo() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .combo_global(
@@ -1028,7 +1028,7 @@ fn test_morse_with_combo() {
 
 #[test]
 fn test_morse_with_combo_2() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .combo_global(
@@ -1068,7 +1068,7 @@ fn test_morse_with_combo_2() {
 
 #[test]
 fn test_morse_abc_c() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -1100,7 +1100,7 @@ fn test_morse_abc_c() {
 
 #[test]
 fn test_morse_abc_s_o_s() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()
@@ -1156,7 +1156,7 @@ fn test_morse_abc_s_o_s() {
 
 #[test]
 fn test_morse_rmk() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(SIMPLE_MORSE_SETUP)
             .build()

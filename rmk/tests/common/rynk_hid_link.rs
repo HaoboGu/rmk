@@ -20,7 +20,7 @@ use rmk_types::protocol::rynk::{Cmd, Deframer, RYNK_HID_REPORT_SIZE, RynkHeader,
 use serde::Serialize;
 
 use super::rynk_link::{Frame, RynkHostClient};
-use super::test_block_on::test_block_on;
+use super::test_block_on;
 
 /// One direction of the link, carrying whole HID reports.
 pub type Link = Pipe<NoopRawMutex, RYNK_BUFFER_SIZE>;

@@ -48,7 +48,7 @@ mod one_shot_test {
         KeymapOverride::new(1, 0, 4, k!(E)),
         KeymapOverride::new(1, 0, 5, k!(F)),
     ];
-    const ONE_SHOT_SETUP: SimKeyboardSetup<5, 14> = SimKeyboardSetup::new().keys(&ONE_SHOT_KEY_OVERRIDES);
+    const ONE_SHOT_SETUP: SimKeyboardSetup = SimKeyboardSetup::new().keys(&ONE_SHOT_KEY_OVERRIDES);
 
     /// OSM Test Case 1
     ///
@@ -65,7 +65,7 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_basic_single_behavior() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
 
             keyboard
@@ -99,7 +99,7 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_timeout() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(ONE_SHOT_SETUP)
                 .one_shot_timeout_ms(100)
@@ -140,7 +140,7 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_held_behavior() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
 
             keyboard
@@ -178,7 +178,7 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_multiple_keys() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
 
             keyboard
@@ -220,7 +220,7 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_rolling_with_tap_hold() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
 
             keyboard
@@ -255,7 +255,7 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_combined_modifiers() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
 
             keyboard
@@ -294,7 +294,7 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_multiple_osm_with_wm() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
 
             keyboard
@@ -335,7 +335,7 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_activate_on_keypress() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(ONE_SHOT_SETUP)
                 .one_shot_activate_on_keypress(true)
@@ -377,7 +377,7 @@ mod one_shot_test {
     /// - All released
     #[test]
     fn test_osm_combined_modifiers_with_activate_on_keypress() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(ONE_SHOT_SETUP)
                 .one_shot_activate_on_keypress(true)
@@ -409,7 +409,7 @@ mod one_shot_test {
     // OSL Tests
     #[test]
     fn test_osl_basic_single_behavior() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
 
             keyboard
@@ -430,7 +430,7 @@ mod one_shot_test {
 
     #[test]
     fn test_osl_held_behavior() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
 
             keyboard
@@ -451,7 +451,7 @@ mod one_shot_test {
 
     #[test]
     fn test_osl_timeout() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(ONE_SHOT_SETUP)
                 .one_shot_timeout_ms(100)
@@ -476,7 +476,7 @@ mod one_shot_test {
 
     #[test]
     fn test_osl_multiple_keys() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
 
             keyboard
@@ -503,7 +503,7 @@ mod one_shot_test {
 
     #[test]
     fn test_osm_then_osl() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
 
             keyboard
@@ -528,7 +528,7 @@ mod one_shot_test {
 
     #[test]
     fn test_osl_then_osm() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(ONE_SHOT_SETUP).build().await;
 
             keyboard
@@ -553,7 +553,7 @@ mod one_shot_test {
 
     #[test]
     fn test_osm_and_osl_timeout() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(ONE_SHOT_SETUP)
                 .one_shot_timeout_ms(100)
@@ -583,7 +583,7 @@ mod one_shot_test {
     /// Chain mode (quick_release = false): modifier released on key RELEASE
     #[test]
     fn test_osm_chain_mode_basic() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(ONE_SHOT_SETUP)
                 .one_shot_quick_release(false)
@@ -605,7 +605,7 @@ mod one_shot_test {
     /// Chain mode: tap A then tap B — only A gets modifier
     #[test]
     fn test_osm_chain_mode_multiple_keys() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(ONE_SHOT_SETUP)
                 .one_shot_quick_release(false)
@@ -631,7 +631,7 @@ mod one_shot_test {
     /// Chain mode with activate_on_keypress
     #[test]
     fn test_osm_chain_mode_activate_on_keypress() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(ONE_SHOT_SETUP)
                 .one_shot_activate_on_keypress(true)
@@ -656,7 +656,7 @@ mod one_shot_test {
 
     #[test]
     fn test_osm_quick_release_basic() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(ONE_SHOT_SETUP)
                 .one_shot_quick_release(true)
@@ -678,7 +678,7 @@ mod one_shot_test {
 
     #[test]
     fn test_osm_quick_release_multiple_keys() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(ONE_SHOT_SETUP)
                 .one_shot_quick_release(true)
@@ -707,7 +707,7 @@ mod one_shot_test {
 
     #[test]
     fn test_osm_quick_release_combined_modifiers() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(ONE_SHOT_SETUP)
                 .one_shot_quick_release(true)
@@ -731,7 +731,7 @@ mod one_shot_test {
 
     #[test]
     fn test_osm_quick_release_with_wm() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(ONE_SHOT_SETUP)
                 .one_shot_quick_release(true)
@@ -755,7 +755,7 @@ mod one_shot_test {
 
     #[test]
     fn test_osm_quick_release_activate_on_keypress() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(ONE_SHOT_SETUP)
                 .one_shot_activate_on_keypress(true)
@@ -779,7 +779,7 @@ mod one_shot_test {
 
     #[test]
     fn test_osm_quick_release_combined_activate_on_keypress() {
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(ONE_SHOT_SETUP)
                 .one_shot_activate_on_keypress(true)

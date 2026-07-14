@@ -20,7 +20,7 @@ use rmk_types::protocol::rynk::{Cmd, DeviceCapabilities, KeyPosition, ProtocolVe
 
 use crate::common::rynk_hid_link::link_session_hid;
 use crate::common::rynk_link::RynkHostClient;
-use crate::common::test_block_on::test_block_on;
+use crate::common::test_block_on;
 
 /// A 2-layer 2×2 `RynkService`, leaked to `'static` (see `rynk_loopback.rs`).
 fn service() -> RynkService<'static> {

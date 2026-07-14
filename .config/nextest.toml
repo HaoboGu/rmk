@@ -5,7 +5,7 @@
 #
 # rmk's integration tests run against `embassy-time/mock-driver` (via the
 # dev-only `std` feature in rmk/Cargo.toml) and are driven by
-# `tests/common/test_block_on::test_block_on`. Virtual time eliminates the
+# `rmk::sim::test_block_on`. Virtual time eliminates the
 # wall-clock drift that previously caused flaky tap/hold decisions, so no
 # parallelism cap or retry net is needed.
 

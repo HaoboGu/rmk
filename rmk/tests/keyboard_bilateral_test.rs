@@ -31,7 +31,7 @@ const BILATERAL_HANDS: [HandOverride; 5] = [
     HandOverride::new(0, 3, Hand::Right),
     HandOverride::new(0, 4, Hand::Right),
 ];
-const BILATERAL_SETUP: SimKeyboardSetup<5, 14> = HRM_MORSE_SETUP
+const BILATERAL_SETUP: SimKeyboardSetup = HRM_MORSE_SETUP
     .hand_overrides(&BILATERAL_HANDS)
     .morse_profile(BILATERAL_PROFILE)
     .morse_flow_tap(true)
@@ -42,7 +42,7 @@ const BILATERAL_SETUP: SimKeyboardSetup<5, 14> = HRM_MORSE_SETUP
 /// Instead, permissive hold should activate because A is released before mt!(B, LShift).
 #[test]
 fn test_bilateral_exempts_from_unilateral_tap() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(BILATERAL_SETUP).build().await;
 
         keyboard
@@ -67,7 +67,7 @@ fn test_bilateral_exempts_from_unilateral_tap() {
 /// mt!(B, LShift) (col 1, Left) + mt!(C, LGui) (col 2, Right) = cross-hand -> permissive hold.
 #[test]
 fn test_bilateral_cross_hand_unchanged() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(BILATERAL_SETUP).build().await;
 
         keyboard
@@ -92,7 +92,7 @@ fn test_bilateral_cross_hand_unchanged() {
 /// mt!(C, LGui) (col 2, Right) + lt!(1, D) (col 3, Right, NOT bilateral) = same hand, unilateral tap.
 #[test]
 fn test_non_bilateral_same_hand_still_unilateral() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(BILATERAL_SETUP).build().await;
 
         keyboard
@@ -117,7 +117,7 @@ fn test_non_bilateral_same_hand_still_unilateral() {
 /// Bilateral only affects unilateral_tap decision, not the hold timeout.
 #[test]
 fn test_bilateral_hold_timeout_unchanged() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(BILATERAL_SETUP).build().await;
 
         keyboard
@@ -139,7 +139,7 @@ fn test_bilateral_hold_timeout_unchanged() {
 /// However, releasing mt key first still resolves it as tap (B) via normal morse tap prediction.
 #[test]
 fn test_bilateral_reversed_release() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(BILATERAL_SETUP).build().await;
 
         keyboard

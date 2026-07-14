@@ -111,10 +111,8 @@ pub mod watchdog;
 #[doc(hidden)]
 pub mod sim;
 
-// Test-only helper that drives `embassy-time/mock-driver` from the
-// `#[cfg(test)]` modules under `src/`. Mirrors the same helper at
-// `tests/common/test_block_on.rs` (which is invisible to lib unit tests
-// because integration tests are a separate compilation target).
+// Makes the shared simulator executor available to `#[cfg(test)]` modules
+// while preserving the nextest process guard.
 #[cfg(test)]
 pub(crate) mod test_support;
 

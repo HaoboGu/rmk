@@ -2,7 +2,7 @@
 pub mod common;
 
 use rmk::config::Hand;
-use rmk::sim::{HandOverride, KeymapOverride, SimKeyboard, SimKeyboardSetup, SimMorseSetup};
+use rmk::sim::{HandOverride, KeymapOverride, SimKeyboard, SimKeyboardSetup};
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
@@ -53,11 +53,10 @@ const TAP_DANCE_MORSES: [(Action, Action, Action, Action, MorseProfile); 3] = [
         MorseProfile::const_default(),
     ),
 ];
-const TAP_DANCE_SETUP: SimKeyboardSetup<5, 14> = SimKeyboardSetup::new().keys(&TAP_DANCE_KEY_OVERRIDES).morse(
-    SimMorseSetup::new()
-        .vial_morses(&TAP_DANCE_MORSES)
-        .profile(TAP_DANCE_PROFILE),
-);
+const TAP_DANCE_SETUP: SimKeyboardSetup = SimKeyboardSetup::new()
+    .keys(&TAP_DANCE_KEY_OVERRIDES)
+    .vial_morses(&TAP_DANCE_MORSES)
+    .morse_profile(TAP_DANCE_PROFILE);
 
 /// Create a keyboard with a morse key at (0,4) td!(0) that has:
 ///   tap = Enter, hold_after_tap = Enter (no double_tap)
@@ -94,11 +93,10 @@ const EARLY_FIRE_MORSES: [(Action, Action, Action, Action, MorseProfile); 2] = [
         MorseProfile::const_default(),
     ),
 ];
-const EARLY_FIRE_SETUP: SimKeyboardSetup<5, 14> = SimKeyboardSetup::new().keys(&EARLY_FIRE_KEY_OVERRIDES).morse(
-    SimMorseSetup::new()
-        .vial_morses(&EARLY_FIRE_MORSES)
-        .profile(TAP_DANCE_PROFILE),
-);
+const EARLY_FIRE_SETUP: SimKeyboardSetup = SimKeyboardSetup::new()
+    .keys(&EARLY_FIRE_KEY_OVERRIDES)
+    .vial_morses(&EARLY_FIRE_MORSES)
+    .morse_profile(TAP_DANCE_PROFILE);
 
 /// Create a keyboard with permissive hold mode for testing key ordering.
 ///   td!(0): tap=A, hold=B, hold_after_tap=C, double_tap=D
@@ -120,12 +118,10 @@ const PERMISSIVE_HOLD_MORSES: [(Action, Action, Action, Action, MorseProfile); 1
     Action::Key(KeyCode::Hid(HidKeyCode::D)),
     MorseProfile::const_default(),
 )];
-const PERMISSIVE_HOLD_SETUP: SimKeyboardSetup<5, 14> =
-    SimKeyboardSetup::new().keys(&PERMISSIVE_HOLD_KEY_OVERRIDES).morse(
-        SimMorseSetup::new()
-            .vial_morses(&PERMISSIVE_HOLD_MORSES)
-            .profile(PERMISSIVE_HOLD_PROFILE),
-    );
+const PERMISSIVE_HOLD_SETUP: SimKeyboardSetup = SimKeyboardSetup::new()
+    .keys(&PERMISSIVE_HOLD_KEY_OVERRIDES)
+    .vial_morses(&PERMISSIVE_HOLD_MORSES)
+    .morse_profile(PERMISSIVE_HOLD_PROFILE);
 
 const TIMEOUT_BLOCKING_KEYS: [KeymapOverride; 8] = [
     KeymapOverride::new(0, 0, 0, td!(0)),
@@ -153,12 +149,11 @@ const TIMEOUT_BLOCKING_MORSES: [(Action, Action, Action, Action, MorseProfile); 
         MorseProfile::const_default(),
     ),
 ];
-const TIMEOUT_BLOCKING_SETUP: SimKeyboardSetup<5, 14> = SimKeyboardSetup::new().keys(&TIMEOUT_BLOCKING_KEYS).morse(
-    SimMorseSetup::new()
-        .vial_morses(&TIMEOUT_BLOCKING_MORSES)
-        .profile(PERMISSIVE_HOLD_PROFILE)
-        .flow_tap(false),
-);
+const TIMEOUT_BLOCKING_SETUP: SimKeyboardSetup = SimKeyboardSetup::new()
+    .keys(&TIMEOUT_BLOCKING_KEYS)
+    .vial_morses(&TIMEOUT_BLOCKING_MORSES)
+    .morse_profile(PERMISSIVE_HOLD_PROFILE)
+    .morse_flow_tap(false);
 
 const DUSK_HRM_PROFILE: MorseProfile =
     MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(400u16), None);
@@ -227,21 +222,18 @@ const DUSK_MORSES: [(Action, Action, Action, Action, MorseProfile); 7] = [
         DUSK_HRM_PROFILE,
     ),
 ];
-const DUSK_SETUP: SimKeyboardSetup<5, 14> = SimKeyboardSetup::new()
+const DUSK_SETUP: SimKeyboardSetup = SimKeyboardSetup::new()
     .keys(&DUSK_KEYS)
     .hand_overrides(&DUSK_HANDS)
-    .morse(
-        SimMorseSetup::new()
-            .vial_morses(&DUSK_MORSES)
-            .profile(MorseProfile::new(
-                None,
-                Some(MorseMode::Normal),
-                Some(250u16),
-                Some(250u16),
-            ))
-            .flow_tap(true)
-            .prior_idle_ms(120),
-    );
+    .vial_morses(&DUSK_MORSES)
+    .morse_profile(MorseProfile::new(
+        None,
+        Some(MorseMode::Normal),
+        Some(250u16),
+        Some(250u16),
+    ))
+    .morse_flow_tap(true)
+    .morse_prior_idle_ms(120);
 
 const SAURUS_HRM_PROFILE: MorseProfile =
     MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(400u16), Some(250u16));
@@ -302,25 +294,22 @@ const SAURUS_MORSES: [(Action, Action, Action, Action, MorseProfile); 5] = [
         SAURUS_SHORT_GAP_PROFILE,
     ),
 ];
-const SAURUS_SETUP: SimKeyboardSetup<5, 14> = SimKeyboardSetup::new()
+const SAURUS_SETUP: SimKeyboardSetup = SimKeyboardSetup::new()
     .keys(&SAURUS_KEYS)
     .hand_overrides(&SAURUS_HANDS)
-    .morse(
-        SimMorseSetup::new()
-            .vial_morses(&SAURUS_MORSES)
-            .profile(MorseProfile::new(
-                None,
-                Some(MorseMode::Normal),
-                Some(250u16),
-                Some(250u16),
-            ))
-            .flow_tap(true)
-            .prior_idle_ms(120),
-    );
+    .vial_morses(&SAURUS_MORSES)
+    .morse_profile(MorseProfile::new(
+        None,
+        Some(MorseMode::Normal),
+        Some(250u16),
+        Some(250u16),
+    ))
+    .morse_flow_tap(true)
+    .morse_prior_idle_ms(120);
 
 #[test]
 fn test_tap() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -337,7 +326,7 @@ fn test_tap() {
 
 #[test]
 fn test_hold() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -354,7 +343,7 @@ fn test_hold() {
 
 #[test]
 fn test_hold_after_tap() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -375,7 +364,7 @@ fn test_hold_after_tap() {
 
 #[test]
 fn test_double_tap() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -396,7 +385,7 @@ fn test_double_tap() {
 
 #[test]
 fn test_tap_on_other_press() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -419,7 +408,7 @@ fn test_tap_on_other_press() {
 
 #[test]
 fn test_hold_on_other_press() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -442,7 +431,7 @@ fn test_hold_on_other_press() {
 
 #[test]
 fn test_hold_after_tap_on_other_press() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -469,7 +458,7 @@ fn test_hold_after_tap_on_other_press() {
 
 #[test]
 fn test_multiple_tap() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -498,7 +487,7 @@ fn test_multiple_tap() {
 
 #[test]
 fn test_tap_after_double_tap() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -525,7 +514,7 @@ fn test_tap_after_double_tap() {
 
 #[test]
 fn test_rolling() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -552,7 +541,7 @@ fn test_rolling() {
 
 #[test]
 fn test_rolling_2() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -579,7 +568,7 @@ fn test_rolling_2() {
 
 #[test]
 fn test_rolling_3() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -606,7 +595,7 @@ fn test_rolling_3() {
 
 #[test]
 fn test_multiple_tap_dance_keys() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -633,7 +622,7 @@ fn test_multiple_tap_dance_keys() {
 
 #[test]
 fn test_multiple_tap_dance_keys_2() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -660,7 +649,7 @@ fn test_multiple_tap_dance_keys_2() {
 
 #[test]
 fn test_multiple_tap_dance_keys_3() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(TAP_DANCE_SETUP).build().await;
 
         keyboard
@@ -693,7 +682,7 @@ fn test_multiple_tap_dance_keys_3() {
 /// Expected: Enter press, Enter release, A press (NOT: Enter press, Enter release, Enter press, Enter release, A press)
 #[test]
 fn test_early_fire_no_double_press_on_next_key() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(EARLY_FIRE_SETUP).build().await;
 
         keyboard
@@ -723,7 +712,7 @@ fn test_early_fire_no_double_press_on_next_key() {
 /// Test that re-pressing an early-fired key and holding it resolves as hold-after-tap.
 #[test]
 fn test_early_fire_then_hold_after_tap() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(EARLY_FIRE_SETUP).build().await;
 
         keyboard
@@ -753,7 +742,7 @@ fn test_early_fire_then_hold_after_tap() {
 /// Expected: A (morse tap) fires first, then E fires — NOT E then A.
 #[test]
 fn test_permissive_hold_morse_released_first_key_order() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(PERMISSIVE_HOLD_SETUP)
             .build()
@@ -783,7 +772,7 @@ fn test_permissive_hold_morse_released_first_key_order() {
 /// permissive hold → morse resolves as hold=B), then release morse key.
 #[test]
 fn test_permissive_hold_normal_released_first() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(PERMISSIVE_HOLD_SETUP)
             .build()
@@ -811,7 +800,7 @@ fn test_permissive_hold_normal_released_first() {
 /// keys must still wait behind any other unresolved morse key.
 #[test]
 fn test_timeout_does_not_flush_normal_keys_before_released_morse() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut hold_continues = Morse::default();
         hold_continues
             .actions
@@ -855,7 +844,7 @@ fn test_timeout_does_not_flush_normal_keys_before_released_morse() {
 /// still be unresolved if a longer hold pattern exists.
 #[test]
 fn test_timeout_does_not_flush_normal_keys_before_holding_morse() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut hold_continues = Morse::default();
         hold_continues
             .actions
@@ -897,7 +886,7 @@ fn test_timeout_does_not_flush_normal_keys_before_holding_morse() {
 /// Expected: E press, E release (early fire), press E again
 #[test]
 fn test_early_fire_then_fire_on_second_tap_with_no_double_tap_config() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(EARLY_FIRE_SETUP).build().await;
 
         keyboard
@@ -952,18 +941,16 @@ const FLOW_TAP_EARLY_FIRE_MORSES: [(Action, Action, Action, Action, MorseProfile
     Action::No,
     MorseProfile::const_default(),
 )];
-const FLOW_TAP_EARLY_FIRE_SETUP: SimKeyboardSetup<5, 14> =
-    SimKeyboardSetup::new().keys(&FLOW_TAP_EARLY_FIRE_KEY_OVERRIDES).morse(
-        SimMorseSetup::new()
-            .vial_morses(&FLOW_TAP_EARLY_FIRE_MORSES)
-            .profile(TAP_DANCE_PROFILE)
-            .flow_tap(true)
-            .prior_idle_ms(120),
-    );
+const FLOW_TAP_EARLY_FIRE_SETUP: SimKeyboardSetup = SimKeyboardSetup::new()
+    .keys(&FLOW_TAP_EARLY_FIRE_KEY_OVERRIDES)
+    .vial_morses(&FLOW_TAP_EARLY_FIRE_MORSES)
+    .morse_profile(TAP_DANCE_PROFILE)
+    .morse_flow_tap(true)
+    .morse_prior_idle_ms(120);
 
 #[test]
 fn test_flow_tap_after_early_fire_does_not_jam() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(FLOW_TAP_EARLY_FIRE_SETUP)
             .build()
@@ -1004,7 +991,7 @@ fn test_flow_tap_after_early_fire_does_not_jam() {
 /// fix makes flow-tapped taps leave the same breadcrumb when a hold-after-tap action exists.
 #[test]
 fn test_flow_tapped_tap_then_hold_after_tap() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(FLOW_TAP_EARLY_FIRE_SETUP)
             .build()
@@ -1039,7 +1026,7 @@ fn test_flow_tapped_tap_then_hold_after_tap() {
 /// host sees "clietn".
 #[test]
 fn test_saurus_client_roll_with_flow_tap_override_keeps_n_before_t() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(SAURUS_SETUP).build().await;
 
         keyboard
@@ -1089,7 +1076,7 @@ fn test_saurus_client_roll_with_flow_tap_override_keeps_n_before_t() {
 /// to overtake the already-held O.
 #[test]
 fn test_dusk_tap_dance_cou_rollover_keeps_o_before_u() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(DUSK_SETUP).build().await;
 
         keyboard
@@ -1129,7 +1116,7 @@ fn test_dusk_tap_dance_cou_rollover_keeps_o_before_u() {
 /// expires before the next key arrives.
 #[test]
 fn test_dusk_tap_dance_cou_rollover_after_gap_timeout() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(DUSK_SETUP).build().await;
 
         keyboard
@@ -1161,7 +1148,7 @@ fn test_dusk_tap_dance_cou_rollover_after_gap_timeout() {
 /// physical rollover.
 #[test]
 fn test_dusk_tap_hold_cou_rollover_keeps_o_before_u() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(DUSK_SETUP)
             .key(

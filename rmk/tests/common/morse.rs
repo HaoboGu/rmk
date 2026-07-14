@@ -1,4 +1,4 @@
-use rmk::sim::{KeymapOverride, SimKeyboardSetup, SimMorseSetup};
+use rmk::sim::{KeymapOverride, SimKeyboardSetup};
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
@@ -18,8 +18,18 @@ pub const SIMPLE_MORSE_KEY_OVERRIDES: [KeymapOverride; 10] = [
     KeymapOverride::new(1, 0, 4, k!(Kp5)),
 ];
 
-pub const HRM_EXTRA_KEY_OVERRIDES: [KeymapOverride; 1] =
-    [KeymapOverride::new(0, 0, 4, mt!(E, ModifierCombination::LALT))];
+pub const HRM_MORSE_KEY_OVERRIDES: [KeymapOverride; 10] = [
+    KeymapOverride::new(0, 0, 0, k!(A)),
+    KeymapOverride::new(0, 0, 1, mt!(B, ModifierCombination::LSHIFT)),
+    KeymapOverride::new(0, 0, 2, mt!(C, ModifierCombination::LGUI)),
+    KeymapOverride::new(0, 0, 3, lt!(1, D)),
+    KeymapOverride::new(0, 0, 4, mt!(E, ModifierCombination::LALT)),
+    KeymapOverride::new(1, 0, 0, k!(Kp1)),
+    KeymapOverride::new(1, 0, 1, k!(Kp2)),
+    KeymapOverride::new(1, 0, 2, k!(Kp3)),
+    KeymapOverride::new(1, 0, 3, k!(Kp4)),
+    KeymapOverride::new(1, 0, 4, k!(Kp5)),
+];
 
 pub const TEST_MORSE_PATTERNS: [(u16, Action); 8] = [
     (0b1_01, Action::Key(KeyCode::Hid(HidKeyCode::A))),
@@ -32,11 +42,13 @@ pub const TEST_MORSE_PATTERNS: [(u16, Action); 8] = [
     (0b1_000, Action::Key(KeyCode::Hid(HidKeyCode::S))),
 ];
 
-pub const SIMPLE_MORSE_SETUP: SimKeyboardSetup<5, 14> = SimKeyboardSetup::new()
+pub const SIMPLE_MORSE_SETUP: SimKeyboardSetup = SimKeyboardSetup::new()
     .keys(&SIMPLE_MORSE_KEY_OVERRIDES)
-    .morse(SimMorseSetup::new().patterns(&TEST_MORSE_PATTERNS));
+    .morse_patterns(&TEST_MORSE_PATTERNS);
 
-pub const HRM_MORSE_SETUP: SimKeyboardSetup<5, 14> = SIMPLE_MORSE_SETUP.extra_keys(&HRM_EXTRA_KEY_OVERRIDES);
+pub const HRM_MORSE_SETUP: SimKeyboardSetup = SimKeyboardSetup::new()
+    .keys(&HRM_MORSE_KEY_OVERRIDES)
+    .morse_patterns(&TEST_MORSE_PATTERNS);
 
 pub const MORSE_COMBO_KEY: KeyAction = KeyAction::TapHold(
     Action::Key(KeyCode::Hid(HidKeyCode::B)),

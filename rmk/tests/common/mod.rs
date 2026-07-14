@@ -3,7 +3,7 @@ pub mod morse;
 pub mod rynk_hid_link;
 #[cfg(feature = "rynk")]
 pub mod rynk_link;
-pub mod test_block_on;
+use core::future::Future;
 
 use rmk::types::action::KeyAction;
 use rmk::types::modifier::ModifierCombination;
@@ -37,6 +37,10 @@ pub fn init_log() {
         .filter_level(log::LevelFilter::Debug)
         .is_test(true)
         .try_init();
+}
+
+pub fn test_block_on<F: Future>(future: F) -> F::Output {
+    rmk::sim::test_block_on(future)
 }
 
 pub const KC_LCTRL: u8 = 1 << 0;

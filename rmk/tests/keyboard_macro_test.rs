@@ -13,7 +13,7 @@ mod macro_test {
         KeymapOverride::new(0, 0, 0, KeyAction::Single(Action::TriggerMacro(0))),
         KeymapOverride::new(0, 0, 1, KeyAction::Single(Action::TriggerMacro(1))),
     ];
-    const MACRO_SETUP: SimKeyboardSetup<5, 14> = SimKeyboardSetup::new().keys(&MACRO_KEY_OVERRIDES);
+    const MACRO_SETUP: SimKeyboardSetup = SimKeyboardSetup::new().keys(&MACRO_KEY_OVERRIDES);
 
     #[test]
     fn test_macro_key_a_press_release() {
@@ -25,7 +25,7 @@ mod macro_test {
 
         let macro_data = define_macro_sequences(macro_sequences);
 
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(MACRO_SETUP)
                 .macro_sequences(macro_data)
@@ -78,7 +78,7 @@ mod macro_test {
 
         let macro_data = define_macro_sequences(macro_sequences);
 
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(MACRO_SETUP)
                 .macro_sequences(macro_data)
@@ -125,7 +125,7 @@ mod macro_test {
 
         let macro_data = define_macro_sequences(macro_sequences);
 
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(MACRO_SETUP)
                 .macro_sequences(macro_data)
@@ -156,7 +156,7 @@ mod macro_test {
 
         let macro_data = define_macro_sequences(macro_sequences);
 
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(MACRO_SETUP)
                 .macro_sequences(macro_data)
@@ -190,7 +190,7 @@ mod macro_test {
 
         let macro_data = define_macro_sequences(macro_sequences);
 
-        crate::common::test_block_on::test_block_on(async {
+        crate::common::test_block_on(async {
             let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
                 .setup(MACRO_SETUP)
                 .macro_sequences(macro_data)

@@ -40,7 +40,7 @@ use rmk_types::protocol::rynk::{
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use super::test_block_on::test_block_on;
+use super::test_block_on;
 
 /// One direction of the link. Sized to a full Rynk buffer so any single legal
 /// frame fits, and the writer never deadlocks waiting on a reader that has not

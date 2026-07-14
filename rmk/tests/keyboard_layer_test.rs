@@ -18,11 +18,11 @@ const LAYER_KEY_OVERRIDES: [KeymapOverride; 4] = [
     KeymapOverride::new(1, 0, 0, KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::B)))),
     KeymapOverride::new(1, 0, 1, KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::C)))),
 ];
-const LAYER_SETUP: SimKeyboardSetup<5, 14> = SimKeyboardSetup::new().keys(&LAYER_KEY_OVERRIDES);
+const LAYER_SETUP: SimKeyboardSetup = SimKeyboardSetup::new().keys(&LAYER_KEY_OVERRIDES);
 
 #[test]
 fn test_pdf_sets_default_layer() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder([
             [[
                 KeyAction::Single(Action::PersistentDefaultLayer(1)),
@@ -63,7 +63,7 @@ fn test_pdf_invalid_layer_is_ignored() {
             KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::B))),
         ]],
     ];
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(keymap).build().await;
 
         keyboard
@@ -81,7 +81,7 @@ fn test_pdf_invalid_layer_is_ignored() {
 
 #[test]
 fn test_lm_release() {
-    crate::common::test_block_on::test_block_on(async {
+    crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP).setup(LAYER_SETUP).build().await;
 
         keyboard

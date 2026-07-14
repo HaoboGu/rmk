@@ -14,7 +14,7 @@ fn test_passkey_entry_submits_passkey() {
     //   col 1 = Kc1, col 2 = Kc2, col 3 = Kc3, col 4 = Kc4, col 5 = Kc5, col 6 = Kc6
     // Enter is at row 2, col 13
     // Passkey processes on key release, so we need press+release for each key
-    common::test_block_on::test_block_on(async {
+    common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP).build().await;
 
         keyboard
@@ -46,7 +46,7 @@ fn test_passkey_entry_submits_passkey() {
 fn test_passkey_entry_cancel() {
     // Type a couple digits then cancel with Escape
     // Escape is at row 2, col 0
-    common::test_block_on::test_block_on(async {
+    common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(crate::common::TEST_KEYMAP).build().await;
 
         keyboard
