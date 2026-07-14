@@ -666,6 +666,44 @@ mod tests {
     }
 
     #[test]
+    fn test_latchtap_grammar() {
+        // LatchTap(modifier, key) is parsed as a single top-level action and
+        // forwarded verbatim (no layer references to resolve).
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+
+        let keymap = "LatchTap(LCtrl, Tab) LatchTap(LAlt, Tab) LatchTap(LGui, Tab)";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok(), "{:?}", result);
+        assert_eq!(
+            result.unwrap(),
+            vec![
+                "LatchTap(LCtrl, Tab)",
+                "LatchTap(LAlt, Tab)",
+                "LatchTap(LGui, Tab)",
+            ]
+        );
+
+        // The grammar recognizes it as `latchtap_action`, case-insensitively.
+        for input in ["LatchTap(LCtrl, Tab)", "latchtap(LGui, Escape)", "LATCHTAP(RAlt, Home)"] {
+            let parsed = ConfigParser::parse(Rule::key_map, input);
+            assert!(parsed.is_ok(), "Failed to parse: {}", input);
+            let mut found = None;
+            for pair in parsed.unwrap() {
+                if pair.as_rule() == Rule::key_map {
+                    for inner in pair.into_inner() {
+                        if inner.as_rule() == Rule::latchtap_action {
+                            found = Some(inner.as_rule());
+                        }
+                    }
+                }
+            }
+            assert_eq!(found, Some(Rule::latchtap_action), "Input: {}", input);
+        }
+    }
+
+    #[test]
     fn test_nested_actions_in_tap_hold_slots() {
         let aliases = HashMap::new();
         let layer_names = HashMap::new();
