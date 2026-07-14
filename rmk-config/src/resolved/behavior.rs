@@ -28,18 +28,11 @@ pub const DEFAULT_AUTO_MOUSE_LAYER_TIMEOUT_MS: u64 = 500;
 /// Default motion threshold for [`AutoMouseLayer`] when not specified.
 pub const DEFAULT_AUTO_MOUSE_LAYER_THRESHOLD: u16 = 1;
 
-/// Maximum number of [`AutoMouseLayer`] entries.
-///
-/// This bounds the `heapless::Vec` capacity used on firmware, so the build-time
-/// constant emitted by `rmk-types/build.rs` and the `keyboard.toml` validation
-/// must both derive from this single definition.
-pub const AUTO_MOUSE_LAYER_MAX_NUM: usize = 4;
+/// Fallback for `auto_mouse_layer_max_num` when no `keyboard.toml` is loaded.
+pub const DEFAULT_AUTO_MOUSE_LAYER_MAX_NUM: usize = 4;
 
-/// Maximum `extra_mouse_keys` per `AutoMouseLayer` entry.
-///
-/// Single source of truth: `rmk-types/build.rs` emits `AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM`
-/// from this constant, and `keyboard.toml` validation reads it from here.
-pub const AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM: usize = 8;
+/// Fallback for `auto_mouse_layer_extra_mouse_keys_max_num` when no `keyboard.toml` is loaded.
+pub const DEFAULT_AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM: usize = 8;
 
 pub struct OneShot {
     pub activate_on_keypress: Option<bool>,

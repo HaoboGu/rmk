@@ -70,13 +70,21 @@ impl<'a, 'k> AutoMouseLayerRunner<'a, 'k> {
             let mut config = config;
             config.threshold = config.threshold.max(1);
             any_action_event_configured |= config.deactivate_on_key || config.reset_timeout_on_key;
-            // Capacity already matches AUTO_MOUSE_LAYER_MAX_NUM upstream.
-            let _ = entries.push(EntryState {
-                config,
-                self_activated: false,
-                deadline: None,
-                overlap_warned: false,
-            });
+            let device_id = config.device_id;
+            if entries
+                .push(EntryState {
+                    config,
+                    self_activated: false,
+                    deadline: None,
+                    overlap_warned: false,
+                })
+                .is_err()
+            {
+                warn!(
+                    "auto_mouse_layer: too many entries configured (max {}); entry for device_id {:?} is dropped",
+                    AUTO_MOUSE_LAYER_MAX_NUM, device_id
+                );
+            }
         }
         Self {
             keymap,

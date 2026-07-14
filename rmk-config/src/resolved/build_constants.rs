@@ -48,6 +48,8 @@ pub struct BuildConstants {
     pub split_central_sleep_timeout_seconds: u32,
     pub protocol_max_bulk_size: usize,
     pub protocol_macro_chunk_size: usize,
+    pub auto_mouse_layer_max_num: usize,
+    pub auto_mouse_layer_extra_mouse_keys_max_num: usize,
     pub events: Vec<EventChannel>,
     pub passkey: Option<Passkey>,
 }
@@ -156,6 +158,31 @@ impl crate::KeyboardTomlConfig {
             ));
         }
 
+        let auto_mouse_layer_max_num = rmk
+            .auto_mouse_layer_max_num
+            .unwrap_or(crate::resolved::behavior::DEFAULT_AUTO_MOUSE_LAYER_MAX_NUM);
+        let auto_mouse_layer_extra_mouse_keys_max_num = rmk
+            .auto_mouse_layer_extra_mouse_keys_max_num
+            .unwrap_or(crate::resolved::behavior::DEFAULT_AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM);
+        if let Some(entries) = self.behavior.as_ref().and_then(|b| b.auto_mouse_layer.as_ref()) {
+            if entries.len() > auto_mouse_layer_max_num {
+                return Err(format!(
+                    "number of [[behavior.auto_mouse_layer]] entries ({}) exceeds auto_mouse_layer_max_num ({})",
+                    entries.len(),
+                    auto_mouse_layer_max_num
+                ));
+            }
+            for (i, entry) in entries.iter().enumerate() {
+                let extra_mouse_keys_len = entry.extra_mouse_keys.as_ref().map(|v| v.len()).unwrap_or(0);
+                if extra_mouse_keys_len > auto_mouse_layer_extra_mouse_keys_max_num {
+                    return Err(format!(
+                        "[[behavior.auto_mouse_layer]] entry #{} extra_mouse_keys ({}) exceeds auto_mouse_layer_extra_mouse_keys_max_num ({})",
+                        i, extra_mouse_keys_len, auto_mouse_layer_extra_mouse_keys_max_num
+                    ));
+                }
+            }
+        }
+
         Ok(BuildConstants {
             combo_max_num: rmk.combo_max_num,
             combo_max_length: rmk.combo_max_length,
@@ -174,6 +201,8 @@ impl crate::KeyboardTomlConfig {
             split_central_sleep_timeout_seconds: rmk.split_central_sleep_timeout_seconds,
             protocol_max_bulk_size: rmk.protocol_max_bulk_size,
             protocol_macro_chunk_size: rmk.protocol_macro_chunk_size,
+            auto_mouse_layer_max_num,
+            auto_mouse_layer_extra_mouse_keys_max_num,
             events,
             passkey,
         })
@@ -249,5 +278,35 @@ mod tests {
 
         assert!(!passkey.enabled);
         assert_eq!(passkey.timeout_secs, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS);
+    }
+
+    fn parse(toml: &str) -> crate::KeyboardTomlConfig {
+        toml::from_str(toml).expect("Failed to parse keyboard config")
+    }
+
+    #[test]
+    fn auto_mouse_layer_max_num_explicitly_too_small_is_rejected() {
+        let toml = "[rmk]\nauto_mouse_layer_max_num = 0\n\n[[behavior.auto_mouse_layer]]\ntarget_layer = 1\n";
+        let err = match parse(toml).build_constants(&[]) {
+            Ok(_) => panic!("expected auto_mouse_layer_max_num validation failure"),
+            Err(err) => err,
+        };
+        assert!(err.contains("auto_mouse_layer_max_num"));
+    }
+
+    #[test]
+    fn auto_mouse_layer_extra_mouse_keys_explicitly_too_small_is_rejected() {
+        let toml = "[rmk]\nauto_mouse_layer_extra_mouse_keys_max_num = 1\n\n[[behavior.auto_mouse_layer]]\ntarget_layer = 1\nextra_mouse_keys = [\"LCtrl\", \"LShift\"]\n";
+        let err = match parse(toml).build_constants(&[]) {
+            Ok(_) => panic!("expected auto_mouse_layer_extra_mouse_keys_max_num validation failure"),
+            Err(err) => err,
+        };
+        assert!(err.contains("auto_mouse_layer_extra_mouse_keys_max_num"));
+    }
+
+    #[test]
+    fn auto_mouse_layer_within_capacity_is_accepted() {
+        let toml = "[rmk]\nauto_mouse_layer_max_num = 1\n\n[[behavior.auto_mouse_layer]]\ntarget_layer = 1\nextra_mouse_keys = [\"LCtrl\"]\n";
+        assert!(parse(toml).build_constants(&[]).is_ok());
     }
 }

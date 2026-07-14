@@ -77,11 +77,11 @@ fn generate_constants(bc: &BuildConstants) -> String {
     lines.push(format!("pub const MORSE_MAX_NUM: usize = {};", bc.morse_max_num));
     lines.push(format!(
         "pub const AUTO_MOUSE_LAYER_MAX_NUM: usize = {};",
-        rmk_config::resolved::behavior::AUTO_MOUSE_LAYER_MAX_NUM
+        bc.auto_mouse_layer_max_num
     ));
     lines.push(format!(
         "pub const AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM: usize = {};",
-        rmk_config::resolved::behavior::AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM
+        bc.auto_mouse_layer_extra_mouse_keys_max_num
     ));
     lines.push(format!(
         "pub const MAX_PATTERNS_PER_KEY: usize = {};",

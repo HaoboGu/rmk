@@ -80,11 +80,15 @@ impl crate::KeyboardTomlConfig {
                 }
                 behavior.auto_mouse_layer = behavior.auto_mouse_layer.or(default.auto_mouse_layer);
                 if let Some(entries) = &behavior.auto_mouse_layer {
-                    if entries.len() > crate::resolved::behavior::AUTO_MOUSE_LAYER_MAX_NUM {
+                    let auto_mouse_layer_max_num = self
+                        .rmk
+                        .auto_mouse_layer_max_num
+                        .unwrap_or(crate::resolved::behavior::DEFAULT_AUTO_MOUSE_LAYER_MAX_NUM);
+                    if entries.len() > auto_mouse_layer_max_num {
                         return Err(format!(
-                            "keyboard.toml: at most {} [[behavior.auto_mouse_layer]] entries are allowed, got {}",
-                            crate::resolved::behavior::AUTO_MOUSE_LAYER_MAX_NUM,
-                            entries.len()
+                            "keyboard.toml: number of [[behavior.auto_mouse_layer]] entries ({}) exceeds auto_mouse_layer_max_num ({}) configured under [rmk] section",
+                            entries.len(),
+                            auto_mouse_layer_max_num
                         ));
                     }
                     let mut seen_device_ids: Vec<Option<u8>> = Vec::new();
@@ -116,13 +120,17 @@ impl crate::KeyboardTomlConfig {
                                 ));
                             }
                         }
+                        let auto_mouse_layer_extra_mouse_keys_max_num = self
+                            .rmk
+                            .auto_mouse_layer_extra_mouse_keys_max_num
+                            .unwrap_or(crate::resolved::behavior::DEFAULT_AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM);
                         if let Some(exceptions) = &entry.extra_mouse_keys
-                            && exceptions.len() > crate::resolved::behavior::AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM
+                            && exceptions.len() > auto_mouse_layer_extra_mouse_keys_max_num
                         {
                             return Err(format!(
-                                "keyboard.toml: [[behavior.auto_mouse_layer]].extra_mouse_keys accepts at most {} entries, got {}",
-                                crate::resolved::behavior::AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM,
-                                exceptions.len()
+                                "keyboard.toml: [[behavior.auto_mouse_layer]].extra_mouse_keys ({}) exceeds auto_mouse_layer_extra_mouse_keys_max_num ({}) configured under [rmk] section",
+                                exceptions.len(),
+                                auto_mouse_layer_extra_mouse_keys_max_num
                             ));
                         }
                         if seen_device_ids.contains(&entry.device_id) {
