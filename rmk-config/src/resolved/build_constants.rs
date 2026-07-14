@@ -181,6 +181,14 @@ impl crate::KeyboardTomlConfig {
                     ));
                 }
             }
+            let uses_action_event = entries
+                .iter()
+                .any(|e| e.deactivate_on_key == Some(true) || e.reset_timeout_on_key == Some(true));
+            if uses_action_event && events.iter().any(|e| e.name == "action" && e.subs == 0) {
+                return Err(
+                    "[[behavior.auto_mouse_layer]].deactivate_on_key / reset_timeout_on_key require [event.action] subs to be at least 1".to_string(),
+                );
+            }
         }
 
         Ok(BuildConstants {
@@ -307,6 +315,22 @@ mod tests {
     #[test]
     fn auto_mouse_layer_within_capacity_is_accepted() {
         let toml = "[rmk]\nauto_mouse_layer_max_num = 1\n\n[[behavior.auto_mouse_layer]]\ntarget_layer = 1\nextra_mouse_keys = [\"LCtrl\"]\n";
+        assert!(parse(toml).build_constants(&[]).is_ok());
+    }
+
+    #[test]
+    fn deactivate_on_key_without_action_subs_is_rejected() {
+        let toml = "[[behavior.auto_mouse_layer]]\ntarget_layer = 1\ndeactivate_on_key = true\n";
+        let err = match parse(toml).build_constants(&[]) {
+            Ok(_) => panic!("expected action subs validation failure"),
+            Err(err) => err,
+        };
+        assert!(err.contains("[event.action]"));
+    }
+
+    #[test]
+    fn deactivate_on_key_with_action_subs_set_is_accepted() {
+        let toml = "[event.action]\nchannel_size = 16\npubs = 1\nsubs = 1\n\n[[behavior.auto_mouse_layer]]\ntarget_layer = 1\ndeactivate_on_key = true\n";
         assert!(parse(toml).build_constants(&[]).is_ok());
     }
 }

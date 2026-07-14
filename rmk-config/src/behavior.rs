@@ -133,6 +133,13 @@ impl crate::KeyboardTomlConfig {
                                 auto_mouse_layer_extra_mouse_keys_max_num
                             ));
                         }
+                        if (entry.deactivate_on_key == Some(true) || entry.reset_timeout_on_key == Some(true))
+                            && self.event.action.subs == 0
+                        {
+                            return Err(
+                                "keyboard.toml: [[behavior.auto_mouse_layer]].deactivate_on_key / reset_timeout_on_key require [event.action] subs to be at least 1".to_string(),
+                            );
+                        }
                         if seen_device_ids.contains(&entry.device_id) {
                             return Err(match entry.device_id {
                                 Some(id) => format!(

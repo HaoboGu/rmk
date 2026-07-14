@@ -1274,7 +1274,7 @@ mod tests {
 
         assert_eq!(config.action.channel_size, 16);
         assert_eq!(config.action.pubs, 1);
-        assert_eq!(config.action.subs, 1);
+        assert_eq!(config.action.subs, 0);
     }
 
     #[test]

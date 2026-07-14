@@ -15,7 +15,8 @@
 //! morse, and tap dance keys are therefore classified by their final result;
 //! see [`keypress_step`] for the actions that cannot be classified.
 
-use embassy_time::{Duration, Instant};
+use embassy_futures::select::{Either, Either3, select, select3};
+use embassy_time::{Duration, Instant, Timer};
 use heapless::Vec;
 use rmk_macro::processor;
 use rmk_types::action::Action;
@@ -25,21 +26,23 @@ use rmk_types::modifier::ModifierCombination;
 use crate::AUTO_MOUSE_LAYER_MAX_NUM;
 use crate::config::AutoMouseLayerConfig;
 use crate::core_traits::Runnable;
-use crate::event::{ActionEvent, Axis, AxisValType, LayerChangeEvent, PointingEvent};
+use crate::event::{
+    ActionEvent, Axis, AxisValType, EventSubscriber, LayerChangeEvent, PointingEvent, SubscribableEvent,
+};
 use crate::keymap::KeyMap;
-use crate::processor::DeadlineProcessor;
+use crate::processor::Processor;
 
 /// [`Runnable`] for the auto mouse layer task.
 ///
-/// Subscribes to [`PointingEvent`], [`LayerChangeEvent`], and [`ActionEvent`]; the action
-/// event handler is a no-op unless at least one entry sets `deactivate_on_key` or `reset_timeout_on_key`.
+/// Always subscribes to [`PointingEvent`] and [`LayerChangeEvent`]; additionally subscribes
+/// to [`ActionEvent`] only when an entry sets `deactivate_on_key` or `reset_timeout_on_key`,
+/// so `[event.action].subs` (default `0`) only needs to be raised to `1` when opting into those options.
+/// If those options are set while `[event.action].subs` resolves to `0`, startup panics; raise
+/// it via a `keyboard.toml` pointed to by `KEYBOARD_TOML_PATH`.
 /// Construct with [`AutoMouseLayerRunner::new`] and pass to `run_all!`. If the keymap has no
 /// auto mouse layer configured (or every entry's layer is out of range), [`Runnable::run`] parks
 /// forever on [`core::future::pending`] so it can sit alongside the other tasks without doing anything.
-///
-/// Note: `[event.action].subs` defaults to `1` and must be at least `1` to run this task;
-/// otherwise subscriber creation panics at startup.
-#[processor(subscribe = [PointingEvent, LayerChangeEvent, ActionEvent])]
+#[processor(subscribe = [PointingEvent, LayerChangeEvent])]
 #[::rmk::macros::runnable_generated]
 pub struct AutoMouseLayerRunner<'a, 'k> {
     keymap: &'a KeyMap<'k>,
@@ -162,7 +165,7 @@ enum PointingOutcome {
     Idle,
 }
 
-impl DeadlineProcessor for AutoMouseLayerRunner<'_, '_> {
+impl AutoMouseLayerRunner<'_, '_> {
     fn deadline(&self) -> Option<Instant> {
         earliest_deadline(&self.entries)
     }
@@ -179,8 +182,42 @@ impl Runnable for AutoMouseLayerRunner<'_, '_> {
         if self.entries.is_empty() {
             core::future::pending().await
         }
-        self.deadline_loop().await
+        let mut sub = <Self as Processor>::subscriber();
+        assert_action_event_subscriber_available(self.any_action_event_configured);
+        let mut action_sub = self.any_action_event_configured.then(ActionEvent::subscriber);
+        loop {
+            let action_fut = async {
+                match action_sub.as_mut() {
+                    Some(action_sub) => action_sub.next_event().await,
+                    None => core::future::pending().await,
+                }
+            };
+            match self.deadline() {
+                Some(deadline) => match select3(Timer::at(deadline), sub.next_event(), action_fut).await {
+                    Either3::First(_) => self.on_deadline().await,
+                    Either3::Second(event) => self.process(event).await,
+                    Either3::Third(event) => self.on_action_event(event).await,
+                },
+                None => match select(sub.next_event(), action_fut).await {
+                    Either::First(event) => self.process(event).await,
+                    Either::Second(event) => self.on_action_event(event).await,
+                },
+            }
+        }
     }
+}
+
+/// Panic when ActionEvent-driven options are enabled but the event has no
+/// subscriber slot, so the misconfiguration is loud instead of calling
+/// `ActionEvent::subscriber()` with `subs = 0` (which would also panic, with a
+/// less specific message).
+fn assert_action_event_subscriber_available(any_action_event_configured: bool) {
+    assert!(
+        !any_action_event_configured || crate::ACTION_EVENT_SUB_SIZE >= 1,
+        "auto_mouse_layer: deactivate_on_key / reset_timeout_on_key require \
+         [event.action].subs >= 1, but it is 0. Set KEYBOARD_TOML_PATH to a \
+         keyboard.toml containing `[event.action] subs = 1`."
+    );
 }
 
 fn earliest_deadline(entries: &[EntryState]) -> Option<Instant> {
@@ -376,6 +413,26 @@ mod tests {
             deadline: None,
             overlap_warned: false,
         }
+    }
+
+    #[test]
+    fn action_event_subs_is_zero_without_keyboard_toml() {
+        // rmk's own test build has no keyboard.toml, so ActionEvent gets no
+        // subscriber slot; the startup assert must catch configured opt-ins.
+        assert_eq!(crate::ACTION_EVENT_SUB_SIZE, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "[event.action].subs >= 1")]
+    fn guard_panics_when_options_configured_without_subscriber_slot() {
+        // This build has subs == 0 (see above), so a configured opt-in must panic
+        // before ActionEvent::subscriber() is called in run().
+        assert_action_event_subscriber_available(true);
+    }
+
+    #[test]
+    fn guard_allows_when_options_not_configured() {
+        assert_action_event_subscriber_available(false);
     }
 
     #[test]
