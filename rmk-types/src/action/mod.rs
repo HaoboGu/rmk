@@ -26,7 +26,7 @@ use postcard::experimental::max_size::MaxSize;
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
-use crate::keycode::{KeyCode, SpecialKey};
+use crate::keycode::{HidKeyCode, KeyCode, SpecialKey};
 use crate::modifier::ModifierCombination;
 #[cfg(feature = "steno")]
 use crate::steno::StenoKey;
@@ -36,9 +36,9 @@ use crate::steno::StenoKey;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub struct StickyKeyAction {
-    /// Key sent on each SK press. `KeyCode::Hid(HidKeyCode::No)` selects the pure-mod (OSM) shape
+    /// HID key sent on each SK press. `HidKeyCode::No` selects the pure-mod (OSM) shape
     /// when `layer` is `None`; otherwise it's the tap-key (alt-tab) shape.
-    pub key: KeyCode,
+    pub key: HidKeyCode,
     /// Modifiers held between presses (0 = none). Unused for the layer (OSL) shape.
     pub keep: ModifierCombination,
     /// `Some(n)` = one-shot-layer (OSL) shape activating layer `n`.

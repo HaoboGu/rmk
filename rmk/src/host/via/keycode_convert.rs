@@ -91,7 +91,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                 // OSL, VIA range (same as old OneShotLayer)
                 (_, Some(layer)) if layer < 32 => 0x5280 | layer as u16,
                 // OSM, VIA range (same as old OneShotModifier)
-                (KeyCode::Hid(HidKeyCode::No), None) => 0x52A0 | ((sk.keep.into_packed_bits() & 0x1F) as u16),
+                (HidKeyCode::No, None) => 0x52A0 | ((sk.keep.into_packed_bits() & 0x1F) as u16),
                 _ => {
                     warn!("StickyKey {:?} is not supported by VIA", sk);
                     0
@@ -231,7 +231,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x5280..=0x529F => {
             let layer = via_keycode as u8 & 0x1F;
             KeyAction::Single(Action::StickyKey(StickyKeyAction {
-                key: KeyCode::Hid(HidKeyCode::No),
+                key: HidKeyCode::No,
                 keep: ModifierCombination::new(),
                 layer: Some(layer),
             }))
@@ -240,7 +240,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x52A0..=0x52BF => {
             let m = ModifierCombination::from_packed_bits((via_keycode & 0x1F) as u8);
             KeyAction::Single(Action::StickyKey(StickyKeyAction {
-                key: KeyCode::Hid(HidKeyCode::No),
+                key: HidKeyCode::No,
                 keep: m,
                 layer: None,
             }))
@@ -670,7 +670,7 @@ mod test {
     fn test_vial_osm_round_trip() {
         // OSM(LCtrl) — VIA range 0x52A0 + packed_bits
         let osm_ctrl = KeyAction::Single(Action::StickyKey(StickyKeyAction {
-            key: KeyCode::Hid(HidKeyCode::No),
+            key: HidKeyCode::No,
             keep: ModifierCombination::LCTRL,
             layer: None,
         }));
@@ -681,7 +681,7 @@ mod test {
 
         // OSM(LShift)
         let osm_shift = KeyAction::Single(Action::StickyKey(StickyKeyAction {
-            key: KeyCode::Hid(HidKeyCode::No),
+            key: HidKeyCode::No,
             keep: ModifierCombination::LSHIFT,
             layer: None,
         }));
@@ -692,7 +692,7 @@ mod test {
 
         // OSM(LAlt) — uses VIA range 0x52A0, round-trips through packed bits cleanly now
         let osm_alt = KeyAction::Single(Action::StickyKey(StickyKeyAction {
-            key: KeyCode::Hid(HidKeyCode::No),
+            key: HidKeyCode::No,
             keep: ModifierCombination::LALT,
             layer: None,
         }));
@@ -706,7 +706,7 @@ mod test {
     fn test_vial_osl_round_trip() {
         // OSL(0) — VIA range 0x5280 + layer
         let osl_0 = KeyAction::Single(Action::StickyKey(StickyKeyAction {
-            key: KeyCode::Hid(HidKeyCode::No),
+            key: HidKeyCode::No,
             keep: ModifierCombination::new(),
             layer: Some(0),
         }));
@@ -717,7 +717,7 @@ mod test {
 
         // OSL(5)
         let osl_5 = KeyAction::Single(Action::StickyKey(StickyKeyAction {
-            key: KeyCode::Hid(HidKeyCode::No),
+            key: HidKeyCode::No,
             keep: ModifierCombination::new(),
             layer: Some(5),
         }));
@@ -730,7 +730,7 @@ mod test {
     #[test]
     fn test_vial_does_not_convert_tap_key_sticky_key_to_osm() {
         let tap_key_sticky_key = KeyAction::Single(Action::StickyKey(StickyKeyAction {
-            key: KeyCode::Hid(HidKeyCode::Tab),
+            key: HidKeyCode::Tab,
             keep: ModifierCombination::LALT,
             layer: None,
         }));

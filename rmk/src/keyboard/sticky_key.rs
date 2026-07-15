@@ -10,7 +10,7 @@
 
 use embassy_time::{Duration, Instant};
 use rmk_types::action::StickyKeyAction;
-use rmk_types::keycode::{HidKeyCode, KeyCode};
+use rmk_types::keycode::HidKeyCode;
 use rmk_types::modifier::ModifierCombination;
 
 use crate::event::{KeyboardEvent, KeyboardEventPos};
@@ -74,8 +74,8 @@ pub(crate) enum StickyKeyState {
         /// Physical key that owns this latch.
         source: KeyboardEventPos,
         mods: ModifierCombination,
-        /// `KeyCode::Hid(HidKeyCode::No)` = pure-mod or layer shape; any other key = tap-key shape.
-        key: KeyCode,
+        /// `HidKeyCode::No` = pure-mod or layer shape; any other key = tap-key shape.
+        key: HidKeyCode,
         /// `Some(n)` = OSL shape; `None` = pure-mod or tap-key shape.
         layer: Option<u8>,
         phase: SkPhase,
@@ -98,7 +98,7 @@ mod size_tests {
         Active {
             source: KeyboardEventPos,
             mods: ModifierCombination,
-            key: KeyCode,
+            key: HidKeyCode,
             layer: Option<u8>,
             phase: SkPhase,
             pressed: bool,
@@ -138,7 +138,7 @@ impl StickyKeyState {
         matches!(
             self,
             StickyKeyState::Active {
-                key: KeyCode::Hid(HidKeyCode::No),
+                key: HidKeyCode::No,
                 layer: None,
                 ..
             }
@@ -160,7 +160,7 @@ impl Keyboard<'_> {
     pub(crate) async fn process_action_sticky_key(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
         if params.layer.is_some() {
             self.process_sticky_layer(params, event).await;
-        } else if params.key == KeyCode::Hid(HidKeyCode::No) {
+        } else if params.key == HidKeyCode::No {
             self.process_sticky_pure_mod(params, event).await;
         } else {
             self.process_sticky_tap_key(params, event).await;
@@ -380,9 +380,7 @@ impl Keyboard<'_> {
                 self.sticky_key_state = StickyKeyState::None;
                 self.send_keyboard_report_with_resolved_modifiers(false).await;
             } else {
-                if let KeyCode::Hid(hid_key) = params.key {
-                    self.register_key(hid_key, event);
-                }
+                self.register_key(params.key, event);
                 self.send_keyboard_report_with_resolved_modifiers(true).await;
             }
         } else {
@@ -393,9 +391,7 @@ impl Keyboard<'_> {
                 && *source == event.pos
             {
                 *pressed = false;
-                if let KeyCode::Hid(hid_key) = params.key {
-                    self.unregister_key(hid_key, event);
-                }
+                self.unregister_key(params.key, event);
                 self.send_keyboard_report_with_resolved_modifiers(false).await;
             }
         }
@@ -538,7 +534,7 @@ impl Keyboard<'_> {
         // StickyKey while physically held. Unregister it before clearing the latch so it cannot
         // remain stuck in the report.
         if let StickyKeyState::Active {
-            key: KeyCode::Hid(hid_key),
+            key: hid_key,
             layer: None,
             source,
             ..
