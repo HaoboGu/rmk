@@ -38,13 +38,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                     0
                 }
             },
-            Action::KeyWithModifier(k, m) => {
-                if let KeyCode::Hid(hid_keycode) = k {
-                    ((m.into_packed_bits() as u16) << 8) | hid_keycode as u16
-                } else {
-                    0
-                }
-            }
+            Action::KeyWithModifier(k, m) => ((m.into_packed_bits() as u16) << 8) | k as u16,
             Action::LayerToggleOnly(l) => 0x5200 | l as u16,
             Action::LayerOn(l) => 0x5220 | l as u16,
             Action::DefaultLayer(l) => 0x5240 | l as u16,
@@ -69,6 +63,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
             Action::KeyboardControl(c) => match c {
                 KeyboardAction::Bootloader => 0x7c00,
                 KeyboardAction::Reboot => 0x7c01,
+                KeyboardAction::ClearEeprom => 0x7c03,
                 KeyboardAction::ComboOn => 0x7c50,
                 KeyboardAction::ComboOff => 0x7c51,
                 KeyboardAction::ComboToggle => 0x7c52,
@@ -86,7 +81,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                     0
                 }
             },
-            Action::User(id) => (id as u16 & 0xF) | 0x7E00,
+            Action::User(id) => (id as u16 & 0x1F) | 0x7E00,
             Action::StickyKey(sk) => match (sk.key, sk.layer) {
                 // OSL, VIA range (same as old OneShotLayer)
                 (_, Some(layer)) if layer < 32 => 0x5280 | layer as u16,
@@ -119,11 +114,20 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                 }
             }
             Action::Modifier(m) => {
-                let keycode = match tap {
-                    Action::Key(KeyCode::Hid(k)) => k as u16,
+                match tap {
+                    Action::KeyWithModifier(k, sm) if sm == ModifierCombination::LSHIFT => match k {
+                        // Space cadet keys
+                        HidKeyCode::Kc9 if m == ModifierCombination::LCTRL => 0x7C18,
+                        HidKeyCode::Kc0 if m == ModifierCombination::RCTRL => 0x7C19,
+                        HidKeyCode::Kc9 if m == ModifierCombination::LSHIFT => 0x7C1A,
+                        HidKeyCode::Kc0 if m == ModifierCombination::RSHIFT => 0x7C1B,
+                        HidKeyCode::Kc9 if m == ModifierCombination::LALT => 0x7C1C,
+                        HidKeyCode::Kc0 if m == ModifierCombination::RALT => 0x7C1D,
+                        _ => 0,
+                    },
+                    Action::Key(KeyCode::Hid(k)) => 0x2000 | ((m.into_packed_bits() as u16) << 8) | (k as u16),
                     _ => 0,
-                };
-                0x2000 | ((m.into_packed_bits() as u16) << 8) | keycode
+                }
             }
             _ => 0x0000,
         },
@@ -145,10 +149,9 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x0001 => KeyAction::Transparent,
         0x0002..=0x00FF => KeyAction::Single(Action::Key(KeyCode::Hid((via_keycode as u8).into()))),
         0x0100..=0x1FFF => {
-            // WithModifier
-            let keycode = KeyCode::Hid((via_keycode as u8).into());
+            // WithModifier. Modifiers only apply to HID keyboard keys, so the key narrows to HidKeyCode.
             let modifier = ModifierCombination::from_packed_bits((via_keycode >> 8) as u8);
-            KeyAction::Single(Action::KeyWithModifier(keycode, modifier))
+            KeyAction::Single(Action::KeyWithModifier((via_keycode as u8).into(), modifier))
         }
         0x2000..=0x3FFF => {
             // Modifier tap-hold.
@@ -219,6 +222,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         }
         0x7C00 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::Bootloader)),
         0x7C01 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::Reboot)),
+        0x7C03 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::ClearEeprom)),
         0x7C50 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::ComboOn)),
         0x7C51 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::ComboOff)),
         0x7C52 => KeyAction::Single(Action::KeyboardControl(KeyboardAction::ComboToggle)),
@@ -245,18 +249,53 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
                 layer: None,
             }))
         }
+        0x7C18 => KeyAction::TapHold(
+            Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
+            Action::Modifier(ModifierCombination::LCTRL),
+            Default::default(),
+        ),
+        0x7C19 => KeyAction::TapHold(
+            Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
+            Action::Modifier(ModifierCombination::RCTRL),
+            Default::default(),
+        ),
+        0x7C1A => KeyAction::TapHold(
+            Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
+            Action::Modifier(ModifierCombination::LSHIFT),
+            Default::default(),
+        ),
+        0x7C1B => KeyAction::TapHold(
+            Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
+            Action::Modifier(ModifierCombination::RSHIFT),
+            Default::default(),
+        ),
+        0x7C1C => KeyAction::TapHold(
+            Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
+            Action::Modifier(ModifierCombination::LALT),
+            Default::default(),
+        ),
+        0x7C1D => KeyAction::TapHold(
+            Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
+            Action::Modifier(ModifierCombination::RALT),
+            Default::default(),
+        ),
+        // RS Enter (SC_SENT): decode only. Re-encodes as the equivalent RShift mod-tap (0x3228).
+        0x7C1E => KeyAction::TapHold(
+            Action::Key(KeyCode::Hid(HidKeyCode::Enter)),
+            Action::Modifier(ModifierCombination::RSHIFT),
+            Default::default(),
+        ),
         0x7C02..=0x7C5F => {
-            // TODO: Reset/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro
-            // - [Space Cadet](https://docs.qmk.fm/#/feature_space_cadet)
+            // TODO: Reset/Haptic/Auto shift(AS)/Dynamic macro
             warn!(
-                "Reset/Space Cadet/Haptic/Auto shift(AS)/Dynamic macro not supported: {:#X}",
+                "Reset/Haptic/Auto shift(AS)/Dynamic macro not supported: {:#X}",
                 via_keycode
             );
             KeyAction::No
         }
-        0x7E00..=0x7E0F => {
+        0x7E00..=0x7E1F => {
             // QK_KB_N, aka UserN
-            KeyAction::Single(Action::User(via_keycode as u8 & 0xF))
+            KeyAction::Single(Action::User(via_keycode as u8 & 0x1F))
         }
         _ => {
             warn!("Via keycode {:#X} is not processed", via_keycode);
@@ -284,6 +323,25 @@ mod test {
         let via_keycode = 0xE5;
         assert_eq!(
             KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::RShift))),
+            from_via_keycode(via_keycode)
+        );
+
+        // User0 (QK_KB_0)
+        let via_keycode = 0x7E00;
+        assert_eq!(KeyAction::Single(Action::User(0)), from_via_keycode(via_keycode));
+
+        // User16 (QK_KB_16) — must not alias to User0
+        let via_keycode = 0x7E10;
+        assert_eq!(KeyAction::Single(Action::User(16)), from_via_keycode(via_keycode));
+
+        // User31 (QK_KB_31)
+        let via_keycode = 0x7E1F;
+        assert_eq!(KeyAction::Single(Action::User(31)), from_via_keycode(via_keycode));
+
+        // ClearEeprom (QK_CLEAR_EEPROM)
+        let via_keycode = 0x7C03;
+        assert_eq!(
+            KeyAction::Single(Action::KeyboardControl(KeyboardAction::ClearEeprom)),
             from_via_keycode(via_keycode)
         );
 
@@ -322,7 +380,7 @@ mod test {
         let via_keycode = 0x104;
         assert_eq!(
             KeyAction::Single(Action::KeyWithModifier(
-                KeyCode::Hid(HidKeyCode::A),
+                HidKeyCode::A,
                 ModifierCombination::new_from(false, false, false, false, true)
             )),
             from_via_keycode(via_keycode)
@@ -332,7 +390,7 @@ mod test {
         let via_keycode = 0x1104;
         assert_eq!(
             KeyAction::Single(Action::KeyWithModifier(
-                KeyCode::Hid(HidKeyCode::A),
+                HidKeyCode::A,
                 ModifierCombination::new_from(true, false, false, false, true)
             )),
             from_via_keycode(via_keycode)
@@ -342,7 +400,7 @@ mod test {
         let via_keycode = 0x704;
         assert_eq!(
             KeyAction::Single(Action::KeyWithModifier(
-                KeyCode::Hid(HidKeyCode::A),
+                HidKeyCode::A,
                 ModifierCombination::new_from(false, false, true, true, true)
             )),
             from_via_keycode(via_keycode)
@@ -352,7 +410,7 @@ mod test {
         let via_keycode = 0xF04;
         assert_eq!(
             KeyAction::Single(Action::KeyWithModifier(
-                KeyCode::Hid(HidKeyCode::A),
+                HidKeyCode::A,
                 ModifierCombination::new_from(false, true, true, true, true)
             )),
             from_via_keycode(via_keycode)
@@ -462,6 +520,83 @@ mod test {
             from_via_keycode(via_keycode)
         );
 
+        // Space Cadet LC( / KC_LCPO
+        let via_keycode = 0x7C18;
+        assert_eq!(
+            KeyAction::TapHold(
+                Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
+                Action::Modifier(ModifierCombination::LCTRL),
+                Default::default(),
+            ),
+            from_via_keycode(via_keycode)
+        );
+
+        // Space Cadet RC) / KC_RCPC
+        let via_keycode = 0x7C19;
+        assert_eq!(
+            KeyAction::TapHold(
+                Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
+                Action::Modifier(ModifierCombination::RCTRL),
+                Default::default(),
+            ),
+            from_via_keycode(via_keycode)
+        );
+
+        // Space Cadet LS( / KC_LSPO
+        let via_keycode = 0x7C1A;
+        assert_eq!(
+            KeyAction::TapHold(
+                Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
+                Action::Modifier(ModifierCombination::LSHIFT),
+                Default::default(),
+            ),
+            from_via_keycode(via_keycode)
+        );
+
+        // Space Cadet RS) / KC_RSPC
+        let via_keycode = 0x7C1B;
+        assert_eq!(
+            KeyAction::TapHold(
+                Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
+                Action::Modifier(ModifierCombination::RSHIFT),
+                Default::default(),
+            ),
+            from_via_keycode(via_keycode)
+        );
+
+        // Space Cadet LA( / KC_LAPO
+        let via_keycode = 0x7C1C;
+        assert_eq!(
+            KeyAction::TapHold(
+                Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
+                Action::Modifier(ModifierCombination::LALT),
+                Default::default(),
+            ),
+            from_via_keycode(via_keycode)
+        );
+
+        // Space Cadet RA) / KC_RAPC
+        let via_keycode = 0x7C1D;
+        assert_eq!(
+            KeyAction::TapHold(
+                Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
+                Action::Modifier(ModifierCombination::RALT),
+                Default::default(),
+            ),
+            from_via_keycode(via_keycode)
+        );
+
+        // Space Cadet RS Enter / KC_SENT (decode only)
+        let via_keycode = 0x7C1E;
+        assert_eq!(
+            KeyAction::TapHold(
+                Action::Key(KeyCode::Hid(HidKeyCode::Enter)),
+                Action::Modifier(ModifierCombination::RSHIFT),
+                Default::default(),
+            ),
+            from_via_keycode(via_keycode)
+        );
+
         // Morse(0)
         let via_keycode = 0x5700;
         assert_eq!(KeyAction::Morse(0), from_via_keycode(via_keycode));
@@ -491,6 +626,21 @@ mod test {
         let a = KeyAction::Single(Action::LayerOn(3));
         assert_eq!(0x5223, to_via_keycode(a));
 
+        // User0 (QK_KB_0)
+        let a = KeyAction::Single(Action::User(0));
+        assert_eq!(0x7E00, to_via_keycode(a));
+
+        // User16 (QK_KB_16) — must not alias to User0's 0x7E00
+        let a = KeyAction::Single(Action::User(16));
+        assert_eq!(0x7E10, to_via_keycode(a));
+
+        // User31 (QK_KB_31)
+        let a = KeyAction::Single(Action::User(31));
+        assert_eq!(0x7E1F, to_via_keycode(a));
+
+        // ClearEeprom (QK_CLEAR_EEPROM)
+        let a = KeyAction::Single(Action::KeyboardControl(KeyboardAction::ClearEeprom));
+        assert_eq!(0x7C03, to_via_keycode(a));
         // DF(3)
         let a = KeyAction::Single(Action::DefaultLayer(3));
         assert_eq!(0x5243, to_via_keycode(a));
@@ -504,28 +654,28 @@ mod test {
         assert_eq!(0x52EF, to_via_keycode(a));
         // LCtrl(A) -> WithModifier(A)
         let a = KeyAction::Single(Action::KeyWithModifier(
-            KeyCode::Hid(HidKeyCode::A),
+            HidKeyCode::A,
             ModifierCombination::new_from(false, false, false, false, true),
         ));
         assert_eq!(0x104, to_via_keycode(a));
 
         // RCtrl(A) -> WithModifier(A)
         let a = KeyAction::Single(Action::KeyWithModifier(
-            KeyCode::Hid(HidKeyCode::A),
+            HidKeyCode::A,
             ModifierCombination::new_from(true, false, false, false, true),
         ));
         assert_eq!(0x1104, to_via_keycode(a));
 
         // Meh(A) -> WithModifier(A)
         let a = KeyAction::Single(Action::KeyWithModifier(
-            KeyCode::Hid(HidKeyCode::A),
+            HidKeyCode::A,
             ModifierCombination::new_from(false, false, true, true, true),
         ));
         assert_eq!(0x704, to_via_keycode(a));
 
         // Hypr(A) -> WithModifier(A)
         let a = KeyAction::Single(Action::KeyWithModifier(
-            KeyCode::Hid(HidKeyCode::A),
+            HidKeyCode::A,
             ModifierCombination::new_from(false, true, true, true, true),
         ));
         assert_eq!(0xF04, to_via_keycode(a));
@@ -600,6 +750,62 @@ mod test {
         // RepeatKey
         let a = KeyAction::Single(Action::Special(SpecialKey::Repeat));
         assert_eq!(0x7C79, to_via_keycode(a));
+
+        // Space Cadet LC( / KC_LCPO
+        let a = KeyAction::TapHold(
+            Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
+            Action::Modifier(ModifierCombination::LCTRL),
+            Default::default(),
+        );
+        assert_eq!(0x7C18, to_via_keycode(a));
+
+        // Space Cadet RC) / KC_RCPC
+        let a = KeyAction::TapHold(
+            Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
+            Action::Modifier(ModifierCombination::RCTRL),
+            Default::default(),
+        );
+        assert_eq!(0x7C19, to_via_keycode(a));
+
+        // Space Cadet LS( / KC_LSPO
+        let a = KeyAction::TapHold(
+            Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
+            Action::Modifier(ModifierCombination::LSHIFT),
+            Default::default(),
+        );
+        assert_eq!(0x7C1A, to_via_keycode(a));
+
+        // Space Cadet RS) / KC_RSPC
+        let a = KeyAction::TapHold(
+            Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
+            Action::Modifier(ModifierCombination::RSHIFT),
+            Default::default(),
+        );
+        assert_eq!(0x7C1B, to_via_keycode(a));
+
+        // Space Cadet LA( / KC_LAPO
+        let a = KeyAction::TapHold(
+            Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
+            Action::Modifier(ModifierCombination::LALT),
+            Default::default(),
+        );
+        assert_eq!(0x7C1C, to_via_keycode(a));
+
+        // Space Cadet RA) / KC_RAPC
+        let a = KeyAction::TapHold(
+            Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
+            Action::Modifier(ModifierCombination::RALT),
+            Default::default(),
+        );
+        assert_eq!(0x7C1D, to_via_keycode(a));
+
+        // RS Enter (SC_SENT) shares its internal action with RSFT_T(Enter), so it re-encodes to 0x3228.
+        let a = KeyAction::TapHold(
+            Action::Key(KeyCode::Hid(HidKeyCode::Enter)),
+            Action::Modifier(ModifierCombination::RSHIFT),
+            Default::default(),
+        );
+        assert_eq!(0x3228, to_via_keycode(a));
 
         // Morse
         let a = KeyAction::Morse(0);

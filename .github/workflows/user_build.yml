@@ -18,8 +18,8 @@ on:
         required: false
         type: string
 env:
-  LIBSSL: "libssl1.1_1.1.1f-1ubuntu2_amd64.deb"
   RUST_MIN_STACK: "67108864"
+  RUST_TOOLCHAIN: "1.96.0"
 jobs:
   get_chip_name:
     runs-on: ubuntu-latest
@@ -28,41 +28,23 @@ jobs:
       project_name: ${{ steps.project.outputs.project_name }}
       artifact_prefix: ${{ steps.prefix.outputs.prefix }}
     steps:
-      - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v6
-      - uses: actions/cache@v5
-        with:
-          path: |
-            libssl*.deb
-          key: ${{ runner.os }}-libssl
-      - name: Install libssl
-        run: |
-          [ ! -f $LIBSSL ] && wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/$LIBSSL
-          sudo dpkg -i $LIBSSL
+      - uses: dtolnay/rust-toolchain@1.96.0
+      - uses: cargo-bins/cargo-binstall@main
       - name: Install rmkit
         run: cargo binstall rmkit -y
       - name: Get chip name
         id: capture
         run: |
-          # Run rmkit command to get the chip name
-          OUTPUT=$(rmkit get-chip --keyboard-toml-path ${{ inputs.keyboard_toml_path }})
-
-          # Print the output to confirm
+          OUTPUT=$(rmkit get-chip --keyboard-toml-path "${{ inputs.keyboard_toml_path }}")
           echo "Command output: $OUTPUT"
-
-          # Save the output as a GitHub Actions output variable
-          echo "chip_name=$OUTPUT" >> $GITHUB_OUTPUT
+          echo "chip_name=$OUTPUT" >> "$GITHUB_OUTPUT"
       - name: Get project name
         id: project
         run: |
-          # Run rmkit command to get the project name (from [keyboard].name)
-          OUTPUT=$(rmkit get-project-name --keyboard-toml-path ${{ inputs.keyboard_toml_path }})
-
-          # Print the output to confirm
+          OUTPUT=$(rmkit get-project-name --keyboard-toml-path "${{ inputs.keyboard_toml_path }}")
           echo "Command output: $OUTPUT"
-
-          # Save the output as a GitHub Actions output variable
-          echo "project_name=$OUTPUT" >> $GITHUB_OUTPUT
+          echo "project_name=$OUTPUT" >> "$GITHUB_OUTPUT"
       - name: Compute artifact path prefix from keyboard.toml directory
         id: prefix
         env:
@@ -81,26 +63,42 @@ jobs:
   build:
     runs-on: ubuntu-latest
     needs: get_chip_name
-    # Only esp32s3 (Xtensa) needs the espup toolchain in build_esp;
-    # RISC-V esp32 chips build here with the standard toolchain.
-    if: needs.get_chip_name.outputs.chip_name != 'esp32s3'
     steps:
-      - uses: cargo-bins/cargo-binstall@main
       - uses: actions/checkout@v6
-      - uses: actions/cache@v5
-        with:
-          path: |
-            libssl*.deb
-          key: ${{ runner.os }}-libssl
-      - name: Install libssl
-        run: |
-          [ ! -f $LIBSSL ] && wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/$LIBSSL
-          sudo dpkg -i $LIBSSL
+      - uses: dtolnay/rust-toolchain@1.96.0
+      - uses: cargo-bins/cargo-binstall@main
       - name: Install rmkit, flip-link and cargo-make
         run: cargo binstall cargo-make rmkit flip-link -y
+      # esp32s3 is the only Xtensa esp chip RMK builds, so it alone needs the
+      # espup toolchain. RISC-V esp32 chips (c3/c6/h2) build with the standard
+      # toolchain and let cargo-make pull cargo-espflash on demand.
+      - name: Install esp toolchain (esp32s3 / Xtensa)
+        if: ${{ needs.get_chip_name.outputs.chip_name == 'esp32s3' }}
+        run: cargo binstall cargo-espflash espup -y
+      - name: Cache ESP Rust toolchain
+        if: ${{ needs.get_chip_name.outputs.chip_name == 'esp32s3' }}
+        id: esp-toolchain-cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.rustup/toolchains/esp
+            ~/export-esp.sh
+          key: ${{ runner.os }}-esp-toolchain-${{ needs.get_chip_name.outputs.chip_name }}-v1
+      - name: Prepare esp environment
+        if: ${{ needs.get_chip_name.outputs.chip_name == 'esp32s3' && steps.esp-toolchain-cache.outputs.cache-hit != 'true' }}
+        run: espup install
       - name: Create firmware project
-        working-directory: .
-        run: rmkit create --keyboard-toml-path ${{ inputs.keyboard_toml_path }} --vial-json-path ${{ inputs.vial_json_path }} --version ${{ inputs.rmk_version }} --target-dir rmk
+        run: rmkit create --keyboard-toml-path "${{ inputs.keyboard_toml_path }}" --vial-json-path "${{ inputs.vial_json_path }}" --version "${{ inputs.rmk_version }}" --target-dir rmk
+      - name: Pin generated Rust toolchain
+        if: ${{ needs.get_chip_name.outputs.chip_name != 'esp32s3' }}
+        working-directory: ./rmk
+        run: |
+          if [ -f rust-toolchain.toml ]; then
+            sed -i "s/^channel = .*/channel = \"$RUST_TOOLCHAIN\"/" rust-toolchain.toml
+            rustup toolchain install
+          else
+            rustup toolchain install "$RUST_TOOLCHAIN"
+          fi
       - name: Cache cargo registry and target
         uses: Swatinem/rust-cache@v2
         with:
@@ -108,10 +106,17 @@ jobs:
           key: ${{ needs.get_chip_name.outputs.chip_name }}
       - name: Build firmware
         working-directory: ./rmk
-        run: cargo build --release
-      - name: Build uf2 firmware
-        working-directory: ./rmk
-        run: cargo make uf2 --release
+        env:
+          IS_XTENSA_ESP: ${{ needs.get_chip_name.outputs.chip_name == 'esp32s3' }}
+        run: |
+          # esp32s3 (Xtensa) builds only through cargo-make with the esp env
+          # sourced; every other chip does a plain release build first.
+          if [ "$IS_XTENSA_ESP" = "true" ]; then
+            . /home/runner/export-esp.sh
+          else
+            cargo build --release
+          fi
+          cargo make uf2 --release
       - name: Upload uf2 artifacts
         if: ${{ !startsWith(needs.get_chip_name.outputs.chip_name, 'esp32') }}
         uses: actions/upload-artifact@v7
@@ -133,74 +138,6 @@ jobs:
           path: rmk/*.bin
       - name: Stage ELF
         # Expose the raw ELF(s) for debugging (probe-rs/gdb); esp32 flashes it directly.
-        # Name them like the other firmware: <name>.elf, or <name>-central/-peripheral.elf
-        # for splits (whose bin targets are named central/peripheral, not <name>).
-        working-directory: ./rmk
-        env:
-          PROJECT_NAME: ${{ needs.get_chip_name.outputs.project_name }}
-        run: |
-          for f in target/*/release/*; do
-            if [ -f "$f" ] && [ -x "$f" ]; then
-              bin=$(basename "$f")
-              case "$bin" in
-                central|peripheral) name="${PROJECT_NAME}-${bin}" ;;
-                *)                  name="$bin" ;;
-              esac
-              cp "$f" "${name}.elf"
-            fi
-          done
-      - name: Upload elf artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ needs.get_chip_name.outputs.artifact_prefix }}${{ needs.get_chip_name.outputs.project_name }}-firmware_elf
-          path: rmk/*.elf
-  build_esp:
-    runs-on: ubuntu-latest
-    needs: get_chip_name
-    if: needs.get_chip_name.outputs.chip_name == 'esp32s3'
-    steps:
-      - uses: cargo-bins/cargo-binstall@main
-      - uses: actions/checkout@v6
-      - uses: actions/cache@v5
-        with:
-          path: |
-            libssl*.deb
-          key: ${{ runner.os }}-libssl
-      - name: Install libssl
-        run: |
-          [ ! -f $LIBSSL ] && wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/$LIBSSL
-          sudo dpkg -i $LIBSSL
-      - name: Install rmkit, cargo-espflash, cargo-make and espup
-        run: cargo binstall rmkit cargo-espflash cargo-make espup -y
-      - name: Cache ESP Rust toolchain
-        id: esp-toolchain-cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.rustup/toolchains/esp
-            ~/export-esp.sh
-          key: ${{ runner.os }}-esp-toolchain-${{ needs.get_chip_name.outputs.chip_name }}-v1
-      - name: Prepare esp environment
-        if: steps.esp-toolchain-cache.outputs.cache-hit != 'true'
-        run: espup install
-      - name: Create firmware project
-        working-directory: .
-        run: rmkit create --keyboard-toml-path ${{ inputs.keyboard_toml_path }} --vial-json-path ${{ inputs.vial_json_path }} --version ${{ inputs.rmk_version }} --target-dir rmk
-      - name: Cache cargo registry and target
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "rmk -> target"
-          key: ${{ needs.get_chip_name.outputs.chip_name }}
-      - name: Build firmware for esp32
-        working-directory: ./rmk
-        run: . /home/runner/export-esp.sh && cargo make uf2 --release
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ needs.get_chip_name.outputs.artifact_prefix }}${{ needs.get_chip_name.outputs.project_name }}-firmware_bin
-          path: rmk/*.bin
-      - name: Stage esp32 ELF
-        # espflash can flash the raw ELF directly, so expose it as an artifact.
         # Name them like the other firmware: <name>.elf, or <name>-central/-peripheral.elf
         # for splits (whose bin targets are named central/peripheral, not <name>).
         working-directory: ./rmk
