@@ -1030,8 +1030,8 @@ fn get_set_behavior_config_round_trip() {
     // Non-default values make a dropped Set observable.
     link_session(&service, async |client| {
         let cfg = WireBehaviorConfig {
-            combo_timeout_ms: 123,
-            oneshot_timeout_ms: 456,
+            combo_timeout_ms: 120_000,
+            oneshot_timeout_ms: 300_000,
             tap_interval_ms: 78,
             tap_capslock_interval_ms: 90,
         };

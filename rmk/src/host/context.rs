@@ -241,13 +241,13 @@ impl<'a> KeyboardContext<'a> {
         self.keymap.morse_prior_idle_time()
     }
 
-    pub async fn set_combo_timeout(&self, ms: u16) {
+    pub async fn set_combo_timeout(&self, ms: u32) {
         self.keymap.set_combo_timeout(Duration::from_millis(ms as u64));
         #[cfg(feature = "storage")]
         FLASH_CHANNEL.send(FlashOperationMessage::ComboTimeout(ms)).await;
     }
 
-    pub async fn set_one_shot_timeout(&self, ms: u16) {
+    pub async fn set_one_shot_timeout(&self, ms: u32) {
         self.keymap.set_one_shot_timeout(Duration::from_millis(ms as u64));
         #[cfg(feature = "storage")]
         FLASH_CHANNEL.send(FlashOperationMessage::OneShotTimeout(ms)).await;

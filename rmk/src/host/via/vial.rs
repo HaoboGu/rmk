@@ -117,7 +117,7 @@ pub(crate) async fn process_vial<'a>(
             match value.into() {
                 SettingKey::None => report.input_data[0] = 0xFF,
                 SettingKey::ComboTimeout => {
-                    let combo_timeout = ctx.combo_timeout().as_millis() as u16;
+                    let combo_timeout = u16::try_from(ctx.combo_timeout().as_millis()).unwrap_or(u16::MAX);
                     LittleEndian::write_u16(&mut report.input_data[1..3], combo_timeout);
                 }
                 SettingKey::MorseTimeout => {
@@ -125,7 +125,7 @@ pub(crate) async fn process_vial<'a>(
                     LittleEndian::write_u16(&mut report.input_data[1..3], tapping_term);
                 }
                 SettingKey::OneShotTimeout => {
-                    let one_shot_timeout = ctx.one_shot_timeout().as_millis() as u16;
+                    let one_shot_timeout = u16::try_from(ctx.one_shot_timeout().as_millis()).unwrap_or(u16::MAX);
                     LittleEndian::write_u16(&mut report.input_data[1..3], one_shot_timeout);
                 }
                 SettingKey::TapInterval => {
@@ -174,7 +174,7 @@ pub(crate) async fn process_vial<'a>(
                 SettingKey::None => (),
                 SettingKey::ComboTimeout => {
                     let combo_timeout = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
-                    ctx.set_combo_timeout(combo_timeout).await;
+                    ctx.set_combo_timeout(combo_timeout.into()).await;
                 }
                 SettingKey::MorseTimeout => {
                     let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
@@ -183,7 +183,7 @@ pub(crate) async fn process_vial<'a>(
                 }
                 SettingKey::OneShotTimeout => {
                     let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
-                    ctx.set_one_shot_timeout(timeout_time).await;
+                    ctx.set_one_shot_timeout(timeout_time.into()).await;
                 }
                 SettingKey::TapInterval => {
                     let tap_interval = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);

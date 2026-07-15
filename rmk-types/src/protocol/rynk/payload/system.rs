@@ -20,8 +20,8 @@ pub struct ProtocolVersion {
 
 impl ProtocolVersion {
     /// Current protocol version for this firmware release.
-    /// Now the protocol is still being developed, so the version is v0.1
-    pub const CURRENT: Self = Self { major: 0, minor: 1 };
+    /// Now the protocol is still being developed, so the version is v0.2
+    pub const CURRENT: Self = Self { major: 0, minor: 2 };
 }
 
 /// Device capabilities discovered during the connection handshake.
@@ -151,8 +151,8 @@ pub enum StorageResetMode {
 #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct BehaviorConfig {
-    pub combo_timeout_ms: u16,
-    pub oneshot_timeout_ms: u16,
+    pub combo_timeout_ms: u32,
+    pub oneshot_timeout_ms: u32,
     pub tap_interval_ms: u16,
     pub tap_capslock_interval_ms: u16,
 }
@@ -283,8 +283,8 @@ mod tests {
     #[test]
     fn round_trip_behavior_config() {
         round_trip(&BehaviorConfig {
-            combo_timeout_ms: 50,
-            oneshot_timeout_ms: 500,
+            combo_timeout_ms: 120_000,
+            oneshot_timeout_ms: 300_000,
             tap_interval_ms: 200,
             tap_capslock_interval_ms: 20,
         });

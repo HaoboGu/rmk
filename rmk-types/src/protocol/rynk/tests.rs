@@ -252,8 +252,8 @@ fn exemplars() -> Exemplars {
         serial_number: heapless::String::try_from("rynk:0001").unwrap(),
     };
     let behavior = BehaviorConfig {
-        combo_timeout_ms: 50,
-        oneshot_timeout_ms: 500,
+        combo_timeout_ms: 120_000,
+        oneshot_timeout_ms: 300_000,
         tap_interval_ms: 200,
         tap_capslock_interval_ms: 20,
     };
@@ -459,7 +459,7 @@ fn wire_values_locked() {
         ("MatrixState{[0x05,0x00,0x20]}", encode(&ex.matrix)),
         ("DeviceCapabilities{1..16}", encode(&ex.capabilities)),
         ("DeviceInfo{1.2.3,4,5,RMK,..}", encode(&ex.device_info)),
-        ("BehaviorConfig{50,500,200,20}", encode(&ex.behavior)),
+        ("BehaviorConfig{120000,300000,200,20}", encode(&ex.behavior)),
         ("ConnectionStatus{Configured,{1,Adv},Ble}", encode(&ex.connection)),
         ("ProtocolVersion{1,0}", encode(&ProtocolVersion { major: 1, minor: 0 })),
         ("ProtocolVersion::CURRENT", encode(&ProtocolVersion::CURRENT)),
@@ -831,7 +831,7 @@ fn wire_frames_locked() {
             encode_frame(Cmd::GetBehaviorConfig, SEQ, &())
         ),
         (
-            "GetBehaviorConfig reply Ok(BehaviorConfig{50,500,200,20})",
+            "GetBehaviorConfig reply Ok(BehaviorConfig{120000,300000,200,20})",
             encode_frame(
                 Cmd::GetBehaviorConfig,
                 SEQ,
@@ -839,7 +839,7 @@ fn wire_frames_locked() {
             ),
         ),
         (
-            "SetBehaviorConfig request BehaviorConfig{50,500,200,20}",
+            "SetBehaviorConfig request BehaviorConfig{120000,300000,200,20}",
             encode_frame(Cmd::SetBehaviorConfig, SEQ, &ex.behavior)
         ),
         (

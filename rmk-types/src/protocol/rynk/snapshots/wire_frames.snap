@@ -10,7 +10,7 @@
 BootloaderJump reply Ok(())                                             04 00 01 01 00 00
 BootloaderJump request ()                                               04 00 01 00 00
 ConnectionChange topic ConnectionStatus{Configured,{1,Adv},Ble}         03 80 00 04 00 02 01 00 01
-GetBehaviorConfig reply Ok(BehaviorConfig{50,500,200,20})               01 06 01 07 00 00 32 f4 03 c8 01 14
+GetBehaviorConfig reply Ok(BehaviorConfig{120000,300000,200,20})        01 06 01 0a 00 00 c0 a9 07 e0 a7 12 c8 01 14
 GetBehaviorConfig request ()                                            01 06 01 00 00
 GetCapabilities reply Ok(DeviceCapabilities{1..16})                     02 00 01 16 00 00 01 02 03 04 05 06 07 08 09 0a 01 00 01 0b 00 0c 0d 0e 0f 10 01
 GetCapabilities request ()                                              02 00 01 00 00
@@ -44,7 +44,7 @@ GetMorse reply Ok(Morse{TAP->Key(A)})                                   01 04 01
 GetMorse request 0                                                      01 04 01 01 00 00
 GetSleepState reply Ok(true)                                            06 08 01 02 00 00 01
 GetSleepState request ()                                                06 08 01 00 00
-GetVersion reply Ok(CURRENT)                                            01 00 01 03 00 00 00 01
+GetVersion reply Ok(CURRENT)                                            01 00 01 03 00 00 00 02
 GetVersion request ()                                                   01 00 01 00 00
 GetWpm reply Ok(42)                                                     05 08 01 02 00 00 2a
 GetWpm request ()                                                       05 08 01 00 00
@@ -55,7 +55,7 @@ Lock request ()                                                         08 00 01
 Reboot reply Ok(())                                                     03 00 01 01 00 00
 Reboot request ()                                                       03 00 01 00 00
 SetBehaviorConfig reply Ok(())                                          02 06 01 01 00 00
-SetBehaviorConfig request BehaviorConfig{50,500,200,20}                 02 06 01 06 00 32 f4 03 c8 01 14
+SetBehaviorConfig request BehaviorConfig{120000,300000,200,20}          02 06 01 09 00 c0 a9 07 e0 a7 12 c8 01 14
 SetCombo reply Ok(())                                                   02 03 01 01 00 00
 SetCombo request SetComboRequest{3,combo}                               02 03 01 0a 00 03 01 02 01 00 04 05 01 01 02
 SetDefaultLayer reply Ok(())                                            04 01 01 01 00 00

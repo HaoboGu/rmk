@@ -140,9 +140,9 @@ pub(crate) enum FlashOperationMessage {
     // Current saved connection type
     ConnectionType(ConnectionType),
     // Timeout time for combos
-    ComboTimeout(u16),
+    ComboTimeout(u32),
     // Timeout time for one-shot keys
-    OneShotTimeout(u16),
+    OneShotTimeout(u32),
     // Interval for tap actions
     TapInterval(u16),
     // Interval for tapping capslock
@@ -305,9 +305,9 @@ pub(crate) struct BehaviorConfig {
     pub(crate) morse_default_profile: MorseProfile,
 
     // Timeout time for combos
-    pub(crate) combo_timeout: u16,
+    pub(crate) combo_timeout: u32,
     // Timeout time for one-shot keys
-    pub(crate) one_shot_timeout: u16,
+    pub(crate) one_shot_timeout: u32,
     // Interval for tap actions
     pub(crate) tap_interval: u16,
     // Interval for tapping capslock.
@@ -333,8 +333,8 @@ impl From<&config::BehaviorConfig> for StorageData {
         Self::BehaviorConfig(BehaviorConfig {
             prior_idle_time: behavior.morse.prior_idle_time.as_millis() as u16,
             morse_default_profile: behavior.morse.default_profile,
-            combo_timeout: behavior.combo.timeout.as_millis() as u16,
-            one_shot_timeout: behavior.one_shot.timeout.as_millis() as u16,
+            combo_timeout: u32::try_from(behavior.combo.timeout.as_millis()).unwrap_or(u32::MAX),
+            one_shot_timeout: u32::try_from(behavior.one_shot.timeout.as_millis()).unwrap_or(u32::MAX),
             tap_interval: behavior.tap.tap_interval,
             tap_capslock_interval: behavior.tap.tap_capslock_interval,
         })
@@ -1005,6 +1005,47 @@ mod tests {
             assert_eq!(decoded, key);
             assert_eq!(used, size);
         }
+    }
+
+    #[test]
+    fn behavior_storage_preserves_long_timeouts() {
+        let mut behavior = RuntimeBehaviorConfig::default();
+        behavior.combo.timeout = Duration::from_secs(120);
+        behavior.one_shot.timeout = Duration::from_secs(300);
+
+        let StorageData::BehaviorConfig(stored) = StorageData::from(&behavior) else {
+            panic!("expected behavior storage data");
+        };
+        assert_eq!(stored.combo_timeout, 120_000);
+        assert_eq!(stored.one_shot_timeout, 300_000);
+    }
+
+    #[test]
+    fn behavior_storage_reads_legacy_u16_timeouts() {
+        #[derive(serde::Serialize)]
+        struct LegacyBehaviorConfig {
+            prior_idle_time: u16,
+            morse_default_profile: MorseProfile,
+            combo_timeout: u16,
+            one_shot_timeout: u16,
+            tap_interval: u16,
+            tap_capslock_interval: u16,
+        }
+
+        let legacy = LegacyBehaviorConfig {
+            prior_idle_time: 100,
+            morse_default_profile: MorseProfile::default(),
+            combo_timeout: 50,
+            one_shot_timeout: 500,
+            tap_interval: 200,
+            tap_capslock_interval: 20,
+        };
+        let mut buffer = [0u8; 64];
+        let encoded = postcard::to_slice(&legacy, &mut buffer).unwrap();
+        let decoded: BehaviorConfig = postcard::from_bytes(encoded).unwrap();
+
+        assert_eq!(decoded.combo_timeout, 50);
+        assert_eq!(decoded.one_shot_timeout, 500);
     }
 
     #[test]
