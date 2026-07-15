@@ -247,6 +247,12 @@ async fn lock_gate_rejects_and_reports() {
         assert!(!status.unlocking);
         assert_eq!(status.key_positions.as_slice(), &[(0, 0)]);
 
+        let jump = client.bootloader_jump().await;
+        assert!(
+            matches!(jump, Err(RynkHostError::Rejected(RynkError::Locked))),
+            "locked bootloader jump must be reported, got {jump:?}"
+        );
+
         // A hard-locked command flattens `RynkError::Locked` to `Rejected` end to end.
         let gated = client.get_matrix_state().await;
         assert!(

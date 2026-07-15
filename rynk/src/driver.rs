@@ -405,8 +405,8 @@ mod tests {
     use rmk_types::battery::BatteryStatus;
     use rmk_types::connection::{ConnectionStatus, ConnectionType};
     use rmk_types::protocol::rynk::{
-        GetComboBulkResponse, GetKeymapBulkResponse, GetMorseBulkResponse, PeripheralStatus, SetComboBulkRequest,
-        SetKeymapBulkRequest, SetMorseBulkRequest, TopicEvent,
+        GetComboBulkResponse, GetKeymapBulkResponse, GetMorseBulkResponse, LockStatus, PeripheralStatus,
+        SetComboBulkRequest, SetKeymapBulkRequest, SetMorseBulkRequest, TopicEvent,
     };
     use tokio::time::timeout;
 
@@ -749,6 +749,47 @@ mod tests {
         let mut client = Client::connect(t).await.unwrap();
         assert_eq!(client.capabilities().num_cols, 14);
         assert_eq!(client.get_wpm().await.unwrap(), 37);
+    }
+
+    #[tokio::test]
+    async fn bootloader_jump_reports_locked_device_before_fire_and_forget_send() {
+        let status = LockStatus {
+            locked: true,
+            unlocking: false,
+            remaining_keys: 0,
+            key_positions: Default::default(),
+        };
+        let t = MockTransport::new(vec![
+            Step::Chunk(reply(Cmd::GetVersion, 1, ProtocolVersion::CURRENT)),
+            Step::Chunk(reply(Cmd::GetCapabilities, 2, caps())),
+            Step::Chunk(reply(Cmd::GetLockStatus, 3, status)),
+        ]);
+        let mut client = Client::connect(t).await.unwrap();
+
+        assert!(matches!(
+            client.bootloader_jump().await,
+            Err(RynkHostError::Rejected(RynkError::Locked))
+        ));
+        assert_eq!(client.next_seq, 4, "locked preflight must not send BootloaderJump");
+    }
+
+    #[tokio::test]
+    async fn bootloader_jump_sends_after_unlocked_preflight() {
+        let status = LockStatus {
+            locked: false,
+            unlocking: false,
+            remaining_keys: 0,
+            key_positions: Default::default(),
+        };
+        let t = MockTransport::new(vec![
+            Step::Chunk(reply(Cmd::GetVersion, 1, ProtocolVersion::CURRENT)),
+            Step::Chunk(reply(Cmd::GetCapabilities, 2, caps())),
+            Step::Chunk(reply(Cmd::GetLockStatus, 3, status)),
+        ]);
+        let mut client = Client::connect(t).await.unwrap();
+
+        client.bootloader_jump().await.unwrap();
+        assert_eq!(client.next_seq, 5, "unlocked client sends BootloaderJump");
     }
 
     #[tokio::test]

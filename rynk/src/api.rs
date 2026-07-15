@@ -13,7 +13,7 @@ use rmk_types::morse::Morse;
 use rmk_types::protocol::rynk::{
     BehaviorConfig, Cmd, DeviceCapabilities, GetComboBulkRequest, GetComboBulkResponse, GetEncoderRequest,
     GetKeymapBulkRequest, GetKeymapBulkResponse, GetMacroRequest, GetMorseBulkRequest, GetMorseBulkResponse,
-    KeyPosition, LockStatus, MacroData, MatrixState, PeripheralStatus, ProtocolVersion, SetComboBulkRequest,
+    KeyPosition, LockStatus, MacroData, MatrixState, PeripheralStatus, ProtocolVersion, RynkError, SetComboBulkRequest,
     SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetKeymapBulkRequest, SetMacroRequest,
     SetMorseBulkRequest, SetMorseRequest, StorageResetMode, TopicEvent, command,
 };
@@ -87,9 +87,13 @@ impl<T: Read + Write> Client<T> {
         self.send_no_reply::<command::Reboot>(&()).await
     }
 
-    /// Jump to the bootloader (DFU mode) — fire-and-forget, same contract as
-    /// [`reboot`](Self::reboot).
+    /// Jump to the bootloader (DFU mode). The lock state is checked first so a
+    /// locked device is reported to the caller; once unlocked, the jump itself
+    /// is fire-and-forget because the firmware resets before it can reply.
     pub async fn bootloader_jump(&mut self) -> Result<(), RynkHostError> {
+        if self.get_lock_status().await?.locked {
+            return Err(RynkHostError::Rejected(RynkError::Locked));
+        }
         self.send_no_reply::<command::BootloaderJump>(&()).await
     }
 
