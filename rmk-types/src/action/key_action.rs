@@ -4,7 +4,6 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 use super::Action;
-use crate::morse::MorseProfile;
 
 /// A KeyAction is the action at a keyboard position, stored in keymap.
 /// It can be a single action like triggering a key, or a composite keyboard action like tap/hold
@@ -22,9 +21,10 @@ pub enum KeyAction {
     Single(Action),
     /// Don't wait the release of the key, auto-release after a time threshold.
     Tap(Action),
-    /// Tap hold action
-    TapHold(Action, Action, MorseProfile),
-
+    /// Tap hold action. The `u8` indexes the morse profile table; an index
+    /// with no table entry (e.g. `u8::MAX`, which the default-profile macros
+    /// emit) falls back to the default [`crate::morse::MorseProfile`].
+    TapHold(Action, Action, u8),
     /// Morse action, references a morse configuration by index.
     Morse(u8),
 }
@@ -51,12 +51,12 @@ impl KeyAction {
 }
 
 /// Combo and fork trigger matching compares key actions by their "identity" —
-/// the tap/hold actions — ignoring the `MorseProfile` timing configuration.
+/// the tap/hold actions — ignoring the profile-table index.
 ///
-/// This is intentional: a combo or fork may store a trigger with `Profile1`,
-/// but if the user later rebinds the key's profile to `Profile2`, the
-/// trigger should still match. The profile is a per-key timing config,
-/// not part of the key's logical identity.
+/// This is intentional: a combo or fork may store a trigger with one profile
+/// index, but if the user later rebinds the key's profile, the trigger should
+/// still match. The profile is a per-key timing config, not part of the key's
+/// logical identity.
 impl PartialEq for KeyAction {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {

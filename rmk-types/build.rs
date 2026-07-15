@@ -73,6 +73,10 @@ fn generate_constants(bc: &BuildConstants) -> String {
     ));
     lines.push(format!("pub const MORSE_MAX_NUM: usize = {};", bc.morse_max_num));
     lines.push(format!(
+        "pub const MORSE_PROFILE_MAX_NUM: usize = {};",
+        bc.morse_profile_max_num
+    ));
+    lines.push(format!(
         "pub const AUTO_MOUSE_LAYER_MAX_NUM: usize = {};",
         bc.auto_mouse_layer_max_num
     ));

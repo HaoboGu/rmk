@@ -204,7 +204,7 @@ fn create_dusk_rollover_keyboard(use_tap_dance_c: bool) -> Keyboard<'static> {
     let c_action = if use_tap_dance_c {
         td!(6)
     } else {
-        KeyAction::TapHold(key_action(HidKeyCode::C), Action::LayerOn(3), hrm_profile)
+        KeyAction::TapHold(key_action(HidKeyCode::C), Action::LayerOn(3), 0u8)
     };
 
     #[rustfmt::skip]
@@ -212,7 +212,7 @@ fn create_dusk_rollover_keyboard(use_tap_dance_c: bool) -> Keyboard<'static> {
         [k!(B),     k!(F), k!(L), k!(P), k!(Q),     k!(Quote),     k!(W),     k!(O),     k!(U),   k!(Y)],
         [td!(2),    td!(3), td!(4), td!(5), k!(K),  k!(J),         c_action,  td!(7),    td!(8),  td!(9)],
         [k!(X),     k!(V), k!(M), k!(D), k!(Z),     k!(Minus),     k!(G),     k!(Comma), k!(Dot), k!(Slash)],
-        [a!(No),    a!(No), td!(0), KeyAction::TapHold(key_action(HidKeyCode::R), Action::LayerOn(1), ph_profile), k!(Enter), k!(Backspace), td!(1), k!(Grave), a!(No), a!(No)],
+        [a!(No),    a!(No), td!(0), KeyAction::TapHold(key_action(HidKeyCode::R), Action::LayerOn(1), 1u8), k!(Enter), k!(Backspace), td!(1), k!(Grave), a!(No), a!(No)],
     ];
     let no_layer = [[a!(No); 10]; 4];
     let keymap = [dusk_layer, no_layer, no_layer, no_layer, no_layer];
@@ -222,6 +222,8 @@ fn create_dusk_rollover_keyboard(use_tap_dance_c: bool) -> Keyboard<'static> {
             enable_flow_tap: true,
             prior_idle_time: Duration::from_millis(120),
             default_profile: MorseProfile::new(None, Some(MorseMode::Normal), Some(250u16), Some(250u16)),
+            // Index 0 = hrm_profile (C→LayerOn3 tap-hold), index 1 = ph_profile (R→LayerOn1 tap-hold).
+            profiles: Vec::from_slice(&[hrm_profile, ph_profile]).unwrap(),
             // The test build's MORSE_MAX_NUM is 8; only TD(0)..TD(6) is needed for this rollover.
             morses: Vec::from_slice(&[
                 Morse::new_from_vial(

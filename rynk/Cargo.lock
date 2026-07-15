@@ -2236,7 +2236,6 @@ dependencies = [
  "critical-section",
  "embassy-futures",
  "embassy-sync",
- "embedded-io-adapters",
  "embedded-io-async 0.7.0",
  "env_logger",
  "heapless 0.9.3",
@@ -2245,6 +2244,7 @@ dependencies = [
  "miniz_oxide",
  "postcard",
  "rmk",
+ "rmk-config",
  "rmk-types",
  "rynk-ble",
  "rynk-serial",
@@ -2262,8 +2262,9 @@ version = "0.1.0"
 dependencies = [
  "async-stream",
  "bluest",
+ "embedded-io-async 0.7.0",
  "futures-util",
- "log",
+ "rmk-types",
  "rynk",
  "tokio",
 ]
@@ -2288,6 +2289,7 @@ version = "0.1.0"
 dependencies = [
  "embedded-io-adapters",
  "libc",
+ "rmk-types",
  "rynk",
  "serde",
  "tokio",
@@ -2300,11 +2302,10 @@ version = "0.0.0"
 dependencies = [
  "console_error_panic_hook",
  "console_log",
- "embassy-futures",
- "embassy-sync",
  "js-sys",
  "log",
  "rynk",
+ "serde-wasm-bindgen",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]

@@ -50,7 +50,7 @@ KeyAction::Morse(3)                       05 03
 KeyAction::No                             00
 KeyAction::Single(Action::Key(Hid(A)))    02 01 00 04
 KeyAction::Tap(Action::No)                03 00
-KeyAction::TapHold(Key(A),LayerOn(3))     04 01 00 04 04 03 00
+KeyAction::TapHold(Key(A),LayerOn(3))     04 01 00 04 04 03 ff
 KeyAction::Transparent                    01
 KeyCode::Consumer(VolumeIncrement)        01 12
 KeyCode::Hid(A)                           00 04

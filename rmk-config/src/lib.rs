@@ -266,6 +266,10 @@ pub(crate) struct RmkConstantsConfig {
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_morse_max_num")]
     pub morse_max_num: usize,
+    /// Capacity of the morse profile table (named profiles in `[behavior.morse.profiles]`)
+    #[serde_inline_default(16)]
+    #[serde(deserialize_with = "check_morse_profile_max_num")]
+    pub morse_profile_max_num: usize,
     /// Maximum number of patterns a morse key can handle
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_max_patterns_per_key")]
@@ -333,6 +337,20 @@ where
     Ok(value)
 }
 
+/// The profile index is a `u8` in `KeyAction::TapHold` and an index with no
+/// table entry means "use the default profile", so the table may never cover
+/// the full `u8` range: capacity ≤ 255 keeps at least one index always vacant.
+fn check_morse_profile_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let value = Deserialize::deserialize(deserializer)?;
+    if value > 255 {
+        panic!("❌ Parse `keyboard.toml` error: morse_profile_max_num must be between 0 and 255, got {value}");
+    }
+    Ok(value)
+}
+
 fn check_max_patterns_per_key<'de, D>(deserializer: D) -> Result<usize, D::Error>
 where
     D: de::Deserializer<'de>,
@@ -369,6 +387,7 @@ impl Default for RmkConstantsConfig {
             combo_max_length: 4,
             fork_max_num: 8,
             morse_max_num: 8,
+            morse_profile_max_num: 16,
             max_patterns_per_key: 8,
             macro_space_size: 256,
             debounce_time: 20,
