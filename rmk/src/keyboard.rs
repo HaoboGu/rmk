@@ -1256,18 +1256,14 @@ impl<'a> Keyboard<'a> {
                 // Reactivate the layer after the key is released
                 if event.pressed {
                     self.keymap.deactivate_layer(layer_num);
-                    if self.keymap.sticky_key_config().release_on_layer_change {
-                        self.release_sticky_key_if_active().await;
-                    }
+                    self.release_sticky_key_on_layer_change().await;
                 }
             }
             Action::LayerToggle(layer_num) => {
                 // Toggle a layer when the key is released
                 if !event.pressed {
                     self.keymap.toggle_layer(layer_num);
-                    if self.keymap.sticky_key_config().release_on_layer_change {
-                        self.release_sticky_key_if_active().await;
-                    }
+                    self.release_sticky_key_on_layer_change().await;
                 }
             }
             Action::LayerToggleOnly(layer_num) => {
@@ -1283,24 +1279,18 @@ impl<'a> Keyboard<'a> {
                     }
                     // Activate the target layer
                     self.keymap.activate_layer(layer_num);
-                    if self.keymap.sticky_key_config().release_on_layer_change {
-                        self.release_sticky_key_if_active().await;
-                    }
+                    self.release_sticky_key_on_layer_change().await;
                 }
             }
             Action::DefaultLayer(layer_num) => {
                 // Set the default layer
                 self.keymap.set_default_layer(layer_num);
-                if self.keymap.sticky_key_config().release_on_layer_change {
-                    self.release_sticky_key_if_active().await;
-                }
+                self.release_sticky_key_on_layer_change().await;
             }
             Action::PersistentDefaultLayer(layer_num) => {
                 // Set the default layer and persist it so it survives a reboot
                 self.keymap.set_default_layer(layer_num);
-                if self.keymap.sticky_key_config().release_on_layer_change {
-                    self.release_sticky_key_if_active().await;
-                }
+                self.release_sticky_key_on_layer_change().await;
                 // Persist only if the layer was valid (set_default_layer rejects out-of-range)
                 #[cfg(feature = "storage")]
                 if event.pressed && self.keymap.get_default_layer() == layer_num {
@@ -1616,14 +1606,10 @@ impl<'a> Keyboard<'a> {
         // Change layer state only when the key's state is changed
         if event.pressed {
             self.keymap.activate_layer(layer_num);
-            if self.keymap.sticky_key_config().release_on_layer_change {
-                self.release_sticky_key_if_active().await;
-            }
+            self.release_sticky_key_on_layer_change().await;
         } else {
             self.keymap.deactivate_layer(layer_num);
-            if self.keymap.sticky_key_config().release_on_layer_change {
-                self.release_sticky_key_if_active().await;
-            }
+            self.release_sticky_key_on_layer_change().await;
         }
     }
 

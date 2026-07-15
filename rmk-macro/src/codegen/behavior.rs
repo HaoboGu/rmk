@@ -51,6 +51,28 @@ fn expand_sticky_key(behavior: &Behavior) -> proc_macro2::TokenStream {
         .as_ref()
         .and_then(|sk| sk.release_on_layer_change)
         .unwrap_or(false);
+    let option_bool = |value: Option<bool>| match value {
+        Some(value) => quote! { ::core::option::Option::Some(#value) },
+        None => quote! { ::core::option::Option::None },
+    };
+    let tap_key_release_on_layer_change = option_bool(
+        behavior
+            .sticky_key
+            .as_ref()
+            .and_then(|sk| sk.tap_key_release_on_layer_change),
+    );
+    let one_shot_mod_release_on_layer_change = option_bool(
+        behavior
+            .sticky_key
+            .as_ref()
+            .and_then(|sk| sk.one_shot_mod_release_on_layer_change),
+    );
+    let layer_release_on_layer_change = option_bool(
+        behavior
+            .sticky_key
+            .as_ref()
+            .and_then(|sk| sk.layer_release_on_layer_change),
+    );
 
     quote! {
         ::rmk::config::StickyKeyConfig {
@@ -59,6 +81,9 @@ fn expand_sticky_key(behavior: &Behavior) -> proc_macro2::TokenStream {
             quick_release: #quick_release,
             max_repeat: #max_repeat,
             release_on_layer_change: #release_on_layer_change,
+            tap_key_release_on_layer_change: #tap_key_release_on_layer_change,
+            one_shot_mod_release_on_layer_change: #one_shot_mod_release_on_layer_change,
+            layer_release_on_layer_change: #layer_release_on_layer_change,
         }
     }
 }
@@ -536,5 +561,45 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
             auto_mouse_layer: #auto_mouse_layer,
             ..Default::default()
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rmk_config::resolved::behavior::StickyKeyConfig;
+
+    #[test]
+    fn sticky_key_codegen_preserves_shape_overrides() {
+        let behavior = Behavior {
+            tri_layer: None,
+            combos: None,
+            macros: None,
+            forks: None,
+            morse: None,
+            sticky_key: Some(StickyKeyConfig {
+                timeout_ms: None,
+                activate_on_keypress: None,
+                quick_release: None,
+                max_repeat: None,
+                release_on_layer_change: Some(false),
+                tap_key_release_on_layer_change: Some(true),
+                one_shot_mod_release_on_layer_change: Some(false),
+                layer_release_on_layer_change: None,
+            }),
+            auto_mouse_layer: Vec::new(),
+        };
+
+        let tokens = expand_sticky_key(&behavior).to_string().replace(' ', "");
+        assert!(tokens.contains("release_on_layer_change:false"));
+        assert!(
+            tokens.contains("tap_key_release_on_layer_change:::core::option::Option::Some(true)")
+        );
+        assert!(
+            tokens.contains(
+                "one_shot_mod_release_on_layer_change:::core::option::Option::Some(false)"
+            )
+        );
+        assert!(tokens.contains("layer_release_on_layer_change:::core::option::Option::None"));
     }
 }

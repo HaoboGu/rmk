@@ -157,6 +157,25 @@ impl StickyKeyState {
 }
 
 impl Keyboard<'_> {
+    /// Release the active StickyKey when its shape-specific layer-change policy says to.
+    /// A shape override takes precedence over the global fallback.
+    pub(crate) async fn release_sticky_key_on_layer_change(&mut self) {
+        let config = self.keymap.sticky_key_config();
+        let shape_override = if self.sticky_key_state.is_tap_key() {
+            config.tap_key_release_on_layer_change
+        } else if self.sticky_key_state.is_pure_mod() {
+            config.one_shot_mod_release_on_layer_change
+        } else if self.sticky_key_state.is_layer() {
+            config.layer_release_on_layer_change
+        } else {
+            return;
+        };
+
+        if shape_override.unwrap_or(config.release_on_layer_change) {
+            self.release_sticky_key_if_active().await;
+        }
+    }
+
     pub(crate) async fn process_action_sticky_key(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
         if params.layer.is_some() {
             self.process_sticky_layer(params, event).await;

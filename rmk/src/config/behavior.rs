@@ -115,8 +115,14 @@ pub struct StickyKeyConfig {
     pub quick_release: bool,
     /// 0 = infinite; governs tap-key cycling. Default 0.
     pub max_repeat: u16,
-    /// true = a layer change releases the SK. Default false (survives).
+    /// Fallback used when the active SK shape has no layer-change override.
     pub release_on_layer_change: bool,
+    /// Tap-key SK override. `None` inherits `release_on_layer_change`.
+    pub tap_key_release_on_layer_change: Option<bool>,
+    /// One-shot-mod SK override. `None` inherits `release_on_layer_change`.
+    pub one_shot_mod_release_on_layer_change: Option<bool>,
+    /// Layer SK override. `None` inherits `release_on_layer_change`.
+    pub layer_release_on_layer_change: Option<bool>,
 }
 
 impl Default for StickyKeyConfig {
@@ -127,6 +133,9 @@ impl Default for StickyKeyConfig {
             quick_release: false,
             max_repeat: 0,
             release_on_layer_change: false,
+            tap_key_release_on_layer_change: None,
+            one_shot_mod_release_on_layer_change: None,
+            layer_release_on_layer_change: None,
         }
     }
 }

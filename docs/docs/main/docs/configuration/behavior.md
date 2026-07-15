@@ -53,7 +53,36 @@ The `[behavior.sticky_key]` table configures the unified **Sticky Key** (`SK`) f
 | `activate_on_keypress` | `false` | **Pure-mod SKs only.** When `true`, send the modifier immediately as the SK key itself is pressed, instead of waiting and applying it to the next key. (Also known as One-Shot Sticky Modifiers / OSSM.) |
 | `quick_release` | `false` | **Pure-mod SKs only.** Release the modifier as soon as the next key is *pressed* (`true`) rather than when it is *released* (`false`, chain mode). |
 | `max_repeat` | `0` | **Tap-key SKs only.** Caps how many repeated presses of the key keep the modifier held; `0` = unlimited. Pure-mod (`SK(LGui)`) and layer (`SK(MO(n))`) SKs ignore this — they always apply to exactly one following key. |
-| `release_on_layer_change` | `false` | Whether a layer change releases the sticky key. `false` = it survives layer changes. |
+| `release_on_layer_change` | `false` | Global fallback: whether a layer change releases any sticky-key shape. |
+| `tap_key_release_on_layer_change` | unset | Tap-key override for `SK(key, [mods])`. When unset, inherits `release_on_layer_change`. |
+| `one_shot_mod_release_on_layer_change` | unset | One-shot-mod override for `SK(mod)` / `OSM(mod)`. When unset, inherits `release_on_layer_change`. |
+| `layer_release_on_layer_change` | unset | Layer override for `SK(MO(n))` / `OSL(n)`. When unset, inherits `release_on_layer_change`. |
+
+The three shape-specific layer-change settings take precedence over the global
+`release_on_layer_change` value. This lets a configuration establish one global
+default and opt individual shapes in or out. Leaving all three overrides unset
+preserves the original global behavior.
+
+For a layer-shaped sticky key, `layer_release_on_layer_change` applies to a
+separate layer transition that occurs while the OSL is active. Activating the
+OSL's own one-shot layer does not immediately release itself.
+
+For example, this releases Alt+Tab-style tap-key sticky keys when a layer changes,
+while allowing OSM and OSL actions to survive the same change:
+
+```toml
+[behavior.sticky_key]
+release_on_layer_change = false
+tap_key_release_on_layer_change = true
+```
+
+The inverse is also valid. Here every shape releases by default, except pure-mod OSM actions:
+
+```toml
+[behavior.sticky_key]
+release_on_layer_change = true
+one_shot_mod_release_on_layer_change = false
+```
 
 The `quick_release` option in detail:
 
@@ -75,6 +104,10 @@ activate_on_keypress = false
 quick_release = false
 max_repeat = 0
 release_on_layer_change = false
+# Shape-specific overrides are optional and inherit the global value when omitted:
+# tap_key_release_on_layer_change = true
+# one_shot_mod_release_on_layer_change = false
+# layer_release_on_layer_change = false
 ```
 
 OSSM example (pure-mod SK activates on key press):
@@ -117,7 +150,7 @@ Accepted breaking changes:
 
 - The old 5-positional `SK(key, [mod], max_repeat, timeout_ms, exit_on_layer_change)` form is **removed** → build error. The trailing knobs now live in `[behavior.sticky_key]`.
 - The `[behavior.one_shot]` and `[behavior.one_shot_modifiers]` config tables are **removed** → use `[behavior.sticky_key]`.
-- The old per-key `exit_on_layer_change` is renamed to the global `release_on_layer_change` (default `false`).
+- The old per-key `exit_on_layer_change` is renamed to the global `release_on_layer_change` (default `false`). The optional tap-key, pure-mod, and layer overrides can refine that global value per sticky-key shape.
 - Tap-key (alt-tab) SKs now have a **1s default timeout** (previously they had no timeout). Set `timeout` higher or rely on the default.
 
 ## Combo

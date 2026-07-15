@@ -111,6 +111,42 @@ fn create_test_keyboard_mixed() -> Keyboard<'static> {
     Keyboard::new(wrap_keymap(KEYMAP_MIXED, per_key_config, behavior_config))
 }
 
+// Layer-change policy keymaps. The transparent layer positions keep each action
+// reachable while another layer is active, and the A/B/C keys reveal which
+// sticky layer remains selected after a momentary layer change.
+const KEYMAP_PURE_MOD_LAYER_CHANGE: [[[KeyAction; 3]; 1]; 2] = [
+    [[sk_mod!(ModifierCombination::LSHIFT), mo!(1), k!(A)]],
+    [[a!(Transparent), a!(Transparent), a!(Transparent)]],
+];
+
+const KEYMAP_OSL_LAYER_CHANGE: [[[KeyAction; 3]; 1]; 3] = [
+    [[sk_layer!(1), mo!(2), k!(A)]],
+    [[a!(Transparent), a!(Transparent), k!(B)]],
+    [[a!(Transparent), a!(Transparent), k!(C)]],
+];
+
+fn create_pure_mod_layer_change_keyboard(sticky_key: StickyKeyConfig) -> Keyboard<'static> {
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
+        sticky_key,
+        ..BehaviorConfig::default()
+    }));
+    let per_key_config: &'static PositionalConfig<1, 3> = Box::leak(Box::new(PositionalConfig::default()));
+    Keyboard::new(wrap_keymap(
+        KEYMAP_PURE_MOD_LAYER_CHANGE,
+        per_key_config,
+        behavior_config,
+    ))
+}
+
+fn create_osl_layer_change_keyboard(sticky_key: StickyKeyConfig) -> Keyboard<'static> {
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
+        sticky_key,
+        ..BehaviorConfig::default()
+    }));
+    let per_key_config: &'static PositionalConfig<1, 3> = Box::leak(Box::new(PositionalConfig::default()));
+    Keyboard::new(wrap_keymap(KEYMAP_OSL_LAYER_CHANGE, per_key_config, behavior_config))
+}
+
 fn create_test_keyboard() -> Keyboard<'static> {
     static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
     let behavior_config = BEHAVIOR_CONFIG.init(BehaviorConfig {
@@ -147,6 +183,163 @@ fn create_test_keyboard_with_behavior_config(config: BehaviorConfig) -> Keyboard
     let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(config));
     let per_key_config: &'static PositionalConfig<1, 6> = Box::leak(Box::new(PositionalConfig::default()));
     Keyboard::new(wrap_keymap(KEYMAP, per_key_config, behavior_config))
+}
+
+#[test]
+fn sticky_key_config_layer_change_overrides_do_not_increase_struct_size() {
+    assert_eq!(core::mem::size_of::<StickyKeyConfig>(), 16);
+}
+
+/// A tap-key override can enable layer-change release while the global fallback is disabled.
+#[test]
+fn tap_key_layer_change_override_enables_release() {
+    key_sequence_test! {
+        keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
+            sticky_key: StickyKeyConfig {
+                release_on_layer_change: false,
+                tap_key_release_on_layer_change: Some(true),
+                ..StickyKeyConfig::default()
+            },
+            ..BehaviorConfig::default()
+        }),
+        sequence: [
+            [0, 3, true,  10],
+            [0, 0, true,  10],
+            [0, 0, false, 10],
+            [0, 3, false, 10],
+        ],
+        expected_reports: [
+            [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],
+            [KC_LALT, [0, 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+/// A tap-key override can disable layer-change release while the global fallback is enabled.
+#[test]
+fn tap_key_layer_change_override_disables_release() {
+    key_sequence_test! {
+        keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
+            sticky_key: StickyKeyConfig {
+                release_on_layer_change: true,
+                tap_key_release_on_layer_change: Some(false),
+                ..StickyKeyConfig::default()
+            },
+            ..BehaviorConfig::default()
+        }),
+        sequence: [
+            [0, 3, true,  10],
+            [0, 0, true,  10],
+            [0, 0, false, 10],
+            [0, 3, false, 10],
+            [0, 0, true,  10],
+            [0, 0, false, 10],
+        ],
+        expected_reports: [
+            [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],
+            [KC_LALT, [0, 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+/// The one-shot-mod override wins over an enabled global fallback.
+#[test]
+fn pure_mod_layer_change_override_disables_release() {
+    key_sequence_test! {
+        keyboard: create_pure_mod_layer_change_keyboard(StickyKeyConfig {
+            release_on_layer_change: true,
+            one_shot_mod_release_on_layer_change: Some(false),
+            ..StickyKeyConfig::default()
+        }),
+        sequence: [
+            [0, 0, true,  10],
+            [0, 0, false, 10],
+            [0, 1, true,  10],
+            [0, 1, false, 10],
+            [0, 2, true,  10],
+            [0, 2, false, 10],
+        ],
+        expected_reports: [
+            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+/// The one-shot-mod override can enable release over a disabled global fallback.
+#[test]
+fn pure_mod_layer_change_override_enables_release() {
+    key_sequence_test! {
+        keyboard: create_pure_mod_layer_change_keyboard(StickyKeyConfig {
+            release_on_layer_change: false,
+            one_shot_mod_release_on_layer_change: Some(true),
+            ..StickyKeyConfig::default()
+        }),
+        sequence: [
+            [0, 0, true,  10],
+            [0, 0, false, 10],
+            [0, 1, true,  10],
+            [0, 1, false, 10],
+            [0, 2, true,  10],
+            [0, 2, false, 10],
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+/// The layer-shape override wins over an enabled global fallback.
+#[test]
+fn osl_layer_change_override_disables_release() {
+    key_sequence_test! {
+        keyboard: create_osl_layer_change_keyboard(StickyKeyConfig {
+            release_on_layer_change: true,
+            layer_release_on_layer_change: Some(false),
+            ..StickyKeyConfig::default()
+        }),
+        sequence: [
+            [0, 0, true,  10],
+            [0, 0, false, 10],
+            [0, 1, true,  10],
+            [0, 1, false, 10],
+            [0, 2, true,  10],
+            [0, 2, false, 10],
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+/// The layer-shape override can enable release over a disabled global fallback.
+#[test]
+fn osl_layer_change_override_enables_release() {
+    key_sequence_test! {
+        keyboard: create_osl_layer_change_keyboard(StickyKeyConfig {
+            release_on_layer_change: false,
+            layer_release_on_layer_change: Some(true),
+            ..StickyKeyConfig::default()
+        }),
+        sequence: [
+            [0, 0, true,  10],
+            [0, 0, false, 10],
+            [0, 1, true,  10],
+            [0, 1, false, 10],
+            [0, 2, true,  10],
+            [0, 2, false, 10],
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
 }
 
 /// StickyKey Test 1: Basic SK flow — press SK twice while MO held

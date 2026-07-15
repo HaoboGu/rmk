@@ -6,6 +6,9 @@ pub struct StickyKeyConfig {
     pub quick_release: Option<bool>,
     pub max_repeat: Option<u16>,
     pub release_on_layer_change: Option<bool>,
+    pub tap_key_release_on_layer_change: Option<bool>,
+    pub one_shot_mod_release_on_layer_change: Option<bool>,
+    pub layer_release_on_layer_change: Option<bool>,
 }
 
 /// Resolved behavioral configuration.
@@ -225,6 +228,9 @@ impl crate::KeyboardTomlConfig {
             quick_release: s.quick_release,
             max_repeat: s.max_repeat,
             release_on_layer_change: s.release_on_layer_change,
+            tap_key_release_on_layer_change: s.tap_key_release_on_layer_change,
+            one_shot_mod_release_on_layer_change: s.one_shot_mod_release_on_layer_change,
+            layer_release_on_layer_change: s.layer_release_on_layer_change,
         });
 
         let auto_mouse_layer = toml_behavior
@@ -322,5 +328,43 @@ hold_timeout = "200ms"
         assert_eq!(morse.profiles["flow_on"].enable_flow_tap, Some(true));
         assert_eq!(morse.profiles["flow_off"].enable_flow_tap, Some(false));
         assert_eq!(morse.profiles["inherit"].enable_flow_tap, None);
+    }
+
+    #[test]
+    fn sticky_key_layer_change_overrides_are_preserved() {
+        let toml = r#"
+[layout]
+rows = 1
+cols = 1
+layers = 1
+keymap = [
+  [
+    ["A"],
+  ],
+]
+
+[behavior.sticky_key]
+release_on_layer_change = true
+tap_key_release_on_layer_change = true
+one_shot_mod_release_on_layer_change = false
+layer_release_on_layer_change = false
+"#;
+
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "rmk-config-sticky-layer-change-{}-{}.toml",
+            std::process::id(),
+            unique
+        ));
+
+        fs::write(&path, toml).unwrap();
+        let config = KeyboardTomlConfig::new_from_toml_path_with_event_defaults(&path);
+        let _ = fs::remove_file(&path);
+
+        let sticky_key = config.behavior().unwrap().sticky_key.unwrap();
+        assert_eq!(sticky_key.release_on_layer_change, Some(true));
+        assert_eq!(sticky_key.tap_key_release_on_layer_change, Some(true));
+        assert_eq!(sticky_key.one_shot_mod_release_on_layer_change, Some(false));
+        assert_eq!(sticky_key.layer_release_on_layer_change, Some(false));
     }
 }
