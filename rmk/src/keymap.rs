@@ -579,6 +579,20 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().behavior.morse.default_profile
     }
 
+    /// Resolve a per-key morse profile by its table index: the table entry if
+    /// present, otherwise the user-configured default profile. Fields left
+    /// `None` by the resolved profile are still filled in per-field by the
+    /// callers (default profile, then hardcoded fallbacks).
+    pub(crate) fn morse_profile(&self, idx: u8) -> MorseProfile {
+        let inner = self.inner.borrow();
+        let morse = &inner.behavior.morse;
+        morse
+            .profiles
+            .get(idx as usize)
+            .copied()
+            .unwrap_or(morse.default_profile)
+    }
+
     pub(crate) fn mouse_key_config(&self) -> MouseKeyConfig {
         self.inner.borrow().behavior.mouse_key
     }

@@ -451,16 +451,43 @@ pub(crate) fn parse_key(
     }
 }
 
-/// Expand the optional trailing morse profile argument of a tap-hold action,
-/// falling back to the const default when omitted.
+/// Named profiles sorted by name, giving each a stable index into the runtime
+/// morse profile table: a name at sorted position `i` is table index `i`.
+pub(crate) fn sorted_profile_names(
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> Vec<String> {
+    match profiles {
+        Some(p) => {
+            let mut names: Vec<String> = p.keys().cloned().collect();
+            names.sort();
+            names
+        }
+        None => Vec::new(),
+    }
+}
+
+/// Expand the optional trailing profile argument of a tap-hold action into its
+/// morse profile table index. When omitted, emit `u8::MAX`: an index with no
+/// table entry falls back to the default profile at runtime (the table
+/// capacity is validated to be ≤ 255, so `u8::MAX` is always vacant).
 fn morse_profile(
     profile_name: Option<&String>,
     profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> TokenStream2 {
-    match profile_name {
-        Some(name) => expand_profile_name(name, profiles),
-        None => quote! { ::rmk::types::morse::MorseProfile::const_default() },
-    }
+    let Some(name) = profile_name else {
+        return quote! { ::core::primitive::u8::MAX };
+    };
+    let idx = match sorted_profile_names(profiles)
+        .iter()
+        .position(|n| n == name)
+    {
+        Some(pos) => pos as u8,
+        None => panic!(
+            "\n\u{274c} `{:?}` profile name is not found in behavior.morse.profiles",
+            name
+        ),
+    };
+    quote! { #idx }
 }
 
 /// Parse the single layer-index argument of a call-form layer action, e.g. `MO(1)`.

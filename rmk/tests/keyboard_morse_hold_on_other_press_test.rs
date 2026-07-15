@@ -31,27 +31,19 @@ fn create_hold_on_other_key_press_keyboard() -> Keyboard<'static> {
 }
 
 fn create_hold_on_other_key_press_keyboard_with_combo() -> Keyboard<'static> {
+    // Profile index is irrelevant here — combo matching compares tap/hold only
+    // (KeyAction::PartialEq ignores the profile), which is what these exercise.
     let combo_key = KeyAction::TapHold(
         Action::Key(KeyCode::Hid(HidKeyCode::B)),
         Action::Modifier(ModifierCombination::LSHIFT),
-        MorseProfile::new(
-            //just to test if combo ignores the profile as expected
-            Some(false),
-            Some(MorseMode::HoldOnOtherPress),
-            Some(250u16),
-            Some(250u16),
-        ),
+        u8::MAX,
     );
     let combo_key_2 = KeyAction::TapHold(
         Action::Key(KeyCode::Hid(HidKeyCode::C)),
         Action::Modifier(ModifierCombination::LGUI),
-        MorseProfile::new(Some(false), Some(MorseMode::Normal), Some(250u16), Some(250u16)), //just to test if combo ignores the profile as expected
+        u8::MAX,
     );
-    let combo_key_3 = KeyAction::TapHold(
-        Action::Key(KeyCode::Hid(HidKeyCode::D)),
-        Action::LayerOn(1),
-        Default::default(),
-    );
+    let combo_key_3 = KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::D)), Action::LayerOn(1), u8::MAX);
     create_simple_morse_keyboard(BehaviorConfig {
         morse: MorsesConfig {
             enable_flow_tap: false,
@@ -101,7 +93,7 @@ fn create_profile_flow_tap_keyboard(
         KeyAction::TapHold(
             Action::Key(KeyCode::Hid(HidKeyCode::B)),
             Action::Modifier(ModifierCombination::LSHIFT),
-            profile,
+            0u8,
         ),
     ]]];
     let behavior_config = BehaviorConfig {
@@ -114,6 +106,7 @@ fn create_profile_flow_tap_keyboard(
                 Some(250u16),
                 Some(250u16),
             ),
+            profiles: Vec::from_slice(&[profile]).unwrap(),
             ..Default::default()
         },
         ..Default::default()
@@ -182,15 +175,11 @@ fn create_flow_tap_layer_cache_keyboard() -> Keyboard<'static> {
     let keymap = [
         [[
             k!(A),
-            KeyAction::TapHold(
-                Action::Key(KeyCode::Hid(HidKeyCode::D)),
-                Action::LayerOn(1),
-                disabled_flow_profile,
-            ),
+            KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::D)), Action::LayerOn(1), 0u8),
             KeyAction::TapHold(
                 Action::Key(KeyCode::Hid(HidKeyCode::B)),
                 Action::Modifier(ModifierCombination::LSHIFT),
-                enabled_flow_profile,
+                1u8,
             ),
         ]],
         [[a!(Transparent), a!(Transparent), k!(Kp1)]],
@@ -205,6 +194,7 @@ fn create_flow_tap_layer_cache_keyboard() -> Keyboard<'static> {
                 Some(250u16),
                 Some(250u16),
             ),
+            profiles: Vec::from_slice(&[disabled_flow_profile, enabled_flow_profile]).unwrap(),
             ..Default::default()
         },
         ..Default::default()

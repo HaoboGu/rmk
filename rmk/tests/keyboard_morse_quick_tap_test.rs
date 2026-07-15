@@ -50,13 +50,18 @@ fn make_keyboard_with_morse(morses: Vec<Morse, 8>, global_profile: MorseProfile)
     Keyboard::new(wrap_keymap(keymap, per_key_config, behavior_config))
 }
 
-fn make_keyboard_with_keyaction(key_action: KeyAction, global_profile: MorseProfile) -> Keyboard<'static> {
+fn make_keyboard_with_keyaction(
+    key_action: KeyAction,
+    global_profile: MorseProfile,
+    profiles: &[MorseProfile],
+) -> Keyboard<'static> {
     let keymap = [[[key_action, k!(E), k!(F), k!(B)]], KEYMAP_LAYER2];
 
     let behavior_config = BehaviorConfig {
         morse: MorsesConfig {
             enable_flow_tap: false,
             default_profile: global_profile,
+            profiles: Vec::from_slice(profiles).unwrap(),
             ..Default::default()
         },
         ..Default::default()
@@ -151,14 +156,13 @@ fn quick_tap_disabled_outside_window() {
 /// (A) instead of the modifier (LShift).
 #[test]
 fn quick_tap_mod_tap_held_second_press() {
-    let profile = default_profile(Some(180));
     let mt = KeyAction::TapHold(
         Action::Key(KeyCode::Hid(HidKeyCode::A)),
         Action::Modifier(rmk::types::modifier::ModifierCombination::LSHIFT),
-        profile,
+        0,
     );
     key_sequence_test! {
-        keyboard: make_keyboard_with_keyaction(mt, default_profile(None)),
+        keyboard: make_keyboard_with_keyaction(mt, default_profile(None), &[default_profile(Some(180))]),
         sequence: [
             [0, 0, true, 50],
             [0, 0, false, 50],

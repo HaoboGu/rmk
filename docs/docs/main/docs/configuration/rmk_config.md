@@ -18,6 +18,8 @@ combo_max_length = 4
 fork_max_num = 8
 # Maximum number of morse keys keyboard can store (max 256)
 morse_max_num = 8
+# Maximum number of named morse profiles, shared by morse and tap-hold keys (max 255)
+morse_profile_max_num = 16
 # Maximum number of patterns a morse key can handle (default: 8, min: 4, max 65536)
 max_patterns_per_key = 8
 # Macro space size in bytes for storing sequences. The maximum number of Macros depends on the size of each sequence: All sequences combined need to fit into macro_space_size, the number of macro sequences doesn't matter.
@@ -63,6 +65,7 @@ Increasing the number of combos, forks, morses (tap dances), and macros will inc
 - `combo_max_length`: Maximum number of keys that can be pressed simultaneously in a combo, default value is 4.
 - `fork_max_num`: Maximum number of forks for conditional key actions, default value is 8. This value must be between 0 and 256.
 - `morse_max_num`: Maximum number of morses that can be stored, default value is 8. This value must be between 0 and 256.
+- `morse_profile_max_num`: Capacity of the morse profile table (the named profiles in `[behavior.morse.profiles]`, referenced by morse and tap-hold keys), default value is 16. This value must be between 0 and 255.
 - `max_patterns_per_key` : Maximum number of tap/hold patterns a morse key can handle, default value is 8. This value must be between 4 and 65536. (Will be automatically set to the maximum length of `tap_actions` + `hold_actions` or `morse_actions`.)
 - `macro_space_size`: Space size in bytes for storing macro sequences, default value is 256.
 

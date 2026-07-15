@@ -380,7 +380,7 @@ fn wire_values_locked() {
             encode(&KeyAction::TapHold(
                 Action::Key(KeyCode::Hid(HidKeyCode::A)),
                 Action::LayerOn(3),
-                MorseProfile::const_default(),
+                u8::MAX,
             )),
         ),
         ("KeyAction::Morse(3)", encode(&KeyAction::Morse(3))),

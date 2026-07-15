@@ -9,7 +9,9 @@ use rmk_config::resolved::behavior::{
     MorseProfile, OneShot,
 };
 
-use super::action_parser::{expand_profile, expand_profile_name, get_key_with_alias, parse_key};
+use super::action_parser::{
+    expand_profile, expand_profile_name, get_key_with_alias, parse_key, sorted_profile_names,
+};
 
 fn expand_tri_layer(tri_layer: &Option<[u8; 3]>) -> proc_macro2::TokenStream {
     match tri_layer {
@@ -118,11 +120,35 @@ fn expand_morse(morse: &Option<Morse>) -> proc_macro2::TokenStream {
         };
         let morses = expand_morses(&config.morses, &profiles_ref);
 
+        // Interned morse profile table, in the same sorted-name order used by
+        // `morse_profile` when it emits per-key indices. The pushes can't overflow:
+        // the profile count is validated against the capacity in `behavior()`.
+        let profile_names = sorted_profile_names(&profiles_ref);
+        let profiles_token = if profile_names.is_empty() {
+            quote! {}
+        } else {
+            let profile_tokens = profile_names.into_iter().map(|name| {
+                let profile = profiles_ref
+                    .as_ref()
+                    .and_then(|m| m.get(&name))
+                    .expect("name from same map");
+                expand_profile(profile)
+            });
+            quote! {
+                profiles: {
+                    let mut v = ::rmk::heapless::Vec::new();
+                    #( let _ = v.push(#profile_tokens); )*
+                    v
+                },
+            }
+        };
+
         quote! {
             ::rmk::config::MorsesConfig {
                 #enable_flow_tap_token
                 #prior_idle_time_token
                 default_profile: #default_profile,
+                #profiles_token
                 #morses
                 ..Default::default()
             }
