@@ -362,7 +362,7 @@ impl<'a> Keyboard<'a> {
         #[cfg(feature = "passkey_entry")]
         self.passkey_entry_state.check_mode_transition();
 
-        #[cfg(feature = "host_security")]
+        #[cfg(feature = "host_lock")]
         self.keymap.update_matrix_state(&event);
 
         // Report activity for sleep management
