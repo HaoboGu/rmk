@@ -692,8 +692,8 @@ pub struct StickyKeyConfig {
     pub tap_key_release_on_layer_change: Option<bool>,
     /// One-shot-modifier sticky keys only: overrides `release_on_layer_change` when set.
     pub one_shot_mod_release_on_layer_change: Option<bool>,
-    /// Layer sticky keys only: overrides `release_on_layer_change` when set.
-    pub layer_release_on_layer_change: Option<bool>,
+    /// One-shot-layer sticky keys only: overrides `release_on_layer_change` when set.
+    pub one_shot_layer_release_on_layer_change: Option<bool>,
 }
 
 /// Configurations for combos

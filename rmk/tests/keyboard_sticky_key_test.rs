@@ -300,7 +300,7 @@ fn osl_layer_change_override_disables_release() {
     key_sequence_test! {
         keyboard: create_osl_layer_change_keyboard(StickyKeyConfig {
             release_on_layer_change: true,
-            layer_release_on_layer_change: Some(false),
+            one_shot_layer_release_on_layer_change: Some(false),
             ..StickyKeyConfig::default()
         }),
         sequence: [
@@ -324,7 +324,7 @@ fn osl_layer_change_override_enables_release() {
     key_sequence_test! {
         keyboard: create_osl_layer_change_keyboard(StickyKeyConfig {
             release_on_layer_change: false,
-            layer_release_on_layer_change: Some(true),
+            one_shot_layer_release_on_layer_change: Some(true),
             ..StickyKeyConfig::default()
         }),
         sequence: [

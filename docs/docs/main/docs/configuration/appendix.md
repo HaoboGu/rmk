@@ -125,7 +125,7 @@ sticky_key = {
   # Optional per-shape overrides; omitted values inherit release_on_layer_change.
   # tap_key_release_on_layer_change = true,
   # one_shot_mod_release_on_layer_change = false,
-  # layer_release_on_layer_change = false,
+  # one_shot_layer_release_on_layer_change = false,
 }
 
 [behavior.morse]

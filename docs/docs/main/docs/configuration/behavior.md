@@ -56,14 +56,14 @@ The `[behavior.sticky_key]` table configures the unified **Sticky Key** (`SK`) f
 | `release_on_layer_change` | `false` | Global fallback: whether a layer change releases any sticky-key shape. |
 | `tap_key_release_on_layer_change` | unset | Tap-key override for `SK(key, [mods])`. When unset, inherits `release_on_layer_change`. |
 | `one_shot_mod_release_on_layer_change` | unset | One-shot-mod override for `SK(mod)` / `OSM(mod)`. When unset, inherits `release_on_layer_change`. |
-| `layer_release_on_layer_change` | unset | Layer override for `SK(MO(n))` / `OSL(n)`. When unset, inherits `release_on_layer_change`. |
+| `one_shot_layer_release_on_layer_change` | unset | One-shot-layer override for `SK(MO(n))` / `OSL(n)`. When unset, inherits `release_on_layer_change`. |
 
 The three shape-specific layer-change settings take precedence over the global
 `release_on_layer_change` value. This lets a configuration establish one global
 default and opt individual shapes in or out. Leaving all three overrides unset
 preserves the original global behavior.
 
-For a layer-shaped sticky key, `layer_release_on_layer_change` applies to a
+For a layer-shaped sticky key, `one_shot_layer_release_on_layer_change` applies to a
 separate layer transition that occurs while the OSL is active. Activating the
 OSL's own one-shot layer does not immediately release itself.
 
@@ -107,7 +107,7 @@ release_on_layer_change = false
 # Shape-specific overrides are optional and inherit the global value when omitted:
 # tap_key_release_on_layer_change = true
 # one_shot_mod_release_on_layer_change = false
-# layer_release_on_layer_change = false
+# one_shot_layer_release_on_layer_change = false
 ```
 
 OSSM example (pure-mod SK activates on key press):

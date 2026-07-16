@@ -8,7 +8,7 @@ pub struct StickyKeyConfig {
     pub release_on_layer_change: Option<bool>,
     pub tap_key_release_on_layer_change: Option<bool>,
     pub one_shot_mod_release_on_layer_change: Option<bool>,
-    pub layer_release_on_layer_change: Option<bool>,
+    pub one_shot_layer_release_on_layer_change: Option<bool>,
 }
 
 /// Resolved behavioral configuration.
@@ -230,7 +230,7 @@ impl crate::KeyboardTomlConfig {
             release_on_layer_change: s.release_on_layer_change,
             tap_key_release_on_layer_change: s.tap_key_release_on_layer_change,
             one_shot_mod_release_on_layer_change: s.one_shot_mod_release_on_layer_change,
-            layer_release_on_layer_change: s.layer_release_on_layer_change,
+            one_shot_layer_release_on_layer_change: s.one_shot_layer_release_on_layer_change,
         });
 
         let auto_mouse_layer = toml_behavior
@@ -347,7 +347,7 @@ keymap = [
 release_on_layer_change = true
 tap_key_release_on_layer_change = true
 one_shot_mod_release_on_layer_change = false
-layer_release_on_layer_change = false
+one_shot_layer_release_on_layer_change = false
 "#;
 
         let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
@@ -365,6 +365,6 @@ layer_release_on_layer_change = false
         assert_eq!(sticky_key.release_on_layer_change, Some(true));
         assert_eq!(sticky_key.tap_key_release_on_layer_change, Some(true));
         assert_eq!(sticky_key.one_shot_mod_release_on_layer_change, Some(false));
-        assert_eq!(sticky_key.layer_release_on_layer_change, Some(false));
+        assert_eq!(sticky_key.one_shot_layer_release_on_layer_change, Some(false));
     }
 }

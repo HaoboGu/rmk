@@ -166,7 +166,7 @@ impl Keyboard<'_> {
         } else if self.sticky_key_state.is_pure_mod() {
             config.one_shot_mod_release_on_layer_change
         } else if self.sticky_key_state.is_layer() {
-            config.layer_release_on_layer_change
+            config.one_shot_layer_release_on_layer_change
         } else {
             return;
         };

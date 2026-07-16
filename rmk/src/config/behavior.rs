@@ -121,8 +121,8 @@ pub struct StickyKeyConfig {
     pub tap_key_release_on_layer_change: Option<bool>,
     /// One-shot-mod SK override. `None` inherits `release_on_layer_change`.
     pub one_shot_mod_release_on_layer_change: Option<bool>,
-    /// Layer SK override. `None` inherits `release_on_layer_change`.
-    pub layer_release_on_layer_change: Option<bool>,
+    /// One-shot-layer SK override. `None` inherits `release_on_layer_change`.
+    pub one_shot_layer_release_on_layer_change: Option<bool>,
 }
 
 impl Default for StickyKeyConfig {
@@ -135,7 +135,7 @@ impl Default for StickyKeyConfig {
             release_on_layer_change: false,
             tap_key_release_on_layer_change: None,
             one_shot_mod_release_on_layer_change: None,
-            layer_release_on_layer_change: None,
+            one_shot_layer_release_on_layer_change: None,
         }
     }
 }

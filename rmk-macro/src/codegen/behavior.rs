@@ -67,11 +67,11 @@ fn expand_sticky_key(behavior: &Behavior) -> proc_macro2::TokenStream {
             .as_ref()
             .and_then(|sk| sk.one_shot_mod_release_on_layer_change),
     );
-    let layer_release_on_layer_change = option_bool(
+    let one_shot_layer_release_on_layer_change = option_bool(
         behavior
             .sticky_key
             .as_ref()
-            .and_then(|sk| sk.layer_release_on_layer_change),
+            .and_then(|sk| sk.one_shot_layer_release_on_layer_change),
     );
 
     quote! {
@@ -83,7 +83,7 @@ fn expand_sticky_key(behavior: &Behavior) -> proc_macro2::TokenStream {
             release_on_layer_change: #release_on_layer_change,
             tap_key_release_on_layer_change: #tap_key_release_on_layer_change,
             one_shot_mod_release_on_layer_change: #one_shot_mod_release_on_layer_change,
-            layer_release_on_layer_change: #layer_release_on_layer_change,
+            one_shot_layer_release_on_layer_change: #one_shot_layer_release_on_layer_change,
         }
     }
 }
@@ -585,7 +585,7 @@ mod tests {
                 release_on_layer_change: Some(false),
                 tap_key_release_on_layer_change: Some(true),
                 one_shot_mod_release_on_layer_change: Some(false),
-                layer_release_on_layer_change: None,
+                one_shot_layer_release_on_layer_change: None,
             }),
             auto_mouse_layer: Vec::new(),
         };
@@ -600,6 +600,6 @@ mod tests {
                 "one_shot_mod_release_on_layer_change:::core::option::Option::Some(false)"
             )
         );
-        assert!(tokens.contains("layer_release_on_layer_change:::core::option::Option::None"));
+        assert!(tokens.contains("one_shot_layer_release_on_layer_change:::core::option::Option::None"));
     }
 }
