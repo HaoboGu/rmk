@@ -1,8 +1,6 @@
 use embassy_futures::join::join4;
 use embassy_futures::select::{Either, select};
 use embassy_sync::signal::Signal;
-#[cfg(feature = "host")]
-use embassy_usb::class::hid::HidReaderWriter;
 use embassy_usb::class::hid::{HidReader, HidWriter, ReportId, RequestHandler};
 use embassy_usb::control::OutResponse;
 use embassy_usb::driver::{Driver, EndpointError};
@@ -17,13 +15,23 @@ use crate::config::DeviceConfig;
 use crate::core_traits::Runnable;
 #[cfg(feature = "steno")]
 use crate::hid::StenoReport;
-#[cfg(feature = "host")]
-use crate::hid::ViaReport;
 use crate::hid::{
     CompositeReport, CompositeReportType, HidError, HidWriterTrait, KeyboardReport, Report, run_led_reader,
 };
 use crate::light::UsbLedReader;
 use crate::state::{current_usb_state, set_usb_state};
+
+#[cfg(feature = "rynk")]
+pub(crate) mod rynk;
+#[cfg(feature = "vial")]
+pub(crate) mod vial;
+
+// Both submodules export the same host-transport names; `rynk` and `vial`
+// are mutually exclusive, so exactly one alias set is compiled.
+#[cfg(feature = "rynk")]
+use self::rynk::{HostUsbReader, HostUsbWriter, build_host_usb, run_host_usb};
+#[cfg(feature = "vial")]
+use self::vial::{HostUsbReader, HostUsbWriter, build_host_usb, run_host_usb};
 
 pub(crate) static USB_REMOTE_WAKEUP: Signal<RawMutex, ()> = Signal::new();
 
@@ -149,7 +157,18 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     let mut usb_config = embassy_usb::Config::new(keyboard_config.vid, keyboard_config.pid);
     usb_config.manufacturer = Some(keyboard_config.manufacturer);
     usb_config.product = Some(keyboard_config.product_name);
-    usb_config.serial_number = Some(keyboard_config.serial_number);
+    // Prefix Rynk serials so hosts can identify RMK devices cheaply.
+    #[cfg(feature = "rynk")]
+    let serial_number = {
+        static SERIAL: StaticCell<heapless::String<64>> = StaticCell::new();
+        let s = SERIAL.init(heapless::String::new());
+        let _ = s.push_str(rmk_types::protocol::rynk::RYNK_SERIAL_MAGIC);
+        let _ = s.push_str(keyboard_config.serial_number);
+        s.as_str()
+    };
+    #[cfg(not(feature = "rynk"))]
+    let serial_number = keyboard_config.serial_number;
+    usb_config.serial_number = Some(serial_number);
     usb_config.max_power = 450;
     usb_config.supports_remote_wakeup = true;
 
@@ -160,10 +179,10 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     usb_config.device_protocol = 0x01;
     usb_config.composite_with_iads = true;
 
-    // Extra interfaces (usb_log, steno, dfu) overflow the 128-byte config descriptor buffer.
-    #[cfg(any(feature = "usb_log", feature = "steno", feature = "dfu"))]
+    // Extra interfaces (usb_log, steno, dfu, rynk) overflow the 128-byte config descriptor buffer.
+    #[cfg(any(feature = "usb_log", feature = "steno", feature = "dfu", feature = "rynk"))]
     const USB_BUF_SIZE: usize = 256;
-    #[cfg(not(any(feature = "usb_log", feature = "steno", feature = "dfu")))]
+    #[cfg(not(any(feature = "usb_log", feature = "steno", feature = "dfu", feature = "rynk")))]
     const USB_BUF_SIZE: usize = 128;
 
     // Control buffer must be large enough for the largest DFU transfer block.
@@ -195,20 +214,28 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
 /// USB transport runnable. Owns the embassy-usb device + every HID
 /// reader/writer pair and runs them concurrently for the lifetime of the
 /// program.
-pub struct UsbTransport<D: Driver<'static>> {
+pub struct UsbTransport<'a, D: Driver<'static>> {
     device: UsbDevice<'static, D>,
     keyboard_reader: HidReader<'static, D, 1>,
     keyboard_writer: HidWriter<'static, D, 8>,
     other_writer: HidWriter<'static, D, 9>,
     #[cfg(feature = "steno")]
     steno_writer: HidWriter<'static, D, 9>,
-    #[cfg(feature = "host")]
-    host_rw: HidReaderWriter<'static, D, 32, 32>,
     #[cfg(feature = "usb_log")]
     logger: Option<embassy_usb::class::cdc_acm::CdcAcmClass<'static, D>>,
+    /// Host-protocol transport halves: CDC-ACM under `rynk`, 32-byte HID
+    /// reports under `vial`.
+    #[cfg(feature = "host")]
+    host_reader: HostUsbReader<D>,
+    #[cfg(feature = "host")]
+    host_writer: HostUsbWriter<D>,
+    #[cfg(feature = "host")]
+    host_service: Option<&'a crate::host::HostService<'a>>,
+    #[cfg(not(feature = "host"))]
+    _phantom: core::marker::PhantomData<&'a ()>,
 }
 
-impl<D: Driver<'static>> UsbTransport<D> {
+impl<'a, D: Driver<'static>> UsbTransport<'a, D> {
     pub fn new(driver: D, device_config: DeviceConfig<'static>) -> Self {
         // nRF chips don't have a stable USB serial number unless one is derived
         // from the FICR. Override here so user code doesn't have to know.
@@ -234,8 +261,6 @@ impl<D: Driver<'static>> UsbTransport<D> {
         let other_writer = add_usb_writer!(&mut builder, CompositeReport, 9, 16);
         #[cfg(feature = "steno")]
         let steno_writer = add_usb_writer!(&mut builder, StenoReport, 9, 16);
-        #[cfg(feature = "host")]
-        let host_rw = add_usb_reader_writer!(&mut builder, ViaReport, 32, 32, 32);
         #[cfg(feature = "usb_log")]
         let logger = Some(add_usb_logger!(&mut builder));
 
@@ -253,6 +278,10 @@ impl<D: Driver<'static>> UsbTransport<D> {
                 );
             }
         }
+
+        #[cfg(any(feature = "rynk", feature = "vial"))]
+        let (host_reader, host_writer) = build_host_usb(&mut builder);
+
         let (keyboard_reader, keyboard_writer) = keyboard_rw.split();
         let device = builder.build();
 
@@ -263,15 +292,28 @@ impl<D: Driver<'static>> UsbTransport<D> {
             other_writer,
             #[cfg(feature = "steno")]
             steno_writer,
-            #[cfg(feature = "host")]
-            host_rw,
             #[cfg(feature = "usb_log")]
             logger,
+            #[cfg(any(feature = "rynk", feature = "vial"))]
+            host_reader,
+            #[cfg(any(feature = "rynk", feature = "vial"))]
+            host_writer,
+            #[cfg(feature = "host")]
+            host_service: None,
+            #[cfg(not(feature = "host"))]
+            _phantom: core::marker::PhantomData,
         }
+    }
+
+    /// Attach the host-protocol service
+    #[cfg(feature = "host")]
+    pub fn with_host_service(mut self, service: &'a crate::host::HostService<'a>) -> Self {
+        self.host_service = Some(service);
+        self
     }
 }
 
-impl<D: Driver<'static>> Runnable for UsbTransport<D> {
+impl<D: Driver<'static>> Runnable for UsbTransport<'_, D> {
     async fn run(&mut self) -> ! {
         let Self {
             device,
@@ -280,10 +322,16 @@ impl<D: Driver<'static>> Runnable for UsbTransport<D> {
             other_writer,
             #[cfg(feature = "steno")]
             steno_writer,
-            #[cfg(feature = "host")]
-            host_rw,
             #[cfg(feature = "usb_log")]
             logger,
+            #[cfg(any(feature = "rynk", feature = "vial"))]
+            host_reader,
+            #[cfg(any(feature = "rynk", feature = "vial"))]
+            host_writer,
+            #[cfg(feature = "host")]
+            host_service,
+            #[cfg(not(feature = "host"))]
+                _phantom: _,
         } = self;
 
         let usb_device_task = async {
@@ -314,8 +362,14 @@ impl<D: Driver<'static>> Runnable for UsbTransport<D> {
         let led_task = run_led_reader(&mut led_reader, ConnectionType::Usb);
 
         let host_and_extras = async {
-            #[cfg(feature = "host")]
-            let host_task = crate::host::usb::run_usb_host(host_rw);
+            #[cfg(any(feature = "rynk", feature = "vial"))]
+            let host_task = async {
+                if let Some(service) = *host_service {
+                    run_host_usb(host_reader, host_writer, service).await
+                } else {
+                    core::future::pending::<()>().await
+                }
+            };
             #[cfg(not(feature = "host"))]
             let host_task = core::future::pending::<()>();
 
@@ -352,7 +406,7 @@ macro_rules! add_usb_logger {
         // The usb logger can be only initialized once, so just use a fixed name for the state
         static LOGGER_STATE: StaticCell<State> = StaticCell::new();
         let state = LOGGER_STATE.init(State::new());
-        CdcAcmClass::new($usb_builder, state, 64)
+        CdcAcmClass::new($usb_builder, state, embassy_usb_logger::MAX_PACKET_SIZE as u16)
     }};
 }
 

@@ -2,6 +2,8 @@ mod behavior;
 #[cfg(feature = "_ble")]
 mod ble_battery;
 mod device;
+#[cfg(feature = "rynk")]
+mod lock;
 mod positional;
 mod storage;
 mod vial;
@@ -13,6 +15,8 @@ pub use behavior::{
 #[cfg(feature = "_ble")]
 pub use ble_battery::BleBatteryConfig;
 pub use device::{DeviceConfig, RMK_BUILD_INFO};
+#[cfg(feature = "rynk")]
+pub use lock::LockConfig;
 pub use positional::{Hand, PositionalConfig};
 pub use storage::StorageConfig;
 pub use vial::VialConfig;
@@ -23,6 +27,12 @@ pub struct RmkConfig<'a> {
     pub device_config: DeviceConfig<'a>,
     #[cfg(feature = "vial")]
     pub vial_config: VialConfig<'a>,
+    #[cfg(feature = "rynk")]
+    pub lock_config: LockConfig,
+    /// Opaque, compressed physical-layout blob served over rynk's `GetLayout`.
+    /// Baked at build time from `[layout].map`; empty when there's no layout.
+    #[cfg(feature = "rynk")]
+    pub layout_blob: &'a [u8],
     #[cfg(feature = "storage")]
     pub storage_config: StorageConfig,
     #[cfg(feature = "_ble")]
