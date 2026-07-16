@@ -273,6 +273,13 @@ impl Keyboard<'_> {
         let deadline = StickyKeyDeadline::from_timeout(config.timeout);
 
         if event.pressed {
+            // A held tap-key owns a registered HID key. Release it before this
+            // layer shape takes over the shared latch so its later physical
+            // release cannot leave that HID key stuck in the report.
+            if self.sticky_key_state.is_tap_key() {
+                self.release_sticky_key_if_active().await;
+            }
+
             // Latch-replacement rule on a single mutually-exclusive latch: a layer SK press
             // takes over the latch. Deactivate any previously-latched OSL layer first, then
             // drop any latched mods/tap-key. A layer-on-layer press keeps the existing phase
@@ -406,10 +413,21 @@ impl Keyboard<'_> {
             // Only unregister and report if SK was active (key was registered on press).
             // If max_repeat deactivated SK silently on the press event, the key was never
             // registered, so the release is a no-op.
-            if let StickyKeyState::Active { source, pressed, .. } = &mut self.sticky_key_state
+            if let StickyKeyState::Active {
+                source,
+                pressed,
+                deadline,
+                ..
+            } = &mut self.sticky_key_state
                 && *source == event.pos
             {
                 *pressed = false;
+                // A timeout that fired while this key was held cleared its deadline so
+                // this physical release could unregister the tap key safely. Re-arm the
+                // latched modifier now; otherwise it would remain active indefinitely.
+                if deadline.get().is_none() {
+                    *deadline = StickyKeyDeadline::from_timeout(config.timeout);
+                }
                 self.unregister_key(params.key, event);
                 self.send_keyboard_report_with_resolved_modifiers(false).await;
             }

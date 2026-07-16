@@ -825,6 +825,29 @@ fn test_sk_tap_key_replaces_layer() {
     };
 }
 
+/// A layer-shaped SK must release a physically held tap-key before replacing the
+/// shared latch; otherwise the displaced tap key remains registered indefinitely.
+#[test]
+fn test_sk_layer_replaces_held_tap_key_without_sticking() {
+    key_sequence_test! {
+        keyboard: create_test_keyboard_mixed(),
+        sequence: [
+            [0, 1, true,  0], // Press SK(Tab, LAlt)
+            [0, 2, true,  0], // Press SK(MO(1)) while Tab is still held → releases Tab first
+            [0, 1, false, 0], // Release displaced tap-key: must be ignored
+            [0, 2, false, 0], // Release layer SK → layer 1 is latched
+            [0, 3, true,  0], // Resolves to Z on the latched layer
+            [0, 3, false, 0], // Releases Z and consumes the layer latch
+        ],
+        expected_reports: [
+            [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(Z), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
 /// StickyKey Test 15: `activate_on_keypress` is IGNORED for tap-key SKs.
 ///
 /// Docs: `activate_on_keypress` is "honored only for pure-mod SKs" and is
@@ -951,7 +974,8 @@ fn test_sk_timeout_while_held() {
 ///
 /// Tap-key SKs use the `Latched` phase while their physical key is down, so phase alone cannot
 /// tell the timeout handler whether clearing the state is safe. The physical-press flag must keep
-/// the state alive until release so that release unregisters Tab and retains the latched Alt.
+/// the state alive until release so that release unregisters Tab, retains the latched Alt, and
+/// re-arms Alt's timeout.
 #[test]
 fn test_tap_sk_timeout_while_held() {
     key_sequence_test! {
@@ -959,10 +983,15 @@ fn test_tap_sk_timeout_while_held() {
         sequence: [
             [0, 0, true,  0],  // Press SK(Tab, LAlt)
             [0, 0, false, 20], // Hold past timeout, then release
+            [0, 1, true,  20], // Wait past the re-armed timeout, then press A
+            [0, 1, false, 0],
         ],
         expected_reports: [
             [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],
             [KC_LALT, [0, 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
         ]
     };
 }
