@@ -1,4 +1,5 @@
 use quote::{format_ident, quote};
+use rmk_config::EncoderPhase;
 use rmk_config::resolved::hardware::{ChipModel, EncoderConfig, EncoderResolution};
 
 use super::Initializer;
@@ -41,8 +42,8 @@ pub(crate) fn expand_encoder_device(
         };
 
         // Create different types of encoders based on the phase field
-        let encoder_device = match encoder.phase.as_deref() {
-            Some("e8h7") => {
+        let encoder_device = match encoder.phase {
+            EncoderPhase::E8h7 => {
                 quote! {
                     let mut #encoder_name = ::rmk::input_device::rotary_encoder::RotaryEncoder::with_phase(
                         #pin_a,
@@ -52,7 +53,7 @@ pub(crate) fn expand_encoder_device(
                     )#debounce_chain;
                 }
             }
-            Some("resolution") => {
+            EncoderPhase::Resolution => {
                 // When phase is "resolution", ensure resolution and reverse are set
                 let resolution = match encoder.resolution.clone().expect(
                     "`resolution` field needs to be set when the encoder's mode is 'resolution'",
@@ -72,8 +73,7 @@ pub(crate) fn expand_encoder_device(
                     )#debounce_chain;
                 }
             }
-            Some("default") => {
-                // Default phase
+            EncoderPhase::Default => {
                 quote! {
                     let mut #encoder_name = ::rmk::input_device::rotary_encoder::RotaryEncoder::with_phase(
                         #pin_a,
@@ -82,9 +82,6 @@ pub(crate) fn expand_encoder_device(
                         #encoder_id
                     )#debounce_chain;
                 }
-            }
-            _ => {
-                panic!("Invalid rotary encoder phase, available phase: default, resolution, e8h7");
             }
         };
 
