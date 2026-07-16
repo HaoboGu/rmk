@@ -1,61 +1,89 @@
 //! Combo endpoint types.
 
 use postcard::experimental::max_size::MaxSize;
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::combo::Combo;
 
 /// Request payload for `SetCombo`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct SetComboRequest {
     pub index: u8,
     pub config: Combo,
 }
 
-// Bulk transfer types live in the `bulk` submodule below and are re-exported
-// when the `bulk` feature is enabled. Gating the entire submodule once avoids
-// repeating `#[cfg(feature = "bulk")]` on every type, impl, and import.
-#[cfg(feature = "bulk")]
 mod bulk {
-    use heapless::Vec;
     use postcard::experimental::max_size::MaxSize;
-    use postcard_schema::Schema;
     use serde::{Deserialize, Serialize};
 
     use crate::combo::Combo;
+    #[cfg(not(feature = "host"))]
     use crate::constants::BULK_SIZE;
 
-    /// Request payload for `GetComboBulk`.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+    // Firmware uses a bounded Vec; host bounds transfers from capabilities.
+    #[cfg(not(feature = "host"))]
+    type BulkCombos = heapless::Vec<Combo, BULK_SIZE>;
+    #[cfg(feature = "host")]
+    type BulkCombos = alloc::vec::Vec<Combo>;
+
+    /// Request payload for `GetComboBulk`: read a page of combos starting at slot
+    /// `start_index`. The firmware returns as many as fit (`max_bulk_configs`),
+    /// fewer at the end, or an empty page once `start_index` reaches the slot count.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct GetComboBulkRequest {
         pub start_index: u8,
-        pub count: u8,
     }
 
-    /// Bulk request payload for setting multiple combos at once.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+    /// Bulk request payload for `SetComboBulk`: write `configs` starting at slot
+    /// `start_index`.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct SetComboBulkRequest {
         pub start_index: u8,
-        pub configs: Vec<Combo, BULK_SIZE>,
+        #[cfg_attr(feature = "wasm", tsify(type = "Combo[]"))]
+        pub configs: BulkCombos,
     }
 
+    // Firmware sizes its fixed buffer from these exact bounds; host builds leave
+    // the fields unbounded and never need `MaxSize`.
+    #[cfg(not(feature = "host"))]
     impl MaxSize for SetComboBulkRequest {
-        const POSTCARD_MAX_SIZE: usize = u8::POSTCARD_MAX_SIZE + crate::heapless_vec_max_size::<Combo, BULK_SIZE>();
+        // start_index, then the bounded configs vector.
+        const POSTCARD_MAX_SIZE: usize =
+            <u8 as MaxSize>::POSTCARD_MAX_SIZE + crate::heapless_vec_max_size::<Combo, BULK_SIZE>();
     }
 
     /// Bulk response for getting multiple combos at once.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct GetComboBulkResponse {
-        pub configs: Vec<Combo, BULK_SIZE>,
+        #[cfg_attr(feature = "wasm", tsify(type = "Combo[]"))]
+        pub configs: BulkCombos,
     }
 
+    #[cfg(not(feature = "host"))]
     impl MaxSize for GetComboBulkResponse {
         const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<Combo, BULK_SIZE>();
     }
+
+    impl GetComboBulkResponse {
+        /// Build the response, collecting up to the bulk capacity.
+        pub fn from_iter_bounded(configs: impl IntoIterator<Item = Combo>) -> Self {
+            #[cfg(not(feature = "host"))]
+            let configs = configs.into_iter().take(BULK_SIZE).collect();
+            #[cfg(feature = "host")]
+            let configs = configs.into_iter().collect();
+            Self { configs }
+        }
+    }
 }
 
-#[cfg(feature = "bulk")]
 pub use bulk::*;
 
 #[cfg(test)]
@@ -63,7 +91,7 @@ mod tests {
     use super::*;
     use crate::action::KeyAction;
     use crate::constants::COMBO_SIZE;
-    use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+    use crate::protocol::rynk::tests::{assert_max_size_bound, round_trip};
 
     /// Build a `Combo` filled to `COMBO_SIZE` actions plus a `Some` layer —
     /// the worst case for the manual `MaxSize` impl on `Combo`.
@@ -99,7 +127,8 @@ mod tests {
         assert_max_size_bound(&c);
     }
 
-    #[cfg(feature = "bulk")]
+    // Firmware-only: exercises heapless bulk capacity.
+    #[cfg(not(feature = "host"))]
     mod bulk {
         use heapless::Vec;
 
@@ -107,7 +136,7 @@ mod tests {
         use super::full_combo;
         use crate::combo::Combo;
         use crate::constants::BULK_SIZE;
-        use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+        use crate::protocol::rynk::tests::{assert_max_size_bound, round_trip};
 
         #[test]
         fn round_trip_set_combo_bulk_request_max_capacity() {

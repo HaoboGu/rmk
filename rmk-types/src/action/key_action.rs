@@ -1,8 +1,6 @@
 //! Composite key actions stored in the keymap.
 
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use super::Action;
@@ -12,8 +10,9 @@ use crate::morse::MorseProfile;
 /// It can be a single action like triggering a key, or a composite keyboard action like tap/hold
 #[derive(Debug, Copy, Clone, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[non_exhaustive]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum KeyAction {
     /// No action
     No,

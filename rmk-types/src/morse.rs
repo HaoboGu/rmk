@@ -7,10 +7,6 @@
 
 use heapless::LinearMap;
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::Schema;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::schema::{DataModelType, NamedType, NamedValue};
 use serde::{Deserialize, Serialize};
 
 use crate::action::Action;
@@ -23,10 +19,11 @@ use crate::constants::MORSE_SIZE;
 /// Mode for morse key behavior
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[repr(u8)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum MorseMode {
-    /// Same as QMK's permissive hold: https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes
+    /// Same as QMK's permissive hold: <https://docs.qmk.fm/tap_hold#tap-or-hold-decision-modes>
     /// When another key is pressed and released during the current morse key is held,
     /// the hold action of current morse key will be triggered
     PermissiveHold,
@@ -55,9 +52,8 @@ pub enum MorseMode {
 /// - `gap_timeout` (bits 29-17): gap timeout in ms (0 = None, max 8191)
 /// - `uni_tap` (bits 16-15): `00`/`01` = None, `10` = Some(false), `11` = Some(true)
 /// - `hold_timeout` (bits 12-0): hold timeout in ms (0 = None, max 8191)
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize, MaxSize)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub struct MorseProfile(u64);
 
 const TIMEOUT_MASK: u64 = 0x1FFF;
@@ -251,6 +247,66 @@ impl From<MorseProfile> for u64 {
     }
 }
 
+// Wire stays packed; human-readable serializers expose named fields.
+impl Serialize for MorseProfile {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if serializer.is_human_readable() {
+            #[derive(Serialize)]
+            struct Repr {
+                unilateral_tap: Option<bool>,
+                enable_flow_tap: Option<bool>,
+                mode: Option<MorseMode>,
+                hold_timeout_ms: Option<u16>,
+                gap_timeout_ms: Option<u16>,
+                quick_tap_timeout_ms: Option<u16>,
+            }
+            Repr {
+                unilateral_tap: self.unilateral_tap(),
+                enable_flow_tap: self.enable_flow_tap(),
+                mode: self.mode(),
+                hold_timeout_ms: self.hold_timeout_ms(),
+                gap_timeout_ms: self.gap_timeout_ms(),
+                quick_tap_timeout_ms: self.quick_tap_timeout_ms(),
+            }
+            .serialize(serializer)
+        } else {
+            serializer.serialize_u64(self.0)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for MorseProfile {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        if deserializer.is_human_readable() {
+            #[derive(Deserialize)]
+            struct Repr {
+                unilateral_tap: Option<bool>,
+                enable_flow_tap: Option<bool>,
+                mode: Option<MorseMode>,
+                hold_timeout_ms: Option<u16>,
+                gap_timeout_ms: Option<u16>,
+                quick_tap_timeout_ms: Option<u16>,
+            }
+            let r = Repr::deserialize(deserializer)?;
+            Ok(
+                MorseProfile::new(r.unilateral_tap, r.mode, r.hold_timeout_ms, r.gap_timeout_ms)
+                    .with_enable_flow_tap(r.enable_flow_tap)
+                    .with_quick_tap_timeout_ms(r.quick_tap_timeout_ms),
+            )
+        } else {
+            Ok(MorseProfile(u64::deserialize(deserializer)?))
+        }
+    }
+}
+
+// TS shape mirrors the `Repr` above; `Option<T>` renders as `T | undefined`.
+#[cfg(feature = "wasm")]
+const _: () = {
+    #[::wasm_bindgen::prelude::wasm_bindgen(typescript_custom_section)]
+    const TS_APPEND_CONTENT: &'static str = "export type MorseProfile = { unilateral_tap: boolean | undefined; enable_flow_tap: boolean | undefined; mode: MorseMode | undefined; hold_timeout_ms: number | undefined; gap_timeout_ms: number | undefined; quick_tap_timeout_ms: number | undefined; };";
+};
+crate::wasm_object_abi!(MorseProfile, "MorseProfile");
+
 // ---------------------------------------------------------------------------
 // MorsePattern & Morse — pattern encoding and key definition
 // ---------------------------------------------------------------------------
@@ -258,8 +314,9 @@ impl From<MorseProfile> for u64 {
 /// MorsePattern is a sequence of maximum 15 taps or holds that can be encoded into an u16:
 /// 0x1 when empty, then 0 for tap or 1 for hold shifted from the right
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct MorsePattern(u16);
 
 pub const TAP: MorsePattern = MorsePattern(0b10);
@@ -346,12 +403,15 @@ impl MorsePattern {
 /// Note: `MORSE_SIZE` is a **wire-format** capacity — on firmware it equals
 /// `MAX_PATTERNS_PER_KEY` (from `keyboard.toml`), on host it's a fixed upper bound.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct Morse {
     /// The profile of this morse key, which defines the timing parameters, etc.
     /// If some of its fields are filled with None, the global default value will be used.
     pub profile: MorseProfile,
     /// The list of pattern -> action pairs, which can be triggered
     #[serde(with = "morse_actions_serde")]
+    #[cfg_attr(feature = "wasm", tsify(type = "[number, Action][]"))]
     pub actions: LinearMap<MorsePattern, Action, MORSE_SIZE>,
 }
 
@@ -386,36 +446,9 @@ impl PartialEq for Morse {
 
 impl Eq for Morse {}
 
-/// Manual Schema impl because Morse uses custom serde for LinearMap.
-/// The wire format is: (MorseProfile, Vec<(u16, Action)>).
-///
-/// **Important:** This must stay in sync with the custom serde impl in
-/// `morse_actions_serde`. If the wire format changes, update this Schema
-/// accordingly. The `morse_schema_matches_wire_format` test validates
-/// this invariant.
-#[cfg(feature = "rmk_protocol")]
-impl Schema for Morse {
-    const SCHEMA: &'static NamedType = &NamedType {
-        name: "Morse",
-        ty: &DataModelType::Struct(&[
-            &NamedValue {
-                name: "profile",
-                ty: <MorseProfile as Schema>::SCHEMA,
-            },
-            &NamedValue {
-                name: "actions",
-                ty: &NamedType {
-                    name: "MorseActions",
-                    ty: &DataModelType::Seq(&NamedType {
-                        name: "MorseActionEntry",
-                        ty: &DataModelType::Tuple(&[<u16 as Schema>::SCHEMA, <Action as Schema>::SCHEMA]),
-                    }),
-                },
-            },
-        ]),
-    };
-}
-
+/// Wire format note: `Morse` uses a custom serde impl for the `LinearMap`
+/// of actions. The on-wire shape is `(MorseProfile, Vec<(u16, Action)>)`.
+/// The `morse_wire_format` test below pins this contract.
 impl Morse {
     pub fn new_from_vial(
         tap: Action,
@@ -815,15 +848,36 @@ mod tests {
         assert_eq!(profile.mode(), Some(MorseMode::PermissiveHold));
     }
 
-    /// Validates that the manual Schema impl matches the actual serde wire format.
-    ///
-    /// The Schema claims Morse serializes as:
-    ///   struct { profile: MorseProfile, actions: Vec<(u16, Action)> }
-    ///
-    /// We verify this by checking that a Morse value can be reconstructed by
-    /// manually deserializing its two fields in order using the same bytes.
+    /// The human-readable serde goes `MorseProfile` -> decoded parts -> `new()`.
+    /// All 32 bits are covered by the five fields, so that path must be lossless.
     #[test]
-    fn morse_schema_matches_wire_format() {
+    fn morse_profile_parts_roundtrip() {
+        for p in [
+            MorseProfile::new(
+                Some(false),
+                Some(MorseMode::HoldOnOtherPress),
+                Some(TIMEOUT_MAX_MS),
+                Some(1),
+            )
+            .with_enable_flow_tap(Some(false)),
+            MorseProfile::new(Some(true), Some(MorseMode::Normal), Some(200), Some(150))
+                .with_enable_flow_tap(Some(true)),
+            MorseProfile::const_default(),
+        ] {
+            let parts = MorseProfile::new(p.unilateral_tap(), p.mode(), p.hold_timeout_ms(), p.gap_timeout_ms())
+                .with_enable_flow_tap(p.enable_flow_tap());
+            assert_eq!(p, parts);
+        }
+    }
+
+    /// Pins the on-wire shape of `Morse`:
+    ///   `(MorseProfile, Vec<(u16, Action)>)`
+    ///
+    /// `Morse` uses a custom serde impl for the `LinearMap` of actions; this
+    /// test verifies a Morse value can be reconstructed by manually
+    /// deserializing those two fields from the same byte stream.
+    #[test]
+    fn morse_wire_format() {
         use postcard::to_slice;
 
         // Build a Morse with known data

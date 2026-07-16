@@ -1,16 +1,15 @@
 //! Shared connection type definitions used across RMK crates.
 
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::ble::{BleState, BleStatus};
 
 /// Connection type for the keyboard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum ConnectionType {
     Usb,
     Ble,
@@ -20,9 +19,10 @@ pub enum ConnectionType {
 /// the bus is enumerated but transmission is gated on remote wakeup — the
 /// first key still needs to reach the USB writer to trigger that wakeup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Default)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum UsbState {
     #[default]
     Disabled,
@@ -35,8 +35,9 @@ pub enum UsbState {
 /// availability and routing. The active transport is derived on demand via
 /// [`Self::decide_active`] from the input fields below.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct ConnectionStatus {
     pub usb: UsbState,
     pub ble: BleStatus,

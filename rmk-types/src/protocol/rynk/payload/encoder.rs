@@ -1,20 +1,23 @@
 //! Encoder endpoint types.
 
 use postcard::experimental::max_size::MaxSize;
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::action::EncoderAction;
 
 /// Request payload for `GetEncoderAction`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct GetEncoderRequest {
     pub encoder_id: u8,
     pub layer: u8,
 }
 
 /// Request payload for `SetEncoderAction`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct SetEncoderRequest {
     pub encoder_id: u8,
     pub layer: u8,
@@ -26,7 +29,7 @@ mod tests {
     use super::*;
     use crate::action::{Action, KeyAction};
     use crate::keycode::{ConsumerKey, KeyCode};
-    use crate::protocol::rmk::test_utils::round_trip;
+    use crate::protocol::rynk::tests::round_trip;
 
     #[test]
     fn round_trip_encoder_requests() {

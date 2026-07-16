@@ -2,14 +2,16 @@
 
 use heapless::Vec;
 use postcard::experimental::max_size::MaxSize;
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::constants::MACRO_DATA_SIZE;
 
 /// Raw macro data for a single macro chunk.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct MacroData {
+    #[cfg_attr(feature = "wasm", tsify(type = "number[]"))]
     pub data: Vec<u8, MACRO_DATA_SIZE>,
 }
 
@@ -18,22 +20,21 @@ impl MaxSize for MacroData {
 }
 
 /// Request payload for `GetMacro`.
-///
-/// The host reads macro data in chunks of up to `MACRO_DATA_SIZE` bytes.
-/// A response shorter than `MACRO_DATA_SIZE` signals the end of the macro.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct GetMacroRequest {
-    pub index: u8,
     pub offset: u16,
 }
 
 /// Request payload for `SetMacro`.
 ///
-/// The host writes macro data in chunks of up to `MACRO_DATA_SIZE` bytes.
-/// A final chunk shorter than `MACRO_DATA_SIZE` signals the end of the macro.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+/// Writes are by `offset`; chunk length carries no end-of-macro meaning, and
+/// writes past the macro region are truncated by the firmware.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct SetMacroRequest {
-    pub index: u8,
     pub offset: u16,
     pub data: MacroData,
 }
@@ -41,7 +42,7 @@ pub struct SetMacroRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+    use crate::protocol::rynk::tests::{assert_max_size_bound, round_trip};
 
     #[test]
     fn round_trip_macro_data() {
@@ -63,8 +64,8 @@ mod tests {
 
     #[test]
     fn round_trip_get_macro_request() {
-        round_trip(&GetMacroRequest { index: 0, offset: 0 });
-        round_trip(&GetMacroRequest { index: 3, offset: 256 });
+        round_trip(&GetMacroRequest { offset: 0 });
+        round_trip(&GetMacroRequest { offset: 256 });
     }
 
     #[test]
@@ -72,7 +73,6 @@ mod tests {
         let mut data: Vec<u8, MACRO_DATA_SIZE> = Vec::new();
         data.extend_from_slice(&[0x01, 0x02]).unwrap();
         round_trip(&SetMacroRequest {
-            index: 1,
             offset: 0,
             data: MacroData { data },
         });
