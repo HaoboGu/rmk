@@ -1,5 +1,6 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
+use rmk_config::SplitConnection;
 use rmk_config::resolved::Hardware;
 use rmk_config::resolved::hardware::{
     BleConfig, BoardConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig,
@@ -326,8 +327,8 @@ fn expand_split_peripheral(
 
     let imports = expand_custom_imports(&item_mod);
     let mut chip_init = expand_chip_init(hardware, Some(id), &item_mod);
-
-    if split_config.connection == "ble" {
+    if split_config.connection == SplitConnection::Ble {
+        // Add storage when using BLE split
         let flash_init = expand_flash_init(hardware);
         chip_init.extend(quote! {
             #flash_init
@@ -529,7 +530,7 @@ fn expand_split_peripheral_entry(
     // Add matrix to devices, and run all devices
     let mut devs = devices.clone();
     devs.push(quote! {matrix});
-    if split_config.connection == "ble" {
+    if split_config.connection == SplitConnection::Ble {
         devs.push(quote! {storage});
     }
     let device_task = quote! {
@@ -549,69 +550,70 @@ fn expand_split_peripheral_entry(
         quote! {}
     };
 
-    if split_config.connection == "ble" {
-        let peripheral_run = quote! {
-            ::rmk::split::peripheral::run_rmk_split_peripheral(
-                #id,
-                &stack,
-            )
-        };
-        // Build task list: device, processor (if any), peripheral, registered_processors, dfu
-        let mut tasks = vec![device_task];
-        if !processors.is_empty() {
-            tasks.push(processor_task);
+    match split_config.connection {
+        SplitConnection::Ble => {
+            let peripheral_run = quote! {
+                ::rmk::split::peripheral::run_rmk_split_peripheral(
+                    #id,
+                    &stack,
+                )
+            };
+            // Build task list: device, processor (if any), peripheral, registered_processors, dfu
+            let mut tasks = vec![device_task];
+            if !processors.is_empty() {
+                tasks.push(processor_task);
+            }
+            tasks.push(peripheral_run);
+            tasks.extend(registered_processors);
+            if let Some(t) = &watchdog_task {
+                tasks.push(t.clone());
+            }
+            if let Some(t) = &dfu_task_future {
+                tasks.push(t.clone());
+            }
+            let run_rmk_peripheral = join_all_tasks(tasks);
+            quote! {
+                #run_rmk_peripheral
+            }
         }
-        tasks.push(peripheral_run);
-        tasks.extend(registered_processors);
-        if let Some(t) = &watchdog_task {
-            tasks.push(t.clone());
-        }
-        if let Some(t) = &dfu_task_future {
-            tasks.push(t.clone());
-        }
-        let run_rmk_peripheral = join_all_tasks(tasks);
-        quote! {
-            #run_rmk_peripheral
-        }
-    } else if split_config.connection == "serial" {
-        let peripheral_serial = peripheral_config
-            .serial
-            .clone()
-            .expect("Missing peripheral serial config");
-        if peripheral_serial.len() != 1 {
-            panic!("Peripheral should have only one serial config");
-        }
-        let serial_init = expand_serial_init(chip, peripheral_serial);
-
-        let uart_instance = format_ident!(
-            "{}",
-            peripheral_config
+        SplitConnection::Serial => {
+            let peripheral_serial = peripheral_config
                 .serial
-                .as_ref()
-                .expect("Missing peripheral serial config")
-                .first()
-                .expect("Peripheral should have only one serial config")
-                .instance
-                .to_lowercase()
-        );
-        let peripheral_run = quote! {
-            ::rmk::split::peripheral::run_rmk_split_peripheral(#uart_instance)
-        };
-        let mut tasks = vec![device_task, peripheral_run];
-        tasks.extend(registered_processors);
-        if let Some(t) = &watchdog_task {
-            tasks.push(t.clone());
+                .clone()
+                .expect("Missing peripheral serial config");
+            if peripheral_serial.len() != 1 {
+                panic!("Peripheral should have only one serial config");
+            }
+            let serial_init = expand_serial_init(chip, peripheral_serial);
+
+            let uart_instance = format_ident!(
+                "{}",
+                peripheral_config
+                    .serial
+                    .as_ref()
+                    .expect("Missing peripheral serial config")
+                    .first()
+                    .expect("Peripheral should have only one serial config")
+                    .instance
+                    .to_lowercase()
+            );
+            let peripheral_run = quote! {
+                ::rmk::split::peripheral::run_rmk_split_peripheral(#uart_instance)
+            };
+            let mut tasks = vec![device_task, peripheral_run];
+            tasks.extend(registered_processors);
+            if let Some(t) = &watchdog_task {
+                tasks.push(t.clone());
+            }
+            if let Some(t) = &dfu_task_future {
+                tasks.push(t.clone());
+            }
+            let run_rmk_peripheral = join_all_tasks(tasks);
+            quote! {
+                #serial_init
+                #run_rmk_peripheral
+            }
         }
-        if let Some(t) = &dfu_task_future {
-            tasks.push(t.clone());
-        }
-        let run_rmk_peripheral = join_all_tasks(tasks);
-        quote! {
-            #serial_init
-            #run_rmk_peripheral
-        }
-    } else {
-        panic!("Invalid split connection type: {}", split_config.connection);
     }
 }
 

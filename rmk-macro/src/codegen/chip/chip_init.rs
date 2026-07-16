@@ -1,6 +1,7 @@
 use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, quote};
+use rmk_config::DcdcReg0Voltage;
 use rmk_config::resolved::Hardware;
 use rmk_config::resolved::hardware::{BoardConfig, ChipModel, ChipSeries, CommunicationConfig};
 use syn::{ItemFn, ItemMod};
@@ -48,7 +49,7 @@ pub(crate) fn expand_chip_init(
 pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize>) -> TokenStream2 {
     let chip = &hardware.chip;
     let communication = &hardware.communication;
-    let peri_num = hardware.board.get_num_periphreal();
+    let peri_num = hardware.board.get_num_peripheral();
     let set_io_capabilities = if peripheral_id.is_none() {
         quote! {
             if ::rmk::ble::passkey::passkey_entry_enabled() {
@@ -68,16 +69,11 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
             let dcdc_config = if chip.chip == "nrf52840" {
                 let reg0_enabled = chip_cfg.dcdc_reg0.unwrap_or(true);
                 let reg1_enabled = chip_cfg.dcdc_reg1.unwrap_or(true);
-                let reg0_voltage_str = chip_cfg.dcdc_reg0_voltage.as_deref().unwrap_or("3V3");
-                let reg0_voltage = match reg0_voltage_str {
-                    "3V3" => quote! { ::embassy_nrf::config::Reg0Voltage::_3V3 },
-                    "1V8" => quote! { ::embassy_nrf::config::Reg0Voltage::_1V8 },
-                    _ => {
-                        panic!(
-                            "Invalid dcdc_reg0_voltage: {}. Must be \"3V3\" or \"1V8\"",
-                            reg0_voltage_str
-                        );
+                let (reg0_voltage, reg0_voltage_str) = match chip_cfg.dcdc_reg0_voltage {
+                    Some(DcdcReg0Voltage::V1_8) => {
+                        (quote! { ::embassy_nrf::config::Reg0Voltage::_1V8 }, "1V8")
                     }
+                    _ => (quote! { ::embassy_nrf::config::Reg0Voltage::_3V3 }, "3V3"),
                 };
                 quote! {
                     config.dcdc.reg0_voltage = Some(#reg0_voltage);

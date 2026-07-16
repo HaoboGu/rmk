@@ -169,7 +169,7 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
             // nrf-sdc interrupt config
             let nrf_sdc_config = match &board {
                 BoardConfig::Split(_) => {
-                    let num_peri = board.get_num_periphreal() as u8;
+                    let num_peri = board.get_num_peripheral() as u8;
                     quote! {
                         ::nrf_sdc::Builder::new()?
                         .support_scan()

@@ -1,5 +1,5 @@
-[usb]
-enabled = false
+[keyboard]
+usb_enable = false
 
 [ble]
 enabled = true
