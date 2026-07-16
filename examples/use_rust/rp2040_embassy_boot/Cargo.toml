@@ -10,8 +10,12 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = [
+rmk = { path = "../../../rmk", default-features = false, features = [
+	"defmt",
 	"dfu_rp",
+	"storage",
+	"vial",
+	"watchdog",
 	# "dfu_lock"
 ] }
 embassy-time = { version = "0.5", features = ["defmt"] }
