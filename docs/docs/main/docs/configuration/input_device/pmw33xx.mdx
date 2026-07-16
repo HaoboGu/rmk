@@ -3,14 +3,12 @@
 PMW3360 / PMW3389 are optical mouse sensors.
 
 ::: note
-Both chips, the PMW3360 and PMW3389, are very similar. The main difference is the higher maximum cpi of the sensor. (12000 on the PMW3360 vs. 16000 on PMW3389)
-They share one driver in RMK and the configuration of both is the same.
+Both chips, the PMW3360 and PMW3389, are very similar. The main difference is the higher maximum cpi of the sensor. (12000 on the PMW3360 vs. 16000 on PMW3389) They share one driver in RMK and the configuration of both is the same.
 
 - PMW33xx uses full-duplex SPI. (MISO/ MOSI) Please note that because of the special requirements those sensors have for the switching of their chip select pin, they can not share an SPI bus with each other or any other SPI device. For each SPI peripheral (SPI0, SPI1 etc.) there can only be one sensor connected.
 - Set `motion` pin for better power efficiency. If omitted, the sensor is polled.
 - By default, report rate is limited to 125 Hz to prevent flooding the event channel, which causes latency issues especially over BLE.
 - Only Nrf, RP2040 and STM32 are supported now.
-
 :::
 
 ## `toml` configuration
@@ -63,10 +61,7 @@ name = ...
 ```
 
 ::: warning Multi-device ID assignment
-
-`PointingEvent` carries a `device_id` so that each `PointingProcessor` can be paired
-with a specific sensor. If you have sensors on both halves of a split keyboard,
-assign distinct ids to avoid the central treating them as the same device:
+`PointingEvent` carries a `device_id` so that each `PointingProcessor` can be paired with a specific sensor. If you have sensors on both halves of a split keyboard, assign distinct ids to avoid the central treating them as the same device:
 
 ```toml
 # Central side sensor
@@ -78,27 +73,18 @@ id = 0
 id = 1
 ```
 
-The peripheral forwards events to the central with the `device_id` preserved.
-The generated `PointingProcessorConfig` on the central will automatically use the
-matching `device_id` for each sensor.
-
+The peripheral forwards events to the central with the `device_id` preserved. The generated `PointingProcessorConfig` on the central will automatically use the matching `device_id` for each sensor.
 :::
 
 ::: warning Breaking change
-
-Adding `device_id` to `PointingEvent` changes the serialized binary format used by the
-split protocol. Both halves of a split keyboard **must** be flashed with the same
-firmware version at the same time.
-
+Adding `device_id` to `PointingEvent` changes the serialized binary format used by the split protocol. Both halves of a split keyboard **must** be flashed with the same firmware version at the same time.
 :::
 
 ## Rust configuration
 
-Define a `PointingDevice` and add it to `run_all!` macro.
-For a split keyboard this must be added to the file (`central.rs` or `peripheral.rs`) corresponding to the side the sensor is connected to.
+Define a `PointingDevice` and add it to `run_all!` macro. For a split keyboard this must be added to the file (`central.rs` or `peripheral.rs`) corresponding to the side the sensor is connected to.
 
 ::: warning
-
 For nrf52 chips you need to add an interrupt for the used SPI. For example when using SPI2:
 
 ```rust
@@ -109,7 +95,6 @@ bind_interrupts!(struct Irqs {
     SPI2 => spim::InterruptHandler<peripherals::SPI2>;
 });
 ```
-
 :::
 
 ```rust
@@ -171,9 +156,7 @@ run_all!(matrix, pmw33xx_device),
 And define a `PointingProcessor` and add it to the `run_all!` macro to process the events.
 
 ::: warning
-
 This should be added to the `central.rs`-File even if the sensor is on split peripheral.
-
 :::
 
 ```rust
@@ -193,4 +176,5 @@ This should be added to the `central.rs`-File even if the sensor is on split per
 ```
 
 ## Pointing Modes
+
 The PointingProcessor has four modes (Cursor, Scroll, Sniper, Caret) with per‑layer configuration. See the [PointingProcessor](./pointing_processor) page for all options.

@@ -36,11 +36,11 @@ rmk::input_device::pointing::ScrollConfig {
 
 Uses the `MotionAccumulator`: `total = remainder + delta * multiplier`, then `output = total / divisor`. The **remainder** (the part that didn't produce output) is kept for the next sample. Without this, small deltas like `3` with `divisor=8` would always produce `0` and the sensor would feel dead.
 
-| Sample | delta | total | output (total/8) | remainder |
-|--------|-------|-------|-----------------|-----------|
-| 1 | 5 | 0+5=5 | 0 | 5 |
-| 2 | 5 | 5+5=10 | 1 | 10−1×8=2 |
-| 3 | 5 | 2+5=7 | 0 | 7 |
+| Sample | delta | total  | output (total/8) | remainder |
+| ------ | ----- | ------ | ---------------- | --------- |
+| 1      | 5     | 0+5=5  | 0                | 5         |
+| 2      | 5     | 5+5=10 | 1                | 10−1×8=2  |
+| 3      | 5     | 2+5=7  | 0                | 7         |
 
 ### Sniper
 
@@ -212,7 +212,7 @@ use crate::pointingproccontroller::PointingProcessorController;
 mod keyboard_central {
     use super::*;
 
-    #[register_processor(event)] 
+    #[register_processor(event)]
     fn pointing_processor_controller() -> PointingProcessorController {
         PointingProcessorController::new()
     }

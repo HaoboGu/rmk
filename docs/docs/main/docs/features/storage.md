@@ -4,7 +4,7 @@ RMK's storage system provides persistent flash memory for storing data like keyb
 
 ## Storage Feature
 
-RMK's storage system is enabled by the `storage` feature. Enabling features related to `vial` and `ble` automatically enables the `storage` feature because they require keymap and BLE bonding data to be persisted to non-volatile storage.
+RMK's storage system is enabled by the `storage` feature, which is part of the default feature set. Enabling BLE automatically pulls in `storage`, since BLE bonding data must be persisted to non-volatile storage. The host configurator protocols (`rynk` and `vial`) rely on `storage` to persist keymap edits across reboots but do not enable it themselves, so keep it enabled when you use them.
 
 ## Storage Configuration
 
