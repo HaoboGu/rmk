@@ -28,9 +28,11 @@ bind_interrupts!(struct Irqs {
 
 ### Add your own layout
 
-The next step is to add your own keymap layout for your firmware. RMK supports the [Vial app](https://get.vial.today/), an open-source cross-platform (Windows/macOS/Linux/web) keyboard configurator. The Vial-like keymap definition needs to be imported into the firmware project.
+This step only applies when you build with the [Vial](https://get.vial.today/) protocol (the `vial` feature), like the Rust examples do. RMK supports the [Vial app](https://get.vial.today/), an open-source cross-platform (Windows/macOS/Linux/web) keyboard configurator. The Vial-like keymap definition needs to be imported into the firmware project.
 
 Fortunately, RMK does most of the heavy lifting for you. All you need to do is create your own keymap definition and convert it to `vial.json` following **[Vial's documentation here](https://get.vial.today/docs/porting-to-via.html)**, and place it at the root of the firmware project, replacing the default one. RMK will handle all the rest for you.
+
+If you opt into [Rynk](./rynk) instead of the default Vial protocol, you don't need a `vial.json` — skip this step.
 
 ### Add your default keymap
 

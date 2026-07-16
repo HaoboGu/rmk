@@ -62,32 +62,21 @@ phase = "default"
 
 ### Define Encoder Actions
 
-To define the actions triggered by encoder rotation, add a `encoders` field under each `[[layer]]` section, or add a `encoder_map` field under the `[layout]` section. The former method is preferred and the latter will be deprecated in the future.
+To define the actions triggered by encoder rotation, add an `encoders` field under each `[[keymap.layer]]` section.
 
-A `encoders` field under `[[layer]]` is a 2D array where each entry corresponds to an encoder in the same order they are defined. Each entry is a 2-element array `[CW_action, CCW_action]`, representing the actions for clockwise and counter-clockwise rotations respectively for that encoder on that layer.
-
-The `encoder_map` under `[layout]` is a 3D array where each entry is a 2D array as described above, representing the encoder actions for that layer.
+An `encoders` field is a 2D array where each entry corresponds to an encoder in the same order they are defined. Each entry is a 2-element array `[CW_action, CCW_action]`, representing the actions for clockwise and counter-clockwise rotations respectively for that encoder on that layer.
 
 **Structure**:
 
 ```toml
-[[layer]]  # Layer 0
+[[keymap.layer]]  # Layer 0
 encoders = [[CW, CCW], [CW, CCW], ...]  # Encoder 0, encoder 1, ...
 
-[[layer]]  # Layer 1
+[[keymap.layer]]  # Layer 1
 encoders = [[CW, CCW], [CW, CCW], ...]  # Encoder 0, encoder 1, ...
 
-[[layer]]  # More layers...
+[[keymap.layer]]  # More layers...
 encoders = [...]
-
-# Alternatively, use encoder_map:
-
-[layout]
-encoder_map = [
-  [ [CW, CCW], [CW, CCW], ... ],  # Layer 0: encoder 0, encoder 1, ...
-  [ [CW, CCW], [CW, CCW], ... ],  # Layer 1: encoder 0, encoder 1, ...
-  ...
-]
 ```
 
 **Example:**
@@ -102,31 +91,20 @@ encoder_map = [
 #   - Encoder 0: No action ("_")
 #   - Encoder 1: CW -> BrightnessUp, CCW -> BrightnessDown
 
-[[layer]]  # Layer 0
+[[keymap.layer]]  # Layer 0
 # ... keys ...
 encoders = [["AudioVolUp", "AudioVolDown"], ["PageDown", "PageUp"]]
 
-[[layer]]  # Layer 1
+[[keymap.layer]]  # Layer 1
 # ... keys ...
 encoders = [["_", "_"], ["BrightnessUp", "BrightnessDown"]]
-
-# Alternatively, use encoder_map:
-
-[layout]
-rows = 5
-cols = 4
-layers = 2
-# ... matrix_map ...
-encoder_map = [
-  [["AudioVolUp", "AudioVolDown"], ["PageDown", "PageUp"]],
-  [["_", "_"], ["BrightnessUp", "BrightnessDown"]]
-]
 ```
 
 **Notes:**
 
-- If the actions for an encoder are not specified in `encoders` or `encoder_map`, they will default to no action.
-- The number of encoder entries should match the number of physical encoders defined in `[[input_device.encoder]]`.
+- A layer must list actions for **every** encoder, or omit the `encoders` field entirely. Listing only some of the board's encoders is rejected, because the unlisted ones would silently stop working on that layer. To keep an encoder inactive on a given layer, give it an explicit `["_", "_"]` (transparent) or `["No", "No"]` entry — as shown for encoder 0 on layer 1 above.
+- When `encoders` is omitted from a layer, every encoder defaults to no action on that layer.
+- The number of encoder entries must match the number of physical encoders defined in `[[input_device.encoder]]`. On split keyboards this is the total across all halves, in the order they are defined (central first, then each peripheral).
 
 ## Rust configuration
 

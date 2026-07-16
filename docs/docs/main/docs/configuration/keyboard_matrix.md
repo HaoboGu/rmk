@@ -144,9 +144,9 @@ RMK has two debouncer modes, "default" and "fast":
 
 If no `debouncer` is set, the matrix will default to `default` mode.
 
-## Vial Unlock Keys - `[host]` Section
+## Host Unlock Keys - `[host]` Section
 
-For enhanced security, Vial locks certain functions (like matrix testing) by default. You can set a key combination to unlock it. This configuration is part of the `[host]` section which controls host-side tools and features.
+`unlock_keys` sets the physical key combination used to unlock protected host operations. When the `host_lock` Cargo feature is enabled alongside Vial, Vial uses it for secured configurator features such as matrix testing. [Rynk](../features/rynk) uses it as a physical-presence challenge for locked operations such as bootloader entry, storage reset, matrix-state reads, and optional configuration writes. For Rynk, leave it unset only if those locked operations should stay inaccessible or you intentionally enable `insecure = true` during development.
 
 ```toml
 [host]
@@ -159,7 +159,7 @@ unlock_keys = [[0, 0], [0, 1]]  # Keys at (row=0,col=0) and (row=0,col=1)
 
 - The unlock keys use the physical matrix position (row, column), not the keycode
 - Choose keys that are easy to press simultaneously but not commonly pressed together accidentally
-- See the [Vial Support](../features/vial_support.mdx) page for more details on Vial configuration
+- See [Vial Support](../features/vial_support) for Vial setup and [Host Configuration](./host_config) for the full `[host]` options
   :::
 
 ## Troubleshooting

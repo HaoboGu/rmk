@@ -49,9 +49,7 @@ direct_pin_low_active = true
 rows = 5
 # Number of cols. For a split keyboard, this is the total number of cols for all splits
 cols = 4
-# Number of layers. Be careful, since large layer number takes more flash and RAM
-layers = 3
-# keypad example: (for the key in position (2,1) the `H1` profile is activated)
+# keypad example
 # ┌───┬───┬───┬───┐
 # │NUM│ / │ * │ - │ <-- row 0, col 0..4
 # ├───┼───┼───┼───┤
@@ -63,13 +61,17 @@ layers = 3
 # ├───┴───┼───┤ N │
 # │   0   │ . │ T │
 # └───────┴───┴───┘
-matrix_map = """
-(0,0,R) (0,1,R)    (0,2,R) (0,3,R)
-(1,0,R) (1,1,R)    (1,2,R) (1,3,R)
-(2,0,R) (2,1,R:H1) (2,2,R)
-(3,0,R) (3,1,R)    (3,2,R) (3,3,R)
-(4,0,R)            (4,1,R)
+map = """
+(0,0,R)  (0,1,R)  (0,2,R)  (0,3,R)
+(1,0,R)  (1,1,R)  (1,2,R)  (1,3,R)
+(2,0,R)  (2,1,R)  (2,2,R)
+(3,0,R)  (3,1,R)  (3,2,R)  (3,3,R)
+(4,0,R)           (4,1,R)
 """
+
+[keymap]
+# Number of layers. Be careful, since large layer number takes more flash and RAM
+layers = 3
 
 # here are the aliases for the example layer.keys below
 [aliases]
@@ -79,13 +81,13 @@ MyPaste = "WM(V, LCtrl)"
 
 # Key map definitions per layer:
 # The number (and order) of entries on each layer should be
-# identical with the number (and order) of entries in `matrix_map`.
+# identical with the number (and order) of entries in `layout.map`.
 # Empty layers will be used to fill if the number of explicitly
-# defined layers is smaller than the `layout.layers` setting
+# defined layers is smaller than the `keymap.layers` setting
 
 # layer 0 (default):
-# (the number comes from the order of '[[layer]] entries' in the file)
-[[layer]]
+# (the number comes from the order of '[[keymap.layer]] entries' in the file)
+[[keymap.layer]]
 name = "base_layer" #optional name for the layer
 keys = """
 NumLock KpSlash KpAsterisk KpMinus
@@ -96,7 +98,7 @@ Kp1     Kp2     Kp3        Enter
 """
 
 # layer 1:
-[[layer]]
+[[keymap.layer]]
 name = "mouse_navigation" #optional name for the layer
 keys = """
 TO(base_layer)   @MyCut     @MyCopy          @MyPaste
@@ -131,7 +133,7 @@ one_shot_modifiers = {
 enable_flow_tap = true
 prior_idle_time = "120ms"
 hold_on_other_press = true
-unilateral_false = false
+unilateral_tap = false
 hold_timeout = "250ms"
 gap_timeout = "250ms"
 
@@ -185,7 +187,8 @@ morses = [
 ]
 
 [behavior.morse.profiles]
-# matrix_map may refer these to override the defaults given in [behavior.morse] for some key positions - this example is a home row mod
+# Named overrides of the [behavior.morse] defaults, referenced by name from a morse key
+# (profile = "...") or a tap-hold action's optional profile arg — e.g. a home row mod is MT(key, mod, H1).
 H1 = { permissive_hold = true, unilateral_tap = true, hold_timeout = "250ms", gap_timeout = "250ms" }
 H2 = { enable_flow_tap = false, permissive_hold = true, unilateral_tap = true, hold_timeout = "200ms", gap_timeout = "200ms" }
 MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_timeout = "200ms" }
@@ -295,6 +298,10 @@ split_peripherals_num = 0
 ble_profiles_num = 3
 # BLE Split Central sleep timeout in seconds (0 = disabled)
 split_central_sleep_timeout_seconds = 0
+# Maximum macro data bytes in one Rynk macro request or response
+protocol_macro_chunk_size = 64
+# Rynk RX/TX buffer size in bytes.
+# rynk_buffer_size = 512
 
 # Split configuration
 # This section conflicts with the [matrix] section. You can only have either [matrix] or [split], but NOT BOTH
@@ -395,11 +402,18 @@ defmt_log = true
 
 # Host-side tools configuration
 [host]
-# Whether Vial is enabled (default: true)
+# Whether Vial is enabled (default: true in keyboard.toml config)
 vial_enabled = true
+# Whether Rynk is enabled (default: false in keyboard.toml config)
+# Rynk and Vial are mutually exclusive and must match Cargo features.
+rynk_enabled = false
 # The unlock keys are the combo of the row 0, col 0 key and
-# the row 0, col 1 key
+# the row 0, col 1 key. Shared by the Vial lock and the Rynk lock gate.
 unlock_keys = [[0, 0], [0, 1]]
+# Start (and stay) unlocked. Renamed from `vial_insecure` (still parses).
+insecure = false
+# Rynk only: move config writes into the locked tier (default: false).
+write_requires_unlock = false
 
 # Chip-specific configuration
 # To use the default configuration, ignore this section completely

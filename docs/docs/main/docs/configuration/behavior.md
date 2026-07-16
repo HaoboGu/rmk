@@ -32,23 +32,17 @@ adjust = 3
 
 In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 3 (`adjust`) will also be enabled.
 
-Note that `"#layer_name"` could also be used in place of layer numbers.
-
 ## One-Shot
 
 The `one_shot` sub-table contains common one-shot configuration (for both OSM and OSL)
 
-Currently, there are only `timeout` field that specifies how long the one-shot modifier/layer remains active.
-When no key is pressed within this time, the one-shot modifier/layer will be canceled.
-`timeout` value is a string suffixed with `s` or `ms` (default: `1s`).
+Currently, there are only `timeout` field that specifies how long the one-shot modifier/layer remains active. When no key is pressed within this time, the one-shot modifier/layer will be canceled. `timeout` value is a string suffixed with `s` or `ms` (default: `1s`).
 
 ## One-Shot Modifiers
 
 The `one_shot_modifiers` sub-table configures one-shot modifiers (OSM).
 
-By default, one-shot modifiers do not activate on keypress and will be sent only when other key is pressed.
-You can change this behavior by setting `activate_on_keypress` to `true`.
-This behavior is also known as One-Shot Sticky Modifiers (OSSM).
+By default, one-shot modifiers do not activate on keypress and will be sent only when other key is pressed. You can change this behavior by setting `activate_on_keypress` to `true`. This behavior is also known as One-Shot Sticky Modifiers (OSSM).
 
 If you press One-Shot Modifier again, it will be sent as a normal modifier key press and, therefore, released.
 
@@ -221,7 +215,6 @@ morses = [
 ```
 
 ::: warning
-
 The three definition methods are mutually exclusive. For any single Morse key definition, you must choose only one of the following approaches:
 
 - Full Morse: `morse_actions`
@@ -229,19 +222,20 @@ The three definition methods are mutually exclusive. For any single Morse key de
 - Vial-style: `tap`, `hold`, `hold_after_tap`, `double_tap`.
 
 Mixing fields from different methods in the same definition is not allowed.
-
 :::
 
 ### Profile
 
 The `profile` of a morse key contains all tunable configurations of this morse key, such as behavior mode, timing configurations, etc.
 
+::: tip
+- `enable_flow_tap`: Enables HRM (Home Row Mod) mode. When enabled, the global `prior_idle_time` setting becomes functional. Defaults to `false`. Profiles may set this to override the global `[behavior.morse]` value; omitting it inherits the global value.
+- `prior_idle_time`: _(global only)_ If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter lives in `[behavior.morse]` (not in a per-key profile) and is effective only when `enable_flow_tap` is enabled for the key. Defaults to 120ms.
+:::
+
 A profile contains the following fields:
 
-- `enable_flow_tap`: Enables HRM (Home Row Mod) mode. When enabled, the `prior_idle_time` setting becomes functional. Defaults to `false`. Profiles may set this to override the global `[behavior.morse]` value; omitting it inherits the global value.
-- `prior_idle_time`: If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter is configured globally in `[behavior.morse]` and is effective only when `enable_flow_tap` is enabled for the key. Defaults to 120ms.
-
-- `unilateral_tap`: (Experimental) Enables unilateral tap mode. When enabled, tap action will be triggered when a key from "same" hand is pressed. In current experimental version, the "same" hand is calculated using the `<hand>`, which can be given in `matrix_map`. This option is recommended to set to true when `enable_flow_tap` is set to true.
+- `unilateral_tap`: (Experimental) Enables unilateral tap mode. When enabled, tap action will be triggered when a key from "same" hand is pressed. In current experimental version, the "same" hand is calculated using the `<hand>`, which can be given in `layout.map`. This option is recommended to set to true when `enable_flow_tap` is set to true.
 
 - The morse mode, which can be set by enabling one of these:
   - `permissive_hold`: Enables permissive hold mode. When enabled, hold action will be triggered when a key is pressed and released during tap-hold decision. This option is recommended to set to true when `enable_flow_tap` is set to true.
@@ -287,12 +281,11 @@ gap_timeout = "250ms"
 
 In the `morse.profiles` sub-table you can define individual key profiles. Each profile has an associated name, which can be referred
 
-- from the layout.matrix_map (the name is case sensitive), to override the defaults in certain key positions
 - from the tap hold keys in the key map if the third optional parameter is filled:
   - `TH(key-tap, key-hold, <profile_name>)`,
   - `MT(key, modifier, <profile_name>)`,
   - `LT(n, key, <profile_name>)`
-- the Morse keys may also have their per key profile overrides (which is stronger than the positional override) by setting the `profile` field.
+- the Morse keys may also have their per key profile overrides by setting the `profile` field.
 
 The following examples are the typical default configurations:
 
@@ -312,7 +305,7 @@ MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_
 Then you can reference the profile in layer config:
 
 ```toml
-[[layer]]
+[[keymap.layer]]
 keys = """
 MT(A, LShift, HRM)
 LT(1, A, FH)
@@ -431,21 +424,34 @@ You can use both `Morse` and `TD` to represent a morse key in your keymap, you c
 [layout]
 rows = 4
 cols = 3
+map = """
+(0,0) (0,1) (0,2)
+(1,0) (1,1) (1,2)
+(2,0) (2,1) (2,2)
+(3,0) (3,1) (3,2)
+"""
+
+[keymap]
 layers = 2
-keymap = [
-    [
-        ["A", "B", "C"],
-        ["TD(0)", "TD(1)", "TD(2)"],  # Use morse dances 0, 1, and 2
-        ["LCtrl", "MO(1)", "LShift"],
-        ["OSL(1)", "LT(2, Kc9, PN)", "LM(1, LShift | LGui)"]  # PN is a morse profile name here
-    [
-        ["_", "TT(1)", "TG(2)"],
-        ["_", "_", "_"],
-        ["_", "_", "_"],
-        ["_", "_", "_"]
-    ],
-]
+
+[[keymap.layer]]
+keys = """
+A      B              C
+TD(0)  TD(1)          TD(2)
+LCtrl  MO(1)          LShift
+OSL(1) LT(2, Kc9, PN) LM(1, LShift | LGui)
+"""
+
+[[keymap.layer]]
+keys = """
+_ TT(1) TG(2)
+_ _     _
+_ _     _
+_ _     _
+"""
 ```
+
+Here `TD(0)`, `TD(1)`, and `TD(2)` reference morse dances by index, and the trailing `PN` in `LT(2, Kc9, PN)` names a morse profile (defined above). `keys` and `map` blocks hold data only.
 
 ## Fork
 
@@ -568,11 +574,9 @@ subs = 1
 | `reset_timeout_on_key` | bool | `false` | When `true`, key presses that do NOT deactivate `target_layer` push the `timeout` deadline forward (reset it to *now + `timeout`*). When `deactivate_on_key` is `false`, every key press extends the timeout. |
 
 ::: warning
-
 Prefer a dedicated layer that is not bound to any manual keys (like `MO` or `TG`). The auto-mouse task releases its ownership when keyboard-driven changes deactivate the layer, so transient overlap is handled cleanly. Layer state is still a single boolean, however, so pressing `TG(target_layer)` while auto-mouse is active toggles the layer off instead of pinning it on.
 
 Entries that share the same `target_layer` cooperate: the layer stays active until the last device stops moving, so per-device `timeout`/`threshold` differences on a shared layer are safe.
-
 :::
 
 ::: warning Limitation: keys that cannot be classified
@@ -590,7 +594,6 @@ Some keys cannot be classified; they never trigger immediate deactivation (only 
 
 - **Subscriber Slots**: Increment `[event.pointing].subs` and `[event.layer_change].subs` by `1` each in your `keyboard.toml` to reserve slots for this task. If any entry uses `deactivate_on_key` or `reset_timeout_on_key`, also set `[event.action].subs` to `1` (it defaults to `0`), otherwise the build fails with a validation error. See [Event Configuration](./event.md).
 - **Buffer Size**: If pointing events are dropped under high-frequency input, increase `[event.pointing].channel_size` (default `8`). `[event.layer_change].channel_size` defaults to `1` and only needs raising if you burst many layer changes faster than subscribers consume them.
-
 :::
 
 ::: note Rust API
