@@ -600,6 +600,8 @@ mod tests {
                 "one_shot_mod_release_on_layer_change:::core::option::Option::Some(false)"
             )
         );
-        assert!(tokens.contains("one_shot_layer_release_on_layer_change:::core::option::Option::None"));
+        assert!(
+            tokens.contains("one_shot_layer_release_on_layer_change:::core::option::Option::None")
+        );
     }
 }
