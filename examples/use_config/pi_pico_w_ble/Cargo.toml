@@ -28,7 +28,7 @@ portable-atomic = { version = "1", features = ["critical-section"] }
 defmt = "1"
 defmt-rtt = "1"
 panic-probe = { version = "1", features = ["print-defmt"] }
-cyw43 = { version = "0.7.0", features = ["defmt", "firmware-logs", "bluetooth"] }
+cyw43 = { version = "0.7", features = ["defmt", "firmware-logs", "bluetooth"] }
 cyw43-pio = { version = "0.10.0", features = ["defmt"] }
 static_cell = "2"
 bt-hci = { version = "0.9", features = ["defmt"] }

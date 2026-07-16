@@ -29,7 +29,7 @@ static_cell = "2"
 defmt = "1"
 defmt-rtt = "1"
 # panic-probe = { version = "1", features = ["print-defmt"] }
-panic-halt = "1.0"
+panic-halt = "1"
 
 [build-dependencies]
 xz2 = "0.1.7"

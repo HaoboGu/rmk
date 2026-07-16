@@ -983,8 +983,9 @@ mod tests {
             .unwrap_or(&insts[0])
     }
 
-    /// (row,col) → (center_x, center_y, w, h, r) as kle-serial sees it.
-    type ExpectedRender = HashMap<(u32, u32), (f64, f64, f64, f64, f64)>;
+    /// (row,col) → (center_x, center_y, w, h, r, rect2) as kle-serial sees
+    /// it. `rect2` is `(w2, h2, center_dx, center_dy)` in the key's local frame.
+    type ExpectedRender = HashMap<(u32, u32), (f64, f64, f64, f64, f64, Option<(f64, f64, f64, f64)>)>;
 
     /// What kle-serial says each default-shown key's center/size/rotation is.
     fn expected_default(parsed: &ParsedKeymap) -> ExpectedRender {
@@ -1011,9 +1012,26 @@ mod tests {
             let annotation = parsed.annotations[ki];
             if annotation.option.is_none() || matches!(annotation.option, Some((_, 0))) {
                 let (tlx, tly) = display_top_left(k);
+                let rect2 = has_rect2(k).then(|| {
+                    let w2 = if approx(k.width2, 0.0) { k.width } else { k.width2 };
+                    let h2 = if approx(k.height2, 0.0) { k.height } else { k.height2 };
+                    (
+                        w2,
+                        h2,
+                        k.x2 + w2 / 2.0 - k.width / 2.0,
+                        k.y2 + h2 / 2.0 - k.height / 2.0,
+                    )
+                });
                 out.insert(
                     annotation.matrix.unwrap(),
-                    (tlx + k.width / 2.0, tly + k.height / 2.0, k.width, k.height, k.rotation),
+                    (
+                        tlx + k.width / 2.0,
+                        tly + k.height / 2.0,
+                        k.width,
+                        k.height,
+                        k.rotation,
+                        rect2,
+                    ),
                 );
             }
         }
@@ -1070,6 +1088,27 @@ mod tests {
                 e.3,
                 e.4
             );
+            match (&k.rect2, e.5) {
+                (Some(actual), Some((w2, h2, dx2, dy2))) => assert!(
+                    close(actual.w as f64, w2)
+                        && close(actual.h as f64, h2)
+                        && close((actual.x - k.rect.x) as f64, dx2)
+                        && close((actual.y - k.rect.y) as f64, dy2),
+                    "{ctx}: rect2 ({},{}) decoded {:?} vs kle {:?}",
+                    k.row,
+                    k.col,
+                    actual,
+                    e.5
+                ),
+                (None, None) => {}
+                (actual, expected) => panic!(
+                    "{ctx}: rect2 presence ({},{}) decoded {} vs kle {}",
+                    k.row,
+                    k.col,
+                    actual.is_some(),
+                    expected.is_some()
+                ),
+            }
         }
     }
 
@@ -1302,6 +1341,14 @@ mod tests {
                 close(a.2, b.2) && close(a.3, b.3) && close(a.4, b.4),
                 "{ctx} {rc:?} size/rot {a:?} -> {b:?}"
             );
+            match (a.5, b.5) {
+                (Some(a2), Some(b2)) => assert!(
+                    close(a2.0, b2.0) && close(a2.1, b2.1) && close(a2.2, b2.2) && close(a2.3, b2.3),
+                    "{ctx} {rc:?} rect2 {a2:?} -> {b2:?}"
+                ),
+                (None, None) => {}
+                (a2, b2) => panic!("{ctx} {rc:?} rect2 presence {a2:?} -> {b2:?}"),
+            }
         }
         let e0 = encoder_bbox(parsed0);
         let e1 = encoder_bbox(&parsed1);
@@ -1325,6 +1372,13 @@ mod tests {
             let (parsed, rows, cols) = load_fixture(&name);
             assert_vial_roundtrip(&parsed, rows, cols, &name);
         }
+    }
+
+    #[test]
+    fn ansi104_big_enter_loopback_preserves_secondary_rect() {
+        let (parsed, rows, cols) = load_fixture("ansi104_bigenter.json");
+        assert_eq!(parsed.keys.iter().filter(|key| has_rect2(key)).count(), 1);
+        assert_vial_roundtrip(&parsed, rows, cols, "ansi104_bigenter");
     }
 
     #[test]

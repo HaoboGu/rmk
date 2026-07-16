@@ -80,19 +80,11 @@ overflow-checks = false
 lto = "fat"
 
 [patch.crates-io]
-embassy-nrf = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-usb-synopsys-otg = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-usb-driver = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-sync = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-time = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-time-driver = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-time-queue-utils = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-executor-timer-queue = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-futures = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-embedded-hal = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-hal-internal = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-usb = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-executor = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-executor-macros = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-net-driver = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
-embassy-net-driver-channel = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-nrf = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
+embassy-usb = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
+embassy-hal-internal = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
+embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
