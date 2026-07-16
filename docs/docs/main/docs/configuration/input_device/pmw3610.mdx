@@ -154,13 +154,13 @@ This should be added to the `central.rs`-File even if the sensor is on split per
     use rmk::input_device::pointing::{ PointingProcessor, PointingProcessorConfig };
 
     let pmw3610_proc_config = PointingProcessorConfig {
-        // invert_x: true, // invert axis if neccesary
+        // invert_x: true, // invert axis if necessary
         // invert_y: true,
         // swap_y: true,
         ..Default::default()
     };
 
-    let mut pmw3360_processor = PointingProcessor::new(&keymap, pmw3610_proc_config);
+    let mut pmw3610_processor = PointingProcessor::new(&keymap, pmw3610_proc_config);
 
 run_all!(pmw3610_processor, /* other processors and devices */)
 ```
