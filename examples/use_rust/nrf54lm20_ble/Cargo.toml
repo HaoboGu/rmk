@@ -10,8 +10,14 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = ["async_matrix", "nrf54lm20_ble"] }
-# nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "abe49d22ebfc85fae134eb082fbfddf752016a55", default-features = false, features = [
+rmk = { path = "../../../rmk", default-features = false, features = [
+    "rynk",
+    "async_matrix",
+    "nrf54lm20_ble",
+    "storage",
+    "defmt",
+    "watchdog",
+] }
 nrf-sdc = { git = "https://github.com/haobogu/nrf-sdc", rev = "73ad22d57f39b5b109a665fe6f55c5ed61294ff2", default-features = false, features = [
     "defmt",
     "peripheral",
@@ -72,3 +78,21 @@ debug = true
 opt-level = "z"
 overflow-checks = false
 lto = "fat"
+
+[patch.crates-io]
+embassy-nrf = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-usb-synopsys-otg = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-usb-driver = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-sync = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-time = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-time-driver = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-time-queue-utils = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-executor-timer-queue = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-futures = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-embedded-hal = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-hal-internal = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-usb = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-executor = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-executor-macros = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-net-driver = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }
+embassy-net-driver-channel = { git = "https://github.com/HaoboGu/embassy", branch = "nrf54lm20-usb-fixes" }

@@ -10,15 +10,15 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = ["async_matrix", "nrf54l15_ble"] }
+rmk = { path = "../../../rmk", default-features = false, features = ["defmt", "storage", "vial", "watchdog", "async_matrix", "nrf54l15_ble"] }
 nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "abe49d22ebfc85fae134eb082fbfddf752016a55", default-features = false, features = [
-     "defmt",
+    "defmt",
     "peripheral",
     "central",
     "nrf54l15-app-s",
 ] }
 nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "abe49d22ebfc85fae134eb082fbfddf752016a55", default-features = false, features = [
-     "defmt",
+    "defmt",
     "critical-section-impl",
     "nrf54l15-app-s",
 ] }

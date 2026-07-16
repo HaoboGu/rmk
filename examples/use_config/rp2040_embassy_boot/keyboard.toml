@@ -13,21 +13,31 @@ col_pins = ["PIN_19", "PIN_20", "PIN_21"]
 [layout]
 rows = 4
 cols = 3
-layers = 2
-keymap = [
-    [
-        ["A", "B", "C"],
-        ["Kc1", "Kc2", "Kc3"],
-        ["LCtrl", "MO(1)", "LShift"],
-        ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"],
-    ],
-    [
-        ["_", "TT(1)", "TG(2)"],
-        ["_", "_", "_"],
-        ["_", "_", "_"],
-        ["_", "_", "_"],
-    ],
-]
+map = """
+(0,0)  (0,1)  (0,2)
+(1,0)  (1,1)  (1,2)
+(2,0)  (2,1)  (2,2)
+(3,0)  (3,1)  (3,2)
+"""
+
+[keymap]
+layers = 3
+
+[[keymap.layer]]
+keys = """
+A       B           C
+Kc1     Kc2         Kc3
+LCtrl   MO(1)       LShift
+OSL(1)  LT(2, Kc9)  LM(1, LShift | LGui)
+"""
+
+[[keymap.layer]]
+keys = """
+_  TT(1)  TG(2)
+_  _      _
+_  _      _
+_  _      _
+"""
 
 # DFU partition layout — must match your bootloader's memory.x
 #
