@@ -1,43 +1,43 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::Instant;
+use embedded_io_async::{Read, Write};
 use rmk_types::protocol::vial::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
 use vial::process_vial;
 
-use crate::channel::{HOST_REQUEST_CHANNEL, try_send_host_reply};
 use crate::config::{RmkConfig, VialConfig};
-use crate::core_traits::Runnable;
 use crate::hid::ViaReport;
 use crate::host::context::KeyboardContext;
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
+use crate::keymap::KeyMap;
 use crate::{MACRO_SPACE_SIZE, boot};
 
 pub(crate) mod keycode_convert;
 mod vial;
-#[cfg(feature = "vial_lock")]
-mod vial_lock;
 
 pub struct VialService<'a> {
-    ctx: &'a KeyboardContext<'a>,
+    ctx: KeyboardContext<'a>,
     vial_config: VialConfig<'static>,
-    #[cfg(feature = "vial_lock")]
-    locker: vial_lock::VialLock<'a>,
+    #[cfg(feature = "host_lock")]
+    locker: crate::host::lock::HostLock<'a>,
 }
 
 impl<'a> VialService<'a> {
-    pub fn new(ctx: &'a KeyboardContext<'a>, config: &RmkConfig<'static>) -> Self {
+    pub fn new(keymap: &'a KeyMap<'a>, config: &RmkConfig<'static>) -> Self {
         Self {
-            ctx,
+            ctx: KeyboardContext::new(keymap),
             vial_config: config.vial_config,
-            #[cfg(feature = "vial_lock")]
-            locker: vial_lock::VialLock::new(
+            // Vial's poll cadence is ~100 ms (`VialCommand::UnlockPoll`).
+            #[cfg(feature = "host_lock")]
+            locker: crate::host::lock::HostLock::new(
                 config.vial_config.unlock_keys,
-                ctx.keymap,
-                config.vial_config.vial_insecure,
+                keymap,
+                config.vial_config.insecure,
+                embassy_time::Duration::from_millis(100),
             ),
         }
     }
 
-    async fn process_via_packet(&mut self, report: &mut ViaReport) {
+    async fn process_via_packet(&self, report: &mut ViaReport) {
         let command_id = report.output_data[0];
 
         // Caller pre-fills `input_data` from `output_data`, so individual arms
@@ -59,13 +59,23 @@ impl<'a> VialService<'a> {
                             let layout_option: u32 = 0;
                             BigEndian::write_u32(&mut report.input_data[2..6], layout_option);
                         }
-                        #[cfg(not(feature = "vial_lock"))]
+                        #[cfg(not(feature = "host_lock"))]
                         ViaKeyboardInfo::SwitchMatrixState => {
                             error!("It is not secure to use matrix tester without vial lock");
                         }
-                        #[cfg(feature = "vial_lock")]
+                        #[cfg(feature = "host_lock")]
                         ViaKeyboardInfo::SwitchMatrixState if self.locker.is_unlocked() => {
-                            self.ctx.read_matrix_state(&mut report.input_data[2..]);
+                            let bitmap = &mut report.input_data[2..];
+                            self.ctx.read_matrix_state(bitmap);
+                            // Vial wants each row's bytes big-endian (QMK matrix_row_t order).
+                            let (rows, cols, _) = self.ctx.keymap_dimensions();
+                            let row_len = cols.div_ceil(8);
+                            if row_len > 1 {
+                                let len = (rows * row_len).min(bitmap.len());
+                                for row in bitmap[..len].chunks_mut(row_len) {
+                                    row.reverse();
+                                }
+                            }
                         }
                         ViaKeyboardInfo::FirmwareVersion => {
                             BigEndian::write_u32(&mut report.input_data[2..6], VIA_FIRMWARE_VERSION);
@@ -225,9 +235,9 @@ impl<'a> VialService<'a> {
                 process_vial(
                     report,
                     &self.vial_config,
-                    #[cfg(feature = "vial_lock")]
-                    &mut self.locker,
-                    self.ctx,
+                    #[cfg(feature = "host_lock")]
+                    &self.locker,
+                    &self.ctx,
                 )
                 .await
             }
@@ -239,16 +249,24 @@ impl<'a> VialService<'a> {
     }
 }
 
-impl Runnable for VialService<'_> {
-    async fn run(&mut self) -> ! {
+impl VialService<'_> {
+    /// Drive one Vial session against `rx`/`tx` (32-byte request → 32-byte
+    /// response, processed in place). Returns on any read/write error;
+    /// transport-specific reconnect lives in the caller.
+    pub async fn run_session<R: Read, T: Write>(&self, rx: &mut R, tx: &mut T) {
+        let mut buf = [0u8; 32];
         loop {
-            let (transport, output_data) = HOST_REQUEST_CHANNEL.receive().await;
+            if rx.read_exact(&mut buf).await.is_err() {
+                return;
+            }
             let mut report = ViaReport {
-                input_data: output_data,
-                output_data,
+                input_data: buf,
+                output_data: buf,
             };
             self.process_via_packet(&mut report).await;
-            try_send_host_reply(transport, report.input_data);
+            if tx.write_all(&report.input_data).await.is_err() {
+                return;
+            }
         }
     }
 }

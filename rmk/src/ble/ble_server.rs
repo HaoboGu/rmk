@@ -3,7 +3,9 @@ use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor};
 
 use super::battery_service::BatteryService;
 use super::device_info::DeviceConfigurationService;
-#[cfg(feature = "host")]
+#[cfg(feature = "rynk")]
+use crate::hid::RynkHidReport;
+#[cfg(feature = "vial")]
 use crate::hid::ViaReport;
 use crate::hid::{BleCompositeReport, CompositeReportType, HidError, HidWriterTrait, Report};
 
@@ -11,25 +13,87 @@ use crate::hid::{BleCompositeReport, CompositeReportType, HidError, HidWriterTra
 // per-connection client-specific attribute buffer size.
 pub(crate) const CCCD_TABLE_SIZE: usize = trouble_host::config::CLIENT_ATT_TABLE_SIZE;
 
-// `gatt_server` compiles every member regardless of the surrounding `cfg` —
-// gating an individual field with `#[cfg(feature = "host")]` doesn't work. So
-// the whole struct is duplicated, with and without `host_service`.
-#[cfg(feature = "host")]
+#[cfg(feature = "rynk")]
+use rmk_types::protocol::rynk::{
+    RYNK_BLE_CHUNK_SIZE, RYNK_HID_REPORT_SIZE, RYNK_INPUT_CHAR_UUID, RYNK_OUTPUT_CHAR_UUID, RYNK_SERVICE_UUID,
+};
+
+#[cfg(feature = "vial")]
 #[gatt_server]
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
     pub(crate) hid_service: HidService,
-    pub(crate) host_service: VialService,
+    pub(crate) vial_service: VialGattService,
     pub(crate) device_config_service: DeviceConfigurationService,
+}
+
+#[cfg(feature = "rynk")]
+#[gatt_server]
+pub(crate) struct Server {
+    pub(crate) battery_service: BatteryService,
+    pub(crate) hid_service: HidService,
+    pub(crate) rynk_service: RynkGattService,
+    pub(crate) rynk_hid_service: RynkHidService,
+    pub(crate) device_config_service: DeviceConfigurationService,
+}
+
+#[cfg(not(feature = "host"))]
+#[gatt_server]
+pub(crate) struct Server {
+    pub(crate) battery_service: BatteryService,
+    pub(crate) hid_service: HidService,
+    pub(crate) device_config_service: DeviceConfigurationService,
+}
+
+/// Rynk-over-GATT transport. The host writes request chunks to `output_data`;
+/// the firmware replies via `input_data` notify. Variable-length values use
+/// `heapless::Vec` so each notify only spends MTU − 3 bytes for the bytes it
+/// actually carries (a fixed `[u8; N]` would always send N).
+///
+/// `gatt_events_task` forwards `output_data` writes into
+/// [`crate::channel::RYNK_BLE_RX_PIPE`] for [`crate::ble::host::HostGattHandler::run`] to drain.
+#[cfg(feature = "rynk")]
+#[gatt_service(uuid = RYNK_SERVICE_UUID)]
+pub(crate) struct RynkGattService {
+    // ATT enforces encryption; the event loop still filters the data path.
+    #[descriptor(uuid = "2908", read, value = [0u8, 1u8])]
+    #[characteristic(uuid = RYNK_INPUT_CHAR_UUID, read, notify, permissions(encrypted))]
+    pub(crate) input_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
+    #[characteristic(uuid = RYNK_OUTPUT_CHAR_UUID, read, write, write_without_response, permissions(encrypted))]
+    pub(crate) output_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
+}
+
+/// Rynk HID-over-GATT service.
+/// `gatt_events_task` feeds the payload into [`crate::channel::RYNK_BLE_RX_PIPE`],
+/// [`crate::ble::host::HostGattHandler::run`] drains the pipe to get data.
+#[cfg(feature = "rynk")]
+#[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
+pub(crate) struct RynkHidService {
+    #[characteristic(uuid = "2a4a", read, value = [0x01, 0x01, 0x00, 0x03])]
+    pub(crate) hid_info: [u8; 4],
+    #[characteristic(uuid = "2a4b", read, value = RynkHidReport::desc().try_into().expect("Failed to convert RynkHidReport to [u8; 27]"))]
+    pub(crate) report_map: [u8; 27],
+    #[characteristic(uuid = "2a4c", write_without_response)]
+    pub(crate) hid_control_point: u8,
+    #[characteristic(uuid = "2a4e", read, write_without_response, value = 1)]
+    pub(crate) protocol_mode: u8,
+    // Report characteristics carry rynk frames — require an encrypted link at
+    // the ATT layer (the app guard in `gatt_events_task` remains the data-path filter).
+    #[descriptor(uuid = "2908", read, value = [0u8, 1u8])]
+    #[characteristic(uuid = "2a4d", read, notify, permissions(encrypted))]
+    pub(crate) input_data: [u8; RYNK_HID_REPORT_SIZE],
+    #[descriptor(uuid = "2908", read, value = [0u8, 2u8])]
+    #[characteristic(uuid = "2a4d", read, write, write_without_response, permissions(encrypted))]
+    pub(crate) output_data: [u8; RYNK_HID_REPORT_SIZE],
 }
 
 /// GATT service exposing the Vial-over-HID protocol. The keyboard writes replies via
 /// `input_data` notify; hosts push requests through `output_data`. `gatt_events_task`
-/// forwards `output_data` writes into `HOST_REQUEST_CHANNEL`, and `host::run_ble_host`
-/// drains `HOST_BLE_REPLY` to notify `input_data`.
-#[cfg(feature = "host")]
+/// forwards `output_data` writes into [`crate::channel::VIAL_BLE_RX_CHANNEL`] for
+/// [`crate::ble::host::HostGattHandler::run`] to drain.
+#[cfg(feature = "vial")]
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
-pub(crate) struct VialService {
+pub(crate) struct VialGattService {
     #[characteristic(uuid = "2a4a", read, value = [0x01, 0x01, 0x00, 0x03])]
     pub(crate) hid_info: [u8; 4],
     #[characteristic(uuid = "2a4b", read, value = ViaReport::desc().try_into().expect("Failed to convert ViaReport to [u8; 27]"))]
@@ -44,14 +108,6 @@ pub(crate) struct VialService {
     #[descriptor(uuid = "2908", read, value = [0u8, 2u8])]
     #[characteristic(uuid = "2a4d", read, write, write_without_response)]
     pub(crate) output_data: [u8; 32],
-}
-
-#[cfg(not(feature = "host"))]
-#[gatt_server]
-pub(crate) struct Server {
-    pub(crate) battery_service: BatteryService,
-    pub(crate) hid_service: HidService,
-    pub(crate) device_config_service: DeviceConfigurationService,
 }
 
 /// The single HID service carrying all reports, distinguished by report id via

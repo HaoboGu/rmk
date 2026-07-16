@@ -13,7 +13,7 @@ use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 pub(crate) async fn process_vial<'a>(
     report: &mut ViaReport,
     vial_config: &VialConfig<'a>,
-    #[cfg(feature = "vial_lock")] locker: &mut super::vial_lock::VialLock<'_>,
+    #[cfg(feature = "host_lock")] locker: &crate::host::lock::HostLock<'_>,
     ctx: &KeyboardContext<'_>,
 ) {
     // report.output_data[0] == 0xFE -> vial commands
@@ -51,7 +51,7 @@ pub(crate) async fn process_vial<'a>(
         VialCommand::GetUnlockStatus => {
             // Reset all data to 0xFF(it's required!)
             report.input_data.fill(0xFF);
-            #[cfg(feature = "vial_lock")]
+            #[cfg(feature = "host_lock")]
             {
                 // Unlocked
                 report.input_data[0] = locker.is_unlocked() as u8;
@@ -63,7 +63,7 @@ pub(crate) async fn process_vial<'a>(
                     report.input_data[3 + idx * 2] = *col;
                 }
             }
-            #[cfg(not(feature = "vial_lock"))]
+            #[cfg(not(feature = "host_lock"))]
             {
                 // Unlocked
                 report.input_data[0] = 1;
@@ -73,26 +73,26 @@ pub(crate) async fn process_vial<'a>(
             }
         }
         VialCommand::UnlockStart => {
-            #[cfg(feature = "vial_lock")]
+            #[cfg(feature = "host_lock")]
             locker.unlocking();
-            #[cfg(not(feature = "vial_lock"))]
+            #[cfg(not(feature = "host_lock"))]
             error!("Vial lock feature is not enabled");
         }
         VialCommand::UnlockPoll => {
-            #[cfg(feature = "vial_lock")]
+            #[cfg(feature = "host_lock")]
             {
                 locker.unlocking();
                 report.input_data[0] = locker.is_unlocked() as u8;
                 report.input_data[1] = locker.is_unlocking() as u8;
                 report.input_data[2] = locker.check_unlock();
             }
-            #[cfg(not(feature = "vial_lock"))]
+            #[cfg(not(feature = "host_lock"))]
             error!("Vial lock feature is not enabled");
         }
         VialCommand::Lock => {
-            #[cfg(feature = "vial_lock")]
+            #[cfg(feature = "host_lock")]
             locker.lock();
-            #[cfg(not(feature = "vial_lock"))]
+            #[cfg(not(feature = "host_lock"))]
             error!("Vial lock feature is not enabled");
         }
         VialCommand::BehaviorSettingQuery => {
@@ -417,13 +417,8 @@ pub(crate) async fn process_vial<'a>(
             );
             let keycode = BigEndian::read_u16(&report.output_data[5..7]);
             let action = from_via_keycode(keycode);
-            if clockwise == 1 {
-                info!("Setting clockwise action: {:?}", action);
-                ctx.set_encoder_clockwise(layer, index, action).await;
-            } else {
-                info!("Setting counter-clockwise action: {:?}", action);
-                ctx.set_encoder_counter_clockwise(layer, index, action).await;
-            }
+            info!("Setting encoder action (clockwise: {}): {:?}", clockwise, action);
+            ctx.set_encoder_direction(layer, index, clockwise == 1, action).await;
         }
         _ => (),
     }
