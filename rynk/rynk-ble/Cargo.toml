@@ -1,0 +1,19 @@
+[package]
+name = "rynk-ble"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "BLE GATT transport for the Rynk host library"
+license.workspace = true
+repository.workspace = true
+keywords = ["keyboard", "firmware", "rmk", "protocol", "ble"]
+
+[dependencies]
+rynk = { path = ".." }
+rmk-types.workspace = true
+embedded-io-async = { workspace = true, features = ["std"] }
+bluest.workspace = true
+futures-util.workspace = true
+async-stream = "0.3"
+tokio = { version = "1.47", default-features = false, features = ["time"] }
