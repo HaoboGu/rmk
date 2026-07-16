@@ -23,12 +23,17 @@
 //!
 //! ### Protocol
 //! - [`protocol::vial`] — Vial/Via protocol types
-//! - [`protocol::rmk`] — RMK native protocol ICD (feature-gated: `rmk_protocol`)
+//! - [`protocol::rynk`] — RMK native protocol ICD (feature-gated: `rynk`)
 //!
 //! ### Build-time
 //! - [`constants`] — Generated from `keyboard.toml` by `build.rs`
 
-#![no_std]
+#![cfg_attr(not(feature = "wasm"), no_std)]
+
+// The host build (no_std, but on an allocator-backed platform) uses `alloc::Vec`
+// for bulk message fields, which are unbounded there — see `protocol::rynk`.
+#[cfg(feature = "host")]
+extern crate alloc;
 
 pub mod action;
 pub mod battery;

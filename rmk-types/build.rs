@@ -9,9 +9,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=KEYBOARD_TOML_PATH");
     println!("cargo:rerun-if-env-changed=VIAL_JSON_PATH");
 
-    // Load keyboard.toml if it's present.
-    //
-    // Build-time constants only need [rmk] + [event]. Keep event defaults support
+    // Build-time constants only need [rmk] + [event], so load event defaults
     // without requiring [keyboard.board]/[keyboard.chip].
     let toml_path = std::env::var("KEYBOARD_TOML_PATH").ok();
     let config: KeyboardTomlConfig = if let Some(toml_path) = &toml_path {
@@ -21,8 +19,7 @@ fn main() {
         toml::from_str("").expect("Failed to parse empty keyboard config\n")
     };
 
-    // Collect active feature flags.
-    // The number of event subscribers bumps according to the enabled feature.
+    // Enabled features drive constant resolution (notably event subscriber counts).
     let active_features = collect_active_features();
     let feature_refs: Vec<&str> = active_features.iter().map(|s| s.as_str()).collect();
 
@@ -31,7 +28,6 @@ fn main() {
         .unwrap_or_else(|err| panic!("Failed to resolve build constants: {err}"));
     let output = generate_constants(&bc);
 
-    // Write to constants.rs file
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("constants.rs");
     fs::write(&dest_path, output).expect("Failed to write constants.rs file");
@@ -85,29 +81,8 @@ fn generate_constants(bc: &BuildConstants) -> String {
         bc.max_patterns_per_key
     ));
 
-    // Protocol Vec capacity constants.
-    //
-    // There are two kinds of constants here:
-    //
-    // - **Internal capacity constants** (e.g., `COMBO_MAX_LENGTH`, `MAX_PATTERNS_PER_KEY`,
-    //   `MACRO_SPACE_SIZE`) define how many combo keys, morse patterns, or macro bytes the
-    //   firmware can store and process.
-    //
-    // - **Message Vec-capacity constants** (e.g., `COMBO_SIZE`, `MORSE_SIZE`,
-    //   `MACRO_DATA_SIZE`, `BULK_SIZE`) define the maximum Vec capacity in protocol
-    //   messages — how many elements can fit in a single request/response.
-    //
-    // On firmware, message capacities are typically set equal to their corresponding
-    // internal constants (e.g., `COMBO_SIZE = COMBO_MAX_LENGTH`), because a single
-    // protocol message needs to carry at most one full config.
-    //
-    // On the host side, message capacities use fixed upper bounds (e.g., 16, 32, 256) so
-    // the host can deserialize responses from any firmware regardless of its config.
-    //
-    // `BULK_SIZE` is different: it controls multi-element bulk transfer (multiple
-    // keys/combos/morses per message) and is only available behind the `bulk` feature.
+    // Host uses protocol ceilings; firmware uses keyboard.toml/default capacities.
     let is_host = env::var("CARGO_FEATURE_HOST").is_ok();
-    let is_bulk = env::var("CARGO_FEATURE_BULK").is_ok();
 
     // Protocol ceilings — always emitted so rmk-types source code can reference them.
     lines.push(format!(
@@ -121,10 +96,6 @@ fn generate_constants(bc: &BuildConstants) -> String {
     lines.push(format!(
         "pub const MAX_MACRO_DATA_SIZE: usize = {};",
         protocol_limits::MAX_MACRO_DATA_SIZE
-    ));
-    lines.push(format!(
-        "pub const MAX_BULK_SIZE: usize = {};",
-        protocol_limits::MAX_BULK_SIZE
     ));
 
     if is_host {
@@ -141,11 +112,6 @@ fn generate_constants(bc: &BuildConstants) -> String {
             "pub const MACRO_DATA_SIZE: usize = {};",
             protocol_limits::MAX_MACRO_DATA_SIZE
         ));
-        // Host always has bulk (host implies bulk feature)
-        lines.push(format!(
-            "pub const BULK_SIZE: usize = {};",
-            protocol_limits::MAX_BULK_SIZE
-        ));
     } else {
         // Firmware: per-item constants from keyboard.toml / defaults.
         lines.push(format!("pub const COMBO_SIZE: usize = {};", bc.combo_max_length));
@@ -154,19 +120,33 @@ fn generate_constants(bc: &BuildConstants) -> String {
             "pub const MACRO_DATA_SIZE: usize = {};",
             bc.protocol_macro_chunk_size
         ));
-        // Compile-time check: firmware Vec sizes must not exceed protocol ceilings.
-        // Only enforce when the rmk_protocol feature is active.
-        if env::var("CARGO_FEATURE_RMK_PROTOCOL").is_ok() {
+        // Firmware Vec sizes must not exceed protocol ceilings (rynk builds only).
+        if env::var("CARGO_FEATURE_RYNK").is_ok() {
             lines.push("const _: () = assert!(COMBO_SIZE <= MAX_COMBO_SIZE, \"firmware COMBO_SIZE exceeds protocol ceiling MAX_COMBO_SIZE\");".to_string());
             lines.push("const _: () = assert!(MORSE_SIZE <= MAX_MORSE_SIZE, \"firmware MORSE_SIZE exceeds protocol ceiling MAX_MORSE_SIZE\");".to_string());
             lines.push("const _: () = assert!(MACRO_DATA_SIZE <= MAX_MACRO_DATA_SIZE, \"firmware MACRO_DATA_SIZE exceeds protocol ceiling MAX_MACRO_DATA_SIZE\");".to_string());
         }
+    }
 
-        // Bulk constant only when bulk feature is active
-        if is_bulk {
-            lines.push(format!("pub const BULK_SIZE: usize = {};", bc.protocol_max_bulk_size));
-            lines.push("const _: () = assert!(BULK_SIZE <= MAX_BULK_SIZE, \"firmware BULK_SIZE exceeds protocol ceiling MAX_BULK_SIZE\");".to_string());
-        }
+    // Bulk counts derive from the buffer and must hold at least one element.
+    if env::var("CARGO_FEATURE_RYNK").is_ok() {
+        lines.push(
+            "pub const BULK_SIZE: usize = \
+             crate::protocol::rynk::bulk_size_for_buffer(RYNK_BUFFER_SIZE);"
+                .to_string(),
+        );
+        lines.push("const _: () = assert!(BULK_SIZE >= 1, \"rynk_buffer_size is too small to hold one combo/morse in a bulk message; increase it\");".to_string());
+        lines.push(
+            "pub const BULK_KEYMAP_SIZE: usize = \
+             crate::protocol::rynk::bulk_keymap_size_for_buffer(RYNK_BUFFER_SIZE);"
+                .to_string(),
+        );
+        lines.push("const _: () = assert!(BULK_KEYMAP_SIZE >= 1, \"rynk_buffer_size is too small to hold one key in a bulk keymap message; increase it\");".to_string());
+    }
+
+    // Bulk defaults higher because its counts scale with the buffer.
+    if env::var("CARGO_FEATURE_RYNK").is_ok() {
+        lines.push(format!("pub const RYNK_BUFFER_SIZE: usize = {};", bc.rynk_buffer_size));
     }
 
     // Event channels
@@ -201,11 +181,10 @@ fn generate_constants(bc: &BuildConstants) -> String {
     lines.join("\n")
 }
 
-/// Collect active Cargo feature flags from environment variables.
+/// Active Cargo feature flags, lowercased to match `subscriber_default.toml`.
 ///
-/// Cargo sets `CARGO_FEATURE_<NAME>` for each enabled feature (with the name
-/// uppercased and `-` replaced by `_`). We reverse that to get lowercase names
-/// matching the convention used in `subscriber_default.toml`.
+/// Cargo exposes each enabled feature as `CARGO_FEATURE_<NAME>` (uppercased,
+/// `-` → `_`); we reverse that.
 fn collect_active_features() -> Vec<String> {
     env::vars()
         .filter_map(|(key, _)| key.strip_prefix("CARGO_FEATURE_").map(|f| f.to_lowercase()))

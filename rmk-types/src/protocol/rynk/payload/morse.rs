@@ -1,61 +1,89 @@
 //! Morse endpoint types.
 
 use postcard::experimental::max_size::MaxSize;
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::morse::Morse;
 
 /// Request payload for `SetMorse`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct SetMorseRequest {
     pub index: u8,
     pub config: Morse,
 }
 
-// Bulk transfer types live in the `bulk` submodule below and are re-exported
-// when the `bulk` feature is enabled. Gating the entire submodule once avoids
-// repeating `#[cfg(feature = "bulk")]` on every type, impl, and import.
-#[cfg(feature = "bulk")]
 mod bulk {
-    use heapless::Vec;
     use postcard::experimental::max_size::MaxSize;
-    use postcard_schema::Schema;
     use serde::{Deserialize, Serialize};
 
+    #[cfg(not(feature = "host"))]
     use crate::constants::BULK_SIZE;
     use crate::morse::Morse;
 
-    /// Request payload for `GetMorseBulk`.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize, Schema)]
+    // Firmware uses a bounded Vec; host bounds transfers from capabilities.
+    #[cfg(not(feature = "host"))]
+    type BulkMorses = heapless::Vec<Morse, BULK_SIZE>;
+    #[cfg(feature = "host")]
+    type BulkMorses = alloc::vec::Vec<Morse>;
+
+    /// Request payload for `GetMorseBulk`: read a page of morses starting at slot
+    /// `start_index`. The firmware returns as many as fit (`max_bulk_configs`),
+    /// fewer at the end, or an empty page once `start_index` reaches the slot count.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct GetMorseBulkRequest {
         pub start_index: u8,
-        pub count: u8,
     }
 
-    /// Bulk request payload for setting multiple morse configs at once.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+    /// Bulk request payload for `SetMorseBulk`: write `configs` starting at slot
+    /// `start_index`.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct SetMorseBulkRequest {
         pub start_index: u8,
-        pub configs: Vec<Morse, BULK_SIZE>,
+        #[cfg_attr(feature = "wasm", tsify(type = "Morse[]"))]
+        pub configs: BulkMorses,
     }
 
+    // Firmware sizes its fixed buffer from these exact bounds; host builds leave
+    // the fields unbounded and never need `MaxSize`.
+    #[cfg(not(feature = "host"))]
     impl MaxSize for SetMorseBulkRequest {
-        const POSTCARD_MAX_SIZE: usize = u8::POSTCARD_MAX_SIZE + crate::heapless_vec_max_size::<Morse, BULK_SIZE>();
+        // start_index, then the bounded configs vector.
+        const POSTCARD_MAX_SIZE: usize =
+            <u8 as MaxSize>::POSTCARD_MAX_SIZE + crate::heapless_vec_max_size::<Morse, BULK_SIZE>();
     }
 
     /// Bulk response for getting multiple morse configs at once.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Schema)]
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
     pub struct GetMorseBulkResponse {
-        pub configs: Vec<Morse, BULK_SIZE>,
+        #[cfg_attr(feature = "wasm", tsify(type = "Morse[]"))]
+        pub configs: BulkMorses,
     }
 
+    #[cfg(not(feature = "host"))]
     impl MaxSize for GetMorseBulkResponse {
         const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<Morse, BULK_SIZE>();
     }
+
+    impl GetMorseBulkResponse {
+        /// Build the response, collecting up to the bulk capacity.
+        pub fn from_iter_bounded(configs: impl IntoIterator<Item = Morse>) -> Self {
+            #[cfg(not(feature = "host"))]
+            let configs = configs.into_iter().take(BULK_SIZE).collect();
+            #[cfg(feature = "host")]
+            let configs = configs.into_iter().collect();
+            Self { configs }
+        }
+    }
 }
 
-#[cfg(feature = "bulk")]
 pub use bulk::*;
 
 #[cfg(test)]
@@ -66,7 +94,7 @@ mod tests {
     use crate::keycode::HidKeyCode;
     use crate::modifier::ModifierCombination;
     use crate::morse::{MorsePattern, MorseProfile};
-    use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+    use crate::protocol::rynk::tests::{assert_max_size_bound, round_trip};
 
     /// Build a `Morse` whose `actions` `LinearMap` is filled to `MORSE_SIZE`
     /// distinct entries, each using a multi-field `Action` variant so both the
@@ -74,10 +102,7 @@ mod tests {
     /// manual `MaxSize` impl. `MorsePattern::from_u16(0)` panics (the empty
     /// pattern is `0b1`), so patterns start at 1.
     fn full_morse() -> Morse {
-        // `KeyWithModifier` carries a `HidKeyCode` + a `ModifierCombination`
-        // bitfield, so it encodes to several bytes rather than the 1 byte of
-        // `Action::No` — enough slack for `assert_max_size_bound` to catch a
-        // per-element under-count.
+        // Use a multi-byte action so MaxSize catches per-entry under-counts.
         let action = Action::KeyWithModifier(HidKeyCode::A, ModifierCombination::new());
         let mut m = Morse {
             profile: MorseProfile::const_default(),
@@ -120,7 +145,8 @@ mod tests {
         assert_max_size_bound(&m);
     }
 
-    #[cfg(feature = "bulk")]
+    // Firmware-only: exercises heapless bulk capacity.
+    #[cfg(not(feature = "host"))]
     mod bulk {
         use heapless::Vec;
 
@@ -128,7 +154,7 @@ mod tests {
         use super::full_morse;
         use crate::constants::BULK_SIZE;
         use crate::morse::Morse;
-        use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
+        use crate::protocol::rynk::tests::{assert_max_size_bound, round_trip};
 
         #[test]
         fn round_trip_set_morse_bulk_request_max_capacity() {

@@ -1,8 +1,6 @@
 //! Consumer page keycodes.
 
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use super::hid::HidKeyCode;
@@ -12,7 +10,8 @@ use super::hid::HidKeyCode;
 #[non_exhaustive]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum ConsumerKey {
     No,
     // 15.5 Display Controls

@@ -6,16 +6,10 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::{
-    Schema,
-    schema::{DataModelType, NamedType},
-};
-use serde::{Deserialize, Serialize};
 
 /// Mouse buttons
 #[bitfield(u8, order = Lsb, defmt = cfg(feature = "defmt"))]
-#[derive(Eq, PartialEq, Serialize, Deserialize, MaxSize)]
+#[derive(Eq, PartialEq, MaxSize)]
 pub struct MouseButtons {
     #[bits(1)]
     pub button1: bool, //left
@@ -34,6 +28,18 @@ pub struct MouseButtons {
     #[bits(1)]
     pub button8: bool,
 }
+
+// u8 on the wire (postcard); named bools on serde-wasm-bindgen / serde_json (TS).
+crate::bitfield_named_serde!(MouseButtons, "MouseButtons", {
+    button1 = with_button1,
+    button2 = with_button2,
+    button3 = with_button3,
+    button4 = with_button4,
+    button5 = with_button5,
+    button6 = with_button6,
+    button7 = with_button7,
+    button8 = with_button8,
+});
 
 impl BitOr for MouseButtons {
     type Output = Self;
@@ -98,12 +104,4 @@ impl MouseButtons {
             .with_button7(button7)
             .with_button8(button8)
     }
-}
-
-#[cfg(feature = "rmk_protocol")]
-impl Schema for MouseButtons {
-    const SCHEMA: &'static NamedType = &NamedType {
-        name: "MouseButtons",
-        ty: &DataModelType::U8,
-    };
 }

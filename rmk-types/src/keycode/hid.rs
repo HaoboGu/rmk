@@ -1,8 +1,6 @@
 //! USB HID keycodes.
 
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 use strum::FromRepr;
 
@@ -14,7 +12,8 @@ use crate::modifier::ModifierCombination;
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, FromRepr, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum HidKeyCode {
     /// Reserved, no-key.
     No = 0x0000,
