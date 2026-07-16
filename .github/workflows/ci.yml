@@ -78,6 +78,49 @@ jobs:
         run: cargo install --locked cargo-expand
       - run: .github/ci/test.sh
 
+  # Host tooling lives in its own workspace, so it gets its own job.
+  host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: wasm32-unknown-unknown
+      - name: Install host system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev pkg-config
+      # host.sh runs wasm-pack to verify JS/.d.ts package generation.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-host
+          cache-directories: |
+            target/ci
+      - run: .github/ci/host.sh
+
+  qemu-rynk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: riscv32imac-unknown-none-elf
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-qemu-rynk
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-misc libdbus-1-dev pkg-config
+          qemu-system-riscv32 --version
+      - name: Run QEMU Rynk behavior verifier
+        working-directory: examples/use_rust/qemu-riscv-rynk
+        run: python3 run.py
+
   # Discover buildable examples for the matrix
   discover:
     runs-on: ubuntu-latest

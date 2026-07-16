@@ -286,9 +286,8 @@ mod tests {
         let mut behavior = BehaviorConfig::default();
         let positional = PositionalConfig::<1, 1>::default();
         let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
-        let ctx = KeyboardContext::new(&keymap);
         let config = RmkConfig::default();
-        let mut service = VialService::new(&ctx, &config);
+        let mut service = VialService::new(&keymap, &config);
         f(&mut service)
     }
 

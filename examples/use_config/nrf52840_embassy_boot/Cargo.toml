@@ -40,7 +40,7 @@ nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "abe49d22ebfc85f
     "defmt",
     "nrf52840",
 ] }
-bt-hci = { version = "0.8", features = ["defmt"] }
+bt-hci = { version = "0.9", features = ["defmt"] }
 embassy-executor = { version = "0.10", features = [
     "defmt",
     "platform-cortex-m",

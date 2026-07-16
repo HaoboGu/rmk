@@ -10,7 +10,7 @@
 //! how RMK stores rotation. Encoders come back in Vial's convention: two 1u CW/CCW
 //! switches side by side, centered on the knob.
 
-use rynk::layout::{Encoder, Key, LayoutInfo, Variant};
+use rynk::layout::{Encoder, Key, LayoutInfo, Rect, Variant};
 use serde_json::{Map, Value, json};
 
 fn round(v: f32) -> f64 {
@@ -20,7 +20,7 @@ fn round(v: f32) -> f64 {
 /// One absolutely-placed KLE key. `r` is always emitted so it can't inherit the
 /// previous key's angle; `rx`/`ry` snap the cursor to the center, `x`/`y` step to
 /// the unrotated top-left.
-fn kle_key(cx: f32, cy: f32, w: f32, h: f32, r: f32, legend: String) -> Value {
+fn kle_key(cx: f32, cy: f32, w: f32, h: f32, rect2: Option<&Rect>, r: f32, legend: String) -> Value {
     let mut o = Map::new();
     o.insert("r".into(), json!(round(r)));
     o.insert("rx".into(), json!(round(cx)));
@@ -33,6 +33,12 @@ fn kle_key(cx: f32, cy: f32, w: f32, h: f32, r: f32, legend: String) -> Value {
     if (h - 1.0).abs() > 1e-4 {
         o.insert("h".into(), json!(round(h)));
     }
+    if let Some(rect2) = rect2 {
+        o.insert("w2".into(), json!(round(rect2.w)));
+        o.insert("h2".into(), json!(round(rect2.h)));
+        o.insert("x2".into(), json!(round(rect2.x - cx + (w - rect2.w) / 2.0)));
+        o.insert("y2".into(), json!(round(rect2.y - cy + (h - rect2.h) / 2.0)));
+    }
     Value::Array(vec![Value::Object(o), Value::String(legend)])
 }
 
@@ -42,6 +48,7 @@ fn key_row(k: &Key) -> Value {
         k.rect.y,
         k.rect.w,
         k.rect.h,
+        k.rect2.as_ref(),
         k.r,
         format!("{},{}", k.row, k.col),
     )
@@ -52,8 +59,8 @@ fn encoder_rows(e: &Encoder) -> [Value; 2] {
     // CW (`id,1`) side by side — both must exist for Vial to offer both bindings.
     let legend = |dir: u8| format!("{},{dir}\n\n\n\n\n\n\n\n\ne", e.id);
     [
-        kle_key(e.x - 0.5, e.y, 1.0, 1.0, 0.0, legend(0)),
-        kle_key(e.x + 0.5, e.y, 1.0, 1.0, 0.0, legend(1)),
+        kle_key(e.x - 0.5, e.y, 1.0, 1.0, None, 0.0, legend(0)),
+        kle_key(e.x + 0.5, e.y, 1.0, 1.0, None, 0.0, legend(1)),
     ]
 }
 
@@ -99,4 +106,25 @@ pub fn keyboard_toml_to_vial(text: &str) -> Result<Value, String> {
         "matrix": { "rows": rows, "cols": cols },
         "layouts": { "keymap": variant_to_kle(variant) }
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keyboard_toml_to_vial_preserves_l_shaped_keys() {
+        let vial =
+            keyboard_toml_to_vial("[layout]\nrows = 1\ncols = 2\nmap = \"(0,0,@iso_enter) (0,1,@bae)\"").unwrap();
+        let keymap = vial.pointer("/layouts/keymap").unwrap();
+        let parsed = crate::kle::parse_keymap(keymap).unwrap();
+
+        let iso = &parsed.keys[0];
+        assert_eq!((iso.width, iso.height), (1.25, 2.0));
+        assert_eq!((iso.width2, iso.height2, iso.x2, iso.y2), (1.5, 1.0, -0.25, 0.0));
+
+        let bae = &parsed.keys[1];
+        assert_eq!((bae.width, bae.height), (2.25, 1.0));
+        assert_eq!((bae.width2, bae.height2, bae.x2, bae.y2), (1.5, 1.0, 0.75, -1.0));
+    }
 }

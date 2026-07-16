@@ -24,7 +24,7 @@ embassy-executor = { version = "0.10", features = [
     "executor-thread",
 ] }
 defmt = "1"
-panic-halt = "1.0"
+panic-halt = "1"
 
 [build-dependencies]
 xz2 = "0.1.7"

@@ -162,21 +162,6 @@ dependencies = [
 
 [[package]]
 name = "bt-hci"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "211713d2e9fb4793ce4360a712c0764264aff6be48932ccf02ca2a331c0436a9"
-dependencies = [
- "btuuid",
- "defmt 1.1.1",
- "embassy-sync",
- "embedded-io 0.7.1",
- "embedded-io-async 0.7.0",
- "futures-intrusive",
- "heapless 0.9.3",
-]
-
-[[package]]
-name = "bt-hci"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f3c66fd0a41a3b3a5906847b1bf5516048ce083e24fa9341a0fa31d3b4cd73d"
@@ -1589,7 +1574,7 @@ name = "nrf-sdc"
 version = "0.4.0"
 source = "git+https://github.com/alexmoon/nrf-sdc?rev=abe49d22ebfc85fae134eb082fbfddf752016a55#abe49d22ebfc85fae134eb082fbfddf752016a55"
 dependencies = [
- "bt-hci 0.9.0",
+ "bt-hci",
  "critical-section",
  "defmt 1.1.1",
  "embassy-nrf",
@@ -1925,7 +1910,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 name = "rmk"
 version = "0.8.2"
 dependencies = [
- "bt-hci 0.9.0",
+ "bt-hci",
  "byteorder",
  "cortex-m",
  "crc32fast",
@@ -1991,7 +1976,7 @@ dependencies = [
 name = "rmk-nrf52840-embassy-boot"
 version = "0.2.0"
 dependencies = [
- "bt-hci 0.8.1",
+ "bt-hci",
  "const-gen",
  "cortex-m",
  "cortex-m-rt",
@@ -2496,7 +2481,7 @@ version = "0.7.0"
 source = "git+https://github.com/embassy-rs/trouble?rev=088e09c451177d5db50cf3e58c68d05512265ba0#088e09c451177d5db50cf3e58c68d05512265ba0"
 dependencies = [
  "aes",
- "bt-hci 0.9.0",
+ "bt-hci",
  "cmac",
  "defmt 1.1.1",
  "embassy-futures",
