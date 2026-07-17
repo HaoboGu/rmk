@@ -20,18 +20,35 @@ pub enum Overwritten {
 /// `#[Overwritten(...)]` (this enum's name; the previous matching ignored the
 /// attribute path entirely, so both were in use).
 ///
+/// A `#[cfg(...)]` / `#[cfg_attr(...)]` on the function makes it ineligible: an
+/// attribute macro receives its module's items *before* `cfg` stripping, so a
+/// disabled item still reaches us with its `cfg` intact and we cannot tell here
+/// whether it is compiled. Such a function is skipped entirely — neither
+/// selected nor validated — so a disabled override can't replace the generated
+/// default and a disabled typo can't emit an error (#967 review). Inert
+/// attributes (doc comments, `#[allow(...)]`, ...) don't gate compilation and
+/// may sit alongside the marker.
+///
 /// Returns:
-/// - `None`: the function carries no override attribute
-/// - `Some(Ok(_))`: a valid override marker (other attributes, doc comments
-///   included, are allowed alongside it)
+/// - `None`: no override marker, or the marker is `cfg`/`cfg_attr`-gated
+/// - `Some(Ok(_))`: a valid override marker (inert attributes may accompany it)
 /// - `Some(Err(_))`: an override attribute that failed to parse
 ///   (unknown or miscased variant, missing argument, ...)
 pub(crate) fn find_overwritten(item_fn: &ItemFn) -> Option<darling::Result<Overwritten>> {
-    item_fn
+    let marker = item_fn
         .attrs
         .iter()
-        .find(|attr| attr.path().is_ident("Override") || attr.path().is_ident("Overwritten"))
-        .map(|attr| Overwritten::from_meta(&attr.meta))
+        .find(|attr| attr.path().is_ident("Override") || attr.path().is_ident("Overwritten"))?;
+    // `cfg`/`cfg_attr` gate whether the item is compiled; we can't evaluate
+    // that here, so leave the function untouched rather than mis-select it.
+    if item_fn
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("cfg") || attr.path().is_ident("cfg_attr"))
+    {
+        return None;
+    }
+    Some(Overwritten::from_meta(&marker.meta))
 }
 
 /// Validate every `#[Overwritten(...)]` attribute in the module.
@@ -98,6 +115,58 @@ mod tests {
         // silently ineligible via the old `attrs.len() == 1` check.
         let res = find_overwritten(&parse_fn("/// my entry\n#[Overwritten(entry)]\nfn f() {}"));
         assert!(matches!(res, Some(Ok(Overwritten::Entry))));
+    }
+
+    #[test]
+    fn cfg_gated_override_is_ignored() {
+        // A `cfg`-gated override must not be selected: the attribute macro sees
+        // the item before `cfg` stripping and cannot tell whether it is active,
+        // so it is left untouched (the generated default is used). Both a valid
+        // variant and a typo behind `cfg` resolve to `None` — no selection and
+        // no spurious compile error for a disabled function (#967 review).
+        assert!(
+            find_overwritten(&parse_fn(
+                "#[cfg(feature = \"x\")]\n#[Override(chip_config)]\nfn f() {}"
+            ))
+            .is_none()
+        );
+        assert!(
+            find_overwritten(&parse_fn(
+                "#[cfg(feature = \"x\")]\n#[Override(Entry)]\nfn f() {}"
+            ))
+            .is_none()
+        );
+        // `cfg_attr` is gated the same way.
+        assert!(
+            find_overwritten(&parse_fn(
+                "#[cfg_attr(test, inline)]\n#[Override(entry)]\nfn f() {}"
+            ))
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn inert_attribute_does_not_disable_override() {
+        // `#[allow(...)]` (like doc comments) does not gate compilation, so it
+        // must not make the override ineligible — only `cfg`/`cfg_attr` do.
+        let res = find_overwritten(&parse_fn(
+            "#[allow(dead_code)]\n#[Override(entry)]\nfn f() {}",
+        ));
+        assert!(matches!(res, Some(Ok(Overwritten::Entry))));
+        // A typo alongside an inert attribute is still caught (no cfg present).
+        let res = find_overwritten(&parse_fn(
+            "#[allow(dead_code)]\n#[Override(Entry)]\nfn f() {}",
+        ));
+        assert!(matches!(res, Some(Err(_))));
+    }
+
+    #[test]
+    fn cfg_gated_override_produces_no_module_error() {
+        // The disabled typo above must not turn into a compile error.
+        let item_mod: ItemMod =
+            syn::parse_str("mod kb { #[cfg(feature = \"x\")] #[Overwritten(Entry)] fn run() {} }")
+                .unwrap();
+        assert!(validate_overwritten_attrs(&item_mod).is_none());
     }
 
     #[test]
