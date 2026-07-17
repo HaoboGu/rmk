@@ -58,6 +58,10 @@ The `[behavior.sticky_key]` table configures the unified **Sticky Key** (`SK`) f
 | `one_shot_mod_release_on_layer_change` | unset | One-shot-mod override for `SK(mod)` / `OSM(mod)`. When unset, inherits `release_on_layer_change`. |
 | `one_shot_layer_release_on_layer_change` | unset | One-shot-layer override for `SK(MO(n))` / `OSL(n)`. When unset, inherits `release_on_layer_change`. |
 
+`timeout` applies to the sticky latch, not to a key that is still physically held.
+Holding an `SK` key longer than the configured timeout will not synthesize a key
+release; releasing the physical key then completes the action normally.
+
 The three shape-specific layer-change settings take precedence over the global
 `release_on_layer_change` value. This lets a configuration establish one global
 default and opt individual shapes in or out. Leaving all three overrides unset
