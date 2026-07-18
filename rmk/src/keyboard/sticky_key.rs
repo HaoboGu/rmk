@@ -8,6 +8,7 @@
 //! no inline `select` in this module. On expiry the run loop calls
 //! [`Keyboard::release_sticky_key_if_active`].
 
+use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Instant};
 use rmk_types::action::StickyKeyAction;
 use rmk_types::keycode::HidKeyCode;
@@ -16,6 +17,19 @@ use rmk_types::modifier::ModifierCombination;
 use crate::config::StickyKeyReleaseMode;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::keyboard::Keyboard;
+use crate::keymap::StickyKeyShape;
+
+static STICKY_LAYER_EVENT_CHANNEL: Channel<crate::RawMutex, StickyKeyReleaseMode, 4> = Channel::new();
+
+pub(crate) fn notify_sticky_layer_event(event: StickyKeyReleaseMode) {
+    if STICKY_LAYER_EVENT_CHANNEL.try_send(event).is_err() {
+        warn!("sticky-key layer event channel is full; dropping layer transition");
+    }
+}
+
+pub(crate) async fn next_sticky_layer_event() -> StickyKeyReleaseMode {
+    STICKY_LAYER_EVENT_CHANNEL.receive().await
+}
 
 /// Latch phase of a sticky key.
 ///
@@ -164,16 +178,28 @@ impl StickyKeyState {
             StickyKeyState::None => None,
         }
     }
+
+    pub(crate) fn shape(&self) -> Option<StickyKeyShape> {
+        if self.is_pure_mod() {
+            Some(StickyKeyShape::PureMod)
+        } else if self.is_layer() {
+            Some(StickyKeyShape::Layer)
+        } else if self.is_tap_key() {
+            Some(StickyKeyShape::TapKey)
+        } else {
+            None
+        }
+    }
 }
 
 impl Keyboard<'_> {
     pub(crate) async fn release_sticky_key_on_layer_event(&mut self, event: StickyKeyReleaseMode) {
-        let Some(index) = self.sticky_key_state.profile() else {
+        let (Some(index), Some(shape)) = (self.sticky_key_state.profile(), self.sticky_key_state.shape()) else {
             return;
         };
         if self
             .keymap
-            .sticky_key_profile(index)
+            .sticky_key_profile(index, shape)
             .release_mode
             .is_some_and(|mode| mode.contains(event))
         {
@@ -194,7 +220,7 @@ impl Keyboard<'_> {
     /// Pure-mod (OSM) shape: accumulate the modifier across taps, apply it through the
     /// terminating key, honor `activate_on_keypress`/`quick_release`.
     async fn process_sticky_pure_mod(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
-        let profile = self.keymap.sticky_key_profile(params.profile);
+        let profile = self.keymap.sticky_key_profile(params.profile, StickyKeyShape::PureMod);
         let deadline = StickyKeyDeadline::from_timeout(profile.timeout);
 
         if event.pressed {
@@ -224,12 +250,16 @@ impl Keyboard<'_> {
                 }
                 StickyKeyState::Active {
                     mods,
+                    profile,
                     pressed,
                     deadline: d,
                     ..
                 } => {
                     // Same-shape pure-mod re-press: accumulate (3c) and refresh the deadline.
                     *mods |= params.keep;
+                    // The most recently pressed pure-mod StickyKey owns the
+                    // accumulated latch's behavior and refreshed deadline.
+                    *profile = params.profile;
                     *pressed = true;
                     *d = deadline;
                 }
@@ -275,7 +305,7 @@ impl Keyboard<'_> {
     /// the latch is consumed.
     async fn process_sticky_layer(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
         let layer_num = params.layer.expect("layer shape requires a layer");
-        let profile = self.keymap.sticky_key_profile(params.profile);
+        let profile = self.keymap.sticky_key_profile(params.profile, StickyKeyShape::Layer);
         let deadline = StickyKeyDeadline::from_timeout(profile.timeout);
 
         if event.pressed {
@@ -361,7 +391,7 @@ impl Keyboard<'_> {
     /// between presses, cycle on each press (`max_repeat`). Ignores
     /// `activate_on_keypress`/`quick_release`.
     async fn process_sticky_tap_key(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
-        let profile = self.keymap.sticky_key_profile(params.profile);
+        let profile = self.keymap.sticky_key_profile(params.profile, StickyKeyShape::TapKey);
         let deadline = StickyKeyDeadline::from_timeout(profile.timeout);
 
         if event.pressed {
@@ -461,7 +491,8 @@ impl Keyboard<'_> {
         let mode = self
             .sticky_key_state
             .profile()
-            .and_then(|index| self.keymap.sticky_key_profile(index).release_mode);
+            .zip(self.sticky_key_state.shape())
+            .and_then(|(index, shape)| self.keymap.sticky_key_profile(index, shape).release_mode);
         // Layer (OSL) shape: mirror the former `update_osl`. Pressed→Held on a foreign key
         // (handled by the shared Pressed arm below, which also clears the deadline). A Latched
         // layer is consumed on the foreign key's RELEASE: deactivate the layer and clear the
@@ -575,10 +606,11 @@ impl Keyboard<'_> {
         //    must NOT produce a spurious empty report. Mirrors the former OSM timeout path.
         //  - layer shape: deactivating a layer emits nothing → never report.
         let needs_report = if self.sticky_key_state.is_pure_mod() {
-            let activate_on_keypress = self
-                .sticky_key_state
-                .profile()
-                .is_some_and(|index| self.keymap.sticky_key_profile(index).activate_on_keypress);
+            let activate_on_keypress = self.sticky_key_state.profile().is_some_and(|index| {
+                self.keymap
+                    .sticky_key_profile(index, StickyKeyShape::PureMod)
+                    .activate_on_keypress
+            });
             matches!(
                 self.sticky_key_state,
                 StickyKeyState::Active {

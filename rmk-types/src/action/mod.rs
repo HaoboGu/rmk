@@ -103,3 +103,23 @@ pub enum Action {
     #[cfg(feature = "steno")]
     Steno(StenoKey),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sticky_key_action_profile_round_trips() {
+        let action = Action::StickyKey(StickyKeyAction {
+            key: HidKeyCode::Tab,
+            keep: ModifierCombination::LALT,
+            layer: None,
+            profile: 7,
+        });
+        let mut bytes = [0; 32];
+        let encoded = postcard::to_slice(&action, &mut bytes).unwrap();
+        let decoded: Action = postcard::from_bytes(encoded).unwrap();
+
+        assert_eq!(decoded, action);
+    }
+}

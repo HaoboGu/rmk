@@ -575,7 +575,7 @@ pub(crate) fn get_key_with_alias(key: String) -> Ident {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmk_config::resolved::behavior::MorseProfile;
+    use rmk_config::resolved::behavior::{MorseProfile, StickyKeyProfile};
 
     fn expand(key: &str) -> String {
         parse_key(key.to_string(), &None, &None).to_string()
@@ -694,5 +694,22 @@ mod tests {
                 "{alias} should emit {expected_macro}!, got: {alias_tokens}"
             );
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "profile name is not found in behavior.sticky_key.profiles")]
+    fn unknown_sticky_key_profile_is_rejected() {
+        let mut profiles = HashMap::new();
+        profiles.insert(
+            "known".to_string(),
+            StickyKeyProfile {
+                timeout_ms: None,
+                activate_on_keypress: None,
+                max_repeat: None,
+                release_mode: None,
+            },
+        );
+
+        parse_key("SK(LShift, @missing)".to_string(), &None, &Some(profiles));
     }
 }

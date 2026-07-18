@@ -1,7 +1,7 @@
 pub mod common;
 
 use embassy_time::Duration;
-use rmk::config::{BehaviorConfig, PositionalConfig, StickyKeyConfig};
+use rmk::config::{BehaviorConfig, PositionalConfig, StickyKeyConfig, StickyKeyProfile, StickyKeyReleaseMode};
 use rmk::keyboard::Keyboard;
 use rmk::types::action::KeyAction;
 use rmk::types::modifier::ModifierCombination;
@@ -909,6 +909,14 @@ fn create_test_keyboard_puremod_sk() -> Keyboard<'static> {
 // KEYMAP_TAP_SK: tap-key SK at col 0 and a basic key at col 1, for testing a timeout while held.
 const KEYMAP_TAP_SK: [[[KeyAction; 2]; 1]; 1] = [[[sk!(Tab, ModifierCombination::LALT), k!(A)]]];
 
+const KEYMAP_PROFILED_TAP_SK: [[[KeyAction; 2]; 1]; 1] = [[[sk!(Tab, ModifierCombination::LALT, 0), k!(A)]]];
+
+const KEYMAP_PROFILED_PURE_MODS: [[[KeyAction; 3]; 1]; 1] = [[[
+    sk_mod!(ModifierCombination::LSHIFT, 0),
+    sk_mod!(ModifierCombination::LCTRL, 1),
+    k!(A),
+]]];
+
 fn create_test_keyboard_tap_sk() -> Keyboard<'static> {
     let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
         sticky_key: StickyKeyConfig {
@@ -919,6 +927,85 @@ fn create_test_keyboard_tap_sk() -> Keyboard<'static> {
     }));
     let per_key_config: &'static PositionalConfig<1, 2> = Box::leak(Box::new(PositionalConfig::default()));
     Keyboard::new(wrap_keymap(KEYMAP_TAP_SK, per_key_config, behavior_config))
+}
+
+fn create_profiled_tap_sk_keyboard(profile: StickyKeyProfile) -> Keyboard<'static> {
+    let mut sticky_key = StickyKeyConfig::default();
+    sticky_key.profiles.push(profile).unwrap();
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
+        sticky_key,
+        ..BehaviorConfig::default()
+    }));
+    let per_key_config: &'static PositionalConfig<1, 2> = Box::leak(Box::new(PositionalConfig::default()));
+    Keyboard::new(wrap_keymap(KEYMAP_PROFILED_TAP_SK, per_key_config, behavior_config))
+}
+
+#[test]
+fn tap_key_other_key_release_keeps_modifier_through_release_report() {
+    key_sequence_test! {
+        keyboard: create_profiled_tap_sk_keyboard(StickyKeyProfile {
+            release_mode: Some(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
+            ..StickyKeyProfile::default()
+        }),
+        sequence: [
+            [0, 0, true,  0],
+            [0, 0, false, 0],
+            [0, 1, true,  0],
+            [0, 1, false, 0],
+        ],
+        expected_reports: [
+            [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],
+            [KC_LALT, [0, 0, 0, 0, 0, 0]],
+            [KC_LALT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [KC_LALT, [0, 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+#[test]
+fn latest_accumulated_pure_mod_profile_owns_release_behavior() {
+    let mut sticky_key = StickyKeyConfig::default();
+    sticky_key
+        .profiles
+        .push(StickyKeyProfile {
+            release_mode: Some(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
+            ..StickyKeyProfile::default()
+        })
+        .unwrap();
+    sticky_key
+        .profiles
+        .push(StickyKeyProfile {
+            release_mode: Some(StickyKeyReleaseMode::OTHER_KEY_PRESS),
+            ..StickyKeyProfile::default()
+        })
+        .unwrap();
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
+        sticky_key,
+        ..BehaviorConfig::default()
+    }));
+    let per_key_config: &'static PositionalConfig<1, 3> = Box::leak(Box::new(PositionalConfig::default()));
+
+    key_sequence_test! {
+        keyboard: Keyboard::new(wrap_keymap(
+            KEYMAP_PROFILED_PURE_MODS,
+            per_key_config,
+            behavior_config,
+        )),
+        sequence: [
+            [0, 0, true,  0],
+            [0, 0, false, 0],
+            [0, 1, true,  0],
+            [0, 1, false, 0],
+            [0, 2, true,  0],
+            [0, 2, false, 0],
+        ],
+        expected_reports: [
+            [KC_LSHIFT | KC_LCTRL, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
 }
 
 // KEYMAP_TWO_TAP_SK: two tap-key SKs for verifying that a second physical key replaces the

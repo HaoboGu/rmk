@@ -21,6 +21,13 @@ use crate::matrix::MatrixState;
 
 pub(crate) const HOLD_BUFFER_SIZE: usize = 16;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StickyKeyShape {
+    PureMod,
+    TapKey,
+    Layer,
+}
+
 /// All allocated data needed to build a [`KeyMap`].
 pub struct KeymapData<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize = 0> {
     /// Per-layer key actions
@@ -142,15 +149,19 @@ impl KeyMapInner<'_> {
         self.behavior.default_layer
     }
 
-    fn set_default_layer(&mut self, layer_num: u8) {
+    fn set_default_layer(&mut self, layer_num: u8) -> bool {
         if layer_num as usize >= self.num_layer {
             warn!(
                 "Not a valid default layer {}, keyboard supports only {} layers",
                 layer_num, self.num_layer
             );
-            return;
+            return false;
+        }
+        if self.behavior.default_layer == layer_num {
+            return false;
         }
         self.behavior.default_layer = layer_num;
+        true
     }
 
     fn get_action_at(&self, pos: KeyboardEventPos, layer_num: usize) -> KeyAction {
@@ -293,40 +304,50 @@ impl KeyMapInner<'_> {
         publish_event(LayerChangeEvent::new(layer));
     }
 
-    fn activate_layer(&mut self, layer_num: u8) {
+    fn activate_layer(&mut self, layer_num: u8) -> bool {
         if layer_num as usize >= self.num_layer {
             warn!(
                 "Not a valid layer {}, keyboard supports only {} layers",
                 layer_num, self.num_layer
             );
-            return;
+            return false;
+        }
+        if self.layer_state[layer_num as usize] {
+            return false;
         }
         self.layer_state[layer_num as usize] = true;
         self.update_tri_layer();
+        true
     }
 
-    fn deactivate_layer(&mut self, layer_num: u8) {
+    fn deactivate_layer(&mut self, layer_num: u8) -> bool {
         if layer_num as usize >= self.num_layer {
             warn!(
                 "Not a valid layer {}, keyboard supports only {} layers",
                 layer_num, self.num_layer
             );
-            return;
+            return false;
+        }
+        if !self.layer_state[layer_num as usize] {
+            return false;
         }
         self.layer_state[layer_num as usize] = false;
         self.update_tri_layer();
+        true
     }
 
-    fn toggle_layer(&mut self, layer_num: u8) {
+    fn toggle_layer(&mut self, layer_num: u8) -> Option<bool> {
         if layer_num as usize >= self.num_layer {
             warn!(
                 "Not a valid layer {}, keyboard supports only {} layers",
                 layer_num, self.num_layer
             );
-            return;
+            return None;
         }
         self.layer_state[layer_num as usize] = !self.layer_state[layer_num as usize];
+        let active = self.layer_state[layer_num as usize];
         self.update_tri_layer();
+        Some(active)
     }
 }
 
@@ -458,16 +479,17 @@ impl<'a> KeyMap<'a> {
 
     // ── Layers ──
 
-    pub(crate) fn activate_layer(&self, layer_num: u8) {
-        self.inner.borrow_mut().activate_layer(layer_num);
+    pub(crate) fn activate_layer(&self, layer_num: u8) -> bool {
+        self.inner.borrow_mut().activate_layer(layer_num)
     }
 
-    pub(crate) fn deactivate_layer(&self, layer_num: u8) {
-        self.inner.borrow_mut().deactivate_layer(layer_num);
+    pub(crate) fn deactivate_layer(&self, layer_num: u8) -> bool {
+        self.inner.borrow_mut().deactivate_layer(layer_num)
     }
 
-    pub(crate) fn toggle_layer(&self, layer_num: u8) {
-        self.inner.borrow_mut().toggle_layer(layer_num);
+    /// Toggle a valid layer, returning its new active state.
+    pub(crate) fn toggle_layer(&self, layer_num: u8) -> Option<bool> {
+        self.inner.borrow_mut().toggle_layer(layer_num)
     }
 
     /// Activate `layer_num` only if it is currently inactive.
@@ -491,14 +513,15 @@ impl<'a> KeyMap<'a> {
     /// deactivates when the layer is currently active. Skips the
     /// `update_tri_layer` call (which would publish a `LayerChangeEvent`) when
     /// the layer is already inactive, avoiding a redundant event publish.
-    pub(crate) fn deactivate_layer_if_active(&self, layer_num: u8) {
+    pub(crate) fn deactivate_layer_if_active(&self, layer_num: u8) -> bool {
         let mut inner = self.inner.borrow_mut();
         let idx = layer_num as usize;
         if idx >= inner.num_layer || !inner.layer_state[idx] {
-            return;
+            return false;
         }
         inner.layer_state[idx] = false;
         inner.update_tri_layer();
+        true
     }
 
     pub(crate) fn auto_mouse_layer_configs(
@@ -529,8 +552,8 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().get_default_layer()
     }
 
-    pub(crate) fn set_default_layer(&self, layer_num: u8) {
-        self.inner.borrow_mut().set_default_layer(layer_num);
+    pub(crate) fn set_default_layer(&self, layer_num: u8) -> bool {
+        self.inner.borrow_mut().set_default_layer(layer_num)
     }
 
     pub(crate) fn update_fn_layer_state(&self) {
@@ -567,13 +590,18 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().behavior.sticky_key.default_profile.timeout
     }
 
-    pub(crate) fn sticky_key_profile(&self, index: u8) -> StickyKeyProfile {
+    pub(crate) fn sticky_key_profile(&self, index: u8, shape: StickyKeyShape) -> StickyKeyProfile {
         let config = &self.inner.borrow().behavior.sticky_key;
         if let Some(profile) = config.profiles.get(index as usize) {
             return *profile;
         }
         let mut profile = config.default_profile;
-        profile.timeout = config.timeout;
+        // Keep the resolved default profile canonical. The remaining fields are
+        // a compatibility shim for Rust callers using the legacy struct-update
+        // API: only non-default legacy values override the canonical profile.
+        if config.timeout != Duration::from_secs(1) {
+            profile.timeout = config.timeout;
+        }
         if config.activate_on_keypress {
             profile.activate_on_keypress = true;
         }
@@ -582,14 +610,15 @@ impl<'a> KeyMap<'a> {
         }
         if profile.release_mode.is_none() {
             let mut mode = 0;
-            if config.quick_release {
+            if shape == StickyKeyShape::PureMod && config.quick_release {
                 mode |= StickyKeyReleaseMode::OTHER_KEY_PRESS.0;
             }
-            let layer_release = config
-                .one_shot_mod_release_on_layer_change
-                .or(config.one_shot_layer_release_on_layer_change)
-                .or(config.tap_key_release_on_layer_change)
-                .unwrap_or(config.release_on_layer_change);
+            let layer_release = match shape {
+                StickyKeyShape::PureMod => config.one_shot_mod_release_on_layer_change,
+                StickyKeyShape::Layer => config.one_shot_layer_release_on_layer_change,
+                StickyKeyShape::TapKey => config.tap_key_release_on_layer_change,
+            }
+            .unwrap_or(config.release_on_layer_change);
             if layer_release {
                 mode |= StickyKeyReleaseMode::LAYER_ENTER.0 | StickyKeyReleaseMode::LAYER_EXIT.0;
             }
@@ -639,7 +668,11 @@ impl<'a> KeyMap<'a> {
     }
 
     pub(crate) fn set_sticky_key_timeout(&self, timeout: Duration) {
-        self.inner.borrow_mut().behavior.sticky_key.default_profile.timeout = timeout;
+        let mut inner = self.inner.borrow_mut();
+        inner.behavior.sticky_key.default_profile.timeout = timeout;
+        // Keep the legacy Rust-API compatibility mirror synchronized so it
+        // cannot override a Vial runtime update during profile resolution.
+        inner.behavior.sticky_key.timeout = timeout;
     }
 
     pub(crate) fn set_tap_interval(&self, interval: u16) {
@@ -814,11 +847,13 @@ impl<'a> KeyMap<'a> {
 
 #[cfg(test)]
 mod test {
+    use embassy_time::Duration;
     use rmk_types::fork::{Fork, StateBits};
     use rmk_types::modifier::ModifierCombination;
 
+    use crate::config::{BehaviorConfig, PositionalConfig, StickyKeyProfile, StickyKeyReleaseMode};
     use crate::keyboard::combo::{Combo, ComboConfig};
-    use crate::keymap::fill_vec;
+    use crate::keymap::{KeyMap, KeymapData, StickyKeyShape, fill_vec};
     use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, k};
 
     #[test]
@@ -872,9 +907,6 @@ mod test {
 
     #[test]
     fn is_layer_active_reports_individual_layer_state() {
-        use crate::config::{BehaviorConfig, PositionalConfig};
-        use crate::keymap::{KeyMap, KeymapData};
-
         let mut data = KeymapData::<1, 1, 4>::new([[[k!(A)]], [[k!(B)]], [[k!(C)]], [[k!(D)]]]);
         let mut behavior = BehaviorConfig::default();
         let positional = PositionalConfig::<1, 1>::default();
@@ -892,16 +924,106 @@ mod test {
         assert!(!keymap.is_layer_active(3));
         assert!(!keymap.activate_layer_if_inactive(2));
 
-        keymap.deactivate_layer_if_active(2);
+        assert!(keymap.deactivate_layer_if_active(2));
         assert!(!keymap.is_layer_active(2));
-        keymap.deactivate_layer_if_active(2);
+        assert!(!keymap.deactivate_layer_if_active(2));
         assert!(!keymap.is_layer_active(2));
 
         // Mirrors the auto-mouse Either3::Third guard.
         assert!(keymap.activate_layer_if_inactive(2));
         let self_activated = true;
         assert!(!(self_activated && !keymap.is_layer_active(2)));
-        keymap.deactivate_layer_if_active(2);
+        assert!(keymap.deactivate_layer_if_active(2));
         assert!(self_activated && !keymap.is_layer_active(2));
+    }
+
+    #[test]
+    fn layer_mutations_report_only_actual_transitions() {
+        let mut data = KeymapData::<1, 1, 2>::new([[[k!(A)]], [[k!(B)]]]);
+        let mut behavior = BehaviorConfig::default();
+        let positional = PositionalConfig::<1, 1>::default();
+        let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
+
+        assert!(keymap.activate_layer(1));
+        assert!(!keymap.activate_layer(1));
+        assert_eq!(keymap.toggle_layer(1), Some(false));
+        assert_eq!(keymap.toggle_layer(1), Some(true));
+        assert_eq!(keymap.toggle_layer(9), None);
+        assert!(keymap.set_default_layer(1));
+        assert!(!keymap.set_default_layer(1));
+        assert!(!keymap.set_default_layer(9));
+    }
+
+    #[test]
+    fn canonical_default_profile_is_not_overwritten_by_legacy_defaults() {
+        let mut data = KeymapData::<1, 1, 1>::new([[[k!(A)]]]);
+        let mut behavior = BehaviorConfig::default();
+        behavior.sticky_key.default_profile.timeout = Duration::from_millis(275);
+        behavior.sticky_key.default_profile.max_repeat = 3;
+        let positional = PositionalConfig::<1, 1>::default();
+        let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
+
+        let profile = keymap.sticky_key_profile(u8::MAX, StickyKeyShape::TapKey);
+        assert_eq!(profile.timeout, Duration::from_millis(275));
+        assert_eq!(profile.max_repeat, 3);
+    }
+
+    #[test]
+    fn runtime_timeout_update_changes_the_canonical_default_profile() {
+        let mut data = KeymapData::<1, 1, 1>::new([[[k!(A)]]]);
+        let mut behavior = BehaviorConfig::default();
+        behavior.sticky_key.timeout = Duration::from_millis(50);
+        let positional = PositionalConfig::<1, 1>::default();
+        let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
+
+        keymap.set_sticky_key_timeout(Duration::from_millis(640));
+
+        assert_eq!(keymap.sticky_key_timeout(), Duration::from_millis(640));
+        assert_eq!(
+            keymap.sticky_key_profile(u8::MAX, StickyKeyShape::PureMod).timeout,
+            Duration::from_millis(640)
+        );
+    }
+
+    #[test]
+    fn named_profiles_ignore_legacy_default_overrides() {
+        let mut data = KeymapData::<1, 1, 1>::new([[[k!(A)]]]);
+        let mut behavior = BehaviorConfig::default();
+        behavior.sticky_key.timeout = Duration::from_millis(50);
+        behavior.sticky_key.quick_release = true;
+        behavior
+            .sticky_key
+            .profiles
+            .push(StickyKeyProfile {
+                timeout: Duration::from_millis(900),
+                activate_on_keypress: false,
+                max_repeat: 4,
+                release_mode: Some(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
+            })
+            .unwrap();
+        let positional = PositionalConfig::<1, 1>::default();
+        let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
+
+        let profile = keymap.sticky_key_profile(0, StickyKeyShape::PureMod);
+        assert_eq!(profile.timeout, Duration::from_millis(900));
+        assert_eq!(profile.max_repeat, 4);
+        assert_eq!(profile.release_mode, Some(StickyKeyReleaseMode::OTHER_KEY_RELEASE));
+    }
+
+    #[test]
+    fn legacy_release_overrides_are_shape_specific() {
+        let mut data = KeymapData::<1, 1, 1>::new([[[k!(A)]]]);
+        let mut behavior = BehaviorConfig::default();
+        behavior.sticky_key.one_shot_mod_release_on_layer_change = Some(true);
+        behavior.sticky_key.tap_key_release_on_layer_change = Some(false);
+        let positional = PositionalConfig::<1, 1>::default();
+        let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
+
+        let pure_mod = keymap.sticky_key_profile(u8::MAX, StickyKeyShape::PureMod);
+        let tap_key = keymap.sticky_key_profile(u8::MAX, StickyKeyShape::TapKey);
+        assert!(pure_mod.release_mode.is_some_and(|mode| {
+            mode.contains(StickyKeyReleaseMode::LAYER_ENTER) && mode.contains(StickyKeyReleaseMode::LAYER_EXIT)
+        }));
+        assert_eq!(tap_key.release_mode, None);
     }
 }
