@@ -15,8 +15,7 @@ use heapless::Vec;
 use rmk_macro::processor;
 
 use crate::AUTO_MOUSE_LAYER_MAX_NUM;
-use crate::config::AutoMouseLayerConfig;
-use crate::config::StickyKeyReleaseMode;
+use crate::config::{AutoMouseLayerConfig, StickyKeyReleaseMode};
 use crate::core_traits::Runnable;
 use crate::event::{Axis, AxisValType, LayerChangeEvent, PointingEvent};
 use crate::keyboard::sticky_key::notify_sticky_layer_event;
