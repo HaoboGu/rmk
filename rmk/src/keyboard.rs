@@ -1294,24 +1294,22 @@ impl<'a> Keyboard<'a> {
             Action::LayerOff(layer_num) => {
                 // Turn off a layer temporarily when the key is pressed
                 // Reactivate the layer after the key is released
-                if event.pressed {
-                    if self.keymap.deactivate_layer(layer_num) {
-                        self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
-                            .await;
-                    }
+                if event.pressed && self.keymap.deactivate_layer(layer_num) {
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
+                        .await;
                 }
             }
             Action::LayerToggle(layer_num) => {
                 // Toggle a layer when the key is released
-                if !event.pressed {
-                    if let Some(active) = self.keymap.toggle_layer(layer_num) {
-                        let mode = if active {
-                            crate::config::StickyKeyReleaseMode::LAYER_ENTER
-                        } else {
-                            crate::config::StickyKeyReleaseMode::LAYER_EXIT
-                        };
-                        self.release_sticky_key_on_layer_event(mode).await;
-                    }
+                if !event.pressed
+                    && let Some(active) = self.keymap.toggle_layer(layer_num)
+                {
+                    let mode = if active {
+                        crate::config::StickyKeyReleaseMode::LAYER_ENTER
+                    } else {
+                        crate::config::StickyKeyReleaseMode::LAYER_EXIT
+                    };
+                    self.release_sticky_key_on_layer_event(mode).await;
                 }
             }
             Action::LayerToggleOnly(layer_num) => {

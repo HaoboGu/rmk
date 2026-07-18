@@ -502,14 +502,12 @@ impl Keyboard<'_> {
             layer: Some(layer_num),
             ..
         } = self.sticky_key_state
+            && !event.pressed
+            && (mode.is_none() || mode.is_some_and(|mode| mode.contains(StickyKeyReleaseMode::OTHER_KEY_RELEASE)))
         {
-            if !event.pressed
-                && (mode.is_none() || mode.is_some_and(|mode| mode.contains(StickyKeyReleaseMode::OTHER_KEY_RELEASE)))
-            {
-                self.keymap.deactivate_layer(layer_num);
-                self.sticky_key_state = StickyKeyState::None;
-                return false;
-            }
+            self.keymap.deactivate_layer(layer_num);
+            self.sticky_key_state = StickyKeyState::None;
+            return false;
         }
         match &mut self.sticky_key_state {
             StickyKeyState::Active {
