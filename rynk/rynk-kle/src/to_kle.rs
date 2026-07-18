@@ -10,7 +10,7 @@
 //! how RMK stores rotation. Encoders come back in Vial's convention: two 1u CW/CCW
 //! switches side by side, centered on the knob.
 
-use rynk::layout::{Encoder, Key, LayoutInfo, Rect, Variant};
+use rynk::layout::{Encoder, Key, Rect, Variant};
 use serde_json::{Map, Value, json};
 
 fn round(v: f32) -> f64 {
@@ -65,7 +65,7 @@ fn encoder_rows(e: &Encoder) -> [Value; 2] {
 }
 
 /// A KLE `layouts.keymap` array for one render variant.
-pub fn variant_to_kle(v: &Variant) -> Value {
+pub(crate) fn variant_to_kle(v: &Variant) -> Value {
     let mut rows: Vec<Value> = v.keys.iter().map(key_row).collect();
     rows.extend(v.encoders.iter().flat_map(encoder_rows));
     Value::Array(rows)
@@ -74,36 +74,19 @@ pub fn variant_to_kle(v: &Variant) -> Value {
 /// Full reverse pipeline: a `keyboard.toml` → a minimal `vial.json` value. Builds
 /// the layout blob with rmk-config, decodes it as the host does, and emits the
 /// default render variant as KLE.
-pub fn keyboard_toml_to_vial(text: &str) -> Result<Value, String> {
-    let doc: toml::Value = toml::from_str(text).map_err(|e| format!("invalid TOML: {e}"))?;
-    let layout = doc.get("layout").ok_or("no [layout] section in the input")?;
-    let rows = layout
-        .get("rows")
-        .and_then(toml::Value::as_integer)
-        .ok_or("[layout].rows is missing")?;
-    let cols = layout
-        .get("cols")
-        .and_then(toml::Value::as_integer)
-        .ok_or("[layout].cols is missing")?;
-
-    // `layout_blob_from_toml` wants the `[layout]` body (bare keys + `[shapes]` +
-    // `[[variant]]`), so re-serialize just that table.
-    let body = toml::to_string(layout).map_err(|e| e.to_string())?;
-    let blob = rmk_config::layout_blob_from_toml(&body)?;
-    if blob.is_empty() {
-        return Err("[layout] has no `map`, so there is no rendered layout to convert".into());
-    }
-    let info = LayoutInfo::from_compressed_blob(&blob).map_err(|e| format!("decode layout blob: {e}"))?;
-    let variant = info
+pub(crate) fn keyboard_toml_to_vial(text: &str) -> Result<Value, String> {
+    let decoded = crate::decode_layout_document(text)?;
+    let variant = decoded
+        .info
         .variants
-        .get(info.default_variant as usize)
+        .get(decoded.info.default_variant as usize)
         .ok_or("layout has no default variant")?;
 
     Ok(json!({
         "name": "Converted from RMK [layout]",
         "vendorId": "0x0000",
         "productId": "0x0000",
-        "matrix": { "rows": rows, "cols": cols },
+        "matrix": { "rows": decoded.rows, "cols": decoded.cols },
         "layouts": { "keymap": variant_to_kle(variant) }
     }))
 }

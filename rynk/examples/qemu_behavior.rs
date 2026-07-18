@@ -19,11 +19,7 @@ use rynk::rmk_types::keycode::{HidKeyCode, KeyCode};
 use rynk::rmk_types::led_indicator::LedIndicator;
 use rynk::rmk_types::modifier::ModifierCombination;
 use rynk::rmk_types::morse::{Morse, MorseProfile};
-use rynk::rmk_types::protocol::rynk::{
-    Cmd, GetComboBulkRequest, GetComboBulkResponse, GetKeymapBulkRequest, GetKeymapBulkResponse, GetMorseBulkRequest,
-    GetMorseBulkResponse, MacroData, ProtocolVersion, RynkError, SetComboBulkRequest, SetKeymapBulkRequest,
-    SetMorseBulkRequest, StorageResetMode,
-};
+use rynk::rmk_types::protocol::rynk::{MacroData, ProtocolVersion, RynkError, StorageResetMode};
 use rynk::{Client, RynkDevice, RynkHostError};
 use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
@@ -42,9 +38,9 @@ impl RynkDevice for TcpDevice {
         "qemu".into()
     }
 
-    async fn open(self) -> Result<(Self::Write, Self::Read), RynkHostError> {
+    async fn open(self) -> Result<(Self::Read, Self::Write), RynkHostError> {
         let (reader, writer) = self.0.into_split();
-        Ok((FromTokio::new(writer), FromTokio::new(reader)))
+        Ok((FromTokio::new(reader), FromTokio::new(writer)))
     }
 }
 
@@ -273,60 +269,6 @@ async fn script(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
     );
     let keymap_bulk = client.get_keymap_bulk(0, 0, 0).await?;
     assert_eq!(keymap_bulk.actions.first(), Some(&key(HidKeyCode::Kp1)));
-
-    let raw_keymap_bulk = client
-        .request_raw::<_, GetKeymapBulkResponse>(
-            Cmd::GetKeymapBulk,
-            &GetKeymapBulkRequest {
-                layer: 0,
-                start_row: 0,
-                start_col: 0,
-            },
-        )
-        .await?;
-    assert_eq!(raw_keymap_bulk.actions.first(), Some(&key(HidKeyCode::Kp1)));
-    client
-        .request_raw::<_, ()>(
-            Cmd::SetKeymapBulk,
-            &SetKeymapBulkRequest {
-                layer: 0,
-                start_row: 0,
-                start_col: 0,
-                actions: vec![key(HidKeyCode::Kp1)],
-            },
-        )
-        .await?;
-
-    let raw_combo_bulk = client
-        .request_raw::<_, GetComboBulkResponse>(Cmd::GetComboBulk, &GetComboBulkRequest { start_index: 0 })
-        .await?;
-    assert_eq!(raw_combo_bulk.configs.first(), Some(&Combo::empty()));
-    client
-        .request_raw::<_, ()>(
-            Cmd::SetComboBulk,
-            &SetComboBulkRequest {
-                start_index: 0,
-                configs: vec![Combo::empty()],
-            },
-        )
-        .await?;
-
-    let raw_morse_bulk = client
-        .request_raw::<_, GetMorseBulkResponse>(Cmd::GetMorseBulk, &GetMorseBulkRequest { start_index: 0 })
-        .await?;
-    assert_eq!(
-        raw_morse_bulk.configs.first(),
-        Some(&empty_morse(MorseProfile::const_default()))
-    );
-    client
-        .request_raw::<_, ()>(
-            Cmd::SetMorseBulk,
-            &SetMorseBulkRequest {
-                start_index: 0,
-                configs: vec![empty_morse(MorseProfile::const_default())],
-            },
-        )
-        .await?;
 
     println!("QEMU Rynk behavior verification passed.");
     Ok(())

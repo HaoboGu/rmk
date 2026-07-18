@@ -45,7 +45,7 @@ impl<'p> RynkDevice for DuplexDevice<'p> {
     }
 
     async fn open(self) -> Result<(&'p Link, &'p Link), RynkHostError> {
-        Ok((self.tx, self.rx))
+        Ok((self.rx, self.tx))
     }
 }
 
@@ -120,6 +120,10 @@ async fn client_against_run_session() {
         assert_eq!((caps.num_layers, caps.num_rows, caps.num_cols), (2, 2, 2));
         // Client consumes the firmware-advertised payload limit.
         assert_eq!(caps.max_payload_size as usize, RYNK_BUFFER_SIZE - RYNK_HEADER_SIZE);
+
+        let info = client.get_device_info().await.unwrap();
+        assert_eq!(info.manufacturer.as_str(), "RMK");
+        assert_eq!(info.product_name.as_str(), "RMK Keyboard");
 
         // Get round-trip: seq correlation, cmd echo, Ok envelope.
         assert_eq!(client.get_current_layer().await.unwrap(), 0);

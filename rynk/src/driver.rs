@@ -36,7 +36,6 @@ use rmk_types::protocol::rynk::{
     Cmd, DeviceCapabilities, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage, TopicEvent, command,
 };
 use serde::Serialize;
-use serde::de::DeserializeOwned;
 use thiserror::Error;
 
 type CS = CriticalSectionRawMutex;
@@ -103,9 +102,6 @@ pub enum RynkHostError {
     TrailingBytes { cmd: Cmd },
     #[error("response cmd mismatch: sent {sent:?}, got {got:?}")]
     CmdMismatch { sent: Cmd, got: Cmd },
-    /// A topic-range `Cmd` was passed to a request method.
-    #[error("{0:?} is a topic, not a request")]
-    TopicCmd(Cmd),
     /// Capabilities reject the command before touching the wire.
     #[error("device does not support {0:?}: {1}")]
     Unsupported(Cmd, &'static str),
@@ -127,7 +123,6 @@ impl From<RynkHostError> for wasm_bindgen::JsValue {
             RynkHostError::Layout(_) => "LayoutDecodeError",
             RynkHostError::TrailingBytes { .. } => "ResponseTrailingBytes",
             RynkHostError::CmdMismatch { .. } => "ResponseCommandMismatch",
-            RynkHostError::TopicCmd(_) => "InvalidRequestCommand",
         };
         let err = js_sys::Error::new(&e.to_string());
         err.set_name(kind);
@@ -165,12 +160,6 @@ impl Client {
         }
     }
 
-    /// Cached capability snapshot taken by
-    /// [`RynkDevice::connect`](crate::RynkDevice::connect).
-    pub fn capabilities(&self) -> &DeviceCapabilities {
-        &self.capabilities
-    }
-
     /// Read the next topic push, decoded. Unrecognized topics are skipped.
     ///
     /// Parks until a topic arrives; if the link dies it never resolves — the
@@ -189,16 +178,8 @@ impl Client {
     }
 
     /// One typed request/response round trip from the shared command table.
-    pub async fn request<E: Endpoint>(&self, req: &E::Request) -> Result<E::Response, RynkHostError> {
-        self.request_raw(E::CMD, req).await
-    }
-
-    /// Untyped request/response for commands not in the typed table yet.
-    pub async fn request_raw<Req: Serialize, Resp: DeserializeOwned>(
-        &self,
-        cmd: Cmd,
-        req: &Req,
-    ) -> Result<Resp, RynkHostError> {
+    pub(crate) async fn request<E: Endpoint>(&self, req: &E::Request) -> Result<E::Response, RynkHostError> {
+        let cmd = E::CMD;
         let seq = self.send_request(cmd, req).await?;
         loop {
             // This wait has no disconnect signal; session supervision must cancel it when the driver exits.
@@ -218,7 +199,7 @@ impl Client {
                 });
             }
             // Reject postcard prefixes so host/firmware type drift is not silently accepted.
-            let (env, rest) = postcard::take_from_bytes::<Result<Resp, RynkError>>(msg.payload())
+            let (env, rest) = postcard::take_from_bytes::<Result<E::Response, RynkError>>(msg.payload())
                 .map_err(|source| RynkHostError::Deserialize { cmd, source })?;
             if !rest.is_empty() {
                 return Err(RynkHostError::TrailingBytes { cmd });
@@ -230,16 +211,13 @@ impl Client {
     /// Send one request frame without waiting for a reply — for commands whose
     /// effect prevents one (reboot, bootloader jump). `Ok` means the frame is
     /// queued for the writer; keep the driver running until it drains.
-    pub async fn send_no_reply<E: Endpoint>(&self, req: &E::Request) -> Result<(), RynkHostError> {
+    pub(crate) async fn send_no_reply<E: Endpoint>(&self, req: &E::Request) -> Result<(), RynkHostError> {
         self.send_request(E::CMD, req).await.map(|_| ())
     }
 
     /// Encode one request into an owned frame and queue it for the writer,
     /// returning its SEQ (cycling `1..=255`).
     async fn send_request<Req: Serialize>(&self, cmd: Cmd, req: &Req) -> Result<u8, RynkHostError> {
-        if cmd.is_topic() {
-            return Err(RynkHostError::TopicCmd(cmd));
-        }
         // `fetch_update` cannot fail because the closure always returns `Some`.
         let (Ok(seq) | Err(seq)) = self.next_seq.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |s| {
             Some(if s == u8::MAX { 1 } else { s + 1 })
@@ -334,8 +312,8 @@ impl<R: Read, W: Write> Driver<R, W> {
                         let mut remaining = frame_len - rx.filled().len();
                         rx.clear();
                         while remaining > 0 {
-                            let cap = rx.unfilled().len().min(remaining);
-                            match reader.read(&mut rx.unfilled()[..cap]).await {
+                            let cap = rx.buf.len().min(remaining);
+                            match reader.read(&mut rx.buf[..cap]).await {
                                 Ok(0) => return RynkHostError::Disconnected,
                                 Ok(n) => remaining -= n,
                                 Err(e) => return RynkHostError::Io(e.kind()),
@@ -348,23 +326,29 @@ impl<R: Read, W: Write> Driver<R, W> {
                     }
                     let frame = &rx.filled()[..frame_len];
                     if header.cmd.is_topic() {
-                        match TopicBytes::try_from(frame) {
-                            Ok(bytes) => {
-                                if let Err(TrySendError::Full(bytes)) = client.topics.try_send(bytes) {
-                                    // Keep RX non-blocking by evicting the oldest best-effort topic.
-                                    let _ = client.topics.try_receive();
-                                    log::debug!("rynk: topic queue full, dropped oldest");
-                                    let _ = client.topics.try_send(bytes);
-                                }
-                            }
-                            Err(_) => log::debug!("rynk: oversized topic dropped"),
+                        #[cfg(feature = "alloc")]
+                        let bytes = TopicBytes::from(frame);
+                        #[cfg(not(feature = "alloc"))]
+                        let Ok(bytes) = TopicBytes::try_from(frame) else {
+                            log::debug!("rynk: oversized topic dropped");
+                            rx.consume(frame_len);
+                            continue;
+                        };
+                        if let Err(TrySendError::Full(bytes)) = client.topics.try_send(bytes) {
+                            // Keep RX non-blocking by evicting the oldest best-effort topic.
+                            let _ = client.topics.try_receive();
+                            log::debug!("rynk: topic queue full, dropped oldest");
+                            let _ = client.topics.try_send(bytes);
                         }
                     } else {
-                        match FrameBytes::try_from(frame) {
-                            // A pending reply is stale after request cancellation; keep the latest.
-                            Ok(bytes) => client.resp.signal(bytes),
-                            Err(_) => log::debug!("rynk: reply exceeds the frame buffer, dropped"),
-                        }
+                        #[cfg(feature = "alloc")]
+                        let bytes = FrameBytes::from(frame);
+                        // Cannot fail: the oversize guard above caps frame_len at the RX
+                        // buffer size, which is exactly FrameBytes' capacity.
+                        #[cfg(not(feature = "alloc"))]
+                        let bytes = FrameBytes::try_from(frame).unwrap();
+                        // A pending reply is stale after request cancellation; keep the latest.
+                        client.resp.signal(bytes);
                     }
                     rx.consume(frame_len);
                 }

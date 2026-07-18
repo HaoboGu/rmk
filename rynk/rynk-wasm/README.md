@@ -9,7 +9,7 @@ package owns the Rynk protocol state machine.
 
 ```text
 Web Serial / WebHID / another browser transport
-        -> JsByteLink { send, recv, close }
+        -> JsByteLink { label, send, recv, close }
         -> transport read/write halves
         -> rynk::Client
         -> RynkClient methods exposed to JavaScript
@@ -73,15 +73,13 @@ The object passed to `connect(link)` only needs this shape:
 
 ```js
 {
+  label: "My keyboard",
   async send(bytes) {
     // Uint8Array from wasm -> browser transport
   },
   async recv() {
     // Browser transport -> Uint8Array for wasm.
     // Return an empty Uint8Array only when the link is closed.
-  },
-  async close() {
-    // Release browser resources. Safe to call more than once.
   },
 }
 ```
@@ -94,6 +92,7 @@ major-specific wasm package.
 
 `JsByteLink` is a byte-stream boundary, not a high-level Rynk API.
 
+- `label` is the required device-picker label. It must be a string.
 - `send(bytes)` receives bytes from Rust and must deliver them in order. It should
   resolve only after the browser transport has accepted the bytes.
 - `recv()` must wait until bytes are available or the link is closed. It may
@@ -101,8 +100,9 @@ major-specific wasm package.
   frame.
 - `recv()` returns `new Uint8Array(0)` only for EOF. That becomes
   `Disconnected` in the wasm API.
-- `close()` should release locks, close devices, and wake any pending `recv()`.
-  It should be idempotent.
+- Closing the link is the page's job; `rynk-wasm` never closes it. Close on
+  every exit path — including a rejected `connect()` — releasing locks and
+  waking any pending `recv()`, which then returns the EOF empty array.
 - Only `rynk-wasm` should call `recv()` after `connect()`. If your page needs to
   probe the protocol version first, do it before calling `connect()`.
 - Transport-specific framing must be hidden below this boundary. For example,
@@ -122,8 +122,13 @@ async function openSerialByteLink() {
   const reader = port.readable.getReader();
   const writer = port.writable.getWriter();
   let closed = false;
+  const { usbVendorId, usbProductId } = port.getInfo();
+  const label = usbVendorId === undefined || usbProductId === undefined
+    ? "Web Serial device"
+    : `USB ${usbVendorId.toString(16).padStart(4, "0")}:${usbProductId.toString(16).padStart(4, "0")}`;
 
   return {
+    label,
     async send(bytes) {
       await writer.write(bytes);
     },
@@ -156,11 +161,11 @@ Call `requestPort()` inside a user gesture such as a button click.
 
 ## RynkClient API
 
-`connect(link, label?)` performs the Rynk handshake and returns a live
-`RynkClient` that owns the `rynk::Client` protocol state machine directly. The
-optional `label` is the display name the page showed in its picker (WebHID
-`productName`, or a string the page derived for WebSerial); read it back with
-`client.label()`. The session is full duplex: a parked `next_topic()` loop and
+`connect(link)` performs the Rynk handshake and returns a live `RynkClient`
+that owns the `rynk::Client` protocol state machine directly. The page keeps
+its own display name for the device (WebHID `productName`, or whatever it
+showed in its picker) in `link.label`; the client does not carry one.
+The session is full duplex: a parked `next_topic()` loop and
 request calls run concurrently. Keep requests themselves serialized — await each
 request before issuing the next; the protocol allows a single request in flight.
 

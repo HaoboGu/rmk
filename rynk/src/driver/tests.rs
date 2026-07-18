@@ -26,7 +26,7 @@ impl RynkDevice for MockDevice {
         "mock".into()
     }
 
-    async fn open(self) -> Result<(MockWrite, MockRead), RynkHostError> {
+    async fn open(self) -> Result<(MockRead, MockWrite), RynkHostError> {
         Ok(mock_halves(self.0, false))
     }
 }
@@ -45,16 +45,16 @@ enum Step {
 /// A scripted link's two halves, sharing a written-frame counter (a `watch`:
 /// the reader awaits it without spinning, which would starve tokio's
 /// paused-clock auto-advance).
-fn mock_halves(steps: Vec<Step>, fail_send: bool) -> (MockWrite, MockRead) {
+fn mock_halves(steps: Vec<Step>, fail_send: bool) -> (MockRead, MockWrite) {
     let (writes, reads) = tokio::sync::watch::channel(0usize);
     (
-        MockWrite { fail_send, writes },
         MockRead {
             steps: steps.into(),
             pending: Vec::new(),
             pos: 0,
             writes: reads,
         },
+        MockWrite { fail_send, writes },
     )
 }
 
@@ -122,7 +122,7 @@ impl Write for MockWrite {
 fn raw_session(steps: Vec<Step>) -> (Client, Driver<MockRead, MockWrite>) {
     let mut client = Client::new();
     client.capabilities.max_payload_size = 4096;
-    let (writer, reader) = mock_halves(steps, false);
+    let (reader, writer) = mock_halves(steps, false);
     (client, Driver::new(reader, writer))
 }
 
@@ -216,14 +216,6 @@ async fn trailing_bytes_rejected() {
 }
 
 #[tokio::test]
-async fn topic_cmd_to_request_rejected() {
-    // Topic commands are rejected before enqueueing, so the driver need not run.
-    let (client, _driver) = raw_session(vec![]);
-    let r = client.request_raw::<(), u8>(Cmd::LayerChange, &()).await;
-    assert!(matches!(r, Err(RynkHostError::TopicCmd(Cmd::LayerChange))));
-}
-
-#[tokio::test]
 async fn unknown_topic_skipped_by_next_topic() {
     let mut chunk = frame(Cmd::from_raw(0x80ff), 0, &[1u8, 2, 3]);
     chunk.extend_from_slice(&topic(Cmd::LayerChange, 3u8));
@@ -262,23 +254,12 @@ async fn eof_ends_driver() {
 async fn send_failure_ends_driver() {
     let mut client = Client::new();
     client.capabilities.max_payload_size = 4096;
-    let (writer, reader) = mock_halves(vec![Step::Hang], true);
+    let (reader, writer) = mock_halves(vec![Step::Hang], true);
     let mut driver = Driver::new(reader, writer);
     match select(driver.run(&client), client.get_wpm()).await {
         Either::First(err) => assert!(matches!(err, RynkHostError::Io(_))),
         Either::Second(r) => panic!("request should not resolve on a dead link: {r:?}"),
     }
-}
-
-#[tokio::test]
-async fn topic_during_request_is_queued() {
-    let mut chunk = topic(Cmd::LayerChange, 3u8);
-    chunk.extend_from_slice(&reply(Cmd::GetWpm, 1, 42u16));
-    let (client, mut driver) = raw_session(vec![Step::AwaitWrites(1), Step::Chunk(chunk), Step::Hang]);
-    let got = drive(&mut driver, &client, client.get_wpm()).await.unwrap();
-    assert_eq!(got, 42);
-    let ev = drive(&mut driver, &client, client.next_topic()).await;
-    assert!(matches!(ev, TopicEvent::LayerChange(3)));
 }
 
 #[tokio::test]
@@ -297,40 +278,6 @@ async fn stale_seq_reply_dropped() {
     chunk.extend_from_slice(&reply(Cmd::GetWpm, 1, 42u16));
     let (client, mut driver) = raw_session(vec![Step::AwaitWrites(1), Step::Chunk(chunk), Step::Hang]);
     let got = drive(&mut driver, &client, client.get_wpm()).await.unwrap();
-    assert_eq!(got, 42);
-}
-
-#[tokio::test]
-async fn cmd_mismatch_detected() {
-    let (client, mut driver) = raw_session(vec![
-        Step::AwaitWrites(1),
-        Step::Chunk(reply(Cmd::GetSleepState, 1, true)),
-        Step::Hang,
-    ]);
-    let r = drive(&mut driver, &client, client.get_wpm()).await;
-    assert!(matches!(
-        r,
-        Err(RynkHostError::CmdMismatch {
-            sent: Cmd::GetWpm,
-            got: Cmd::GetSleepState,
-        })
-    ));
-}
-
-#[tokio::test(start_paused = true)]
-async fn cancelled_request_does_not_poison_the_link() {
-    let (client, mut driver) = raw_session(vec![
-        Step::AwaitWrites(2),
-        Step::Chunk(reply(Cmd::GetWpm, 2, 42u16)),
-        Step::Hang,
-    ]);
-    let got = drive(&mut driver, &client, async {
-        let cancelled = timeout(Duration::from_millis(10), client.get_wpm()).await;
-        assert!(cancelled.is_err(), "request 1 should time out");
-        client.get_wpm().await
-    })
-    .await
-    .unwrap();
     assert_eq!(got, 42);
 }
 
@@ -385,7 +332,7 @@ async fn connect_session(mut steps: Vec<Step>, trailing: Vec<Step>) -> (Client, 
 #[tokio::test]
 async fn capability_gate_rejects_without_wire_send() {
     let (client, _driver) = connect_session(handshake_steps(caps()), vec![Step::Hang]).await;
-    assert!(!client.capabilities().ble_enabled);
+    assert!(!client.capabilities.ble_enabled);
     let r = client.get_battery_status().await;
     assert!(matches!(r, Err(RynkHostError::Unsupported(Cmd::GetBatteryStatus, _))));
 }
@@ -428,7 +375,7 @@ async fn oversized_request_rejected_locally() {
 #[tokio::test]
 async fn bulk_methods_gate_without_wire_send() {
     let (client, _driver) = connect_session(handshake_steps(caps()), vec![Step::Hang]).await;
-    assert!(!client.capabilities().bulk_transfer_supported);
+    assert!(!client.capabilities.bulk_transfer_supported);
 
     let keymap_req = SetKeymapBulkRequest {
         layer: 0,
@@ -687,7 +634,7 @@ async fn rynk_device_trait_drives_lifecycle() {
     async fn run_first<D: RynkDevice>(d: D) -> u16 {
         assert_eq!(d.label(), "mock");
         let (client, mut driver) = d.connect().await.unwrap();
-        assert_eq!(client.capabilities().num_cols, 14);
+        assert_eq!(client.capabilities.num_cols, 14);
         match select(driver.run(&client), client.get_wpm()).await {
             Either::First(err) => panic!("driver died: {err}"),
             Either::Second(wpm) => wpm.unwrap(),

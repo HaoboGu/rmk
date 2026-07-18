@@ -12,6 +12,8 @@
 //! (resetting some MCUs), so only the chosen device is opened, exactly once. The
 //! marker is to BLE's service UUID what identifies a device before connecting.
 
+use std::collections::HashSet;
+
 use embedded_io_adapters::tokio_1::FromTokio;
 use rynk::rmk_types::protocol::rynk::RYNK_SERIAL_MAGIC;
 use rynk::{RynkDevice, RynkHostError};
@@ -40,48 +42,50 @@ pub struct SerialDevice {
 impl SerialDevice {
     /// List the marked USB CDC ports — one [`SerialDevice`] per Rynk keyboard,
     /// recognized by [`RYNK_SERIAL_MAGIC`] without opening any port.
-    pub async fn discover() -> Result<Vec<Self>, RynkHostError> {
-        Ok(Self::rynk_serial_ports()?
-            .into_iter()
-            .map(|port| {
-                let name = match port.port_type {
-                    SerialPortType::UsbPort(info) => info.product,
-                    _ => None,
-                };
-                SerialDevice {
-                    path: port.port_name,
-                    name,
-                }
-            })
-            .collect())
-    }
-
-    /// List the USB CDC ports whose serial number carries the Rynk marker.
-    fn rynk_serial_ports() -> Result<Vec<SerialPortInfo>, RynkHostError> {
+    pub fn discover() -> Result<Vec<Self>, RynkHostError> {
         let ports =
             tokio_serial::available_ports().map_err(|e| RynkHostError::Transport("available_ports", e.to_string()))?;
-        let mut ports: Vec<SerialPortInfo> = ports
+        Ok(Self::from_ports(ports))
+    }
+
+    fn from_ports(ports: Vec<SerialPortInfo>) -> Vec<Self> {
+        let mut devices: Vec<Self> = ports
             .into_iter()
-            .filter(|port| match &port.port_type {
-                SerialPortType::UsbPort(info) => info
+            .filter_map(|port| {
+                let SerialPortType::UsbPort(info) = port.port_type else {
+                    return None;
+                };
+
+                let is_rynk = info
                     .serial_number
                     .as_deref()
-                    .is_some_and(|s| s.to_ascii_lowercase().contains(RYNK_SERIAL_MAGIC)),
-                _ => false,
+                    .and_then(|serial| serial.get(..RYNK_SERIAL_MAGIC.len()))
+                    .is_some_and(|prefix| prefix.eq_ignore_ascii_case(RYNK_SERIAL_MAGIC));
+                if !is_rynk {
+                    return None;
+                }
+
+                Some(Self {
+                    path: port.port_name,
+                    name: info.product,
+                })
             })
             .collect();
-        // macOS exposes one USB CDC device as both `/dev/cu.*` and `/dev/tty.*`:
-        // keep only the `cu.*` node. Other platforms have no `cu.*` sibling.
-        let cu_nodes: std::collections::HashSet<String> = ports
+
+        let cu_suffixes: HashSet<_> = devices
             .iter()
-            .map(|p| p.port_name.clone())
-            .filter(|p| p.starts_with("/dev/cu."))
+            .filter_map(|device| device.path.strip_prefix("/dev/cu."))
+            .map(str::to_owned)
             .collect();
-        ports.retain(|p| match p.port_name.strip_prefix("/dev/tty.") {
-            Some(suffix) => !cu_nodes.contains(&format!("/dev/cu.{suffix}")),
-            None => true,
+        devices.retain(|device| {
+            device
+                .path
+                .strip_prefix("/dev/tty.")
+                .is_none_or(|suffix| !cu_suffixes.contains(suffix))
         });
-        Ok(ports)
+
+        devices.sort_unstable_by(|a, b| a.path.cmp(&b.path).then_with(|| a.name.cmp(&b.name)));
+        devices
     }
 }
 
@@ -97,14 +101,74 @@ impl RynkDevice for SerialDevice {
 
     /// Open the port. A device unplugged since discovery surfaces as a normal
     /// [`RynkHostError`].
-    async fn open(self) -> Result<(SerialWriter, SerialReader), RynkHostError> {
+    async fn open(self) -> Result<(SerialReader, SerialWriter), RynkHostError> {
         let stream = tokio_serial::new(&self.path, CDC_BAUD_RATE)
             .open_native_async()
             .map_err(|e| RynkHostError::Transport("open", e.to_string()))?;
         // Best-effort cleanup of stale bytes from an old session.
         let _ = stream.clear(ClearBuffer::Input);
         let (reader, writer) = tokio::io::split(stream);
-        Ok((FromTokio::new(writer), FromTokio::new(reader)))
+        Ok((FromTokio::new(reader), FromTokio::new(writer)))
+    }
+}
+
+#[cfg(test)]
+mod discovery_tests {
+    use tokio_serial::UsbPortInfo;
+
+    use super::*;
+
+    fn usb(path: &str, serial: Option<&str>, product: Option<&str>) -> SerialPortInfo {
+        SerialPortInfo {
+            port_name: path.into(),
+            port_type: SerialPortType::UsbPort(UsbPortInfo {
+                vid: 0x1209,
+                pid: 0x0001,
+                serial_number: serial.map(Into::into),
+                manufacturer: None,
+                product: product.map(Into::into),
+            }),
+        }
+    }
+
+    #[test]
+    fn filters_marker_prefix_case_insensitively() {
+        let ports = vec![
+            usb("/dev/third", Some("prefix-rynk:123"), Some("embedded marker")),
+            usb("/dev/second", Some("RYNK:456"), Some("second")),
+            usb("/dev/first", Some("rynk:123"), Some("first")),
+            usb("/dev/missing", None, None),
+            SerialPortInfo {
+                port_name: "/dev/not-usb".into(),
+                port_type: SerialPortType::Unknown,
+            },
+        ];
+
+        let devices = SerialDevice::from_ports(ports);
+        let found: Vec<_> = devices
+            .iter()
+            .map(|device| (device.path.as_str(), device.name.as_deref()))
+            .collect();
+        assert_eq!(found, [("/dev/first", Some("first")), ("/dev/second", Some("second"))]);
+    }
+
+    #[test]
+    fn prefers_mac_cu_node() {
+        let ports = vec![
+            usb("/dev/tty.keyboard", Some("rynk:123"), Some("tty")),
+            usb("/dev/cu.keyboard", Some("RYNK:123"), Some("cu")),
+            usb("/dev/tty.other", Some("rynk:456"), Some("other")),
+        ];
+
+        let devices = SerialDevice::from_ports(ports);
+        let found: Vec<_> = devices
+            .iter()
+            .map(|device| (device.path.as_str(), device.name.as_deref()))
+            .collect();
+        assert_eq!(
+            found,
+            [("/dev/cu.keyboard", Some("cu")), ("/dev/tty.other", Some("other"))]
+        );
     }
 }
 
@@ -134,9 +198,9 @@ mod tests {
             "pty".into()
         }
 
-        async fn open(self) -> Result<(SerialWriter, SerialReader), RynkHostError> {
+        async fn open(self) -> Result<(SerialReader, SerialWriter), RynkHostError> {
             let (reader, writer) = tokio::io::split(self.0);
-            Ok((FromTokio::new(writer), FromTokio::new(reader)))
+            Ok((FromTokio::new(reader), FromTokio::new(writer)))
         }
     }
 
@@ -214,12 +278,6 @@ mod tests {
         let mut got = [0u8; 2];
         reader.read_exact(&mut got).await.unwrap();
         assert_eq!(got, [9, 8]);
-    }
-
-    #[test]
-    fn rynk_serial_ports_enumerates() {
-        // Returns marked ports the host has (maybe none in CI); must not error.
-        SerialDevice::rynk_serial_ports().expect("enumeration must not error");
     }
 
     #[tokio::test]

@@ -13,8 +13,8 @@
 //!
 //! Run [`Driver::run`] in the same `select` as everything that awaits on the
 //! [`Client`]. There is no in-band death signal: when the driver returns, the
-//! `select` exits and drops the session, cancelling any parked
-//! [`request`](Client::request)/[`next_topic`](Client::next_topic).
+//! `select` exits and drops the session, cancelling any parked typed request
+//! or [`next_topic`](Client::next_topic) call.
 //!
 //! ```no_run
 //! # async fn run<D: rynk::RynkDevice>(device: D) -> Result<(), Box<dyn std::error::Error>> {

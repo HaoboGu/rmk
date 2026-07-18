@@ -13,7 +13,7 @@ keywords = ["keyboard", "firmware", "rmk", "protocol", "serial"]
 rynk = { path = ".." }
 tokio-serial.workspace = true
 embedded-io-adapters = { workspace = true, features = ["tokio-1"] }
-tokio = { version = "1.47", default-features = false, features = ["time"] }
+tokio = { version = "1.47", default-features = false, features = ["io-util"] }
 
 [dev-dependencies]
 serde.workspace = true

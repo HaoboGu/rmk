@@ -13,7 +13,7 @@ use rmk_types::fork::Fork;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::morse::Morse;
 use rmk_types::protocol::rynk::{
-    BehaviorConfig, Cmd, DeviceCapabilities, GetComboBulkRequest, GetComboBulkResponse, GetEncoderRequest,
+    BehaviorConfig, Cmd, DeviceCapabilities, DeviceInfo, GetComboBulkRequest, GetComboBulkResponse, GetEncoderRequest,
     GetKeymapBulkRequest, GetKeymapBulkResponse, GetMacroRequest, GetMorseBulkRequest, GetMorseBulkResponse,
     KeyPosition, LockStatus, MacroData, MatrixState, PeripheralStatus, ProtocolVersion, SetComboBulkRequest,
     SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetKeymapBulkRequest, SetMacroRequest,
@@ -27,7 +27,7 @@ use crate::layout::LayoutInfo;
 impl Client {
     /// Reject a bulk command locally when capabilities lack bulk transfer.
     fn require_bulk_transfer(&self, cmd: Cmd) -> Result<(), RynkHostError> {
-        if self.capabilities().bulk_transfer_supported {
+        if self.capabilities.bulk_transfer_supported {
             Ok(())
         } else {
             Err(RynkHostError::Unsupported(cmd, "bulk transfer not supported"))
@@ -36,7 +36,7 @@ impl Client {
 
     /// Reject a BLE-only command locally when capabilities lack BLE.
     fn require_ble(&self, cmd: Cmd) -> Result<(), RynkHostError> {
-        if self.capabilities().ble_enabled {
+        if self.capabilities.ble_enabled {
             Ok(())
         } else {
             Err(RynkHostError::Unsupported(cmd, "BLE not enabled"))
@@ -48,10 +48,14 @@ impl Client {
         self.request::<command::GetVersion>(&()).await
     }
 
-    /// Re-read the firmware's capability set. Prefer the cached
-    /// [`Client::capabilities`] for the snapshot taken at connect time.
+    /// Read the firmware's capability set.
     pub async fn get_capabilities(&self) -> Result<DeviceCapabilities, RynkHostError> {
         self.request::<command::GetCapabilities>(&()).await
+    }
+
+    /// Read the firmware and device identity.
+    pub async fn get_device_info(&self) -> Result<DeviceInfo, RynkHostError> {
+        self.request::<command::GetDeviceInfo>(&()).await
     }
 
     /// Reboot the device — fire-and-forget: the firmware resets before its
@@ -71,7 +75,7 @@ impl Client {
     /// ([`DeviceCapabilities::storage_enabled`]), where the wipe would be a silent
     /// no-op.
     pub async fn storage_reset(&self, mode: StorageResetMode) -> Result<(), RynkHostError> {
-        if !self.capabilities().storage_enabled {
+        if !self.capabilities.storage_enabled {
             return Err(RynkHostError::Unsupported(Cmd::StorageReset, "storage not enabled"));
         }
         self.request::<command::StorageReset>(&mode).await
@@ -313,7 +317,7 @@ impl Client {
     /// Read one split peripheral's status by slot. Split keyboards only
     /// ([`DeviceCapabilities::is_split`]); rejected locally otherwise.
     pub async fn get_peripheral_status(&self, slot: u8) -> Result<PeripheralStatus, RynkHostError> {
-        if !self.capabilities().is_split {
+        if !self.capabilities.is_split {
             return Err(RynkHostError::Unsupported(
                 Cmd::GetPeripheralStatus,
                 "not a split keyboard",
@@ -375,7 +379,7 @@ impl Client {
 impl Client {
     /// Read the whole keymap (every layer, row-major) by paging `GetKeymapBulk`.
     pub async fn read_all_keymap(&self) -> Result<Vec<KeyAction>, RynkHostError> {
-        let caps = self.capabilities();
+        let caps = self.capabilities;
         let (rows, cols) = (caps.num_rows as u16, caps.num_cols as u16);
         let total = caps.num_layers as usize * rows as usize * cols as usize;
         self.read_all(total, async |c, start| {
@@ -387,7 +391,7 @@ impl Client {
 
     /// Read every combo slot by paging `GetComboBulk`.
     pub async fn read_all_combos(&self) -> Result<Vec<Combo>, RynkHostError> {
-        let total = self.capabilities().max_combos as usize;
+        let total = self.capabilities.max_combos as usize;
         self.read_all(total, async |c, start| {
             c.get_combo_bulk(start as u8).await.map(|r| r.configs)
         })
@@ -396,7 +400,7 @@ impl Client {
 
     /// Read every morse slot by paging `GetMorseBulk`.
     pub async fn read_all_morses(&self) -> Result<Vec<Morse>, RynkHostError> {
-        let total = self.capabilities().max_morse as usize;
+        let total = self.capabilities.max_morse as usize;
         self.read_all(total, async |c, start| {
             c.get_morse_bulk(start as u8).await.map(|r| r.configs)
         })
@@ -405,7 +409,7 @@ impl Client {
 
     /// Write the whole keymap by paging `SetKeymapBulk` in `max_bulk_keys` chunks.
     pub async fn write_all_keymap(&self, actions: &[KeyAction]) -> Result<(), RynkHostError> {
-        let caps = self.capabilities();
+        let caps = self.capabilities;
         let (rows, cols) = (caps.num_rows as u16, caps.num_cols as u16);
         let page = caps.max_bulk_keys as usize;
         self.write_all(page, actions, async |c, start, actions| {
@@ -423,7 +427,7 @@ impl Client {
 
     /// Write every combo by paging `SetComboBulk` in `max_bulk_configs` chunks.
     pub async fn write_all_combos(&self, configs: &[Combo]) -> Result<(), RynkHostError> {
-        let page = self.capabilities().max_bulk_configs as usize;
+        let page = self.capabilities.max_bulk_configs as usize;
         self.write_all(page, configs, async |c, start, configs| {
             c.set_combo_bulk(SetComboBulkRequest {
                 start_index: start as u8,
@@ -436,7 +440,7 @@ impl Client {
 
     /// Write every morse by paging `SetMorseBulk` in `max_bulk_configs` chunks.
     pub async fn write_all_morses(&self, configs: &[Morse]) -> Result<(), RynkHostError> {
-        let page = self.capabilities().max_bulk_configs as usize;
+        let page = self.capabilities.max_bulk_configs as usize;
         self.write_all(page, configs, async |c, start, configs| {
             c.set_morse_bulk(SetMorseBulkRequest {
                 start_index: start as u8,

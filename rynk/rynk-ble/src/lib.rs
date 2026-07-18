@@ -19,8 +19,8 @@ const RYNK_SERVICE_UUID: Uuid = Uuid::from_u128(rynk::rmk_types::protocol::rynk:
 const RYNK_INPUT_CHAR_UUID: Uuid = Uuid::from_u128(rynk::rmk_types::protocol::rynk::RYNK_INPUT_CHAR_UUID);
 const RYNK_OUTPUT_CHAR_UUID: Uuid = Uuid::from_u128(rynk::rmk_types::protocol::rynk::RYNK_OUTPUT_CHAR_UUID);
 
-/// Bounds each GATT step (connect, discovery, subscribe); they carry no inherent
-/// timeout, so a radio-silent device would otherwise pend forever.
+/// Bounds connection, discovery, and subscription; those operations carry no
+/// inherent timeout, so a radio-silent device would otherwise pend forever.
 const GATT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// ATT-minimum MTU payload.
@@ -32,10 +32,9 @@ const BLE_SAFE_WRITE: usize = 20;
 /// self-referential struct, no leak, and no task; dropping it unsubscribes
 /// (bluest's guard runs) and frees the characteristic.
 pub struct BleReader {
-    input: BoxStream<'static, Vec<u8>>,
+    input: BoxStream<'static, std::io::Result<Vec<u8>>>,
     /// Holds a notification chunk larger than one `read` buffer across reads.
     pending: Vec<u8>,
-    pos: usize,
     /// Held so the GATT connection (owned by the central) outlives the session.
     _adapter: Adapter,
 }
@@ -46,19 +45,20 @@ impl rynk::io::ErrorType for BleReader {
 
 impl Read for BleReader {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        while self.pos >= self.pending.len() {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+        while self.pending.is_empty() {
             match self.input.next().await {
-                Some(chunk) => {
-                    self.pending = chunk;
-                    self.pos = 0;
-                }
-                // Generator ended (notify error or unsubscribe) → EOF → Disconnected.
+                Some(Ok(chunk)) => self.pending = chunk,
+                Some(Err(err)) => return Err(err),
+                // Unsubscribe ends the stream → EOF → Disconnected.
                 None => return Ok(0),
             }
         }
-        let n = buf.len().min(self.pending.len() - self.pos);
-        buf[..n].copy_from_slice(&self.pending[self.pos..self.pos + n]);
-        self.pos += n;
+        let n = buf.len().min(self.pending.len());
+        buf[..n].copy_from_slice(&self.pending[..n]);
+        self.pending.drain(..n);
         Ok(n)
     }
 }
@@ -78,6 +78,9 @@ impl Write for BleWriter {
     /// One GATT write per call, capped to the characteristic; `write_all` loops the
     /// rest. Acknowledged — a dropped chunk would desync the firmware's reassembler.
     async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
         let n = buf.len().min(self.write_chunk);
         self.output.write(&buf[..n]).await.map_err(|e| {
             // Preserve the GATT error detail before the driver reduces it to `ErrorKind`.
@@ -124,14 +127,15 @@ impl BleDevice {
             .connected_devices_with_services(&[RYNK_SERVICE_UUID])
             .await
             .map_err(|e| RynkHostError::Transport("connected_devices_with_services", e.to_string()))?;
-        Ok(connected
-            .into_iter()
-            .map(|device| BleDevice {
-                name: device.name().ok(),
+        let mut devices = Vec::with_capacity(connected.len());
+        for device in connected {
+            devices.push(BleDevice {
+                name: device.name_async().await.ok(),
                 adapter: adapter.clone(),
                 device,
-            })
-            .collect())
+            });
+        }
+        Ok(devices)
     }
 
     // Discover the Rynk service and its input/output characteristics.
@@ -151,7 +155,11 @@ impl BleDevice {
             .await
             .map_err(|e| RynkHostError::Transport("discover_characteristics", e.to_string()))?
         {
-            match c.uuid() {
+            match c
+                .uuid_async()
+                .await
+                .map_err(|e| RynkHostError::Transport("characteristic uuid", e.to_string()))?
+            {
                 u if u == RYNK_INPUT_CHAR_UUID => input_char = Some(c),
                 u if u == RYNK_OUTPUT_CHAR_UUID => output_char = Some(c),
                 _ => {}
@@ -170,10 +178,10 @@ impl BleDevice {
     /// it here means `attach` returns only once subscribed, the order the firmware
     /// needs before the client's first write (bounded; a silent device never acks).
     async fn attach(
-        &self,
+        self,
         input: Characteristic,
         output: Characteristic,
-    ) -> Result<(BleWriter, BleReader), RynkHostError> {
+    ) -> Result<(BleReader, BleWriter), RynkHostError> {
         // Cap writes to the characteristic's capacity.
         let write_chunk = output
             .max_write_len_async()
@@ -184,33 +192,35 @@ impl BleDevice {
         let mut input = stream! {
             // `notify().await` returns only once the subscription is live; `input`
             // is moved into and owned by this state machine.
-            let Ok(updates) = input.notify().await else {
-                return; // subscribe failed → stream ends → caller sees `None`
+            let updates = match input.notify().await {
+                Ok(updates) => updates,
+                Err(err) => {
+                    yield Err(std::io::Error::other(err));
+                    return;
+                }
             };
-            yield Vec::new(); // readiness ack: subscription is now live
+            yield Ok(Vec::new()); // readiness ack: subscription is now live
             futures_util::pin_mut!(updates);
-            // A notify error (disconnect) ends the stream → read sees EOF.
-            while let Some(Ok(chunk)) = updates.next().await {
-                yield chunk;
+            while let Some(update) = updates.next().await {
+                yield update.map_err(std::io::Error::other);
             }
         }
         .boxed();
 
-        // Block on the readiness ack (bounded) so we return only once live.
-        match tokio::time::timeout(GATT_TIMEOUT, input.next()).await {
-            Ok(Some(_)) => {}
-            Ok(None) => return Err(RynkHostError::Disconnected),
-            Err(_) => return Err(RynkHostError::Io(ErrorKind::TimedOut)),
+        // Block on the readiness ack so we return only once live. `open` bounds it.
+        match input.next().await {
+            Some(Ok(_)) => {}
+            Some(Err(err)) => return Err(RynkHostError::Transport("notify", err.to_string())),
+            None => return Err(RynkHostError::Disconnected),
         }
 
         Ok((
-            BleWriter { output, write_chunk },
             BleReader {
                 input,
                 pending: Vec::new(),
-                pos: 0,
-                _adapter: self.adapter.clone(),
+                _adapter: self.adapter,
             },
+            BleWriter { output, write_chunk },
         ))
     }
 }
@@ -225,18 +235,16 @@ impl RynkDevice for BleDevice {
 
     /// Connect, discover characteristics, and subscribe — once, no retry. A failure
     /// means the device is gone or isn't a Rynk keyboard.
-    async fn open(self) -> Result<(BleWriter, BleReader), RynkHostError> {
-        // Bound connect + discovery; `attach` bounds its own subscribe step.
-        let (input, output) = tokio::time::timeout(GATT_TIMEOUT, async {
+    async fn open(self) -> Result<(BleReader, BleWriter), RynkHostError> {
+        tokio::time::timeout(GATT_TIMEOUT, async {
             self.adapter
                 .connect_device(&self.device)
                 .await
                 .map_err(|e| RynkHostError::Transport("connect_device", e.to_string()))?;
-            self.discover_characteristic().await
+            let (input, output) = self.discover_characteristic().await?;
+            self.attach(input, output).await
         })
         .await
-        .map_err(|_| RynkHostError::Io(ErrorKind::TimedOut))??;
-
-        self.attach(input, output).await
+        .map_err(|_| RynkHostError::Io(ErrorKind::TimedOut))?
     }
 }

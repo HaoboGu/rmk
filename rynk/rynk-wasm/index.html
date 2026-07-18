@@ -119,7 +119,7 @@
       }
 
       // Share framing and the pre-wasm version probe across Serial and HID.
-      function framedLink({ start, send, close }) {
+      function framedLink({ label, start, send, close }) {
         let rx = new Uint8Array(0);
         let closed = false;
         let wake = null;          // resolve fn of a consumer waiting on `rx`
@@ -149,6 +149,7 @@
         }
 
         return {
+          label,
           async probeVersion() {
             await send(frame(CMD_GET_VERSION, 1, new Uint8Array(0)));
             // Ignore topic pushes that arrive before the reply.
@@ -172,6 +173,10 @@
       }
 
       function link(port) {
+        const { usbVendorId, usbProductId } = port.getInfo();
+        const label = usbVendorId === undefined || usbProductId === undefined
+          ? "Web Serial device"
+          : `USB ${usbVendorId.toString(16).padStart(4, "0")}:${usbProductId.toString(16).padStart(4, "0")}`;
         const reader = port.readable.getReader();
         let writer;
         try {
@@ -181,6 +186,7 @@
           throw e;
         }
         return framedLink({
+          label,
           start(push, end) {
             (async () => {
               try {
@@ -213,6 +219,8 @@
         let onReport = null;
         let endLink = null;
         return framedLink({
+          label: device.productName
+            || `HID ${device.vendorId.toString(16).padStart(4, "0")}:${device.productId.toString(16).padStart(4, "0")}`,
           start(push, end) {
             endLink = end;
             // Trim final-report padding using the frame LEN field.
@@ -285,12 +293,10 @@
           core = await loadCore(major);
           await core.default();            // wasm-bindgen init (idempotent)
 
-          // WebHID exposes the device name; WebSerial's getInfo() has only VID/PID,
-          // so serial passes null and the wasm side falls back to a default.
-          client = await core.connect(l, device?.productName || null);
+          client = await core.connect(l);
           const caps = await client.get_capabilities();
           connected = true;
-          log(`✓ connected via ${label} (${client.label()}) — ${caps.num_layers}×${caps.num_rows}×${caps.num_cols} keymap, `
+          log(`✓ connected via ${label} (${l.label}) — ${caps.num_layers}×${caps.num_rows}×${caps.num_cols} keymap, `
             + `${caps.max_combos} combos, ${caps.max_forks} forks, ${caps.max_morse} morse, `
             + `${caps.macro_space_size} bytes macro storage, ble=${caps.ble_enabled}\n`);
 

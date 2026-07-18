@@ -86,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Discovery is the one transport-specific call; connect + the command sweep
     // below are generic over `RynkDevice`.
     match std::env::args().nth(1).as_deref().unwrap_or("usb") {
-        "usb" => run_first("USB CDC serial", SerialDevice::discover().await?, false).await,
+        "usb" => run_first("USB CDC serial", SerialDevice::discover()?, false).await,
         "ble" => run_first("BLE GATT", BleDevice::discover().await?, true).await,
         other => Err(format!("unknown transport {other:?}; use 'usb' (default) or 'ble'").into()),
     }
@@ -122,7 +122,7 @@ async fn run_first<D: RynkDevice>(
 
 /// Exercise non-reboot Rynk commands.
 async fn run_all(client: &Client, over_ble: bool) -> Result<(), Box<dyn std::error::Error>> {
-    let caps = client.capabilities();
+    let caps = client.get_capabilities().await?;
     let version = client.get_version().await?;
     let mut fails = 0u32;
     info!(

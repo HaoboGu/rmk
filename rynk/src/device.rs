@@ -31,9 +31,9 @@ pub trait RynkDevice: Sized {
     fn label(&self) -> String;
 
     /// Open the link without handshaking — the per-transport primitive — and
-    /// hand out its two halves. Consumes the handle: an open link is one
-    /// session (a web link, once wrapped, can't be reopened).
-    async fn open(self) -> Result<(Self::Write, Self::Read), RynkHostError>;
+    /// hand out its reader followed by its writer. Consumes the handle: an
+    /// open link is one session (a web link, once wrapped, can't be reopened).
+    async fn open(self) -> Result<(Self::Read, Self::Write), RynkHostError>;
 
     /// Connect this recognized device into a live session: open the link and
     /// complete the Rynk handshake (version check and capability snapshot)
@@ -43,7 +43,7 @@ pub trait RynkDevice: Sized {
     /// Runtime-free, so no handshake timeout: a silent peer hangs here. Callers
     /// that need a bound wrap this in their runtime's timeout.
     async fn connect(self) -> Result<(Client, Driver<Self::Read, Self::Write>), RynkHostError> {
-        let (writer, reader) = self.open().await?;
+        let (reader, writer) = self.open().await?;
         let mut client = Client::new();
         let mut driver = Driver::new(reader, writer);
         let capabilities = match select(driver.run(&client), client.handshake()).await {
