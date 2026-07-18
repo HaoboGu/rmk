@@ -279,7 +279,32 @@ impl KeyboardTomlConfig {
                                 next_keys.push_str(value);
                                 made_replacement = true;
                             }
-                            None => return Err(format!("Undefined alias: {}", alias_key)),
+                            None => {
+                                // Sticky-key profiles use the same `@name`
+                                // spelling as keymap aliases, but occur as the
+                                // final argument of SK/OSM/OSL. Preserve that
+                                // reference for the action parser instead of
+                                // trying to resolve it as an alias.
+                                let profile_end = current_keys[start_index + 1..]
+                                    .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                                    .map(|offset| start_index + 1 + offset)
+                                    .unwrap_or(current_keys.len());
+                                let profile_name = &current_keys[start_index + 1..profile_end];
+                                let follows_comma = current_keys[..start_index].trim_end().ends_with(',');
+                                let closes_action = current_keys[profile_end..].trim_start().starts_with(')');
+                                let valid_profile_name = profile_name
+                                    .as_bytes()
+                                    .first()
+                                    .is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_');
+
+                                if follows_comma && closes_action && valid_profile_name {
+                                    next_keys.push_str(&current_keys[start_index..profile_end]);
+                                    last_index = profile_end;
+                                    continue;
+                                }
+
+                                return Err(format!("Undefined alias: {}", alias_key));
+                            }
                         }
                         last_index = end_index; // Move past the processed alias
                     } else {
@@ -809,5 +834,38 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), vec!["OSM(LGui)", "OSM(LCtrl | LShift)", "OSL(1)"]);
+    }
+
+    #[test]
+    fn test_sticky_profile_refs_are_not_resolved_as_keymap_aliases() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+        let keymap = "SK(LGui, @osm) SK(Tab, [LAlt], @alt_tab) SK(MO(1), @nav) OSM(LShift, @osm) OSL(1, @nav)";
+
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            vec![
+                "SK(LGui, @osm)",
+                "SK(Tab, [LAlt], @alt_tab)",
+                "SK(MO(1), @nav)",
+                "OSM(LShift, @osm)",
+                "OSL(1, @nav)",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_keymap_aliases_still_resolve_next_to_sticky_profile_refs() {
+        let aliases = HashMap::from([("copy".to_string(), "WM(C, LCtrl)".to_string())]);
+        let layer_names = HashMap::new();
+        let keymap = "@copy SK(LGui, @osm)";
+
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), vec!["WM(C, LCtrl)", "SK(LGui, @osm)"]);
     }
 }
