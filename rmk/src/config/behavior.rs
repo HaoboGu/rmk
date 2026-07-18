@@ -6,7 +6,7 @@ use rmk_types::morse::{Morse, MorseMode, MorseProfile};
 use crate::keyboard::combo::Combo;
 use crate::{
     AUTO_MOUSE_LAYER_MAX_NUM, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MOUSE_KEY_INTERVAL,
-    MOUSE_WHEEL_INTERVAL,
+    MOUSE_WHEEL_INTERVAL, STICKY_KEY_PROFILE_MAX_NUM,
 };
 
 /// Config for configurable action behavior
@@ -102,36 +102,71 @@ impl Default for MorsesConfig {
     }
 }
 
-/// Unified sticky-key configuration. Absorbs the former one_shot, one_shot_modifiers,
-/// and sticky_key tables. `activate_on_keypress`/`quick_release` are honored only for
-/// the pure-modifier SK shape (key == No); see docs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StickyKeyReleaseMode(pub u8);
+
+impl StickyKeyReleaseMode {
+    pub const OTHER_KEY_PRESS: Self = Self(1 << 0);
+    pub const OTHER_KEY_RELEASE: Self = Self(1 << 1);
+    pub const LAYER_ENTER: Self = Self(1 << 2);
+    pub const LAYER_EXIT: Self = Self(1 << 3);
+
+    pub const fn contains(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+}
+
+/// A resolved Sticky Key profile. `release_mode = None` preserves the legacy
+/// shape-native release behavior for keymaps that do not opt into explicit modes.
 #[derive(Clone, Copy, Debug)]
-pub struct StickyKeyConfig {
+pub struct StickyKeyProfile {
     /// Applies to every SK shape. Default 1s.
     pub timeout: Duration,
     /// Honored only by pure-mod SK. Default false.
     pub activate_on_keypress: bool,
-    /// Honored only by pure-mod SK. Default false.
-    pub quick_release: bool,
     /// 0 = infinite; governs tap-key cycling. Default 0.
     pub max_repeat: u16,
-    /// Fallback used when the active SK shape has no layer-change override.
+    /// Explicit release triggers. `None` retains legacy shape-native behavior.
+    pub release_mode: Option<StickyKeyReleaseMode>,
+}
+
+impl Default for StickyKeyProfile {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_secs(1),
+            activate_on_keypress: false,
+            max_repeat: 0,
+            release_mode: None,
+        }
+    }
+}
+
+/// Unified Sticky Key configuration with a default profile and compact named
+/// profile table. Actions retain only a `u8` profile index.
+#[derive(Clone, Debug)]
+pub struct StickyKeyConfig {
+    pub default_profile: StickyKeyProfile,
+    pub profiles: Vec<StickyKeyProfile, STICKY_KEY_PROFILE_MAX_NUM>,
+    /// Legacy Rust-API compatibility knobs. TOML uses `release_mode` instead.
+    pub timeout: Duration,
+    pub activate_on_keypress: bool,
+    pub max_repeat: u16,
+    pub quick_release: bool,
     pub release_on_layer_change: bool,
-    /// Tap-key SK override. `None` inherits `release_on_layer_change`.
     pub tap_key_release_on_layer_change: Option<bool>,
-    /// One-shot-mod SK override. `None` inherits `release_on_layer_change`.
     pub one_shot_mod_release_on_layer_change: Option<bool>,
-    /// One-shot-layer SK override. `None` inherits `release_on_layer_change`.
     pub one_shot_layer_release_on_layer_change: Option<bool>,
 }
 
 impl Default for StickyKeyConfig {
     fn default() -> Self {
         Self {
+            default_profile: StickyKeyProfile::default(),
+            profiles: Vec::new(),
             timeout: Duration::from_secs(1),
             activate_on_keypress: false,
-            quick_release: false,
             max_repeat: 0,
+            quick_release: false,
             release_on_layer_change: false,
             tap_key_release_on_layer_change: None,
             one_shot_mod_release_on_layer_change: None,

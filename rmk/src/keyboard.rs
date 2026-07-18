@@ -1236,13 +1236,22 @@ impl<'a> Keyboard<'a> {
         // THROUGH the terminating key's report (and is then consumed by `update_sticky_key`
         // in `process_action_key`, per `quick_release`). Only the tap-key shape releases its
         // held modifier cleanly before the foreign key registers.
-        if event.pressed && self.sticky_key_state.is_tap_key() {
+        if self.sticky_key_state.is_tap_key() {
             let is_sk_or_modifier = match action {
                 Action::StickyKey(_) | Action::Modifier(_) => true,
                 Action::Key(KeyCode::Hid(hid_key)) if hid_key.is_modifier() => true,
                 _ => false,
             };
-            if !is_sk_or_modifier {
+            let release_mode = self
+                .sticky_key_state
+                .profile()
+                .and_then(|index| self.keymap.sticky_key_profile(index).release_mode);
+            let should_release = match release_mode {
+                Some(mode) if event.pressed => mode.contains(crate::config::StickyKeyReleaseMode::OTHER_KEY_PRESS),
+                Some(mode) => mode.contains(crate::config::StickyKeyReleaseMode::OTHER_KEY_RELEASE),
+                None => event.pressed,
+            };
+            if !is_sk_or_modifier && should_release {
                 self.release_sticky_key_if_active().await;
             }
         }
@@ -1268,14 +1277,16 @@ impl<'a> Keyboard<'a> {
                 // Reactivate the layer after the key is released
                 if event.pressed {
                     self.keymap.deactivate_layer(layer_num);
-                    self.release_sticky_key_on_layer_change().await;
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
+                        .await;
                 }
             }
             Action::LayerToggle(layer_num) => {
                 // Toggle a layer when the key is released
                 if !event.pressed {
                     self.keymap.toggle_layer(layer_num);
-                    self.release_sticky_key_on_layer_change().await;
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER)
+                        .await;
                 }
             }
             Action::LayerToggleOnly(layer_num) => {
@@ -1291,18 +1302,23 @@ impl<'a> Keyboard<'a> {
                     }
                     // Activate the target layer
                     self.keymap.activate_layer(layer_num);
-                    self.release_sticky_key_on_layer_change().await;
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
+                        .await;
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER)
+                        .await;
                 }
             }
             Action::DefaultLayer(layer_num) => {
                 // Set the default layer
                 self.keymap.set_default_layer(layer_num);
-                self.release_sticky_key_on_layer_change().await;
+                self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER)
+                    .await;
             }
             Action::PersistentDefaultLayer(layer_num) => {
                 // Set the default layer and persist it so it survives a reboot
                 self.keymap.set_default_layer(layer_num);
-                self.release_sticky_key_on_layer_change().await;
+                self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER)
+                    .await;
                 // Persist only if the layer was valid (set_default_layer rejects out-of-range)
                 #[cfg(feature = "storage")]
                 if event.pressed && self.keymap.get_default_layer() == layer_num {
@@ -1611,10 +1627,16 @@ impl<'a> Keyboard<'a> {
             true
         };
 
-        // Consume any pending one-shot StickyKey; on quick-release of a basic key, re-send the report.
-        let quick_release = self.keymap.sticky_key_config().quick_release;
+        // Consume any pending one-shot StickyKey. A press-triggered release needs a
+        // follow-up report after the terminating key has been registered.
+        let press_release = self.sticky_key_state.profile().is_some_and(|index| {
+            self.keymap
+                .sticky_key_profile(index)
+                .release_mode
+                .is_some_and(|mode| mode.contains(crate::config::StickyKeyReleaseMode::OTHER_KEY_PRESS))
+        });
         let sk_consumed = self.update_sticky_key(event);
-        if quick_release && sk_consumed && is_basic_keyboard_key && event.pressed {
+        if press_release && sk_consumed && is_basic_keyboard_key && event.pressed {
             self.send_keyboard_report_with_resolved_modifiers(true).await;
         }
     }
@@ -1624,10 +1646,12 @@ impl<'a> Keyboard<'a> {
         // Change layer state only when the key's state is changed
         if event.pressed {
             self.keymap.activate_layer(layer_num);
-            self.release_sticky_key_on_layer_change().await;
+            self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER)
+                .await;
         } else {
             self.keymap.deactivate_layer(layer_num);
-            self.release_sticky_key_on_layer_change().await;
+            self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
+                .await;
         }
     }
 

@@ -82,7 +82,7 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                 }
             },
             Action::User(id) => (id as u16 & 0x1F) | 0x7E00,
-            Action::StickyKey(sk) => match (sk.key, sk.layer) {
+            Action::StickyKey(sk) if sk.profile == u8::MAX => match (sk.key, sk.layer) {
                 // OSL, VIA range (same as old OneShotLayer)
                 (_, Some(layer)) if layer < 32 => 0x5280 | layer as u16,
                 // OSM, VIA range (same as old OneShotModifier)
@@ -238,6 +238,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
                 key: HidKeyCode::No,
                 keep: ModifierCombination::new(),
                 layer: Some(layer),
+                profile: u8::MAX,
             }))
         }
         // OSM(mod) — one-shot modifier (VIA range 0x52A0..0x52BF, matching old OneShotModifier)
@@ -247,6 +248,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
                 key: HidKeyCode::No,
                 keep: m,
                 layer: None,
+                profile: u8::MAX,
             }))
         }
         0x7C18 => KeyAction::TapHold(
@@ -879,6 +881,7 @@ mod test {
             key: HidKeyCode::No,
             keep: ModifierCombination::LCTRL,
             layer: None,
+            profile: u8::MAX,
         }));
         let via = to_via_keycode(osm_ctrl);
         assert_eq!(via, 0x52A1); // 0x52A0 | LCtrl packed bits (0x01)
@@ -890,6 +893,7 @@ mod test {
             key: HidKeyCode::No,
             keep: ModifierCombination::LSHIFT,
             layer: None,
+            profile: u8::MAX,
         }));
         let via = to_via_keycode(osm_shift);
         assert_eq!(via, 0x52A2); // 0x52A0 | LShift packed bits (0x02)
@@ -901,6 +905,7 @@ mod test {
             key: HidKeyCode::No,
             keep: ModifierCombination::LALT,
             layer: None,
+            profile: u8::MAX,
         }));
         let via = to_via_keycode(osm_alt);
         assert_eq!(via, 0x52A4); // 0x52A0 | LAlt packed bits (0x04)
@@ -915,6 +920,7 @@ mod test {
             key: HidKeyCode::No,
             keep: ModifierCombination::new(),
             layer: Some(0),
+            profile: u8::MAX,
         }));
         let via = to_via_keycode(osl_0);
         assert_eq!(via, 0x5280);
@@ -926,6 +932,7 @@ mod test {
             key: HidKeyCode::No,
             keep: ModifierCombination::new(),
             layer: Some(5),
+            profile: u8::MAX,
         }));
         let via = to_via_keycode(osl_5);
         assert_eq!(via, 0x5285);
@@ -939,6 +946,7 @@ mod test {
             key: HidKeyCode::Tab,
             keep: ModifierCombination::LALT,
             layer: None,
+            profile: u8::MAX,
         }));
 
         assert_eq!(to_via_keycode(tap_key_sticky_key), 0);

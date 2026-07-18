@@ -45,6 +45,8 @@ pub struct StickyKeyAction {
     /// `None` + `key == KeyCode::Hid(HidKeyCode::No)` = pure-mod (OSM) shape.
     /// `None` + `key != KeyCode::Hid(HidKeyCode::No)` = tap-key (alt-tab) shape.
     pub layer: Option<u8>,
+    /// Profile-table index. `u8::MAX` selects the default Sticky Key profile.
+    pub profile: u8,
 }
 
 /// A single basic action that a keyboard can execute.

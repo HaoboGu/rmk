@@ -11,7 +11,7 @@ use {
 };
 
 use crate::MACRO_SPACE_SIZE;
-use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, PositionalConfig, StickyKeyConfig};
+use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, PositionalConfig, StickyKeyProfile, StickyKeyReleaseMode};
 use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_event};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::combo::Combo;
@@ -564,11 +564,40 @@ impl<'a> KeyMap<'a> {
     }
 
     pub(crate) fn sticky_key_timeout(&self) -> Duration {
-        self.inner.borrow().behavior.sticky_key.timeout
+        self.inner.borrow().behavior.sticky_key.default_profile.timeout
     }
 
-    pub(crate) fn sticky_key_config(&self) -> StickyKeyConfig {
-        self.inner.borrow().behavior.sticky_key
+    pub(crate) fn sticky_key_profile(&self, index: u8) -> StickyKeyProfile {
+        let config = &self.inner.borrow().behavior.sticky_key;
+        if let Some(profile) = config.profiles.get(index as usize) {
+            return *profile;
+        }
+        let mut profile = config.default_profile;
+        profile.timeout = config.timeout;
+        if config.activate_on_keypress {
+            profile.activate_on_keypress = true;
+        }
+        if config.max_repeat != 0 {
+            profile.max_repeat = config.max_repeat;
+        }
+        if profile.release_mode.is_none() {
+            let mut mode = 0;
+            if config.quick_release {
+                mode |= StickyKeyReleaseMode::OTHER_KEY_PRESS.0;
+            }
+            let layer_release = config
+                .one_shot_mod_release_on_layer_change
+                .or(config.one_shot_layer_release_on_layer_change)
+                .or(config.tap_key_release_on_layer_change)
+                .unwrap_or(config.release_on_layer_change);
+            if layer_release {
+                mode |= StickyKeyReleaseMode::LAYER_ENTER.0 | StickyKeyReleaseMode::LAYER_EXIT.0;
+            }
+            if mode != 0 {
+                profile.release_mode = Some(StickyKeyReleaseMode(mode));
+            }
+        }
+        profile
     }
 
     pub(crate) fn tap_interval(&self) -> u16 {
@@ -610,7 +639,7 @@ impl<'a> KeyMap<'a> {
     }
 
     pub(crate) fn set_sticky_key_timeout(&self, timeout: Duration) {
-        self.inner.borrow_mut().behavior.sticky_key.timeout = timeout;
+        self.inner.borrow_mut().behavior.sticky_key.default_profile.timeout = timeout;
     }
 
     pub(crate) fn set_tap_interval(&self, interval: u16) {

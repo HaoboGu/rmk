@@ -227,6 +227,10 @@ pub(crate) struct RmkConstantsConfig {
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_morse_max_num")]
     pub morse_max_num: usize,
+    /// Capacity of the named Sticky Key profile table (maximum 255).
+    #[serde_inline_default(16)]
+    #[serde(deserialize_with = "check_sticky_key_profile_max_num")]
+    pub sticky_key_profile_max_num: usize,
     /// Maximum number of patterns a morse key can handle
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_max_patterns_per_key")]
@@ -287,6 +291,17 @@ where
     Ok(value)
 }
 
+fn check_sticky_key_profile_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let value = Deserialize::deserialize(deserializer)?;
+    if value > 255 {
+        panic!("❌ Parse `keyboard.toml` error: sticky_key_profile_max_num must be between 0 and 255, got {value}");
+    }
+    Ok(value)
+}
+
 fn check_max_patterns_per_key<'de, D>(deserializer: D) -> Result<usize, D::Error>
 where
     D: de::Deserializer<'de>,
@@ -319,6 +334,7 @@ impl Default for RmkConstantsConfig {
             combo_max_length: 4,
             fork_max_num: 8,
             morse_max_num: 8,
+            sticky_key_profile_max_num: 16,
             max_patterns_per_key: 8,
             macro_space_size: 256,
             debounce_time: 20,
@@ -682,18 +698,23 @@ pub struct StickyKeyConfig {
     pub timeout: Option<DurationMillis>,
     /// Pure-modifier sticky keys only: activate on the next key press instead of release. Default false.
     pub activate_on_keypress: Option<bool>,
-    /// Pure-modifier sticky keys only: release the modifier as soon as the next key is pressed. Default false.
-    pub quick_release: Option<bool>,
     /// Max number of held keys the sticky modifier applies to; 0 = unlimited. Default 0.
     pub max_repeat: Option<u16>,
-    /// Whether a layer change releases the sticky key. Default false (it survives layer changes).
-    pub release_on_layer_change: Option<bool>,
-    /// Tap-key sticky keys only: overrides `release_on_layer_change` when set.
-    pub tap_key_release_on_layer_change: Option<bool>,
-    /// One-shot-modifier sticky keys only: overrides `release_on_layer_change` when set.
-    pub one_shot_mod_release_on_layer_change: Option<bool>,
-    /// One-shot-layer sticky keys only: overrides `release_on_layer_change` when set.
-    pub one_shot_layer_release_on_layer_change: Option<bool>,
+    /// `|`-separated release triggers, e.g. "other_key_press | layer_exit".
+    pub release_mode: Option<String>,
+    /// Named profiles overriding this default configuration.
+    #[serde(default)]
+    pub profiles: HashMap<String, StickyKeyProfile>,
+}
+
+/// Per-profile Sticky Key overrides. Omitted fields inherit the default table.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StickyKeyProfile {
+    pub timeout: Option<DurationMillis>,
+    pub activate_on_keypress: Option<bool>,
+    pub max_repeat: Option<u16>,
+    pub release_mode: Option<String>,
 }
 
 /// Configurations for combos

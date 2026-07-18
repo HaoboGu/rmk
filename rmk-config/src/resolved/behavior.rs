@@ -3,12 +3,49 @@ use std::collections::HashMap;
 pub struct StickyKeyConfig {
     pub timeout_ms: Option<u64>,
     pub activate_on_keypress: Option<bool>,
-    pub quick_release: Option<bool>,
     pub max_repeat: Option<u16>,
-    pub release_on_layer_change: Option<bool>,
-    pub tap_key_release_on_layer_change: Option<bool>,
-    pub one_shot_mod_release_on_layer_change: Option<bool>,
-    pub one_shot_layer_release_on_layer_change: Option<bool>,
+    pub release_mode: Option<StickyKeyReleaseMode>,
+    pub profiles: HashMap<String, StickyKeyProfile>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StickyKeyReleaseMode(pub u8);
+
+impl StickyKeyReleaseMode {
+    pub const OTHER_KEY_PRESS: Self = Self(1 << 0);
+    pub const OTHER_KEY_RELEASE: Self = Self(1 << 1);
+    pub const LAYER_ENTER: Self = Self(1 << 2);
+    pub const LAYER_EXIT: Self = Self(1 << 3);
+
+    pub fn parse(value: &str) -> Result<Self, String> {
+        let mut result = Self::default();
+        for part in value.split('|').map(str::trim).filter(|part| !part.is_empty()) {
+            let flag = match part {
+                "other_key_press" => Self::OTHER_KEY_PRESS,
+                "other_key_release" => Self::OTHER_KEY_RELEASE,
+                "layer_enter" => Self::LAYER_ENTER,
+                "layer_exit" => Self::LAYER_EXIT,
+                _ => {
+                    return Err(format!(
+                        "unknown Sticky Key release_mode `{part}`; expected other_key_press, other_key_release, layer_enter, or layer_exit"
+                    ));
+                }
+            };
+            result.0 |= flag.0;
+        }
+        if result.0 == 0 {
+            return Err("Sticky Key release_mode must contain at least one trigger".to_string());
+        }
+        Ok(result)
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct StickyKeyProfile {
+    pub timeout_ms: Option<u64>,
+    pub activate_on_keypress: Option<bool>,
+    pub max_repeat: Option<u16>,
+    pub release_mode: Option<StickyKeyReleaseMode>,
 }
 
 /// Resolved behavioral configuration.
@@ -222,16 +259,35 @@ impl crate::KeyboardTomlConfig {
             }
         });
 
-        let sticky_key = toml_behavior.sticky_key.map(|s| StickyKeyConfig {
-            timeout_ms: s.timeout.as_ref().map(|t| t.0),
-            activate_on_keypress: s.activate_on_keypress,
-            quick_release: s.quick_release,
-            max_repeat: s.max_repeat,
-            release_on_layer_change: s.release_on_layer_change,
-            tap_key_release_on_layer_change: s.tap_key_release_on_layer_change,
-            one_shot_mod_release_on_layer_change: s.one_shot_mod_release_on_layer_change,
-            one_shot_layer_release_on_layer_change: s.one_shot_layer_release_on_layer_change,
-        });
+        let sticky_key = toml_behavior.sticky_key.map(|s| {
+            let parse_profile = |p: crate::StickyKeyProfile| -> Result<StickyKeyProfile, String> {
+                Ok(StickyKeyProfile {
+                    timeout_ms: p.timeout.map(|t| t.0),
+                    activate_on_keypress: p.activate_on_keypress,
+                    max_repeat: p.max_repeat,
+                    release_mode: p.release_mode
+                        .as_deref()
+                        .map(StickyKeyReleaseMode::parse)
+                        .transpose()?,
+                })
+            };
+            if s.profiles.len() > self.rmk.sticky_key_profile_max_num {
+                return Err(format!(
+                    "behavior.sticky_key.profiles defines {} profiles, but `[rmk] sticky_key_profile_max_num` is {}. Raise it in keyboard.toml",
+                    s.profiles.len(), self.rmk.sticky_key_profile_max_num
+                ));
+            }
+            let profiles = s.profiles.into_iter()
+                .map(|(name, profile)| parse_profile(profile).map(|profile| (name, profile)))
+                .collect::<Result<HashMap<_, _>, _>>()?;
+            Ok(StickyKeyConfig {
+                timeout_ms: s.timeout.as_ref().map(|t| t.0),
+                activate_on_keypress: s.activate_on_keypress,
+                max_repeat: s.max_repeat,
+                release_mode: s.release_mode.as_deref().map(StickyKeyReleaseMode::parse).transpose()?,
+                profiles,
+            })
+        }).transpose()?;
 
         let auto_mouse_layer = toml_behavior
             .auto_mouse_layer
@@ -286,6 +342,7 @@ mod tests {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    use super::StickyKeyReleaseMode;
     use crate::KeyboardTomlConfig;
 
     #[test]
@@ -331,7 +388,7 @@ hold_timeout = "200ms"
     }
 
     #[test]
-    fn sticky_key_layer_change_overrides_are_preserved() {
+    fn sticky_key_profiles_and_release_modes_are_resolved() {
         let toml = r#"
 [layout]
 rows = 1
@@ -344,10 +401,11 @@ keymap = [
 ]
 
 [behavior.sticky_key]
-release_on_layer_change = true
-tap_key_release_on_layer_change = true
-one_shot_mod_release_on_layer_change = false
-one_shot_layer_release_on_layer_change = false
+release_mode = "other_key_release | layer_exit"
+
+[behavior.sticky_key.profiles.alt_tab]
+timeout = "5s"
+release_mode = "other_key_press | layer_enter"
 "#;
 
         let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
@@ -362,9 +420,19 @@ one_shot_layer_release_on_layer_change = false
         let _ = fs::remove_file(&path);
 
         let sticky_key = config.behavior().unwrap().sticky_key.unwrap();
-        assert_eq!(sticky_key.release_on_layer_change, Some(true));
-        assert_eq!(sticky_key.tap_key_release_on_layer_change, Some(true));
-        assert_eq!(sticky_key.one_shot_mod_release_on_layer_change, Some(false));
-        assert_eq!(sticky_key.one_shot_layer_release_on_layer_change, Some(false));
+        assert_eq!(
+            sticky_key.release_mode,
+            Some(StickyKeyReleaseMode(
+                StickyKeyReleaseMode::OTHER_KEY_RELEASE.0 | StickyKeyReleaseMode::LAYER_EXIT.0
+            ))
+        );
+        let alt_tab = &sticky_key.profiles["alt_tab"];
+        assert_eq!(alt_tab.timeout_ms, Some(5000));
+        assert_eq!(
+            alt_tab.release_mode,
+            Some(StickyKeyReleaseMode(
+                StickyKeyReleaseMode::OTHER_KEY_PRESS.0 | StickyKeyReleaseMode::LAYER_ENTER.0
+            ))
+        );
     }
 }

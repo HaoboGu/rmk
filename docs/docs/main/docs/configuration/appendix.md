@@ -119,13 +119,8 @@ tri_layer = {
 sticky_key = {
   timeout = "1s",
   activate_on_keypress = false,
-  quick_release = false,
   max_repeat = 0,
-  release_on_layer_change = false,
-  # Optional per-shape overrides; omitted values inherit release_on_layer_change.
-  # tap_key_release_on_layer_change = true,
-  # one_shot_mod_release_on_layer_change = false,
-  # one_shot_layer_release_on_layer_change = false,
+  # release_mode = "other_key_release | layer_exit",
 }
 
 [behavior.morse]

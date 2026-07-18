@@ -324,11 +324,15 @@ macro_rules! thp {
 #[macro_export]
 macro_rules! sk {
     ($key:ident, $keep:expr) => {
+        $crate::sk!($key, $keep, ::core::primitive::u8::MAX)
+    };
+    ($key:ident, $keep:expr, $profile:expr) => {
         $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
             $crate::types::action::StickyKeyAction {
                 key: $crate::types::keycode::HidKeyCode::$key,
                 keep: $keep,
                 layer: None,
+                profile: $profile,
             },
         ))
     };
@@ -348,11 +352,15 @@ macro_rules! sk {
 #[macro_export]
 macro_rules! sk_mod {
     ($m:expr) => {
+        $crate::sk_mod!($m, ::core::primitive::u8::MAX)
+    };
+    ($m:expr, $profile:expr) => {
         $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
             $crate::types::action::StickyKeyAction {
                 key: $crate::types::keycode::HidKeyCode::No,
                 keep: $m,
                 layer: None,
+                profile: $profile,
             },
         ))
     };
@@ -370,11 +378,15 @@ macro_rules! sk_mod {
 #[macro_export]
 macro_rules! sk_layer {
     ($n:literal) => {
+        $crate::sk_layer!($n, ::core::primitive::u8::MAX)
+    };
+    ($n:literal, $profile:expr) => {
         $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
             $crate::types::action::StickyKeyAction {
                 key: $crate::types::keycode::HidKeyCode::No,
                 keep: $crate::types::modifier::ModifierCombination::new(),
                 layer: Some($n),
+                profile: $profile,
             },
         ))
     };
@@ -391,6 +403,9 @@ macro_rules! osm {
     ($m:expr) => {
         $crate::sk_mod!($m)
     };
+    ($m:expr, $profile:expr) => {
+        $crate::sk_mod!($m, $profile)
+    };
 }
 
 /// Create a one-shot layer action (alias for `sk_layer!`).
@@ -403,6 +418,9 @@ macro_rules! osm {
 macro_rules! osl {
     ($n:literal) => {
         $crate::sk_layer!($n)
+    };
+    ($n:literal, $profile:expr) => {
+        $crate::sk_layer!($n, $profile)
     };
 }
 

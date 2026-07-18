@@ -56,12 +56,13 @@ wm_action = { ^"WM" ~ "(" ~ keycode_name ~ "," ~ modifier_combination ~ ")" }
 
 // Rule 4.6: OSM(modifier) - One-Shot Modifier. User-facing alias for the
 // pure-mod sticky key SK(modifier); desugared to SK in keymap_parser.
-osm_action = { ^"OSM" ~ "(" ~ modifier_combination ~ ")" }
+sticky_profile_ref = { "@" ~ profile_name }
+osm_action = { ^"OSM" ~ "(" ~ modifier_combination ~ ("," ~ sticky_profile_ref)? ~ ")" }
 
 // Rule 4.5: OSL(n) - One-Shot Layer. User-facing alias for the layer sticky
 // key SK(MO(n)); desugared to SK in keymap_parser. Kept out of layer_action so
 // nonsense like SK(OSL(n)) stays a grammar error.
-osl_action = { ^"OSL" ~ "(" ~ layer_reference ~ ")" }
+osl_action = { ^"OSL" ~ "(" ~ layer_reference ~ ("," ~ sticky_profile_ref)? ~ ")" }
 
 // Rule 4.1: DF(n) - Switch Default Layer
 df_action = { ^"DF" ~ "(" ~ layer_reference ~ ")" }
@@ -119,12 +120,12 @@ trigger_macro_action = { ^"MACRO" ~ "(" ~ number ~ ")" }
 // bracketed modifier list for SK keep parameter: [LAlt] or [LAlt|LShift] or []
 modifier_keep_list = { "[" ~ modifier_combination ~ "]" | "[" ~ "]" }
 
-// SK(key, [mods])  | SK(modifier)  | SK(MO(n))
+// SK(key, [mods], @profile) | SK(modifier, @profile) | SK(MO(n), @profile)
 sk_action = {
     ^"SK" ~ "(" ~ (
-        layer_action                              // SK(MO(n)) — layer shape
-      | (keycode_name ~ "," ~ modifier_keep_list) // SK(key, [mods]) — tap-key shape
-      | modifier_combination                      // SK(LGui) — pure-mod shape
+        layer_action ~ ("," ~ sticky_profile_ref)?
+      | (keycode_name ~ "," ~ modifier_keep_list ~ ("," ~ sticky_profile_ref)?)
+      | modifier_combination ~ ("," ~ sticky_profile_ref)?
     ) ~ ")"
 }
 

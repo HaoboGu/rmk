@@ -186,8 +186,8 @@ fn create_test_keyboard_with_behavior_config(config: BehaviorConfig) -> Keyboard
 }
 
 #[test]
-fn sticky_key_config_layer_change_overrides_do_not_increase_struct_size() {
-    assert_eq!(core::mem::size_of::<StickyKeyConfig>(), 16);
+fn sticky_key_config_reserves_the_bounded_profile_table() {
+    assert!(core::mem::size_of::<StickyKeyConfig>() >= core::mem::size_of::<rmk::config::StickyKeyProfile>());
 }
 
 /// A tap-key override can enable layer-change release while the global fallback is disabled.
