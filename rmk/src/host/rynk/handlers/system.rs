@@ -9,7 +9,7 @@ use rmk_types::protocol::rynk::{
     StorageResetMode,
 };
 
-use super::super::{RMK_VERSION, RynkService};
+use super::super::{RMK_VERSION, RynkService, RynkSession};
 use super::Handle;
 
 impl Handle<GetVersion> for RynkService<'_> {
@@ -85,19 +85,19 @@ impl Handle<StorageReset> for RynkService<'_> {
 
 // Lock endpoints stay dispatchable while locked.
 
-impl Handle<GetLockStatus> for RynkService<'_> {
+impl Handle<GetLockStatus> for RynkSession<'_> {
     async fn handle(&self, _: ()) -> Result<LockStatus, RynkError> {
         Ok(self.locker.status())
     }
 }
 
-impl Handle<UnlockPoll> for RynkService<'_> {
+impl Handle<UnlockPoll> for RynkSession<'_> {
     async fn handle(&self, _: ()) -> Result<LockStatus, RynkError> {
         Ok(self.locker.poll())
     }
 }
 
-impl Handle<Lock> for RynkService<'_> {
+impl Handle<Lock> for RynkSession<'_> {
     async fn handle(&self, _: ()) -> Result<(), RynkError> {
         self.locker.lock();
         Ok(())

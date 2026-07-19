@@ -14,8 +14,10 @@ extern "C" {
     #[derive(Clone)]
     pub type JsByteLink;
 
-    #[wasm_bindgen(method, getter)]
-    fn label(this: &JsByteLink) -> String;
+    // Distinct Rust name: a same-named inherent `label` would shadow the trait
+    // method below, whose forward would otherwise read as self-recursion.
+    #[wasm_bindgen(method, getter, js_name = label)]
+    fn js_label(this: &JsByteLink) -> String;
 
     #[wasm_bindgen(method, catch)]
     async fn send(this: &JsByteLink, frame: Uint8Array) -> Result<(), JsValue>;
@@ -34,7 +36,7 @@ impl RynkDevice for JsByteLink {
     type Write = WasmWriter;
 
     fn label(&self) -> String {
-        self.label()
+        self.js_label()
     }
 
     async fn open(self) -> Result<(WasmReader, WasmWriter), RynkHostError> {

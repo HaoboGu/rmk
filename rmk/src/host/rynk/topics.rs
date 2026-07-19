@@ -15,7 +15,7 @@ use crate::event::{
     SubscribableEvent, WpmUpdateEvent,
 };
 
-pub(crate) struct TopicSubscribers {
+pub(super) struct TopicSubscribers {
     layer: <LayerChangeEvent as SubscribableEvent>::Subscriber,
     wpm: <WpmUpdateEvent as SubscribableEvent>::Subscriber,
     conn: <ConnectionStatusChangeEvent as SubscribableEvent>::Subscriber,
@@ -26,7 +26,7 @@ pub(crate) struct TopicSubscribers {
 }
 
 impl TopicSubscribers {
-    pub(crate) fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             layer: LayerChangeEvent::subscriber(),
             wpm: WpmUpdateEvent::subscriber(),
@@ -41,7 +41,7 @@ impl TopicSubscribers {
     /// Await the next topic event to forward to the host.
     /// Each value's current snapshot is owned by its producer,
     /// this only forwards change notifications onto the wire.
-    pub(crate) async fn next_event(&mut self) -> TopicEvent {
+    pub(super) async fn next_event(&mut self) -> TopicEvent {
         crate::select_biased_with_feature! {
             e = self.layer.next_event().fuse() => TopicEvent::LayerChange(*e),
             e = self.wpm.next_event().fuse() => TopicEvent::WpmUpdate(*e),

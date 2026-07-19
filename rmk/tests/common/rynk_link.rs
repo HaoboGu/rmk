@@ -202,12 +202,9 @@ pub fn link_session<T>(service: &RynkService<'_>, script: impl AsyncFnOnce(&mut 
 }
 
 /// Like [`link_session`] but runs TWO concurrent `run_session`s over the SAME
-/// `service` — the production shape on a board that exposes both BLE-GATT and
-/// BLE-HID (or BLE + USB), where each transport drives its own session with
-/// its own topic-subscription state against one shared `RynkService`/`KeyMap`,
-/// including the device-wide lock (either session's unlock/relock affects both).
-/// Exercises the dispatch guard and the concurrent-subscriber path. `script`
-/// drives both host ends.
+/// `service` — the production shape on a board that exposes USB and BLE. Each
+/// transport has independent authorization and topic subscriptions while both
+/// share one `RynkService`/`KeyMap`. `script` drives both host ends.
 pub fn link_two_sessions<T>(
     service: &RynkService<'_>,
     script: impl AsyncFnOnce(&mut RynkClient<'_>, &mut RynkClient<'_>) -> T,

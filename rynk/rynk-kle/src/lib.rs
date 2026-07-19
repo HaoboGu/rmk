@@ -129,10 +129,7 @@ pub fn decode_layout(text: &str) -> Result<layout::LayoutInfo, String> {
     Ok(decode_layout_document(text)?.info)
 }
 
-/// Convert a `keyboard.toml` layout into a minimal Vial definition.
-pub fn keyboard_toml_to_vial(text: &str) -> Result<Value, String> {
-    to_kle::keyboard_toml_to_vial(text)
-}
+pub use to_kle::keyboard_toml_to_vial;
 
 /// JS bindings over the same pipeline, string-in / plain-object-out. Built
 /// into a wasm package with `wasm-pack build --features wasm`.

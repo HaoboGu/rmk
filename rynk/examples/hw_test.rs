@@ -140,7 +140,7 @@ async fn run_all(client: &Client, over_ble: bool) -> Result<(), Box<dyn std::err
     );
 
     info!("── system ──");
-    report(&mut fails, "get_capabilities", client.get_capabilities().await);
+    report(&mut fails, "get_device_info", client.get_device_info().await);
 
     info!("── keymap ──");
     // Read, set a different value, verify, restore.

@@ -3,17 +3,17 @@
 use rmk_types::protocol::rynk::endpoint::Endpoint;
 use rmk_types::protocol::rynk::{RynkError, RynkMessage};
 
-pub(crate) mod behavior;
+mod behavior;
 mod bulk;
-pub(crate) mod combo;
-pub(crate) mod connection;
-pub(crate) mod fork;
-pub(crate) mod keymap;
-pub(crate) mod layout;
-pub(crate) mod macro_data;
-pub(crate) mod morse;
-pub(crate) mod status;
-pub(crate) mod system;
+mod combo;
+mod connection;
+mod fork;
+mod keymap;
+mod layout;
+mod macro_data;
+mod morse;
+mod status;
+mod system;
 
 /// Fixed-size endpoints: a request → response function. The [`Serve`] blanket
 /// impl adds the decode → handle → encode wire glue.

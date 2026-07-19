@@ -48,9 +48,10 @@ impl Client {
         self.request::<command::GetVersion>(&()).await
     }
 
-    /// Read the firmware's capability set.
+    /// The firmware's capability set — the connect-handshake snapshot, not a
+    /// wire fetch: capabilities are firmware constants, fixed for the session.
     pub async fn get_capabilities(&self) -> Result<DeviceCapabilities, RynkHostError> {
-        self.request::<command::GetCapabilities>(&()).await
+        Ok(self.capabilities)
     }
 
     /// Read the firmware and device identity.

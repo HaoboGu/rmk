@@ -74,7 +74,7 @@ pub(crate) fn variant_to_kle(v: &Variant) -> Value {
 /// Full reverse pipeline: a `keyboard.toml` → a minimal `vial.json` value. Builds
 /// the layout blob with rmk-config, decodes it as the host does, and emits the
 /// default render variant as KLE.
-pub(crate) fn keyboard_toml_to_vial(text: &str) -> Result<Value, String> {
+pub fn keyboard_toml_to_vial(text: &str) -> Result<Value, String> {
     let decoded = crate::decode_layout_document(text)?;
     let variant = decoded
         .info
