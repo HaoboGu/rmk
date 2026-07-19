@@ -100,6 +100,7 @@ impl crate::KeyboardTomlConfig {
             modifier,
             keyboard,
             layer_change,
+            sticky_key_release,
             wpm_update,
             led_indicator,
             sleep_state,

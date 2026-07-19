@@ -80,6 +80,16 @@ fn create_test_keyboard_puremod() -> Keyboard<'static> {
     Keyboard::new(wrap_keymap(KEYMAP_PUREMOD, per_key_config, behavior_config))
 }
 
+fn sticky_key_config_with_release_mode(release_mode: StickyKeyReleaseMode) -> StickyKeyConfig {
+    StickyKeyConfig {
+        default_profile: StickyKeyProfile {
+            release_mode: Some(release_mode),
+            ..StickyKeyProfile::default()
+        },
+        ..StickyKeyConfig::default()
+    }
+}
+
 // KEYMAP_MIXED: all three SK shapes on layer 0, used to exercise the mutually-exclusive
 // latch (pressing a different-shape SK while one is latched REPLACES it, never merges).
 // Layer 0: SK(LGui)  SK(Tab,LAlt)  SK(MO(1))  P            No  No
@@ -739,6 +749,52 @@ fn test_sk_puremod_cross_tap_accumulation() {
     };
 }
 
+#[test]
+fn pure_mod_double_tap_releases_latch() {
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
+        sticky_key: sticky_key_config_with_release_mode(StickyKeyReleaseMode::DOUBLE_TAP),
+        ..BehaviorConfig::default()
+    }));
+    let per_key_config: &'static PositionalConfig<1, 6> = Box::leak(Box::new(PositionalConfig::default()));
+
+    key_sequence_test! {
+        keyboard: Keyboard::new(wrap_keymap(KEYMAP_PUREMOD, per_key_config, behavior_config)),
+        sequence: [
+            [0, 0, true,  0],
+            [0, 0, false, 0],
+            [0, 0, true,  0],
+            [0, 0, false, 0],
+            [0, 3, true,  0],
+            [0, 3, false, 0],
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(P), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+#[test]
+fn sticky_layer_double_tap_deactivates_layer() {
+    key_sequence_test! {
+        keyboard: create_osl_layer_change_keyboard(
+            sticky_key_config_with_release_mode(StickyKeyReleaseMode::DOUBLE_TAP)
+        ),
+        sequence: [
+            [0, 0, true,  0],
+            [0, 0, false, 0],
+            [0, 0, true,  0],
+            [0, 0, false, 0],
+            [0, 2, true,  0],
+            [0, 2, false, 0],
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
 /// StickyKey Test 12 (regression): a tap-key SK pressed while a PURE-MOD SK is latched
 /// REPLACES it — the latch is mutually exclusive, so the old modifier is dropped, not
 /// merged. Without the replacement guard the tap-key press would OR the pure-mod's LGui
@@ -957,6 +1013,27 @@ fn tap_key_other_key_release_keeps_modifier_through_release_report() {
             [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],
             [KC_LALT, [0, 0, 0, 0, 0, 0]],
             [KC_LALT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [KC_LALT, [0, 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+#[test]
+fn tap_key_double_tap_releases_instead_of_cycling() {
+    key_sequence_test! {
+        keyboard: create_profiled_tap_sk_keyboard(StickyKeyProfile {
+            release_mode: Some(StickyKeyReleaseMode::DOUBLE_TAP),
+            ..StickyKeyProfile::default()
+        }),
+        sequence: [
+            [0, 0, true,  0],
+            [0, 0, false, 0],
+            [0, 0, true,  0],
+            [0, 0, false, 0],
+        ],
+        expected_reports: [
+            [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],
             [KC_LALT, [0, 0, 0, 0, 0, 0]],
             [0, [0, 0, 0, 0, 0, 0]],
         ]

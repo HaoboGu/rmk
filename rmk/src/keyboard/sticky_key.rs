@@ -2,13 +2,12 @@
 //!
 //! A unified one-shot action engine covering pure-mod (OSM), tap-key, and layer (OSL) shapes.
 //! The shape is determined by the `StickyKeyAction` payload at compile time.
-//! Runtime state is tracked in `StickyKeyState`; the latch phase is tracked in `SkPhase`.
+//! Runtime state and its lifecycle are represented by `StickyKeyState`.
 //!
 //! Timeout is driven solely by the run-loop deadline race (see `Keyboard::run`); there is
 //! no inline `select` in this module. On expiry the run loop calls
 //! [`Keyboard::release_sticky_key_if_active`].
 
-use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Instant};
 use rmk_types::action::StickyKeyAction;
 use rmk_types::keycode::HidKeyCode;
@@ -19,164 +18,81 @@ use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::keyboard::Keyboard;
 use crate::keymap::StickyKeyShape;
 
-static STICKY_LAYER_EVENT_CHANNEL: Channel<crate::RawMutex, StickyKeyReleaseMode, 4> = Channel::new();
-
-pub(crate) fn notify_sticky_layer_event(event: StickyKeyReleaseMode) {
-    if STICKY_LAYER_EVENT_CHANNEL.try_send(event).is_err() {
-        warn!("sticky-key layer event channel is full; dropping layer transition");
-    }
+fn deadline_from_timeout(timeout: Duration) -> Option<Instant> {
+    (timeout != Duration::MAX).then(|| Instant::now() + timeout)
 }
 
-pub(crate) async fn next_sticky_layer_event() -> StickyKeyReleaseMode {
-    STICKY_LAYER_EVENT_CHANNEL.receive().await
-}
-
-/// Latch phase of a sticky key.
-///
-/// Mirrors the former OSM state machine: `Pressed` == Initial, `Latched` == Single,
-/// `Held` == Held.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub(crate) enum SkPhase {
-    /// SK pressed, not yet consumed (still physically held). OSM `Initial`.
-    #[default]
-    Pressed,
-    /// Armed — SK released before any other key, waiting for the next (foreign) key. OSM `Single`.
-    Latched,
-    /// Another key was pressed while the SK was still held; behaves like a normal held
-    /// modifier until the SK is released. OSM `Held`.
-    Held,
-}
-
-/// An optional deadline stored without `Option<Instant>`'s extra discriminant.
-///
-/// `Duration::MAX` already means "no timeout" in sticky-key configuration, so
-/// `Instant::MAX` is reserved as the inactive sentinel here.
+/// The operation performed while a Sticky Key is active.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct StickyKeyDeadline(Instant);
-
-impl StickyKeyDeadline {
-    const NONE: Self = Self(Instant::MAX);
-
-    fn from_timeout(timeout: Duration) -> Self {
-        if timeout == Duration::MAX {
-            Self::NONE
-        } else {
-            Self(Instant::now() + timeout)
-        }
-    }
-
-    const fn get(self) -> Option<Instant> {
-        if self.0.as_ticks() == Instant::MAX.as_ticks() {
-            None
-        } else {
-            Some(self.0)
-        }
-    }
-
-    fn clear(&mut self) {
-        *self = Self::NONE;
-    }
+enum StickyKeyEffect {
+    Modifier,
+    Layer(u8),
+    TapKey(HidKeyCode),
 }
 
-/// State for the StickyKey action.
-#[derive(Clone, Copy, Default, Debug)]
+/// Data carried through each active Sticky Key lifecycle state.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ActiveStickyKey {
+    /// Physical key that owns this latch.
+    source: KeyboardEventPos,
+    mods: ModifierCombination,
+    effect: StickyKeyEffect,
+    /// Selected Sticky Key profile (`u8::MAX` means default profile).
+    profile: u8,
+    repeat_count: u16,
+    deadline: Option<Instant>,
+}
+
+/// Lifecycle of a Sticky Key.
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) enum StickyKeyState {
-    /// StickyKey is inactive.
+    /// No Sticky Key is active.
     #[default]
     None,
-    /// StickyKey is active — carries all latch state the engine needs.
-    Active {
-        /// Physical key that owns this latch.
-        source: KeyboardEventPos,
-        mods: ModifierCombination,
-        /// `HidKeyCode::No` = pure-mod or layer shape; any other key = tap-key shape.
-        key: HidKeyCode,
-        /// `Some(n)` = OSL shape; `None` = pure-mod or tap-key shape.
-        layer: Option<u8>,
-        /// Selected Sticky Key profile (`u8::MAX` means default profile).
-        profile: u8,
-        phase: SkPhase,
-        /// Whether the physical StickyKey switch is currently held down.
-        pressed: bool,
-        repeat_count: u16,
-        deadline: StickyKeyDeadline,
-    },
+    /// The physical Sticky Key is down and no foreign key has been pressed.
+    Pressed(ActiveStickyKey),
+    /// The physical Sticky Key was released and is armed for a foreign key.
+    Latched(ActiveStickyKey),
+    /// A foreign key was pressed while the physical Sticky Key remained down.
+    Held(ActiveStickyKey),
 }
 
-#[cfg(test)]
-mod size_tests {
-    use core::mem::size_of;
-
-    use super::*;
-
-    #[allow(dead_code)]
-    enum StateWithOptionDeadline {
-        None,
-        Active {
-            source: KeyboardEventPos,
-            mods: ModifierCombination,
-            key: HidKeyCode,
-            layer: Option<u8>,
-            phase: SkPhase,
-            pressed: bool,
-            repeat_count: u16,
-            deadline: Option<Instant>,
-        },
-    }
-
-    #[test]
-    fn sentinel_deadline_reduces_sticky_key_state_size() {
-        assert_eq!(size_of::<StickyKeyDeadline>(), size_of::<Instant>());
-        assert!(size_of::<StickyKeyState>() < size_of::<StateWithOptionDeadline>());
-    }
+enum ReleaseTransition {
+    Ignored,
+    Latched,
+    Held,
 }
 
 impl StickyKeyState {
     pub fn value(&self) -> Option<&ModifierCombination> {
-        match self {
-            StickyKeyState::Active { mods, .. } => Some(mods),
-            StickyKeyState::None => None,
-        }
+        self.active().map(|active| &active.mods)
     }
 
     pub fn is_active(&self) -> bool {
-        matches!(self, StickyKeyState::Active { .. })
+        !matches!(self, StickyKeyState::None)
     }
 
     pub fn deadline(&self) -> Option<Instant> {
-        match self {
-            StickyKeyState::Active { deadline, .. } => deadline.get(),
-            StickyKeyState::None => None,
-        }
+        self.active().and_then(|active| active.deadline)
     }
 
-    /// True when this is a pure-mod shape: active with no tap key and no layer.
     pub fn is_pure_mod(&self) -> bool {
-        matches!(
-            self,
-            StickyKeyState::Active {
-                key: HidKeyCode::No,
-                layer: None,
-                ..
-            }
-        )
+        self.active()
+            .is_some_and(|active| matches!(active.effect, StickyKeyEffect::Modifier))
     }
 
-    /// True when this is a tap-key shape: active with a non-No key code.
     pub fn is_tap_key(&self) -> bool {
-        self.is_active() && !self.is_pure_mod() && !self.is_layer()
+        self.active()
+            .is_some_and(|active| matches!(active.effect, StickyKeyEffect::TapKey(_)))
     }
 
-    /// True when this is a layer (OSL) shape: active with a `Some` layer.
     pub fn is_layer(&self) -> bool {
-        matches!(self, StickyKeyState::Active { layer: Some(_), .. })
+        self.active()
+            .is_some_and(|active| matches!(active.effect, StickyKeyEffect::Layer(_)))
     }
 
     pub(crate) fn profile(&self) -> Option<u8> {
-        match self {
-            StickyKeyState::Active { profile, .. } => Some(*profile),
-            StickyKeyState::None => None,
-        }
+        self.active().map(|active| active.profile)
     }
 
     pub(crate) fn shape(&self) -> Option<StickyKeyShape> {
@@ -190,9 +106,39 @@ impl StickyKeyState {
             None
         }
     }
+
+    pub(crate) fn is_held(&self) -> bool {
+        matches!(self, Self::Held(_))
+    }
+
+    fn active(&self) -> Option<&ActiveStickyKey> {
+        match self {
+            Self::Pressed(active) | Self::Latched(active) | Self::Held(active) => Some(active),
+            Self::None => None,
+        }
+    }
 }
 
 impl Keyboard<'_> {
+    fn transition_on_release(
+        &mut self,
+        owner: Option<KeyboardEventPos>,
+        deadline: Option<Instant>,
+    ) -> ReleaseTransition {
+        match self.sticky_key_state {
+            StickyKeyState::Pressed(mut active) if owner.is_none_or(|owner| active.source == owner) => {
+                active.deadline = deadline;
+                self.sticky_key_state = StickyKeyState::Latched(active);
+                ReleaseTransition::Latched
+            }
+            StickyKeyState::Held(active) if owner.is_none_or(|owner| active.source == owner) => {
+                self.sticky_key_state = StickyKeyState::None;
+                ReleaseTransition::Held
+            }
+            _ => ReleaseTransition::Ignored,
+        }
+    }
+
     pub(crate) async fn release_sticky_key_on_layer_event(&mut self, event: StickyKeyReleaseMode) {
         let (Some(index), Some(shape)) = (self.sticky_key_state.profile(), self.sticky_key_state.shape()) else {
             return;
@@ -208,12 +154,33 @@ impl Keyboard<'_> {
     }
 
     pub(crate) async fn process_action_sticky_key(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
-        if params.layer.is_some() {
-            self.process_sticky_layer(params, event).await;
+        let shape = if params.layer.is_some() {
+            StickyKeyShape::Layer
         } else if params.key == HidKeyCode::No {
-            self.process_sticky_pure_mod(params, event).await;
+            StickyKeyShape::PureMod
         } else {
-            self.process_sticky_tap_key(params, event).await;
+            StickyKeyShape::TapKey
+        };
+
+        if event.pressed
+            && matches!(
+                self.sticky_key_state,
+                StickyKeyState::Latched(ActiveStickyKey { source, .. }) if source == event.pos
+            )
+            && self
+                .keymap
+                .sticky_key_profile(params.profile, shape)
+                .release_mode
+                .is_some_and(|mode| mode.double_tap())
+        {
+            self.release_sticky_key_if_active().await;
+            return;
+        }
+
+        match shape {
+            StickyKeyShape::Layer => self.process_sticky_layer(params, event).await,
+            StickyKeyShape::PureMod => self.process_sticky_pure_mod(params, event).await,
+            StickyKeyShape::TapKey => self.process_sticky_tap_key(params, event).await,
         }
     }
 
@@ -221,168 +188,83 @@ impl Keyboard<'_> {
     /// terminating key, honor `activate_on_keypress`/`quick_release`.
     async fn process_sticky_pure_mod(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
         let profile = self.keymap.sticky_key_profile(params.profile, StickyKeyShape::PureMod);
-        let deadline = StickyKeyDeadline::from_timeout(profile.timeout);
+        let deadline = deadline_from_timeout(profile.timeout);
 
         if event.pressed {
-            // Single mutually-exclusive latch: a pure-mod press accumulates (3c) onto an
-            // existing pure-mod latch, but REPLACES any other shape (layer or tap-key).
-            // Releasing the foreign latch first deactivates a held layer and drops its mods
-            // cleanly, so only a same-shape (pure-mod) latch can reach the accumulate arm below.
             if self.sticky_key_state.is_active()
                 && !self.sticky_key_state.is_pure_mod()
                 && !self.sticky_key_state.is_layer()
             {
                 self.release_sticky_key_if_active().await;
             }
-            match &mut self.sticky_key_state {
-                StickyKeyState::None => {
-                    self.sticky_key_state = StickyKeyState::Active {
-                        source: event.pos,
-                        mods: params.keep,
-                        key: params.key,
-                        layer: None,
-                        profile: params.profile,
-                        phase: SkPhase::Pressed,
-                        pressed: true,
-                        repeat_count: 1,
-                        deadline,
-                    };
+
+            self.sticky_key_state = match self.sticky_key_state.active().copied() {
+                None => StickyKeyState::Pressed(ActiveStickyKey {
+                    source: event.pos,
+                    mods: params.keep,
+                    effect: StickyKeyEffect::Modifier,
+                    profile: params.profile,
+                    repeat_count: 1,
+                    deadline,
+                }),
+                Some(mut active) => {
+                    active.source = event.pos;
+                    active.mods |= params.keep;
+                    active.profile = params.profile;
+                    active.deadline = deadline;
+                    StickyKeyState::Pressed(active)
                 }
-                StickyKeyState::Active {
-                    mods,
-                    profile,
-                    pressed,
-                    deadline: d,
-                    ..
-                } => {
-                    // Same-shape pure-mod re-press: accumulate (3c) and refresh the deadline.
-                    *mods |= params.keep;
-                    // The most recently pressed pure-mod StickyKey owns the
-                    // accumulated latch's behavior and refreshed deadline.
-                    *profile = params.profile;
-                    *pressed = true;
-                    *d = deadline;
-                }
-            }
+            };
 
             if profile.activate_on_keypress {
                 self.send_keyboard_report_with_resolved_modifiers(true).await;
             }
         } else {
-            // SK released.
-            if let StickyKeyState::Active { pressed, .. } = &mut self.sticky_key_state {
-                *pressed = false;
-            }
-            match self.sticky_key_state {
-                StickyKeyState::Active {
-                    phase: SkPhase::Pressed,
-                    ..
-                } => {
-                    // Released before any other key → arm it for the next key. Refresh the
-                    // deadline on release-to-Latched so the timeout is measured from release
-                    // time (not press time). Mirrors the layer shape behavior at line 214.
-                    if let StickyKeyState::Active { phase, deadline: d, .. } = &mut self.sticky_key_state {
-                        *phase = SkPhase::Latched;
-                        *d = deadline;
-                    }
-                }
-                StickyKeyState::Active {
-                    phase: SkPhase::Held, ..
-                } => {
-                    // Held-mode: the modifier was applied as a normal held modifier; releasing
-                    // the SK releases it now in its own report.
-                    self.sticky_key_state = StickyKeyState::None;
-                    self.send_keyboard_report_with_resolved_modifiers(false).await;
-                }
-                _ => {}
+            // Combo outputs may be released by a different constituent position,
+            // so modifier actions cannot require the original source position.
+            if matches!(self.transition_on_release(None, deadline), ReleaseTransition::Held) {
+                self.send_keyboard_report_with_resolved_modifiers(false).await;
             }
         }
     }
 
-    /// Layer (OSL) shape: activate the layer for the next foreign key. Mirrors the former
-    /// `process_action_osl`. The layer carries no modifier, so consuming it emits no HID
-    /// report — the foreign key resolves on the active layer in `process_action_key` before
-    /// the latch is consumed.
+    /// Layer (OSL) shape: activate the layer for the next foreign key. The layer carries
+    /// no modifier, so consuming it emits no HID report.
     async fn process_sticky_layer(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
         let layer_num = params.layer.expect("layer shape requires a layer");
         let profile = self.keymap.sticky_key_profile(params.profile, StickyKeyShape::Layer);
-        let deadline = StickyKeyDeadline::from_timeout(profile.timeout);
+        let deadline = deadline_from_timeout(profile.timeout);
 
         if event.pressed {
-            // A held tap-key owns a registered HID key. Release it before this
-            // layer shape takes over the shared latch so its later physical
-            // release cannot leave that HID key stuck in the report.
             if self.sticky_key_state.is_tap_key() {
                 self.release_sticky_key_if_active().await;
             }
 
-            // Latch-replacement rule on a single mutually-exclusive latch: a layer SK press
-            // takes over the latch. Deactivate any previously-latched OSL layer first, then
-            // drop any latched mods/tap-key. A layer-on-layer press keeps the existing phase
-            // (mirrors old `process_action_osl` lines 51-56); any other shape becomes a fresh
-            // Pressed latch.
-            let (prev_phase, existing_mods) = match self.sticky_key_state {
-                StickyKeyState::Active {
-                    layer: Some(prev_layer),
-                    phase,
-                    mods,
-                    ..
-                } => {
-                    self.keymap.deactivate_layer(prev_layer);
-                    (phase, mods)
+            let existing_mods = match self.sticky_key_state.active().copied() {
+                Some(active) => {
+                    if let StickyKeyEffect::Layer(previous_layer) = active.effect {
+                        self.keymap.deactivate_layer(previous_layer);
+                    }
+                    active.mods
                 }
-                StickyKeyState::Active { mods, phase, .. } => (phase, mods),
-                _ => (SkPhase::Pressed, ModifierCombination::new()),
+                None => ModifierCombination::new(),
             };
 
             self.keymap.activate_layer(layer_num);
-            self.sticky_key_state = StickyKeyState::Active {
+            self.sticky_key_state = StickyKeyState::Pressed(ActiveStickyKey {
                 source: event.pos,
                 mods: existing_mods | params.keep,
-                key: params.key,
-                layer: Some(layer_num),
+                effect: StickyKeyEffect::Layer(layer_num),
                 profile: params.profile,
-                phase: prev_phase,
-                pressed: true,
                 repeat_count: 1,
                 deadline,
-            };
+            });
         } else {
-            // SK released.
-            if !matches!(
-                self.sticky_key_state,
-                StickyKeyState::Active { source, .. } if source == event.pos
+            if matches!(
+                self.transition_on_release(Some(event.pos), deadline),
+                ReleaseTransition::Held
             ) {
-                return;
-            }
-            match self.sticky_key_state {
-                StickyKeyState::Active {
-                    phase: SkPhase::Pressed | SkPhase::Latched,
-                    ..
-                } => {
-                    // Released before any other key → arm it for the next key and (re)arm the
-                    // deadline so the run-loop race covers expiry.
-                    if let StickyKeyState::Active {
-                        phase,
-                        pressed,
-                        deadline: d,
-                        ..
-                    } = &mut self.sticky_key_state
-                    {
-                        *phase = SkPhase::Latched;
-                        *pressed = false;
-                        *d = deadline;
-                    }
-                }
-                StickyKeyState::Active {
-                    phase: SkPhase::Held, ..
-                } => {
-                    // Held-mode: the layer stayed active while the SK was physically held.
-                    // Releasing the SK deactivates the layer now (no HID report).
-                    self.keymap.deactivate_layer(layer_num);
-                    self.sticky_key_state = StickyKeyState::None;
-                }
-                StickyKeyState::None => {}
+                self.keymap.deactivate_layer(layer_num);
             }
         }
     }
@@ -392,83 +274,54 @@ impl Keyboard<'_> {
     /// `activate_on_keypress`/`quick_release`.
     async fn process_sticky_tap_key(&mut self, params: StickyKeyAction, event: KeyboardEvent) {
         let profile = self.keymap.sticky_key_profile(params.profile, StickyKeyShape::TapKey);
-        let deadline = StickyKeyDeadline::from_timeout(profile.timeout);
+        let deadline = deadline_from_timeout(profile.timeout);
 
         if event.pressed {
-            // A repeated press of the same physical tap-key cycles it. A different tap-key, like
-            // any foreign StickyKey shape, replaces the active latch so it gets its own key and
-            // modifiers rather than reusing the first key's state.
-            let is_different_tap_key = matches!(
-                self.sticky_key_state,
-                StickyKeyState::Active { source, .. } if source != event.pos
-            );
+            let is_different_tap_key = self
+                .sticky_key_state
+                .active()
+                .is_some_and(|active| active.source != event.pos);
             if self.sticky_key_state.is_active() && (!self.sticky_key_state.is_tap_key() || is_different_tap_key) {
                 self.release_sticky_key_if_active().await;
             }
 
             let mut should_deactivate = false;
-
-            match &mut self.sticky_key_state {
-                StickyKeyState::None => {
-                    self.sticky_key_state = StickyKeyState::Active {
-                        source: event.pos,
-                        mods: params.keep,
-                        key: params.key,
-                        layer: None,
-                        profile: params.profile,
-                        phase: SkPhase::Latched,
-                        pressed: true,
-                        repeat_count: 1,
-                        deadline,
-                    };
-                }
-                StickyKeyState::Active {
-                    pressed,
-                    repeat_count,
-                    deadline: d,
-                    ..
-                } => {
-                    // Saturating so an unbounded (`max_repeat == 0`) cycle can never overflow
-                    // the counter and panic on a debug build after 65535 presses.
-                    *repeat_count = repeat_count.saturating_add(1);
-                    if profile.max_repeat > 0 && *repeat_count > profile.max_repeat {
+            self.sticky_key_state = match self.sticky_key_state.active().copied() {
+                None => StickyKeyState::Pressed(ActiveStickyKey {
+                    source: event.pos,
+                    mods: params.keep,
+                    effect: StickyKeyEffect::TapKey(params.key),
+                    profile: params.profile,
+                    repeat_count: 1,
+                    deadline,
+                }),
+                Some(mut active) => {
+                    active.repeat_count = active.repeat_count.saturating_add(1);
+                    if profile.max_repeat > 0 && active.repeat_count > profile.max_repeat {
                         should_deactivate = true;
+                        StickyKeyState::None
                     } else {
-                        *pressed = true;
-                        *d = deadline;
+                        active.deadline = deadline;
+                        StickyKeyState::Pressed(active)
                     }
                 }
-            }
+            };
 
             if should_deactivate {
-                self.sticky_key_state = StickyKeyState::None;
                 self.send_keyboard_report_with_resolved_modifiers(false).await;
             } else {
                 self.register_key(params.key, event);
                 self.send_keyboard_report_with_resolved_modifiers(true).await;
             }
-        } else {
-            // Only unregister and report if SK was active (key was registered on press).
-            // If max_repeat deactivated SK silently on the press event, the key was never
-            // registered, so the release is a no-op.
-            if let StickyKeyState::Active {
-                source,
-                pressed,
-                deadline,
-                ..
-            } = &mut self.sticky_key_state
-                && *source == event.pos
-            {
-                *pressed = false;
-                // A timeout that fired while this key was held cleared its deadline so
-                // this physical release could unregister the tap key safely. Re-arm the
-                // latched modifier now; otherwise it would remain active indefinitely.
-                if deadline.get().is_none() {
-                    *deadline = StickyKeyDeadline::from_timeout(profile.timeout);
-                }
-                self.unregister_key(params.key, event);
-                self.send_keyboard_report_with_resolved_modifiers(false).await;
+        } else if let StickyKeyState::Pressed(mut active) = self.sticky_key_state
+            && active.source == event.pos
+        {
+            if active.deadline.is_none() {
+                active.deadline = deadline;
             }
+            self.unregister_key(params.key, event);
+            self.send_keyboard_report_with_resolved_modifiers(false).await;
+            self.sticky_key_state = StickyKeyState::Latched(active);
         }
     }
 
@@ -493,68 +346,32 @@ impl Keyboard<'_> {
             .profile()
             .zip(self.sticky_key_state.shape())
             .and_then(|(index, shape)| self.keymap.sticky_key_profile(index, shape).release_mode);
-        // Layer (OSL) shape: mirror the former `update_osl`. Pressed→Held on a foreign key
-        // (handled by the shared Pressed arm below, which also clears the deadline). A Latched
-        // layer is consumed on the foreign key's RELEASE: deactivate the layer and clear the
-        // latch. No HID report — deactivating a layer emits nothing.
-        if let StickyKeyState::Active {
-            phase: SkPhase::Latched,
-            layer: Some(layer_num),
-            ..
-        } = self.sticky_key_state
-            && !event.pressed
-            && (mode.is_none() || mode.is_some_and(|mode| mode.contains(StickyKeyReleaseMode::OTHER_KEY_RELEASE)))
-        {
-            self.keymap.deactivate_layer(layer_num);
-            self.sticky_key_state = StickyKeyState::None;
-            return false;
-        }
-        match &mut self.sticky_key_state {
-            StickyKeyState::Active {
-                phase: phase @ SkPhase::Pressed,
-                deadline,
-                ..
-            } => {
-                // A key was pressed while the SK is still physically held → promote to Held.
-                // OSM `Held` has no timeout: the modifier stays live until the SK is physically
-                // released (held-alt-tab use case). Clear the run-loop deadline so it does not
-                // spuriously time-out while held.
-                *phase = SkPhase::Held;
-                deadline.clear();
+        match self.sticky_key_state {
+            StickyKeyState::Pressed(mut active) => {
+                active.deadline = None;
+                self.sticky_key_state = StickyKeyState::Held(active);
                 false
             }
-            StickyKeyState::Active {
-                phase: SkPhase::Latched,
-                layer: Some(layer_num),
-                ..
-            } if mode.is_some_and(|mode| mode.contains(StickyKeyReleaseMode::OTHER_KEY_PRESS)) && event.pressed => {
-                self.keymap.deactivate_layer(*layer_num);
-                self.sticky_key_state = StickyKeyState::None;
-                true
+            StickyKeyState::Latched(active) => {
+                let release_on_press =
+                    event.pressed && mode.is_some_and(|mode| mode.contains(StickyKeyReleaseMode::OTHER_KEY_PRESS));
+                let release_on_release = !event.pressed
+                    && (mode.is_none()
+                        || mode.is_some_and(|mode| mode.contains(StickyKeyReleaseMode::OTHER_KEY_RELEASE)));
+                if !release_on_press && !release_on_release {
+                    return false;
+                }
+
+                if let StickyKeyEffect::Layer(layer) = active.effect {
+                    self.keymap.deactivate_layer(layer);
+                    self.sticky_key_state = StickyKeyState::None;
+                    release_on_press
+                } else {
+                    self.sticky_key_state = StickyKeyState::None;
+                    true
+                }
             }
-            StickyKeyState::Active {
-                phase: SkPhase::Latched,
-                ..
-            } if mode.is_some_and(|mode| mode.contains(StickyKeyReleaseMode::OTHER_KEY_PRESS)) && event.pressed => {
-                self.sticky_key_state = StickyKeyState::None;
-                true
-            }
-            StickyKeyState::Active {
-                phase: SkPhase::Latched,
-                ..
-            } if mode.is_some_and(|mode| mode.contains(StickyKeyReleaseMode::OTHER_KEY_RELEASE)) && !event.pressed => {
-                self.sticky_key_state = StickyKeyState::None;
-                true
-            }
-            // No explicit release mode preserves the old one-shot behavior.
-            StickyKeyState::Active {
-                phase: SkPhase::Latched,
-                ..
-            } if mode.is_none() && !event.pressed => {
-                self.sticky_key_state = StickyKeyState::None;
-                true
-            }
-            _ => false,
+            StickyKeyState::None | StickyKeyState::Held(_) => false,
         }
     }
 
@@ -568,20 +385,18 @@ impl Keyboard<'_> {
             return;
         }
 
-        // If the SK is still physically held (Pressed phase), the deadline fired but the
+        // If the SK is still physically held, the deadline fired but the
         // key hasn't been released yet. Don't clear the latch — the physical release
         // handler (process_sticky_*) will transition Held→None cleanly. For pure-mod,
         // the deadline was set on press (→ Held on any other key press), so this can
         // only happen when the key is held and idle. For layer and tap-key shapes, the
         // deadline fires in the same scenario.
         // Clear the deadline to avoid busy-looping on every iteration.
-        if matches!(self.sticky_key_state, StickyKeyState::Active { pressed: true, .. }) {
+        if let StickyKeyState::Pressed(active) = &mut self.sticky_key_state {
             debug!(
                 "StickyKey timeout fired while key is still held — clearing deadline, deferring to physical release"
             );
-            if let StickyKeyState::Active { deadline, .. } = &mut self.sticky_key_state {
-                deadline.clear();
-            }
+            active.deadline = None;
             return;
         }
 
@@ -609,13 +424,7 @@ impl Keyboard<'_> {
                     .sticky_key_profile(index, StickyKeyShape::PureMod)
                     .activate_on_keypress
             });
-            matches!(
-                self.sticky_key_state,
-                StickyKeyState::Active {
-                    phase: SkPhase::Held,
-                    ..
-                }
-            ) || activate_on_keypress
+            self.sticky_key_state.is_held() || activate_on_keypress
         } else {
             // tap-key shape always reports; layer shape never does (deactivating emits nothing).
             !self.sticky_key_state.is_layer()
@@ -624,12 +433,11 @@ impl Keyboard<'_> {
         // A tap-key may still have its HID key registered when it is displaced by a different
         // StickyKey while physically held. Unregister it before clearing the latch so it cannot
         // remain stuck in the report.
-        if let StickyKeyState::Active {
-            key: hid_key,
-            layer: None,
+        if let Some(ActiveStickyKey {
+            effect: StickyKeyEffect::TapKey(hid_key),
             source,
             ..
-        } = self.sticky_key_state
+        }) = self.sticky_key_state.active().copied()
         {
             self.unregister_key(
                 hid_key,
@@ -641,9 +449,10 @@ impl Keyboard<'_> {
         }
 
         // For the layer shape, deactivate the active layer before clearing the latch.
-        if let StickyKeyState::Active {
-            layer: Some(layer_num), ..
-        } = self.sticky_key_state
+        if let Some(ActiveStickyKey {
+            effect: StickyKeyEffect::Layer(layer_num),
+            ..
+        }) = self.sticky_key_state.active().copied()
         {
             self.keymap.deactivate_layer(layer_num);
         }

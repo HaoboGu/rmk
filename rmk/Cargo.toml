@@ -47,6 +47,7 @@ postcard = { version = "1", features = ["experimental-derive"] }
 
 # Used in macro
 paste = "1"
+bitfield-struct = "0.13"
 
 # Display dependencies
 ssd1306 = { version = "0.10", optional = true, features = ["async"] }
@@ -285,4 +286,3 @@ _ble = ["dep:trouble-host", "dep:bt-hci", "storage", "rmk-types/_ble"]
 doctest = false
 [workspace.dependencies]
 embassy-nrf = { version = "0.10", features = ["nrf52840"] }
-

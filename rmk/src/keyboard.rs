@@ -20,14 +20,15 @@ use crate::core_traits::Runnable;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::ClearPeerEvent;
 use crate::event::{
-    ActionEvent, KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event, publish_event_async,
+    ActionEvent, KeyboardEvent, KeyboardEventPos, ModifierEvent, StickyKeyReleaseEvent, SubscribableEvent,
+    publish_event, publish_event_async,
 };
 use crate::hid::{KeyboardReport, Report};
 use crate::keyboard::combo::Combo;
 use crate::keyboard::fork::ActiveFork;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard::mouse::{MouseAction, MouseState};
-use crate::keyboard::sticky_key::{SkPhase, StickyKeyState, next_sticky_layer_event};
+use crate::keyboard::sticky_key::StickyKeyState;
 use crate::keyboard_macros::MacroOperation;
 use crate::keymap::{KeyMap, StickyKeyShape};
 #[cfg(all(feature = "split", feature = "_ble"))]
@@ -165,7 +166,7 @@ impl Runnable for Keyboard<'_> {
                 if let Some(deadline) = deadline {
                     match select3(
                         self.keyboard_event_subscriber.next_message_pure(),
-                        next_sticky_layer_event(),
+                        self.sticky_key_release_event_subscriber.next_message_pure(),
                         Timer::at(deadline),
                     )
                     .await
@@ -174,20 +175,20 @@ impl Runnable for Keyboard<'_> {
                             self.process_inner(event).await;
                         }
                         Either3::Second(layer_event) => {
-                            self.release_sticky_key_on_layer_event(layer_event).await;
+                            self.release_sticky_key_on_layer_event(layer_event.0).await;
                         }
                         Either3::Third(_) => {}
                     }
                 } else {
                     match select(
                         self.keyboard_event_subscriber.next_message_pure(),
-                        next_sticky_layer_event(),
+                        self.sticky_key_release_event_subscriber.next_message_pure(),
                     )
                     .await
                     {
                         Either::First(event) => self.process_inner(event).await,
                         Either::Second(layer_event) => {
-                            self.release_sticky_key_on_layer_event(layer_event).await;
+                            self.release_sticky_key_on_layer_event(layer_event.0).await;
                         }
                     }
                 }
@@ -216,6 +217,15 @@ pub struct Keyboard<'a> {
         { crate::KEYBOARD_EVENT_CHANNEL_SIZE },
         { crate::KEYBOARD_EVENT_SUB_SIZE },
         { crate::KEYBOARD_EVENT_PUB_SIZE },
+    >,
+
+    sticky_key_release_event_subscriber: embassy_sync::pubsub::Subscriber<
+        'static,
+        crate::RawMutex,
+        StickyKeyReleaseEvent,
+        { crate::STICKY_KEY_RELEASE_EVENT_CHANNEL_SIZE },
+        { crate::STICKY_KEY_RELEASE_EVENT_SUB_SIZE },
+        { crate::STICKY_KEY_RELEASE_EVENT_PUB_SIZE },
     >,
 
     /// Unprocessed events
@@ -285,6 +295,7 @@ impl<'a> Keyboard<'a> {
         Keyboard {
             keymap,
             keyboard_event_subscriber: KeyboardEvent::subscriber(),
+            sticky_key_release_event_subscriber: StickyKeyReleaseEvent::subscriber(),
             last_press_time: Instant::now(),
             sticky_key_state: StickyKeyState::default(),
             caps_word: CapsWordState::default(),
@@ -1467,9 +1478,9 @@ impl<'a> Keyboard<'a> {
         //   press report and is "released" together with the key release — except in held
         //   mode (key pressed while SK still physically held), where the modifier behaves
         //   like a normal held modifier and stays applied until the SK itself is released.
-        if let StickyKeyState::Active { mods, phase, .. } = self.sticky_key_state {
+        if let Some(mods) = self.sticky_key_state.value().copied() {
             if self.sticky_key_state.is_pure_mod() || self.sticky_key_state.is_layer() {
-                if pressed || phase == SkPhase::Held {
+                if pressed || self.sticky_key_state.is_held() {
                     result |= mods;
                 }
             } else {

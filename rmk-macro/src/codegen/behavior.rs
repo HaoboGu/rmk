@@ -6,7 +6,7 @@ use quote::quote;
 use rmk_config::resolved::Behavior;
 use rmk_config::resolved::behavior::{
     AutoMouseLayer, Combos, Forks, MacroOperation, Macros, Morse, MorseActionPair, MorseKey,
-    MorseProfile, StickyKeyProfile, StickyKeyReleaseMode,
+    MorseProfile, StickyKeyProfile,
 };
 
 use super::action_parser::{expand_profile, expand_profile_name, get_key_with_alias, parse_key};
@@ -35,8 +35,13 @@ fn expand_sticky_key_profile(
     let max_repeat = profile.max_repeat.or(fallback.max_repeat).unwrap_or(0);
     let release_mode = profile.release_mode.or(fallback.release_mode);
     let release_mode = match release_mode {
-        Some(StickyKeyReleaseMode(bits)) => {
-            quote! { ::core::option::Option::Some(::rmk::config::StickyKeyReleaseMode(#bits)) }
+        Some(mode) => {
+            let bits = mode.into_bits();
+            quote! {
+                ::core::option::Option::Some(
+                    ::rmk::config::StickyKeyReleaseMode::from_bits(#bits)
+                )
+            }
         }
         None => quote! { ::core::option::Option::None },
     };
@@ -595,7 +600,7 @@ mod tests {
                 timeout_ms: None,
                 activate_on_keypress: None,
                 max_repeat: None,
-                release_mode: Some(StickyKeyReleaseMode(StickyKeyReleaseMode::LAYER_ENTER.0)),
+                release_mode: Some(StickyKeyReleaseMode::LAYER_ENTER),
                 profiles: HashMap::new(),
             }),
             auto_mouse_layer: Vec::new(),

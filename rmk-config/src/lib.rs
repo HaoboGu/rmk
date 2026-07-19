@@ -409,6 +409,7 @@ define_event_config!(
     keyboard,
     // Keyboard state events
     layer_change,
+    sticky_key_release,
     wpm_update,
     led_indicator,
     sleep_state,

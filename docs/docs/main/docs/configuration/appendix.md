@@ -120,7 +120,7 @@ sticky_key = {
   timeout = "1s",
   activate_on_keypress = false,
   max_repeat = 0,
-  # release_mode = "other_key_release | layer_exit",
+  # release_mode = "other_key_release | layer_exit | double_tap",
 }
 
 [behavior.morse]

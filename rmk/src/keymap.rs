@@ -611,7 +611,7 @@ impl<'a> KeyMap<'a> {
         if profile.release_mode.is_none() {
             let mut mode = 0;
             if shape == StickyKeyShape::PureMod && config.quick_release {
-                mode |= StickyKeyReleaseMode::OTHER_KEY_PRESS.0;
+                mode |= StickyKeyReleaseMode::OTHER_KEY_PRESS.into_bits();
             }
             let layer_release = match shape {
                 StickyKeyShape::PureMod => config.one_shot_mod_release_on_layer_change,
@@ -620,10 +620,10 @@ impl<'a> KeyMap<'a> {
             }
             .unwrap_or(config.release_on_layer_change);
             if layer_release {
-                mode |= StickyKeyReleaseMode::LAYER_ENTER.0 | StickyKeyReleaseMode::LAYER_EXIT.0;
+                mode |= StickyKeyReleaseMode::LAYER_ENTER.into_bits() | StickyKeyReleaseMode::LAYER_EXIT.into_bits();
             }
             if mode != 0 {
-                profile.release_mode = Some(StickyKeyReleaseMode(mode));
+                profile.release_mode = Some(StickyKeyReleaseMode::from_bits(mode));
             }
         }
         profile

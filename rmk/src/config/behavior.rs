@@ -1,3 +1,4 @@
+use bitfield_struct::bitfield;
 use embassy_time::Duration;
 use heapless::Vec;
 use rmk_types::fork::Fork;
@@ -102,17 +103,27 @@ impl Default for MorsesConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct StickyKeyReleaseMode(pub u8);
+#[bitfield(u8, order = Lsb, debug = false)]
+#[derive(Debug, PartialEq, Eq)]
+pub struct StickyKeyReleaseMode {
+    pub other_key_press: bool,
+    pub other_key_release: bool,
+    pub layer_enter: bool,
+    pub layer_exit: bool,
+    pub double_tap: bool,
+    #[bits(3)]
+    __: u8,
+}
 
 impl StickyKeyReleaseMode {
-    pub const OTHER_KEY_PRESS: Self = Self(1 << 0);
-    pub const OTHER_KEY_RELEASE: Self = Self(1 << 1);
-    pub const LAYER_ENTER: Self = Self(1 << 2);
-    pub const LAYER_EXIT: Self = Self(1 << 3);
+    pub const OTHER_KEY_PRESS: Self = Self::new().with_other_key_press(true);
+    pub const OTHER_KEY_RELEASE: Self = Self::new().with_other_key_release(true);
+    pub const LAYER_ENTER: Self = Self::new().with_layer_enter(true);
+    pub const LAYER_EXIT: Self = Self::new().with_layer_exit(true);
+    pub const DOUBLE_TAP: Self = Self::new().with_double_tap(true);
 
     pub const fn contains(self, other: Self) -> bool {
-        self.0 & other.0 != 0
+        self.into_bits() & other.into_bits() != 0
     }
 }
 

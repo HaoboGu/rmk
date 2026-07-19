@@ -52,7 +52,7 @@ The `[behavior.sticky_key]` table configures the unified **Sticky Key** (`SK`) f
 | `timeout` | `"1s"` | Auto-release an unused sticky key after this idle time. String suffixed `s` or `ms`. |
 | `activate_on_keypress` | `false` | **Pure-mod SKs only.** When `true`, send the modifier immediately as the SK key itself is pressed, instead of waiting and applying it to the next key. (Also known as One-Shot Sticky Modifiers / OSSM.) |
 | `max_repeat` | `0` | **Tap-key SKs only.** Caps how many repeated presses of the key keep the modifier held; `0` = unlimited. Pure-mod (`SK(LGui)`) and layer (`SK(MO(n))`) SKs ignore this — they always apply to exactly one following key. |
-| `release_mode` | unset | Optional `|`-separated release triggers: `other_key_press`, `other_key_release`, `layer_enter`, and `layer_exit`. |
+| `release_mode` | unset | Optional `|`-separated release triggers: `other_key_press`, `other_key_release`, `layer_enter`, `layer_exit`, and `double_tap`. |
 
 The default table applies to every Sticky Key. Define named overrides in
 `[behavior.sticky_key.profiles]` and select one by adding `@name` as the last
@@ -62,6 +62,9 @@ Profile fields omitted from a named profile inherit from the default table.
 When `release_mode` is omitted, RMK preserves the legacy shape-native behavior:
 tap-key SKs release on another non-modifier key press; OSM and OSL are consumed
 on the terminating key release. An explicit mode overrides that behavior.
+`double_tap` releases an active Sticky Key when the same physical Sticky Key is
+pressed a second time. For tap-key SKs, this replaces the normal second cycling
+press with a release.
 
 `timeout` applies to the sticky latch, not to a key that is still physically held.
 Holding an `SK` key longer than the configured timeout will not synthesize a key
@@ -76,7 +79,7 @@ timeout = "1s"
 
 [behavior.sticky_key.profiles.alt_tab]
 timeout = "5s"
-release_mode = "other_key_press | layer_enter | layer_exit"
+release_mode = "other_key_press | layer_enter | layer_exit | double_tap"
 ```
 
 Default values:
@@ -86,7 +89,7 @@ Default values:
 timeout = "1s"
 activate_on_keypress = false
 max_repeat = 0
-# release_mode = "other_key_release | layer_exit"
+# release_mode = "other_key_release | layer_exit | double_tap"
 ```
 
 OSSM example (pure-mod SK activates on key press):
@@ -129,7 +132,7 @@ Accepted breaking changes:
 
 - The old 5-positional `SK(key, [mod], max_repeat, timeout_ms, exit_on_layer_change)` form is **removed** → build error. The trailing knobs now live in `[behavior.sticky_key]`.
 - The `[behavior.one_shot]` and `[behavior.one_shot_modifiers]` config tables are **removed** → use `[behavior.sticky_key]`.
-- The former `quick_release` and layer-change settings are replaced by `release_mode`; use one or more of `other_key_press`, `other_key_release`, `layer_enter`, and `layer_exit`.
+- The former `quick_release` and layer-change settings are replaced by `release_mode`; use one or more of `other_key_press`, `other_key_release`, `layer_enter`, `layer_exit`, and `double_tap`.
 - Tap-key (alt-tab) SKs now have a **1s default timeout** (previously they had no timeout). Set `timeout` higher or rely on the default.
 
 ## Combo

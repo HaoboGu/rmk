@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use bitfield_struct::bitfield;
+
 pub struct StickyKeyConfig {
     pub timeout_ms: Option<u64>,
     pub activate_on_keypress: Option<bool>,
@@ -8,32 +10,42 @@ pub struct StickyKeyConfig {
     pub profiles: HashMap<String, StickyKeyProfile>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct StickyKeyReleaseMode(pub u8);
+#[bitfield(u8, order = Lsb, debug = false)]
+#[derive(Debug, PartialEq, Eq)]
+pub struct StickyKeyReleaseMode {
+    pub other_key_press: bool,
+    pub other_key_release: bool,
+    pub layer_enter: bool,
+    pub layer_exit: bool,
+    pub double_tap: bool,
+    #[bits(3)]
+    __: u8,
+}
 
 impl StickyKeyReleaseMode {
-    pub const OTHER_KEY_PRESS: Self = Self(1 << 0);
-    pub const OTHER_KEY_RELEASE: Self = Self(1 << 1);
-    pub const LAYER_ENTER: Self = Self(1 << 2);
-    pub const LAYER_EXIT: Self = Self(1 << 3);
+    pub const OTHER_KEY_PRESS: Self = Self::new().with_other_key_press(true);
+    pub const OTHER_KEY_RELEASE: Self = Self::new().with_other_key_release(true);
+    pub const LAYER_ENTER: Self = Self::new().with_layer_enter(true);
+    pub const LAYER_EXIT: Self = Self::new().with_layer_exit(true);
+    pub const DOUBLE_TAP: Self = Self::new().with_double_tap(true);
 
     pub fn parse(value: &str) -> Result<Self, String> {
         let mut result = Self::default();
         for part in value.split('|').map(str::trim).filter(|part| !part.is_empty()) {
-            let flag = match part {
-                "other_key_press" => Self::OTHER_KEY_PRESS,
-                "other_key_release" => Self::OTHER_KEY_RELEASE,
-                "layer_enter" => Self::LAYER_ENTER,
-                "layer_exit" => Self::LAYER_EXIT,
+            result = match part {
+                "other_key_press" => result.with_other_key_press(true),
+                "other_key_release" => result.with_other_key_release(true),
+                "layer_enter" => result.with_layer_enter(true),
+                "layer_exit" => result.with_layer_exit(true),
+                "double_tap" => result.with_double_tap(true),
                 _ => {
                     return Err(format!(
-                        "unknown Sticky Key release_mode `{part}`; expected other_key_press, other_key_release, layer_enter, or layer_exit"
+                        "unknown Sticky Key release_mode `{part}`; expected other_key_press, other_key_release, layer_enter, layer_exit, or double_tap"
                     ));
                 }
             };
-            result.0 |= flag.0;
         }
-        if result.0 == 0 {
+        if result.into_bits() == 0 {
             return Err("Sticky Key release_mode must contain at least one trigger".to_string());
         }
         Ok(result)
@@ -401,7 +413,7 @@ keymap = [
 ]
 
 [behavior.sticky_key]
-release_mode = "other_key_release | layer_exit"
+release_mode = "other_key_release | layer_exit | double_tap"
 
 [behavior.sticky_key.profiles.alt_tab]
 timeout = "5s"
@@ -422,17 +434,22 @@ release_mode = "other_key_press | layer_enter"
         let sticky_key = config.behavior().unwrap().sticky_key.unwrap();
         assert_eq!(
             sticky_key.release_mode,
-            Some(StickyKeyReleaseMode(
-                StickyKeyReleaseMode::OTHER_KEY_RELEASE.0 | StickyKeyReleaseMode::LAYER_EXIT.0
-            ))
+            Some(
+                StickyKeyReleaseMode::new()
+                    .with_other_key_release(true)
+                    .with_layer_exit(true)
+                    .with_double_tap(true)
+            )
         );
         let alt_tab = &sticky_key.profiles["alt_tab"];
         assert_eq!(alt_tab.timeout_ms, Some(5000));
         assert_eq!(
             alt_tab.release_mode,
-            Some(StickyKeyReleaseMode(
-                StickyKeyReleaseMode::OTHER_KEY_PRESS.0 | StickyKeyReleaseMode::LAYER_ENTER.0
-            ))
+            Some(
+                StickyKeyReleaseMode::new()
+                    .with_other_key_press(true)
+                    .with_layer_enter(true)
+            )
         );
     }
 }

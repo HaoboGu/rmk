@@ -17,8 +17,7 @@ use rmk_macro::processor;
 use crate::AUTO_MOUSE_LAYER_MAX_NUM;
 use crate::config::{AutoMouseLayerConfig, StickyKeyReleaseMode};
 use crate::core_traits::Runnable;
-use crate::event::{Axis, AxisValType, LayerChangeEvent, PointingEvent};
-use crate::keyboard::sticky_key::notify_sticky_layer_event;
+use crate::event::{Axis, AxisValType, LayerChangeEvent, PointingEvent, StickyKeyReleaseEvent, publish_event};
 use crate::keymap::KeyMap;
 use crate::processor::DeadlineProcessor;
 
@@ -75,7 +74,7 @@ impl<'a, 'k> AutoMouseLayerRunner<'a, 'k> {
         let target_layer = self.entries[idx].config.target_layer;
         let activated_by_us = self.keymap.activate_layer_if_inactive(target_layer);
         if activated_by_us {
-            notify_sticky_layer_event(StickyKeyReleaseMode::LAYER_ENTER);
+            publish_event(StickyKeyReleaseEvent(StickyKeyReleaseMode::LAYER_ENTER));
         }
         if pointing_step(&mut self.entries, idx, Instant::now(), activated_by_us) == PointingOutcome::OverlapFirstSeen {
             warn!(
@@ -133,7 +132,7 @@ impl DeadlineProcessor for AutoMouseLayerRunner<'_, '_> {
     async fn on_deadline(&mut self) {
         for layer in timeout_step(&mut self.entries, Instant::now()) {
             if self.keymap.deactivate_layer_if_active(layer) {
-                notify_sticky_layer_event(StickyKeyReleaseMode::LAYER_EXIT);
+                publish_event(StickyKeyReleaseEvent(StickyKeyReleaseMode::LAYER_EXIT));
             }
         }
     }
