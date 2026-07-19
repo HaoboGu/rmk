@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `report_hz` option for Pmw3610Device
 - Add `bootmagic` config: hold a designated key during boot to drop into the chip bootloader. Works on unibody and on each half of a split independently. Particularly useful for split peripherals whose BOOTSEL button is physically inaccessible ([#457](https://github.com/HaoboGu/rmk/issues/457)).
 - Make `rmk::boot` module public so user code can call `boot::jump_to_bootloader()` directly
-- Add auto mouse layer behavior: automatically activate a configured layer when X/Y cursor motion from a pointing device is detected, and deactivate it after a `timeout` of inactivity ([#781](https://github.com/HaoboGu/rmk/issues/781)) with `deactivate_on_key` (with `extra_mouse_keys`) and `reset_timeout_on_key` options; capacity is auto-derived from `keyboard.toml`, overridable via `[rmk].auto_mouse_layer_max_num` / `auto_mouse_layer_extra_mouse_keys_max_num`
+- Add auto mouse layer behavior: automatically activate a configured layer when X/Y cursor motion from a pointing device is detected, and deactivate it after a `timeout` of inactivity ([#781](https://github.com/HaoboGu/rmk/issues/781)) with `deactivate_on_key` (with `extra_mouse_keys`) and `reset_timeout_on_key` options; entry capacity is auto-derived from `keyboard.toml`, overridable via `[rmk].auto_mouse_layer_max_num`
 
 ### Changed
 

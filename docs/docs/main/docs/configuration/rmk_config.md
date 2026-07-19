@@ -38,8 +38,6 @@ ble_profiles_num = 3
 split_central_sleep_timeout_seconds = 0
 # Maximum number of auto mouse layer entries (auto-derived from [[behavior.auto_mouse_layer]] if unset)
 auto_mouse_layer_max_num = 4
-# Maximum extra_mouse_keys per auto mouse layer entry (auto-derived if unset)
-auto_mouse_layer_extra_mouse_keys_max_num = 8
 ```
 
 ## Parameter Details
@@ -88,4 +86,3 @@ In RMK there are several channels used for communication between tasks. The leng
 ### Auto Mouse Layer Configuration
 
 - `auto_mouse_layer_max_num`: Maximum number of `[[behavior.auto_mouse_layer]]` entries. Auto-derived from your config if unset; set explicitly to override (e.g. when using the Rust API without `keyboard.toml`).
-- `auto_mouse_layer_extra_mouse_keys_max_num`: Maximum `extra_mouse_keys` per auto mouse layer entry. Auto-derived from your config if unset; set explicitly to override.

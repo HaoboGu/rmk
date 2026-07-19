@@ -6,8 +6,8 @@ use rmk_types::morse::{Morse, MorseMode, MorseProfile};
 
 use crate::keyboard::combo::Combo;
 use crate::{
-    AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM, AUTO_MOUSE_LAYER_MAX_NUM, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE,
-    MORSE_MAX_NUM, MOUSE_KEY_INTERVAL, MOUSE_WHEEL_INTERVAL,
+    AUTO_MOUSE_LAYER_MAX_NUM, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MOUSE_KEY_INTERVAL,
+    MOUSE_WHEEL_INTERVAL,
 };
 
 /// Config for configurable action behavior
@@ -55,7 +55,7 @@ pub struct AutoMouseLayerConfig {
     /// modifier is listed in [`Self::extra_mouse_keys`].
     pub deactivate_on_key: bool,
     /// Extra keycodes (e.g. modifiers) that do not trigger deactivation when [`Self::deactivate_on_key`] is set.
-    pub extra_mouse_keys: Vec<KeyCode, AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM>,
+    pub extra_mouse_keys: &'static [KeyCode],
     /// When `true`, key presses that do NOT deactivate [`Self::target_layer`] extend the timeout deadline.
     pub reset_timeout_on_key: bool,
 }
@@ -68,7 +68,7 @@ impl Default for AutoMouseLayerConfig {
             timeout: Duration::from_millis(500),
             threshold: 1,
             deactivate_on_key: false,
-            extra_mouse_keys: Vec::new(),
+            extra_mouse_keys: &[],
             reset_timeout_on_key: false,
         }
     }
@@ -91,14 +91,9 @@ impl AutoMouseLayerConfig {
     }
 
     /// Enable [`Self::deactivate_on_key`] with `exceptions` as additional non-deactivating keycodes.
-    pub fn with_deactivate_on_key(mut self, exceptions: &[KeyCode]) -> Self {
-        assert!(
-            exceptions.len() <= AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM,
-            "AutoMouseLayerConfig::with_deactivate_on_key: too many extra_mouse_keys (max {})",
-            AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM
-        );
+    pub fn with_deactivate_on_key(mut self, exceptions: &'static [KeyCode]) -> Self {
         self.deactivate_on_key = true;
-        self.extra_mouse_keys = Vec::from_slice(exceptions).unwrap();
+        self.extra_mouse_keys = exceptions;
         self
     }
 

@@ -200,16 +200,8 @@ impl KeyboardTomlConfig {
 
             let auto_mouse_layers = behavior.auto_mouse_layer.as_deref().unwrap_or_default();
             self.rmk.auto_mouse_layer_max_num.get_or_insert(auto_mouse_layers.len());
-            self.rmk.auto_mouse_layer_extra_mouse_keys_max_num.get_or_insert(
-                auto_mouse_layers
-                    .iter()
-                    .map(|a| a.extra_mouse_keys.as_ref().map(|v| v.len()).unwrap_or(0))
-                    .max()
-                    .unwrap_or(0),
-            );
         } else {
             self.rmk.auto_mouse_layer_max_num.get_or_insert(0);
-            self.rmk.auto_mouse_layer_extra_mouse_keys_max_num.get_or_insert(0);
         }
     }
 }
@@ -279,9 +271,6 @@ pub(crate) struct RmkConstantsConfig {
     /// Maximum number of auto mouse layer entries; auto-derived from `[[behavior.auto_mouse_layer]]` if unset.
     #[serde(default)]
     pub auto_mouse_layer_max_num: Option<usize>,
-    /// Maximum `extra_mouse_keys` per auto mouse layer entry; auto-derived from config if unset.
-    #[serde(default)]
-    pub auto_mouse_layer_extra_mouse_keys_max_num: Option<usize>,
 }
 
 fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
@@ -350,7 +339,6 @@ impl Default for RmkConstantsConfig {
             protocol_max_bulk_size: 8,
             protocol_macro_chunk_size: 64,
             auto_mouse_layer_max_num: None,
-            auto_mouse_layer_extra_mouse_keys_max_num: None,
         }
     }
 }

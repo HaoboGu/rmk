@@ -514,7 +514,7 @@ fn expand_auto_mouse_layer(auto_mouse_layer: &[AutoMouseLayer]) -> proc_macro2::
                 timeout: ::embassy_time::Duration::from_millis(#timeout_ms),
                 threshold: #threshold,
                 deactivate_on_key: #deactivate_on_key,
-                extra_mouse_keys: ::rmk::heapless::Vec::from_iter([#(#exception_tokens),*]),
+                extra_mouse_keys: &[#(#exception_tokens),*],
                 reset_timeout_on_key: #reset_timeout_on_key,
             }
         }

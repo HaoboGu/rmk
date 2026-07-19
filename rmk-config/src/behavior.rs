@@ -120,19 +120,6 @@ impl crate::KeyboardTomlConfig {
                                 ));
                             }
                         }
-                        let auto_mouse_layer_extra_mouse_keys_max_num = self
-                            .rmk
-                            .auto_mouse_layer_extra_mouse_keys_max_num
-                            .unwrap_or(crate::resolved::behavior::DEFAULT_AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM);
-                        if let Some(exceptions) = &entry.extra_mouse_keys
-                            && exceptions.len() > auto_mouse_layer_extra_mouse_keys_max_num
-                        {
-                            return Err(format!(
-                                "keyboard.toml: [[behavior.auto_mouse_layer]].extra_mouse_keys ({}) exceeds auto_mouse_layer_extra_mouse_keys_max_num ({}) configured under [rmk] section",
-                                exceptions.len(),
-                                auto_mouse_layer_extra_mouse_keys_max_num
-                            ));
-                        }
                         if (entry.deactivate_on_key == Some(true) || entry.reset_timeout_on_key == Some(true))
                             && self.event.action.subs == 0
                         {

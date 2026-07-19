@@ -81,10 +81,6 @@ fn generate_constants(bc: &BuildConstants) -> String {
         bc.auto_mouse_layer_max_num
     ));
     lines.push(format!(
-        "pub const AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM: usize = {};",
-        bc.auto_mouse_layer_extra_mouse_keys_max_num
-    ));
-    lines.push(format!(
         "pub const MAX_PATTERNS_PER_KEY: usize = {};",
         bc.max_patterns_per_key
     ));

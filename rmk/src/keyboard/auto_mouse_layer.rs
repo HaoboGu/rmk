@@ -414,7 +414,7 @@ mod tests {
                 timeout: embassy_time::Duration::from_millis(100),
                 threshold: 1,
                 deactivate_on_key: false,
-                extra_mouse_keys: heapless::Vec::new(),
+                extra_mouse_keys: &[],
                 reset_timeout_on_key: false,
             },
             self_activated: false,
@@ -757,10 +757,10 @@ mod tests {
 
     // ── deactivate_on_key ────────────────────────────────────────
 
-    fn holding_entry_with_deactivate(target_layer: u8, exceptions: &[KeyCode]) -> EntryState {
+    fn holding_entry_with_deactivate(target_layer: u8, exceptions: &'static [KeyCode]) -> EntryState {
         let mut e = entry_with_layer(Some(1), target_layer);
         e.config.deactivate_on_key = true;
-        e.config.extra_mouse_keys = heapless::Vec::from_slice(exceptions).unwrap();
+        e.config.extra_mouse_keys = exceptions;
         e.self_activated = true;
         e.deadline = Some(at(1000));
         e
@@ -850,8 +850,7 @@ mod tests {
 
     #[test]
     fn keypress_step_keeps_layer_active_for_exception_key() {
-        let exceptions = [KeyCode::Hid(HidKeyCode::LCtrl)];
-        let mut entries = [holding_entry_with_deactivate(3, &exceptions)];
+        let mut entries = [holding_entry_with_deactivate(3, &[KeyCode::Hid(HidKeyCode::LCtrl)])];
 
         let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::LCtrl)), at(2000));
 
@@ -946,14 +945,14 @@ mod tests {
         // The second is bound to a different device_id and matches a different key.
         // We simulate this by leaving the second one active and pressing a key that
         // is in its exceptions but not the first one's.
-        let ctrl = KeyCode::Hid(HidKeyCode::LCtrl);
+        const CTRL: KeyCode = KeyCode::Hid(HidKeyCode::LCtrl);
         let mut entries = [
             holding_entry_with_deactivate(4, &[]),
-            holding_entry_with_deactivate(4, &[ctrl]),
+            holding_entry_with_deactivate(4, &[CTRL]),
         ];
         entries[1].config.device_id = Some(2);
 
-        let released = keypress_step(&mut entries, Action::Key(ctrl), at(2000));
+        let released = keypress_step(&mut entries, Action::Key(CTRL), at(2000));
 
         // First entry deactivates (LCtrl not in its exceptions), but layer 4
         // must not be released because the second entry (with LCtrl in exceptions) still holds it.
@@ -1002,52 +1001,20 @@ mod tests {
 
     #[test]
     fn keypress_step_honours_full_exceptions_list() {
-        // Fill the exceptions Vec to its capacity and verify every entry is
-        // consulted (contains() must walk the whole list, not just prefix).
-        use crate::AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM;
-        // HidKeyCode A..Z plus Kc1..Kc6: a pool of guaranteed-valid codes large enough
-        // to fill the Vec whatever the configured capacity is (up to 32).
-        let valid_codes = [
-            HidKeyCode::A,
-            HidKeyCode::B,
-            HidKeyCode::C,
-            HidKeyCode::D,
-            HidKeyCode::E,
-            HidKeyCode::F,
-            HidKeyCode::G,
-            HidKeyCode::H,
-            HidKeyCode::I,
-            HidKeyCode::J,
-            HidKeyCode::K,
-            HidKeyCode::L,
-            HidKeyCode::M,
-            HidKeyCode::N,
-            HidKeyCode::O,
-            HidKeyCode::P,
-            HidKeyCode::Q,
-            HidKeyCode::R,
-            HidKeyCode::S,
-            HidKeyCode::T,
-            HidKeyCode::U,
-            HidKeyCode::V,
-            HidKeyCode::W,
-            HidKeyCode::X,
-            HidKeyCode::Y,
-            HidKeyCode::Z,
-            HidKeyCode::Kc1,
-            HidKeyCode::Kc2,
-            HidKeyCode::Kc3,
-            HidKeyCode::Kc4,
-            HidKeyCode::Kc5,
-            HidKeyCode::Kc6,
+        // Verify contains() walks the whole slice, not just the prefix: place the
+        // matching key at the very end of a long list.
+        const EXCEPTIONS: &[KeyCode] = &[
+            KeyCode::Hid(HidKeyCode::A),
+            KeyCode::Hid(HidKeyCode::B),
+            KeyCode::Hid(HidKeyCode::C),
+            KeyCode::Hid(HidKeyCode::D),
+            KeyCode::Hid(HidKeyCode::E),
+            KeyCode::Hid(HidKeyCode::F),
+            KeyCode::Hid(HidKeyCode::G),
+            KeyCode::Hid(HidKeyCode::LCtrl),
         ];
-        assert!(valid_codes.len() >= AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM);
-        let mut exceptions: heapless::Vec<KeyCode, AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM> = heapless::Vec::new();
-        for code in valid_codes.iter().take(AUTO_MOUSE_LAYER_EXTRA_MOUSE_KEYS_MAX_NUM) {
-            exceptions.push(KeyCode::Hid(*code)).unwrap();
-        }
-        let last = *exceptions.last().unwrap();
-        let mut entries = [holding_entry_with_deactivate(3, exceptions.as_slice())];
+        let last = *EXCEPTIONS.last().unwrap();
+        let mut entries = [holding_entry_with_deactivate(3, EXCEPTIONS)];
 
         let released = keypress_step(&mut entries, Action::Key(last), at(2000));
 
@@ -1112,8 +1079,10 @@ mod tests {
 
     #[test]
     fn keypress_step_keeps_layer_active_for_modifier_action_fully_covered_by_exceptions() {
-        let exceptions = [KeyCode::Hid(HidKeyCode::LCtrl), KeyCode::Hid(HidKeyCode::LShift)];
-        let mut entries = [holding_entry_with_deactivate(3, &exceptions)];
+        let mut entries = [holding_entry_with_deactivate(
+            3,
+            &[KeyCode::Hid(HidKeyCode::LCtrl), KeyCode::Hid(HidKeyCode::LShift)],
+        )];
 
         let released = keypress_step(
             &mut entries,
@@ -1130,8 +1099,7 @@ mod tests {
     #[test]
     fn keypress_step_releases_layer_for_modifier_action_partially_covered_by_exceptions() {
         // LCtrl is excepted but the action also contains LShift — deactivate.
-        let exceptions = [KeyCode::Hid(HidKeyCode::LCtrl)];
-        let mut entries = [holding_entry_with_deactivate(3, &exceptions)];
+        let mut entries = [holding_entry_with_deactivate(3, &[KeyCode::Hid(HidKeyCode::LCtrl)])];
 
         let released = keypress_step(
             &mut entries,
@@ -1146,8 +1114,7 @@ mod tests {
     #[test]
     fn keypress_step_ignores_side_mismatch_between_modifier_action_and_exceptions() {
         // Left/right variants are distinct: RCtrl is not covered by LCtrl.
-        let exceptions = [KeyCode::Hid(HidKeyCode::LCtrl)];
-        let mut entries = [holding_entry_with_deactivate(3, &exceptions)];
+        let mut entries = [holding_entry_with_deactivate(3, &[KeyCode::Hid(HidKeyCode::LCtrl)])];
 
         let released = keypress_step(&mut entries, Action::Modifier(ModifierCombination::RCTRL), at(2000));
 
