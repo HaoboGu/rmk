@@ -63,7 +63,7 @@ mod tests {
     use super::*;
     use crate::action::Action;
     use crate::constants::MORSE_SIZE;
-    use crate::keycode::{HidKeyCode, KeyCode};
+    use crate::keycode::HidKeyCode;
     use crate::modifier::ModifierCombination;
     use crate::morse::{MorsePattern, MorseProfile};
     use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
@@ -74,11 +74,11 @@ mod tests {
     /// manual `MaxSize` impl. `MorsePattern::from_u16(0)` panics (the empty
     /// pattern is `0b1`), so patterns start at 1.
     fn full_morse() -> Morse {
-        // `KeyWithModifier` carries a nested `KeyCode` enum + a `ModifierCombination`
+        // `KeyWithModifier` carries a `HidKeyCode` + a `ModifierCombination`
         // bitfield, so it encodes to several bytes rather than the 1 byte of
         // `Action::No` — enough slack for `assert_max_size_bound` to catch a
         // per-element under-count.
-        let action = Action::KeyWithModifier(KeyCode::Hid(HidKeyCode::A), ModifierCombination::new());
+        let action = Action::KeyWithModifier(HidKeyCode::A, ModifierCombination::new());
         let mut m = Morse {
             profile: MorseProfile::const_default(),
             actions: heapless::LinearMap::new(),

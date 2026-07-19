@@ -6,6 +6,7 @@ use rmk_config::resolved::{Behavior, Hardware, Host};
 use syn::{ItemFn, ItemMod};
 
 use super::override_helper::Overwritten;
+use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn expand_rmk_entry(
@@ -172,10 +173,21 @@ pub(crate) fn rmk_entry_select(
                             .instance
                             .to_lowercase()
                     );
+                    let rmk_features = get_rmk_features();
+                    let dfu_split_enabled = is_feature_enabled(&rmk_features, "dfu_split");
+                    let policy = if dfu_split_enabled {
+                        match p.update_policy.as_deref() {
+                            Some("force") => quote! { ::rmk::split::central::UpdatePolicy::Force },
+                            _ => quote! { ::rmk::split::central::UpdatePolicy::MatchHash },
+                        }
+                    } else {
+                        quote! {}
+                    };
                     tasks.push(quote! {
                         ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
                             #idx,
                             #uart_instance,
+                            #policy
                         )
                     });
                 });

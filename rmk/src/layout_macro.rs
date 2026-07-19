@@ -68,7 +68,7 @@ macro_rules! k {
 macro_rules! wm {
     ($x: ident, $m: expr) => {
         $crate::types::action::KeyAction::Single($crate::types::action::Action::KeyWithModifier(
-            $crate::types::keycode::KeyCode::Hid($crate::types::keycode::HidKeyCode::$x),
+            $crate::types::keycode::HidKeyCode::$x,
             $m,
         ))
     };

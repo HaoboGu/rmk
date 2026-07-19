@@ -1,0 +1,62 @@
+[keyboard]
+name = "RMK RP2040 DFU split"
+product_name = "RMK RP2040 DFU split"
+vendor_id = 0x4c4b
+product_id = 0x4643
+manufacturer = "RMK"
+chip = "rp2040"
+
+[rmk]
+split_peripherals_num = 1
+
+[split]
+connection = "serial"
+
+[split.central]
+rows = 2
+cols = 2
+row_offset = 0
+col_offset = 0
+serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
+[split.central.matrix]
+matrix_type = "normal"
+row_pins = ["PIN_6", "PIN_7"]
+col_pins = ["PIN_19", "PIN_20"]
+
+[[split.peripheral]]
+rows = 2
+cols = 1
+row_offset = 2
+col_offset = 2
+serial = [{ instance = "UART0", tx_pin = "PIN_0", rx_pin = "PIN_1" }]
+firmware = "rmk-rp2040-dfu-split-peripheral.bin"
+update_policy = "MatchHash"
+# update_policy = "force" to force a peripheral update every start of central
+[split.peripheral.matrix]
+matrix_type = "normal"
+row_pins = ["PIN_8", "PIN_9"]
+col_pins = ["PIN_10"]
+
+[layout]
+rows = 4
+cols = 3
+layers = 2
+keymap = [
+    [
+        ["A", "B", "C"],
+        ["Kc1", "Kc2", "Kc3"],
+        ["LCtrl", "MO(1)", "LShift"],
+        ["OSL(1)", "LT(2, Kc9)", "LM(1, LShift | LGui)"]
+    ],
+    [
+        ["_", "TT(1)", "TG(2)"],
+        ["_", "_", "_"],
+        ["_", "_", "_"],
+        ["_", "_", "_"],
+    ],
+]
+
+[dfu]
+led = "PIN_25"
+
+[storage]

@@ -55,14 +55,17 @@ pub(crate) fn parse_split_peripheral_mod(
         let pid = identity.product_id;
         let manufacturer = &identity.manufacturer;
         let product_name = &identity.product_name;
-        let serial_number = &identity.serial_number;
+        let serial_number_tokens = match &identity.serial_number {
+            Some(s) => quote! { #s },
+            None => quote! { ::rmk::config::RMK_BUILD_INFO },
+        };
         quote! {
             const KEYBOARD_DEVICE_CONFIG: ::rmk::config::DeviceConfig = ::rmk::config::DeviceConfig {
                 vid: #vid,
                 pid: #pid,
                 manufacturer: #manufacturer,
                 product_name: #product_name,
-                serial_number: #serial_number,
+                serial_number: #serial_number_tokens,
             };
         }
     } else {

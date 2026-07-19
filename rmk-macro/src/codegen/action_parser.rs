@@ -224,7 +224,7 @@ fn parse_action(key: &str) -> TokenStream2 {
         }
         return quote! {
             ::rmk::types::action::Action::KeyWithModifier(
-                ::rmk::types::keycode::KeyCode::Hid(::rmk::types::keycode::HidKeyCode::#ident),
+                ::rmk::types::keycode::HidKeyCode::#ident,
                 #modifiers,
             )
         };
@@ -282,7 +282,7 @@ fn parse_action(key: &str) -> TokenStream2 {
         let ident = get_key_with_alias(internal.to_string());
         return quote! {
             ::rmk::types::action::Action::KeyWithModifier(
-                ::rmk::types::keycode::KeyCode::Hid(::rmk::types::keycode::HidKeyCode::#ident),
+                ::rmk::types::keycode::HidKeyCode::#ident,
                 ::rmk::types::modifier::ModifierCombination::new_from(false, false, false, true, false),
             )
         };

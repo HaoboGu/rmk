@@ -880,6 +880,14 @@ pub struct SplitBoardConfig {
     pub adc_divider_total: Option<u32>,
     /// Output Pin config for the split
     pub output: Option<Vec<OutputConfig>>,
+    /// Path to the peripheral firmware binary for automatic dfu_split update.
+    /// Relative to the project's `Cargo.toml`.  When set, the generated code
+    /// includes the binary with `include_bytes!` and registers it via
+    /// [`set_firmware_update_data`](crate::set_firmware_update_data).
+    pub firmware: Option<String>,
+    /// DFU update policy for this peripheral. "MatchHash" (default) only
+    /// flashes when the firmware differs; "force" always flashes.
+    pub update_policy: Option<String>,
 }
 
 /// Serial port config

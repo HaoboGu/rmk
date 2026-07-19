@@ -112,7 +112,7 @@ mod tests {
         use super::super::*;
         use crate::action::{Action, KeyAction};
         use crate::constants::BULK_SIZE;
-        use crate::keycode::{HidKeyCode, KeyCode};
+        use crate::keycode::HidKeyCode;
         use crate::modifier::ModifierCombination;
         use crate::morse::MorseProfile;
         use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
@@ -123,7 +123,7 @@ mod tests {
         /// `assert_max_size_bound` exercise both the per-element and the
         /// length-prefix dimensions of the bound.
         fn worst_key_action() -> KeyAction {
-            let action = Action::KeyWithModifier(KeyCode::Hid(HidKeyCode::A), ModifierCombination::new());
+            let action = Action::KeyWithModifier(HidKeyCode::A, ModifierCombination::new());
             KeyAction::TapHold(action, action, MorseProfile::const_default())
         }
 

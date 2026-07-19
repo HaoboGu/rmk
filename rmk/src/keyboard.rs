@@ -199,7 +199,7 @@ pub struct Keyboard<'a> {
 
     /// stores the last KeyCode executed, to be repeated if the repeat key os pressed
     /// Used in repeat-key
-    last_key_code: KeyCode,
+    last_key_code: HidKeyCode,
 
     /// Oneshot Layer state
     osl_state: OneShotState<u8>,
@@ -274,7 +274,7 @@ impl<'a> Keyboard<'a> {
             mouse: MouseState::new(),
             media_report: MediaKeyboardReport { usage_id: 0 },
             system_control_report: SystemControlReport { usage_id: 0 },
-            last_key_code: KeyCode::Hid(HidKeyCode::No),
+            last_key_code: HidKeyCode::No,
             combo_on: true,
             #[cfg(feature = "steno")]
             steno: crate::keyboard::steno::StenoChord::new(),
@@ -1218,7 +1218,21 @@ impl<'a> Keyboard<'a> {
 
         match action {
             Action::No => {}
-            Action::Key(key) => self.process_action_key(key, event).await,
+            Action::Key(key) => match key {
+                KeyCode::Hid(hid) => self.process_action_key(hid, event).await,
+                // Consumer/system keys with no HID alias are dispatched directly here.
+                KeyCode::Consumer(consumer) => {
+                    self.process_action_consumer_control(consumer, event).await;
+                    self.update_osm(event);
+                    self.update_osl(event);
+                }
+                KeyCode::SystemControl(system_control) => {
+                    self.process_action_system_control(system_control, event).await;
+                    self.update_osm(event);
+                    self.update_osl(event);
+                }
+                _ => warn!("KeyCode variant not supported: {:?}", key),
+            },
             Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, event),
             Action::LayerOff(layer_num) => {
                 // Turn off a layer temporarily when the key is pressed
@@ -1520,27 +1534,25 @@ impl<'a> Keyboard<'a> {
     }
 
     // Process action key
-    async fn process_action_key(&mut self, mut key: KeyCode, event: KeyboardEvent) {
+    /// Universal HID keyboard-key pipeline: `Again` resolution, last-key/caps-word
+    /// bookkeeping, dispatch (a `HidKeyCode` may alias to consumer/system/mouse), and one-shot post.
+    async fn process_action_key(&mut self, mut key: HidKeyCode, event: KeyboardEvent) {
         // Process `Again` key first.
         // Not all platform support `Again` key, so we manually repeat it for users.
-        if key == KeyCode::Hid(HidKeyCode::Again) {
+        if key == HidKeyCode::Again {
             debug!("Repeat(Again) last key code: {:?} , {:?}", self.last_key_code, event);
             key = self.last_key_code;
         }
 
         // Pre-check
-        if event.pressed
-            && let KeyCode::Hid(hid_keycode) = key
-        {
-            // Check hid keycodes
-            // Record last press time
-            if hid_keycode.is_simple_key() {
-                // Records only the simple key
+        if event.pressed {
+            // Record last press time, only for the simple key
+            if key.is_simple_key() {
                 self.last_press_time = Instant::now();
             }
 
             // Update last key code
-            if hid_keycode != HidKeyCode::Again && self.last_key_code != key {
+            if key != HidKeyCode::Again && self.last_key_code != key {
                 debug!(
                     "Last key code changed from {:?} to {:?}(pressed: {:?})",
                     self.last_key_code, key, event.pressed
@@ -1549,30 +1561,28 @@ impl<'a> Keyboard<'a> {
             }
 
             // Check Caps Word
-            self.caps_word.check(hid_keycode);
+            self.caps_word.check(key);
         }
 
-        match key {
-            KeyCode::Hid(hid_keycode) => {
-                if let Some(consumer) = hid_keycode.process_as_consumer() {
-                    self.process_action_consumer_control(consumer, event).await
-                } else if let Some(system_control) = hid_keycode.process_as_system_control() {
-                    self.process_action_system_control(system_control, event).await
-                } else if hid_keycode.is_mouse_key() {
-                    self.process_action_mouse(hid_keycode, event).await;
-                } else {
-                    // Basic keycodes
-                    self.process_hid_keycode(hid_keycode, event).await
-                }
-            }
-            KeyCode::Consumer(consumer) => self.process_action_consumer_control(consumer, event).await,
-            KeyCode::SystemControl(system_control) => self.process_action_system_control(system_control, event).await,
-            _ => warn!("KeyCode variant not supported: {:?}", key),
-        }
+        // Dispatch to the right HID report; only the plain-keyboard branch is "basic".
+        let is_basic_keyboard_key = if let Some(consumer) = key.process_as_consumer() {
+            self.process_action_consumer_control(consumer, event).await;
+            false
+        } else if let Some(system_control) = key.process_as_system_control() {
+            self.process_action_system_control(system_control, event).await;
+            false
+        } else if key.is_mouse_key() {
+            self.process_action_mouse(key, event).await;
+            false
+        } else {
+            self.process_hid_keycode(key, event).await;
+            true
+        };
 
+        // Consume any pending one-shot; on quick-release of a basic key, re-send the report.
         let quick_release = self.keymap.one_shot_modifiers_config().quick_release;
         let osm_consumed = self.update_osm(event);
-        if quick_release && osm_consumed && key.is_basic_keyboard_key() && event.pressed {
+        if quick_release && osm_consumed && is_basic_keyboard_key && event.pressed {
             self.send_keyboard_report_with_resolved_modifiers(true).await;
         }
         self.update_osl(event);
@@ -1590,7 +1600,7 @@ impl<'a> Keyboard<'a> {
 
     /// Process consumer control action. Consumer control keys are keys in hid consumer page, such as media keys.
     async fn process_action_consumer_control(&mut self, key: ConsumerKey, event: KeyboardEvent) {
-        self.media_report.usage_id = if event.pressed { key as u16 } else { 0 };
+        self.media_report.usage_id = if event.pressed { key.into() } else { 0 };
 
         self.send_media_report().await;
     }
@@ -2264,7 +2274,7 @@ mod test {
                 trigger: KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Dot))),
                 negative_output: KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::Dot))),
                 positive_output: KeyAction::Single(Action::KeyWithModifier(
-                    KeyCode::Hid(HidKeyCode::Semicolon),
+                    HidKeyCode::Semicolon,
                     ModifierCombination::default().with_left_shift(true),
                 )),
                 match_any: StateBits {

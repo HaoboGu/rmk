@@ -1,0 +1,45 @@
+[package]
+name = "rmk-rp2040-dfu-split"
+version = "0.2.0"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+rmk = { path = "../../../rmk", features = ["dfu_rp", "dfu_split", "split", "storage"] }
+embassy-time = { version = "0.5", features = ["defmt"] }
+embassy-rp = { version = "0.10", features = ["rp2040", "defmt", "time-driver", "critical-section-impl"] }
+embassy-executor = { version = "0.10", features = ["defmt", "platform-cortex-m", "executor-thread"] }
+cortex-m-rt = { version = "0.7.5", features = ["set-vtor"] }
+static_cell = "2"
+portable-atomic = { version = "1.11", features = ["critical-section"] }
+defmt = "1.0"
+defmt-rtt = "1.0"
+panic-probe = { version = "1.0", features = ["print-defmt"] }
+
+[build-dependencies]
+const-gen = "1.6"
+json = "0.12"
+xz2 = "0.1.7"
+
+[[bin]]
+name = "central"
+path = "src/central.rs"
+
+[[bin]]
+name = "peripheral"
+path = "src/peripheral.rs"
+
+[profile.release]
+opt-level = "z"
+debug = true
+lto = true
+codegen-units = 1
+overflow-checks = false
+
+[profile.dev]
+opt-level = 1
+debug = true
+lto = false
+codegen-units = 1
+panic = "unwind"
+overflow-checks = true
