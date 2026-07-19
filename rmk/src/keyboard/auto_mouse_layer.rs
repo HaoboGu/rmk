@@ -211,6 +211,7 @@ impl Runnable for AutoMouseLayerRunner<'_, '_> {
 /// subscriber slot, so the misconfiguration is loud instead of calling
 /// `ActionEvent::subscriber()` with `subs = 0` (which would also panic, with a
 /// less specific message).
+#[allow(clippy::absurd_extreme_comparisons)] // ACTION_EVENT_SUB_SIZE is a build-time const
 fn assert_action_event_subscriber_available(any_action_event_configured: bool) {
     assert!(
         !any_action_event_configured || crate::ACTION_EVENT_SUB_SIZE >= 1,
