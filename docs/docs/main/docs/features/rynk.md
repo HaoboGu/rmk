@@ -178,31 +178,41 @@ don't have to implement the protocol yourself:
 A minimal native USB tool looks like this:
 
 ```rust
+use embassy_futures::select::{Either, select};
 use rynk::RynkDevice;
 use rynk_serial::SerialDevice;
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Find a connected Rynk keyboard and open it (the handshake runs in `connect`).
-    let device = SerialDevice::discover()
-        .await?
+    let device = SerialDevice::discover()?
         .into_iter()
         .next()
         .ok_or("no Rynk keyboard found")?;
 
-    let mut client = device.connect().await?;
-    let caps = client.capabilities();
-    println!("{}x{}x{} keymap", caps.num_layers, caps.num_rows, caps.num_cols);
+    let (client, mut driver) = device.connect().await?;
+    let work = async {
+        let caps = client.get_capabilities().await?;
+        println!("{}x{}x{} keymap", caps.num_layers, caps.num_rows, caps.num_cols);
 
-    let key = client.get_key(0, 0, 0).await?;
-    println!("L0(0,0) = {key:?}");
+        let key = client.get_key(0, 0, 0).await?;
+        println!("L0(0,0) = {key:?}");
+        Ok::<_, rynk::RynkHostError>(())
+    };
+
+    match select(driver.run(&client), work).await {
+        Either::First(err) => return Err(err.into()),
+        Either::Second(result) => result?,
+    }
     Ok(())
 }
 ```
 
-Live status arrives as "topics" you poll for:
+Live status arrives as "topics" you poll for in work running alongside the
+driver:
 
 ```rust
-while let Ok(topic) = client.next_topic().await {
+loop {
+    let topic = client.next_topic().await;
     println!("{topic:?}");
 }
 ```

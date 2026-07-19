@@ -106,7 +106,7 @@ impl MaxSize for DeviceInfo {
         + 3 * crate::heapless_vec_max_size::<u8, DEVICE_INFO_STRING_SIZE>();
 }
 
-/// Current lock/unlock state of the device, returned by `GetLockStatus`
+/// Current lock/unlock state of this Rynk session, returned by `GetLockStatus`
 /// and `UnlockPoll`. The `Lock` endpoint returns `()`.
 ///
 /// Loses `Copy` and derived `MaxSize` (both forbidden by the `heapless::Vec`

@@ -8,11 +8,8 @@ use rmk_types::protocol::rynk::LockStatus;
 
 use crate::keymap::KeyMap;
 
-/// Unlock gate. State (`unlocked`, `unlocking`, `last_poll`) lives behind
-/// `Cell`s so the lock can be shared by reference across concurrent USB and
-/// BLE sessions without an async mutex. Safe because every mutation is a
-/// non-`await` `Cell::set` on `Copy` data, so no borrow ever crosses an
-/// `.await` point.
+/// Unlock gate. Interior mutability lets protocol handlers update it through a
+/// shared reference without holding a borrow across an `.await` point.
 pub(crate) struct HostLock<'a> {
     unlocked: Cell<bool>,
     unlocking: Cell<bool>,
@@ -44,9 +41,7 @@ impl<'a> HostLock<'a> {
         self.unlocking.get()
     }
 
-    /// `insecure` forces unlocked regardless of the `unlocked` cell, so a
-    /// keyless dev device doesn't get stuck locked after relock-on-disconnect
-    /// clears the cell on its first session end.
+    /// `insecure` forces unlocked regardless of the `unlocked` cell.
     pub fn is_unlocked(&self) -> bool {
         self.insecure || self.unlocked.get()
     }
@@ -221,10 +216,7 @@ mod tests {
 
         assert!(lock.is_unlocked(), "insecure starts unlocked");
         lock.lock();
-        assert!(
-            lock.is_unlocked(),
-            "insecure stays unlocked after lock() (relock-on-disconnect safe)"
-        );
+        assert!(lock.is_unlocked(), "lock() does not override insecure mode");
     }
 
     #[cfg(feature = "rynk")]

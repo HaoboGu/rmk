@@ -1156,15 +1156,7 @@ mod tests {
         if !parsed.has_matrix_or_encoder() {
             crate::kle::assign_matrix_by_position(&mut parsed).unwrap();
         }
-        let dim = |k| {
-            root.get("matrix")
-                .and_then(|m| m.get(k))
-                .and_then(|v| v.as_u64())
-                .map(u8::try_from)
-                .transpose()
-                .unwrap()
-                .unwrap_or(0)
-        };
+        let dim = |k| crate::matrix_dim(&root, k).unwrap();
         (parsed, dim("rows"), dim("cols"))
     }
 
@@ -1355,16 +1347,7 @@ mod tests {
             let Some(keymap) = root_json.get("layouts").and_then(|l| l.get("keymap")) else {
                 continue;
             };
-            let dim = |k| {
-                root_json
-                    .get("matrix")
-                    .and_then(|m| m.get(k))
-                    .and_then(|v| v.as_u64())
-                    .map(u8::try_from)
-                    .transpose()
-                    .unwrap()
-                    .unwrap_or(0)
-            };
+            let dim = |k| crate::matrix_dim(&root_json, k).unwrap();
             let parsed = parse_keymap(keymap).unwrap();
             let ctx = f.strip_prefix(root).unwrap().to_string_lossy().into_owned();
             let info = decode_info(&parsed, dim("rows"), dim("cols"));

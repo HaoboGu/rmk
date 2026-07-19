@@ -21,7 +21,7 @@ const RYNK_OUTPUT_CHAR_UUID: Uuid = Uuid::from_u128(rynk::rmk_types::protocol::r
 
 /// Bounds connection, discovery, and subscription; those operations carry no
 /// inherent timeout, so a radio-silent device would otherwise pend forever.
-const GATT_TIMEOUT: Duration = Duration::from_secs(5);
+const GATT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// ATT-minimum MTU payload.
 const BLE_SAFE_WRITE: usize = 20;
