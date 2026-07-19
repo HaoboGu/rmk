@@ -202,7 +202,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 Live status arrives as "topics" you poll for:
 
 ```rust
-while let Ok(topic) = client.next_event().await {
+while let Ok(topic) = client.next_topic().await {
     println!("{topic:?}");
 }
 ```

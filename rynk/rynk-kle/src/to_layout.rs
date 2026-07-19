@@ -15,7 +15,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use kle_serial::Key as SerialKey;
 use serde_json::Value;
 
-use crate::kle::KeyAnnotation;
+use crate::Generated;
+use crate::kle::AnnotatedKey;
 
 const EPS: f64 = 1e-4;
 
@@ -39,25 +40,12 @@ fn fmt(v: f64) -> String {
     }
 }
 
-pub struct GenInput<'a> {
-    pub keys: &'a [SerialKey<f64>],
-    pub annotations: &'a [KeyAnnotation],
-    pub matrix_rows: u32,
-    pub matrix_cols: u32,
+pub(crate) struct GenInput<'a> {
+    pub(crate) keys: &'a [AnnotatedKey],
+    pub(crate) matrix_rows: u8,
+    pub(crate) matrix_cols: u8,
     /// `layouts.labels`, used only to name variants.
-    pub labels: Option<&'a Value>,
-}
-
-/// Serializes for host consumers (e.g. the wasm bindings return it to JS).
-#[derive(Clone, Debug, serde::Serialize)]
-pub struct Generated {
-    /// The full keyboard.toml snippet: `[layout]` + `[layout.shapes]` +
-    /// `[[layout.variant]]`.
-    pub display_toml: String,
-    /// Just the `[layout]` body (bare fields + `[shapes]` + `[[variant]]`), the
-    /// form `rmk_config::layout_blob_from_toml` validates.
-    pub inner_layout_toml: String,
-    pub warnings: Vec<String>,
+    pub(crate) labels: Option<&'a Value>,
 }
 
 /// A resolved shape in RMK's convention: `(x, y)` nudge the center, `rect2` is
@@ -93,15 +81,14 @@ impl ShapeDesc {
             && self.rect2.is_none()
     }
 
-    /// A rounded, hashable identity for de-duplicating generated shapes.
-    fn key(&self) -> Vec<i64> {
+    fn key(&self) -> [i64; 10] {
         let q = |v: f64| (v * 1e4).round() as i64;
-        let mut k = vec![q(self.w), q(self.h), q(self.x), q(self.y), q(self.r)];
-        match self.rect2 {
-            Some((a, b, c, d)) => k.extend([1, q(a), q(b), q(c), q(d)]),
-            None => k.push(0),
+        let mut values = [0; 10];
+        values[..5].copy_from_slice(&[q(self.w), q(self.h), q(self.x), q(self.y), q(self.r)]);
+        if let Some((w, h, x, y)) = self.rect2 {
+            values[5..].copy_from_slice(&[1, q(w), q(h), q(x), q(y)]);
         }
-        k
+        values
     }
 
     fn toml(&self) -> String {
@@ -132,25 +119,12 @@ impl ShapeDesc {
     }
 }
 
-/// Assigns a shape name to each descriptor: a stock name when one fits (no entry
-/// emitted), otherwise a generated `sN` recorded for `[layout.shapes]`.
+/// Assigns stock names and records generated shapes in insertion order.
 struct ShapeRegistry {
-    order: Vec<String>,
-    by_key: HashMap<Vec<i64>, String>,
-    defs: HashMap<String, ShapeDesc>,
-    counter: usize,
+    generated: Vec<([i64; 10], String, ShapeDesc)>,
 }
 
 impl ShapeRegistry {
-    fn new() -> Self {
-        ShapeRegistry {
-            order: Vec::new(),
-            by_key: HashMap::new(),
-            defs: HashMap::new(),
-            counter: 0,
-        }
-    }
-
     fn name_for(&mut self, d: &ShapeDesc) -> String {
         // Stock shapes: only pure width/height changes, no nudge/rotation/L-shape.
         if approx(d.x, 0.0) && approx(d.y, 0.0) && approx(d.r, 0.0) && d.rect2.is_none() {
@@ -166,19 +140,12 @@ impl ShapeRegistry {
             }
         }
         let key = d.key();
-        if let Some(name) = self.by_key.get(&key) {
+        if let Some((_, name, _)) = self.generated.iter().find(|(existing, _, _)| *existing == key) {
             return name.clone();
         }
-        self.counter += 1;
-        let name = format!("s{}", self.counter);
-        self.by_key.insert(key, name.clone());
-        self.defs.insert(name.clone(), *d);
-        self.order.push(name.clone());
+        let name = format!("s{}", self.generated.len() + 1);
+        self.generated.push((key, name.clone(), *d));
         name
-    }
-
-    fn generated(&self) -> impl Iterator<Item = (&String, &ShapeDesc)> {
-        self.order.iter().map(move |n| (n, &self.defs[n]))
     }
 }
 
@@ -263,13 +230,13 @@ fn shape_desc(k: &SerialKey<f64>, baseline: f64, x_nudge: f64, region: Option<(f
 
 struct VariantOut {
     name: String,
-    hidden: Vec<(u32, u32)>,
-    shapes: Vec<((u32, u32), String)>,
+    hidden: Vec<(u8, u8)>,
+    shapes: Vec<((u8, u8), String)>,
 }
 
 /// Best-effort variant name from `layouts.labels`. A string label is a toggle
 /// (choice 1 = the label); an array is a dropdown (`[groupName, c0, c1, …]`).
-fn variant_name(labels: Option<&Value>, g: u32, c: u32, used: &mut HashSet<String>) -> String {
+fn variant_name(labels: Option<&Value>, g: u8, c: u8, used: &mut HashSet<String>) -> String {
     let raw = labels
         .and_then(|l| l.as_array())
         .and_then(|arr| arr.get(g as usize))
@@ -307,7 +274,7 @@ fn variant_name(labels: Option<&Value>, g: u32, c: u32, used: &mut HashSet<Strin
 }
 
 struct EncoderRender {
-    id: u32,
+    id: u8,
     key: SerialKey<f64>,
     row_index: usize,
 }
@@ -348,29 +315,19 @@ fn group_first_seen<K: Copy + Eq + std::hash::Hash>(
     (order, groups, index)
 }
 
-pub fn generate(input: GenInput) -> Result<Generated, String> {
+pub(crate) fn generate(input: GenInput) -> Result<Generated, String> {
     let mut warnings = Vec::new();
-    if input.keys.len() != input.annotations.len() {
-        return Err(format!(
-            "internal error: {} KLE keys but {} annotations",
-            input.keys.len(),
-            input.annotations.len()
-        ));
-    }
-
-    let annotation = |i: usize| input.annotations[i];
 
     // 1. Split real switches into matrix keys and Vial encoder switches (drop decals).
     let mut key_insts: Vec<usize> = Vec::new();
     let mut enc_insts: Vec<usize> = Vec::new();
     for (i, k) in input.keys.iter().enumerate() {
-        let a = annotation(i);
         if k.decal {
             continue;
         }
-        if a.encoder.is_some() {
+        if k.encoder.is_some() {
             enc_insts.push(i);
-        } else if a.matrix.is_some() {
+        } else if k.matrix.is_some() {
             key_insts.push(i);
         } else {
             warnings.push(format!(
@@ -385,11 +342,11 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
     }
 
     // 2. Group key instances by matrix cell, preserving first-seen order.
-    let (order, cells, index) = group_first_seen(&key_insts, |ki| annotation(ki).matrix.unwrap());
+    let (order, cells, index) = group_first_seen(&key_insts, |ki| input.keys[ki].matrix.unwrap());
     // A cell repeated with no layout option is a genuine duplicate; only the first
     // is placed (RMK requires unique coordinates).
     for (i, insts) in cells.iter().enumerate() {
-        let dups = insts.iter().filter(|&&ki| annotation(ki).option.is_none()).count();
+        let dups = insts.iter().filter(|&&ki| input.keys[ki].option.is_none()).count();
         if dups > 1 {
             let (r, c) = order[i];
             warnings.push(format!(
@@ -399,7 +356,7 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
     }
 
     // 3. Collapse Vial CW/CCW switch pairs into one physical encoder knob.
-    let (enc_order, enc_switches, enc_index) = group_first_seen(&enc_insts, |ki| annotation(ki).encoder.unwrap().0);
+    let (enc_order, enc_switches, enc_index) = group_first_seen(&enc_insts, |ki| input.keys[ki].encoder.unwrap().0);
     let mut encoders: Vec<EncoderRender> = Vec::new();
     for (i, sw) in enc_switches.iter().enumerate() {
         let id = enc_order[i];
@@ -435,10 +392,10 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
         encoders.push(EncoderRender {
             id,
             key,
-            row_index: annotation(sw[0]).row_index,
+            row_index: input.keys[sw[0]].row_index,
         });
     }
-    let mut ids: Vec<u32> = enc_order.clone();
+    let mut ids: Vec<u8> = enc_order.clone();
     ids.sort_unstable();
     if ids.iter().enumerate().any(|(want, &id)| id as usize != want) {
         warnings.push(format!(
@@ -450,8 +407,14 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
     //    (0x0 means none was declared — a raw KLE export — so nothing to warn about).
     let max_row = order.iter().map(|&(r, _)| r).max().unwrap();
     let max_col = order.iter().map(|&(_, c)| c).max().unwrap();
-    let rows = input.matrix_rows.max(max_row + 1);
-    let cols = input.matrix_cols.max(max_col + 1);
+    let required_rows = max_row
+        .checked_add(1)
+        .ok_or("matrix row 255 would require 256 rows, but RMK dimensions are u8")?;
+    let required_cols = max_col
+        .checked_add(1)
+        .ok_or("matrix column 255 would require 256 columns, but RMK dimensions are u8")?;
+    let rows = input.matrix_rows.max(required_rows);
+    let cols = input.matrix_cols.max(required_cols);
     if (rows, cols) != (input.matrix_rows, input.matrix_cols) && (input.matrix_rows, input.matrix_cols) != (0, 0) {
         warnings.push(format!(
             "declared matrix is {}x{} but keys reach ({max_row},{max_col}); using {rows}x{cols}",
@@ -463,8 +426,8 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
     let canonical = |insts: &[usize]| -> usize {
         *insts
             .iter()
-            .find(|&&ki| annotation(ki).option.is_none())
-            .or_else(|| insts.iter().find(|&&ki| matches!(annotation(ki).option, Some((_, 0)))))
+            .find(|&&ki| input.keys[ki].option.is_none())
+            .or_else(|| insts.iter().find(|&&ki| matches!(input.keys[ki].option, Some((_, 0)))))
             .unwrap_or(&insts[0])
     };
 
@@ -475,18 +438,17 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
         Enc(usize),
     }
     let mut units: Vec<Unit> = Vec::new();
-    let mut seen_key: HashSet<(u32, u32)> = HashSet::new();
-    let mut seen_enc: HashSet<u32> = HashSet::new();
-    for (i, k) in input.keys.iter().enumerate() {
-        let a = annotation(i);
+    let mut seen_key: HashSet<(u8, u8)> = HashSet::new();
+    let mut seen_enc: HashSet<u8> = HashSet::new();
+    for k in input.keys {
         if k.decal {
             continue;
         }
-        if let Some((id, _)) = a.encoder {
+        if let Some((id, _)) = k.encoder {
             if seen_enc.insert(id) {
                 units.push(Unit::Enc(enc_index[&id]));
             }
-        } else if let Some(rc) = a.matrix {
+        } else if let Some(rc) = k.matrix {
             if seen_key.insert(rc) {
                 units.push(Unit::Key(index[&rc]));
             }
@@ -495,15 +457,15 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
     struct UnitRender<'a> {
         key: &'a SerialKey<f64>,
         row_index: usize,
-        option: Option<(u32, u32)>,
+        option: Option<(u8, u8)>,
     }
     let unit_render = |u: &Unit| match u {
         Unit::Key(ci) => {
             let ki = canonical(&cells[*ci]);
             UnitRender {
                 key: &input.keys[ki],
-                row_index: annotation(ki).row_index,
-                option: annotation(ki).option,
+                row_index: input.keys[ki].row_index,
+                option: input.keys[ki].option,
             }
         }
         Unit::Enc(ei) => UnitRender {
@@ -517,7 +479,7 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
         buckets.entry(unit_render(u).row_index).or_default().push(ui);
     }
 
-    let mut reg = ShapeRegistry::new();
+    let mut reg = ShapeRegistry { generated: Vec::new() };
     let mut map_lines: Vec<String> = Vec::new();
     let mut map_shape: Vec<Option<String>> = vec![None; cells.len()];
     let mut cell_baseline: Vec<f64> = vec![0.0; cells.len()];
@@ -591,10 +553,10 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
     }
 
     // 5. Layout options → best-effort variants.
-    let mut groups: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    let mut groups: BTreeMap<u8, BTreeSet<u8>> = BTreeMap::new();
     for insts in &cells {
         for &ki in insts {
-            if let Some((g, c)) = annotation(ki).option {
+            if let Some((g, c)) = input.keys[ki].option {
                 groups.entry(g).or_default().insert(c);
             }
         }
@@ -611,13 +573,13 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
                 groups.len()
             ));
         }
-        let base: BTreeMap<u32, u32> = groups.keys().map(|&g| (g, 0)).collect();
+        let base: BTreeMap<u8, u8> = groups.keys().map(|&g| (g, 0)).collect();
         let mut used_names = HashSet::new();
         used_names.insert("default".to_string());
         default_variant = "default".to_string();
 
         // Each variant fixes one group to a non-default choice (others default).
-        let mut targets: Vec<(String, BTreeMap<u32, u32>)> = vec![("default".to_string(), base.clone())];
+        let mut targets: Vec<(String, BTreeMap<u8, u8>)> = vec![("default".to_string(), base.clone())];
         for (&g, choices) in &groups {
             for &c in choices {
                 if c == 0 {
@@ -633,16 +595,16 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
             let mut hidden = Vec::new();
             let mut shapes = Vec::new();
             for ci in 0..cells.len() {
-                let matches = |opt: Option<(u32, u32)>| match opt {
+                let matches = |opt: Option<(u8, u8)>| match opt {
                     None => true,
                     Some((g, c)) => settings.get(&g) == Some(&c),
                 };
                 let chosen = cells[ci]
                     .iter()
                     .copied()
-                    .filter(|&ki| matches(annotation(ki).option))
+                    .filter(|&ki| matches(input.keys[ki].option))
                     // Prefer the choice-specific instance over the always-on base.
-                    .max_by_key(|&ki| annotation(ki).option.is_some() as u8);
+                    .max_by_key(|&ki| input.keys[ki].option.is_some() as u8);
                 match chosen {
                     None => hidden.push(order[ci]),
                     Some(ki) => {
@@ -669,7 +631,11 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
 
     // 6. Render.
     let map_block = map_lines.join("\n");
-    let shape_defs: Vec<(String, String)> = reg.generated().map(|(n, d)| (n.clone(), d.toml())).collect();
+    let shape_defs: Vec<(String, String)> = reg
+        .generated
+        .iter()
+        .map(|(_, name, desc)| (name.clone(), desc.toml()))
+        .collect();
 
     let ctx = RenderCtx {
         rows,
@@ -679,27 +645,22 @@ pub fn generate(input: GenInput) -> Result<Generated, String> {
         shape_defs: &shape_defs,
         variants: &variants,
     };
-    // `display` selects the full keyboard.toml snippet vs. the bare validated body.
-    let display_toml = render(&ctx, true);
-    let inner_layout_toml = render(&ctx, false);
-
     Ok(Generated {
-        display_toml,
-        inner_layout_toml,
+        layout_toml: render(&ctx),
         warnings,
     })
 }
 
 struct RenderCtx<'a> {
-    rows: u32,
-    cols: u32,
+    rows: u8,
+    cols: u8,
     default_variant: &'a str,
     map_block: &'a str,
     shape_defs: &'a [(String, String)],
     variants: &'a [VariantOut],
 }
 
-fn rc_list(items: &[(u32, u32)]) -> String {
+fn rc_list(items: &[(u8, u8)]) -> String {
     items
         .iter()
         .map(|(r, c)| format!("\"({r},{c})\""))
@@ -707,20 +668,9 @@ fn rc_list(items: &[(u32, u32)]) -> String {
         .join(", ")
 }
 
-/// Render either the full keyboard.toml snippet (`display`) or just the
-/// `[layout]` body that `layout_blob_from_toml` validates.
-fn render(ctx: &RenderCtx, display: bool) -> String {
+fn render(ctx: &RenderCtx) -> String {
     let mut out = String::new();
-    // Section names differ: nested under `[layout]` for display, bare for validation.
-    let (shapes_hdr, variant_hdr) = if display {
-        ("[layout.shapes]", "[[layout.variant]]")
-    } else {
-        ("[shapes]", "[[variant]]")
-    };
-
-    if display {
-        out.push_str("[layout]\n");
-    }
+    out.push_str("[layout]\n");
     out.push_str(&format!("rows = {}\n", ctx.rows));
     out.push_str(&format!("cols = {}\n", ctx.cols));
     if !ctx.default_variant.is_empty() {
@@ -730,7 +680,7 @@ fn render(ctx: &RenderCtx, display: bool) -> String {
 
     if !ctx.shape_defs.is_empty() {
         out.push('\n');
-        out.push_str(shapes_hdr);
+        out.push_str("[layout.shapes]");
         out.push('\n');
         for (name, def) in ctx.shape_defs {
             out.push_str(&format!("{name} = {def}\n"));
@@ -739,7 +689,7 @@ fn render(ctx: &RenderCtx, display: bool) -> String {
 
     for v in ctx.variants {
         out.push('\n');
-        out.push_str(variant_hdr);
+        out.push_str("[[layout.variant]]");
         out.push('\n');
         out.push_str(&format!("name = \"{}\"\n", v.name));
         if !v.hidden.is_empty() {
@@ -779,15 +729,14 @@ mod tests {
         }
     }
 
-    fn gen_layout(v: Value, rows: u32, cols: u32) -> Generated {
+    fn gen_layout(v: Value, rows: u8, cols: u8) -> Generated {
         let parsed = parse_keymap(&v).unwrap();
         gen_parsed(&parsed, rows, cols)
     }
 
-    fn gen_parsed(parsed: &ParsedKeymap, rows: u32, cols: u32) -> Generated {
+    fn gen_parsed(parsed: &ParsedKeymap, rows: u8, cols: u8) -> Generated {
         generate(GenInput {
             keys: &parsed.keys,
-            annotations: &parsed.annotations,
             matrix_rows: rows,
             matrix_cols: cols,
             labels: None,
@@ -797,24 +746,20 @@ mod tests {
 
     /// Every generated `[layout]` must round-trip through RMK's own builder.
     fn assert_valid(g: &Generated) {
-        rmk_config::layout_blob_from_toml(&g.inner_layout_toml).unwrap_or_else(|e| {
-            panic!(
-                "rmk-config rejected generated layout: {e}\n---\n{}",
-                g.inner_layout_toml
-            )
-        });
+        crate::decode_layout(&g.layout_toml)
+            .unwrap_or_else(|e| panic!("rmk-config rejected generated layout: {e}\n---\n{}", g.layout_toml));
     }
 
     #[test]
     fn plain_grid() {
         let g = gen_layout(json!([["0,0", "0,1", "0,2"], ["1,0", "1,1", "1,2"]]), 2, 3);
-        assert!(g.display_toml.contains("rows = 2"));
-        assert!(g.display_toml.contains("cols = 3"));
-        assert!(g.display_toml.contains("(0,0) (0,1) (0,2)"));
-        assert!(g.display_toml.contains("(1,0) (1,1) (1,2)"));
+        assert!(g.layout_toml.contains("rows = 2"));
+        assert!(g.layout_toml.contains("cols = 3"));
+        assert!(g.layout_toml.contains("(0,0) (0,1) (0,2)"));
+        assert!(g.layout_toml.contains("(1,0) (1,1) (1,2)"));
         // KLE carries no keycodes — the output is render-only, no [keymap].
-        assert!(!g.display_toml.contains("[keymap]"));
-        assert!(!g.display_toml.contains("[layout.shapes]")); // all 1u
+        assert!(!g.layout_toml.contains("[keymap]"));
+        assert!(!g.layout_toml.contains("[layout.shapes]")); // all 1u
         assert_valid(&g);
     }
 
@@ -822,25 +767,25 @@ mod tests {
     fn stock_widths_need_no_shape_defs() {
         // A 2u and a 6.25u space map to stock @2u / @6.25u — no [layout.shapes].
         let g = gen_layout(json!([[{"w": 2.0}, "0,0"], [{"w": 6.25}, "1,0"]]), 2, 1);
-        assert!(g.display_toml.contains("(0,0,@2u)"));
-        assert!(g.display_toml.contains("(1,0,@6.25u)"));
-        assert!(!g.display_toml.contains("[layout.shapes]"));
+        assert!(g.layout_toml.contains("(0,0,@2u)"));
+        assert!(g.layout_toml.contains("(1,0,@6.25u)"));
+        assert!(!g.layout_toml.contains("[layout.shapes]"));
         assert_valid(&g);
     }
 
     #[test]
     fn tall_key_uses_2u_tall() {
         let g = gen_layout(json!([[{"h": 2.0}, "0,0"]]), 1, 1);
-        assert!(g.display_toml.contains("(0,0,@2u_tall)"));
+        assert!(g.layout_toml.contains("(0,0,@2u_tall)"));
         assert_valid(&g);
     }
 
     #[test]
     fn custom_width_generates_shape() {
         let g = gen_layout(json!([[{"w": 1.3}, "0,0", "0,1"]]), 1, 2);
-        assert!(g.display_toml.contains("[layout.shapes]"));
-        assert!(g.display_toml.contains("s1 = { w = 1.3 }"));
-        assert!(g.display_toml.contains("(0,0,@s1)"));
+        assert!(g.layout_toml.contains("[layout.shapes]"));
+        assert!(g.layout_toml.contains("s1 = { w = 1.3 }"));
+        assert!(g.layout_toml.contains("(0,0,@s1)"));
         assert_valid(&g);
     }
 
@@ -848,7 +793,7 @@ mod tests {
     fn horizontal_gap_between_split_halves() {
         // Two keys, then a 1u gap, then two more on the same row.
         let g = gen_layout(json!([["0,0", "0,1", {"x": 1.0}, "0,2", "0,3"]]), 1, 4);
-        assert!(g.display_toml.contains("(0,0) (0,1) [1.0] (0,2) (0,3)"));
+        assert!(g.layout_toml.contains("(0,0) (0,1) [1.0] (0,2) (0,3)"));
         assert_valid(&g);
     }
 
@@ -865,8 +810,8 @@ mod tests {
             4,
             3,
         );
-        assert!(g.display_toml.contains("[y=-2.0]"));
-        assert!(g.display_toml.contains("[4.0] (3,0)"));
+        assert!(g.layout_toml.contains("[y=-2.0]"));
+        assert!(g.layout_toml.contains("[4.0] (3,0)"));
         assert_valid(&g);
     }
 
@@ -882,11 +827,11 @@ mod tests {
             15,
         );
         // Map carries the default 2u key and the extra split key.
-        assert!(g.display_toml.contains("(0,13,@2u)"));
-        assert!(g.display_toml.contains("[[layout.variant]]"));
-        assert!(g.display_toml.contains("name = \"default\""));
+        assert!(g.layout_toml.contains("(0,13,@2u)"));
+        assert!(g.layout_toml.contains("[[layout.variant]]"));
+        assert!(g.layout_toml.contains("name = \"default\""));
         // The default view hides the split-only key; the split view reshapes 0,13.
-        assert!(g.display_toml.contains("hidden = [\"(0,14)\"]"));
+        assert!(g.layout_toml.contains("hidden = [\"(0,14)\"]"));
         assert_valid(&g);
     }
 
@@ -894,10 +839,10 @@ mod tests {
     fn identical_shapes_are_deduped() {
         // Two keys of the same non-stock width share one generated shape.
         let g = gen_layout(json!([[{"w": 1.3}, "0,0", {"w": 1.3}, "0,1"]]), 1, 2);
-        assert_eq!(g.display_toml.matches("s1 = ").count(), 1);
-        assert!(!g.display_toml.contains("s2 = "));
-        assert!(g.display_toml.contains("(0,0,@s1)"));
-        assert!(g.display_toml.contains("(0,1,@s1)"));
+        assert_eq!(g.layout_toml.matches("s1 = ").count(), 1);
+        assert!(!g.layout_toml.contains("s2 = "));
+        assert!(g.layout_toml.contains("(0,0,@s1)"));
+        assert!(g.layout_toml.contains("(0,1,@s1)"));
         assert_valid(&g);
     }
 
@@ -922,11 +867,11 @@ mod tests {
         // KLE rotation clusters become `[r=...]` regions, not baked shapes.
         let g = gen_layout(json!([[{"r": 30, "rx": 3, "ry": 1, "x": 1}, "0,0"]]), 1, 1);
         assert!(
-            g.display_toml.contains("[r=30.0@(3.0,0.0)] [4.0] (0,0)"),
+            g.layout_toml.contains("[r=30.0@(3.0,0.0)] [4.0] (0,0)"),
             "{}",
-            g.display_toml
+            g.layout_toml
         );
-        assert!(!g.display_toml.contains("[layout.shapes]"), "{}", g.display_toml);
+        assert!(!g.layout_toml.contains("[layout.shapes]"), "{}", g.layout_toml);
         assert_valid(&g);
     }
 
@@ -936,12 +881,12 @@ mod tests {
         // the map reproduces them as regions and no shape bakes an angle.
         let (parsed, rows, cols) = load_fixture("corne.json");
         let g = gen_parsed(&parsed, rows, cols);
-        assert!(g.display_toml.contains("[r=15.0@(4.5,8.1)]"), "{}", g.display_toml);
-        assert!(g.display_toml.contains("[r=-15.0@(12.0,8.1)]"), "{}", g.display_toml);
+        assert!(g.layout_toml.contains("[r=15.0@(4.5,8.1)]"), "{}", g.layout_toml);
+        assert!(g.layout_toml.contains("[r=-15.0@(12.0,8.1)]"), "{}", g.layout_toml);
         assert!(
-            !g.display_toml.contains("r ="),
+            !g.layout_toml.contains("r ="),
             "no baked rotation shapes:\n{}",
-            g.display_toml
+            g.layout_toml
         );
         assert_valid(&g);
     }
@@ -951,19 +896,18 @@ mod tests {
         // A raw KLE export with label legends: the row-major fallback supplies the
         // matrix, and an undeclared (0x0) matrix is derived without a warning.
         let mut parsed = parse_keymap(&json!([["Esc", "Q", "W"], [{"w": 1.5}, "Tab", "A"]])).unwrap();
-        crate::kle::assign_matrix_by_position(&mut parsed);
+        crate::kle::assign_matrix_by_position(&mut parsed).unwrap();
         let g = generate(GenInput {
             keys: &parsed.keys,
-            annotations: &parsed.annotations,
             matrix_rows: 0,
             matrix_cols: 0,
             labels: None,
         })
         .unwrap();
-        assert!(g.display_toml.contains("rows = 2"));
-        assert!(g.display_toml.contains("cols = 3"));
-        assert!(g.display_toml.contains("(0,0) (0,1) (0,2)"));
-        assert!(g.display_toml.contains("(1,0,@1.5u) (1,1)"));
+        assert!(g.layout_toml.contains("rows = 2"));
+        assert!(g.layout_toml.contains("cols = 3"));
+        assert!(g.layout_toml.contains("(0,0) (0,1) (0,2)"));
+        assert!(g.layout_toml.contains("(1,0,@1.5u) (1,1)"));
         assert!(g.warnings.is_empty(), "{:?}", g.warnings);
         assert_valid(&g);
     }
@@ -974,25 +918,21 @@ mod tests {
     fn canon(insts: &[usize], parsed: &ParsedKeymap) -> usize {
         *insts
             .iter()
-            .find(|&&ki| parsed.annotations[ki].option.is_none())
-            .or_else(|| {
-                insts
-                    .iter()
-                    .find(|&&ki| matches!(parsed.annotations[ki].option, Some((_, 0))))
-            })
+            .find(|&&ki| parsed.keys[ki].option.is_none())
+            .or_else(|| insts.iter().find(|&&ki| matches!(parsed.keys[ki].option, Some((_, 0)))))
             .unwrap_or(&insts[0])
     }
 
     /// (row,col) → (center_x, center_y, w, h, r, rect2) as kle-serial sees
     /// it. `rect2` is `(w2, h2, center_dx, center_dy)` in the key's local frame.
-    type ExpectedRender = HashMap<(u32, u32), (f64, f64, f64, f64, f64, Option<(f64, f64, f64, f64)>)>;
+    type ExpectedRender = HashMap<(u8, u8), (f64, f64, f64, f64, f64, Option<(f64, f64, f64, f64)>)>;
 
     /// What kle-serial says each default-shown key's center/size/rotation is.
     fn expected_default(parsed: &ParsedKeymap) -> ExpectedRender {
-        let mut idx: HashMap<(u32, u32), usize> = HashMap::new();
+        let mut idx: HashMap<(u8, u8), usize> = HashMap::new();
         let mut cells: Vec<Vec<usize>> = Vec::new();
         for (ki, key) in parsed.keys.iter().enumerate() {
-            let annotation = parsed.annotations[ki];
+            let annotation = &parsed.keys[ki];
             if key.decal || annotation.matrix.is_none() {
                 continue;
             }
@@ -1009,7 +949,7 @@ mod tests {
         for insts in &cells {
             let ki = canon(insts, parsed);
             let k = &parsed.keys[ki];
-            let annotation = parsed.annotations[ki];
+            let annotation = &parsed.keys[ki];
             if annotation.option.is_none() || matches!(annotation.option, Some((_, 0))) {
                 let (tlx, tly) = display_top_left(k);
                 let rect2 = has_rect2(k).then(|| {
@@ -1039,13 +979,12 @@ mod tests {
     }
 
     /// Convert, build the blob, and decode it exactly as the host client does.
-    fn decode_info(parsed: &ParsedKeymap, rows: u32, cols: u32) -> rynk::LayoutInfo {
+    fn decode_info(parsed: &ParsedKeymap, rows: u8, cols: u8) -> rynk::LayoutInfo {
         let g = gen_parsed(parsed, rows, cols);
-        let blob = rmk_config::layout_blob_from_toml(&g.inner_layout_toml).unwrap();
-        rynk::LayoutInfo::from_compressed_blob(&blob).unwrap()
+        crate::decode_layout(&g.layout_toml).unwrap()
     }
 
-    fn decode_default(parsed: &ParsedKeymap, rows: u32, cols: u32) -> Vec<rynk::layout::Key> {
+    fn decode_default(parsed: &ParsedKeymap, rows: u8, cols: u8) -> Vec<rynk::layout::Key> {
         let info = decode_info(parsed, rows, cols);
         info.variants
             .into_iter()
@@ -1060,11 +999,11 @@ mod tests {
         assert_eq!(decoded.len(), expected.len(), "{ctx}: key count");
         let close = |a: f64, b: f64| (a - b).abs() < 5e-3;
         let k0 = &decoded[0];
-        let e0 = expected[&(k0.row as u32, k0.col as u32)];
+        let e0 = expected[&(k0.row, k0.col)];
         let (ox, oy) = (k0.rect.x as f64 - e0.0, k0.rect.y as f64 - e0.1);
         for k in decoded {
             let e = expected
-                .get(&(k.row as u32, k.col as u32))
+                .get(&(k.row, k.col))
                 .unwrap_or_else(|| panic!("{ctx}: decoded ({},{}) absent from kle set", k.row, k.col));
             assert!(
                 close(k.rect.x as f64 - e.0, ox) && close(k.rect.y as f64 - e.1, oy),
@@ -1205,7 +1144,7 @@ mod tests {
     /// Load a committed fixture (vial.json or raw KLE export) as (keys, matrix
     /// rows, matrix cols), mirroring the binary's input handling — including the
     /// row-major matrix fallback for plain KLE legends.
-    fn load_fixture(name: &str) -> (ParsedKeymap, u32, u32) {
+    fn load_fixture(name: &str) -> (ParsedKeymap, u8, u8) {
         let path = format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
         let root: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
         let keymap = if root.is_array() {
@@ -1215,13 +1154,16 @@ mod tests {
         };
         let mut parsed = parse_keymap(keymap).unwrap();
         if !parsed.has_matrix_or_encoder() {
-            crate::kle::assign_matrix_by_position(&mut parsed);
+            crate::kle::assign_matrix_by_position(&mut parsed).unwrap();
         }
         let dim = |k| {
             root.get("matrix")
                 .and_then(|m| m.get(k))
                 .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32
+                .map(u8::try_from)
+                .transpose()
+                .unwrap()
+                .unwrap_or(0)
         };
         (parsed, dim("rows"), dim("cols"))
     }
@@ -1252,8 +1194,8 @@ mod tests {
             let info = decode_info(&parsed, rows, cols);
             let dv = &info.variants[info.default_variant as usize];
             assert_faithful(&dv.keys, &expected_default(&parsed), &name);
-            let enc_ids: BTreeSet<u32> = parsed
-                .annotations
+            let enc_ids: BTreeSet<u8> = parsed
+                .keys
                 .iter()
                 .filter_map(|annotation| annotation.encoder.map(|(id, _)| id))
                 .collect();
@@ -1295,10 +1237,10 @@ mod tests {
     /// center, and the reverse direction re-emits the standard side-by-side
     /// CW/CCW pair, so for conventionally drawn boards the footprint (not just
     /// the center) survives the round-trip.
-    fn encoder_bbox(parsed: &ParsedKeymap) -> BTreeMap<u32, (f64, f64, f64, f64)> {
-        let mut ext: BTreeMap<u32, (f64, f64, f64, f64)> = BTreeMap::new();
-        for (key, annotation) in parsed.keys.iter().zip(&parsed.annotations) {
-            let Some((id, _)) = annotation.encoder else {
+    fn encoder_bbox(parsed: &ParsedKeymap) -> BTreeMap<u8, (f64, f64, f64, f64)> {
+        let mut ext: BTreeMap<u8, (f64, f64, f64, f64)> = BTreeMap::new();
+        for key in &parsed.keys {
+            let Some((id, _)) = key.encoder else {
                 continue;
             };
             let e = ext
@@ -1317,7 +1259,7 @@ mod tests {
     /// Full `vial.json → keyboard.toml → vial.json`: forward to the RMK layout,
     /// reverse it back to KLE, re-parse, and require the render to match the
     /// original (up to one whole-board translation — the display frame is free).
-    fn assert_vial_roundtrip(parsed0: &ParsedKeymap, rows: u32, cols: u32, ctx: &str) {
+    fn assert_vial_roundtrip(parsed0: &ParsedKeymap, rows: u8, cols: u8, ctx: &str) {
         let info = decode_info(parsed0, rows, cols);
         let dv = &info.variants[info.default_variant as usize];
         let regenerated = crate::to_kle::variant_to_kle(dv); // keyboard.toml → vial keymap
@@ -1418,7 +1360,10 @@ mod tests {
                     .get("matrix")
                     .and_then(|m| m.get(k))
                     .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32
+                    .map(u8::try_from)
+                    .transpose()
+                    .unwrap()
+                    .unwrap_or(0)
             };
             let parsed = parse_keymap(keymap).unwrap();
             let ctx = f.strip_prefix(root).unwrap().to_string_lossy().into_owned();
@@ -1427,8 +1372,8 @@ mod tests {
             // Forward faithfulness: vial.json → toml → decode matches kle-serial.
             assert_faithful(&dv.keys, &expected_default(&parsed), &ctx);
             // Every distinct Vial encoder index becomes exactly one decoded knob.
-            let enc_ids: BTreeSet<u32> = parsed
-                .annotations
+            let enc_ids: BTreeSet<u8> = parsed
+                .keys
                 .iter()
                 .filter_map(|annotation| annotation.encoder.map(|(id, _)| id))
                 .collect();

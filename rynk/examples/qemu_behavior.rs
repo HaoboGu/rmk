@@ -6,10 +6,10 @@
 //! paths, and firmware-side rejection behavior.
 
 use std::fmt::Debug;
-use std::io::ErrorKind;
 use std::time::Duration;
 
-use rynk::io::{Read, Write};
+use embassy_futures::select::{Either, select};
+use embedded_io_adapters::tokio_1::FromTokio;
 use rynk::rmk_types::action::{Action, EncoderAction, KeyAction};
 use rynk::rmk_types::ble::{BleState, BleStatus};
 use rynk::rmk_types::combo::Combo;
@@ -19,57 +19,28 @@ use rynk::rmk_types::keycode::{HidKeyCode, KeyCode};
 use rynk::rmk_types::led_indicator::LedIndicator;
 use rynk::rmk_types::modifier::ModifierCombination;
 use rynk::rmk_types::morse::{Morse, MorseProfile};
-use rynk::rmk_types::protocol::rynk::{
-    Cmd, GetComboBulkRequest, GetComboBulkResponse, GetKeymapBulkRequest, GetKeymapBulkResponse, GetMorseBulkRequest,
-    GetMorseBulkResponse, MacroData, ProtocolVersion, RynkError, SetComboBulkRequest, SetKeymapBulkRequest,
-    SetMorseBulkRequest, StorageResetMode,
-};
-use rynk::{Client, RynkHostError};
+use rynk::rmk_types::protocol::rynk::{MacroData, ProtocolVersion, RynkError, StorageResetMode};
+use rynk::{Client, RynkDevice, RynkHostError};
+use tokio::net::TcpStream;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const DEFAULT_ADDR: &str = "127.0.0.1:9000";
 
-struct TcpTransport {
-    stream: tokio::net::TcpStream,
-}
+/// The QEMU TCP serial as a device, connecting through [`RynkDevice::connect`].
+struct TcpDevice(TcpStream);
 
-impl rynk::io::ErrorType for TcpTransport {
-    type Error = std::io::Error;
-}
+impl RynkDevice for TcpDevice {
+    type Read = FromTokio<OwnedReadHalf>;
+    type Write = FromTokio<OwnedWriteHalf>;
 
-impl Read for TcpTransport {
-    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        if buf.is_empty() {
-            return Ok(0);
-        }
-        loop {
-            self.stream.readable().await?;
-            match self.stream.try_read(buf) {
-                Ok(n) => return Ok(n),
-                Err(e) if e.kind() == ErrorKind::WouldBlock => {}
-                Err(e) => return Err(e),
-            }
-        }
-    }
-}
-
-impl Write for TcpTransport {
-    async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        if buf.is_empty() {
-            return Ok(0);
-        }
-        loop {
-            self.stream.writable().await?;
-            match self.stream.try_write(buf) {
-                Ok(n) => return Ok(n),
-                Err(e) if e.kind() == ErrorKind::WouldBlock => {}
-                Err(e) => return Err(e),
-            }
-        }
+    fn label(&self) -> String {
+        "qemu".into()
     }
 
-    async fn flush(&mut self) -> Result<(), Self::Error> {
-        Ok(())
+    async fn open(self) -> Result<(Self::Read, Self::Write), RynkHostError> {
+        let (reader, writer) = self.0.into_split();
+        Ok((FromTokio::new(reader), FromTokio::new(writer)))
     }
 }
 
@@ -117,14 +88,21 @@ fn expect_unsupported<T: Debug>(label: &str, res: Result<T, RynkHostError>) {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = std::env::args().nth(1).unwrap_or_else(|| DEFAULT_ADDR.into());
-    let stream = tokio::time::timeout(CONNECT_TIMEOUT, tokio::net::TcpStream::connect(&addr))
+    let stream = tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&addr))
         .await
         .map_err(|_| format!("connect timed out to QEMU TCP serial at {addr}"))??;
     stream.set_nodelay(true)?;
-    let mut client = tokio::time::timeout(CONNECT_TIMEOUT, Client::connect(TcpTransport { stream }))
+    let (client, mut driver) = tokio::time::timeout(CONNECT_TIMEOUT, TcpDevice(stream).connect())
         .await
         .map_err(|_| format!("Rynk handshake timed out over QEMU TCP serial at {addr}"))??;
 
+    match select(driver.run(&client), script(&client)).await {
+        Either::First(err) => Err(format!("link died during the script: {err}").into()),
+        Either::Second(res) => res,
+    }
+}
+
+async fn script(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(client.get_version().await?, ProtocolVersion::CURRENT);
     let caps = client.get_capabilities().await?;
     assert_eq!((caps.num_layers, caps.num_rows, caps.num_cols), (2, 3, 3));
@@ -291,60 +269,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let keymap_bulk = client.get_keymap_bulk(0, 0, 0).await?;
     assert_eq!(keymap_bulk.actions.first(), Some(&key(HidKeyCode::Kp1)));
-
-    let raw_keymap_bulk = client
-        .request_raw::<_, GetKeymapBulkResponse>(
-            Cmd::GetKeymapBulk,
-            &GetKeymapBulkRequest {
-                layer: 0,
-                start_row: 0,
-                start_col: 0,
-            },
-        )
-        .await?;
-    assert_eq!(raw_keymap_bulk.actions.first(), Some(&key(HidKeyCode::Kp1)));
-    client
-        .request_raw::<_, ()>(
-            Cmd::SetKeymapBulk,
-            &SetKeymapBulkRequest {
-                layer: 0,
-                start_row: 0,
-                start_col: 0,
-                actions: vec![key(HidKeyCode::Kp1)],
-            },
-        )
-        .await?;
-
-    let raw_combo_bulk = client
-        .request_raw::<_, GetComboBulkResponse>(Cmd::GetComboBulk, &GetComboBulkRequest { start_index: 0 })
-        .await?;
-    assert_eq!(raw_combo_bulk.configs.first(), Some(&Combo::empty()));
-    client
-        .request_raw::<_, ()>(
-            Cmd::SetComboBulk,
-            &SetComboBulkRequest {
-                start_index: 0,
-                configs: vec![Combo::empty()],
-            },
-        )
-        .await?;
-
-    let raw_morse_bulk = client
-        .request_raw::<_, GetMorseBulkResponse>(Cmd::GetMorseBulk, &GetMorseBulkRequest { start_index: 0 })
-        .await?;
-    assert_eq!(
-        raw_morse_bulk.configs.first(),
-        Some(&empty_morse(MorseProfile::const_default()))
-    );
-    client
-        .request_raw::<_, ()>(
-            Cmd::SetMorseBulk,
-            &SetMorseBulkRequest {
-                start_index: 0,
-                configs: vec![empty_morse(MorseProfile::const_default())],
-            },
-        )
-        .await?;
 
     println!("QEMU Rynk behavior verification passed.");
     Ok(())

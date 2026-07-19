@@ -11,9 +11,8 @@ keywords = ["keyboard", "firmware", "rmk", "protocol", "ble"]
 
 [dependencies]
 rynk = { path = ".." }
-rmk-types.workspace = true
-embedded-io-async = { workspace = true, features = ["std"] }
 bluest.workspace = true
 futures-util.workspace = true
 async-stream = "0.3"
+log.workspace = true
 tokio = { version = "1.47", default-features = false, features = ["time"] }

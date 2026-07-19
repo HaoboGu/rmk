@@ -208,11 +208,12 @@ macro_rules! topics {
             $( core::assert!(Cmd::from_raw($cmd).is_topic(), "topic CMD value outside the topic range"); )*
             assert_unique(&[$($cmd),*]);
         };
-        /// Largest payload across the whole topic table — folded firmware-side
-        /// only, to feed the firmware buffer assertion.
+        /// Largest payload across the whole topic table — feeds the firmware
+        /// buffer assertion and sizes the no-alloc host's topic frames.
+        /// Absent on `host` builds, which are alloc and need no bound.
         #[cfg(not(feature = "host"))]
         #[allow(unused_doc_comments)]
-        const MAX_TOPIC_PAYLOAD: usize = {
+        pub const MAX_TOPIC_PAYLOAD: usize = {
             let mut m = 0;
             $( $(#[$meta])* { m = max_const(m, <$payload as MaxSize>::POSTCARD_MAX_SIZE); } )*
             m

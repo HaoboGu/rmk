@@ -4,16 +4,22 @@
     <meta charset="utf-8" />
     <title>Rynk web demo</title>
     <style>
-      body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 760px; }
+      body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 1200px; }
       button { font-size: 1rem; padding: .5rem 1rem; border-radius: 6px;
                border: 1px solid #4a90d9; background: #4a90d9; color: #fff; cursor: pointer; }
       button:disabled { opacity: .5; cursor: default; }
-      #log { background: #111; color: #0f0; padding: 1rem; margin-top: 1rem;
-             border-radius: 6px; min-height: 6rem;
-             font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      #panes { display: grid; grid-template-columns: 3fr 2fr; gap: 1rem; margin-top: 1rem; }
+      @media (max-width: 900px) { #panes { grid-template-columns: 1fr; } }
+      .pane h2 { font-size: .85rem; text-transform: uppercase; letter-spacing: .06em;
+                 margin: 0 0 .4rem; color: #555; }
+      .pane pre { background: #111; padding: 1rem; margin: 0; border-radius: 6px;
+                  height: 30rem; overflow-y: auto;
+                  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      #reqLog { color: #0f0; }
+      #topicLog { color: #6cf; }
       /* Hang wrapped object values under the value column. */
-      #log div { white-space: pre-wrap; overflow-wrap: anywhere; }
-      #log div.hang { padding-left: 19ch; text-indent: -19ch; }
+      .pane div { white-space: pre-wrap; overflow-wrap: anywhere; }
+      .pane div.hang { padding-left: 19ch; text-indent: -19ch; }
     </style>
   </head>
   <body>
@@ -22,29 +28,45 @@
        (USB <b>Web Serial</b>, or BLE via <b>WebHID</b> over the OS HID link), runs
        the permanent <code>get_version</code> probe, then dynamically loads the
        version-matched <code>rynk-wasm</code> package and drives the typed client
-       over a JS byte-link bridge. Topic pushes (layer changes, WPM, …) stream live once
-       connected — marked <code>📡</code> below. WebHID reaches the firmware's
+       over a JS byte-link bridge. The session is <b>full duplex</b>: topic pushes
+       (layer changes, key presses, WPM, …) stream into the <b>Topics</b> pane from
+       the moment the session opens, while requests keep running in the
+       <b>Requests</b> pane. WebHID reaches the firmware's
        <code>RynkHidService</code> (vendor usage page <code>0xFF60</code>) and rides
        the existing OS bond, so there is no pairing prompt.</p>
     <button id="serial">Connect via Serial (USB)</button>
     <button id="ble">Connect via BLE (WebHID)</button>
+    <button id="status" hidden>Read status</button>
     <button id="unlock" hidden>Unlock (hold keys)</button>
-    <pre id="log"></pre>
+    <div id="panes">
+      <section class="pane">
+        <h2>Requests</h2>
+        <pre id="reqLog"></pre>
+      </section>
+      <section class="pane">
+        <h2>Topics</h2>
+        <pre id="topicLog"></pre>
+      </section>
+    </div>
 
     <script type="module">
-      const logEl = document.getElementById("log");
+      const reqLogEl = document.getElementById("reqLog");
+      const topicLogEl = document.getElementById("topicLog");
       const serialBtn = document.getElementById("serial");
       const bleBtn = document.getElementById("ble");
+      const statusBtn = document.getElementById("status");
       const unlockBtn = document.getElementById("unlock");
       // Use divs so object logs can be hang-indented.
-      function logLine(m, hang) {
+      function logTo(el, m, hang) {
         const div = document.createElement("div");
         div.textContent = m;
         if (hang) div.className = "hang";
-        logEl.appendChild(div);
+        el.appendChild(div);
+        el.scrollTop = el.scrollHeight;
         console.log(m);
       }
-      const log = (m) => logLine(m, false);
+      const log = (m, hang) => logTo(reqLogEl, m, hang);
+      const logTopic = (m) => logTo(topicLogEl, m, false);
 
       // Format one getter result; Unsupported means the capability is absent.
       async function show(label, fn) {
@@ -52,7 +74,7 @@
         try {
           const v = await fn();
           const isObj = v !== null && typeof v === "object";
-          logLine(`✓ ${pad} ${isObj ? JSON.stringify(v) : v}`, isObj);
+          log(`✓ ${pad} ${isObj ? JSON.stringify(v) : v}`, isObj);
         } catch (e) {
           const kind = (e && e.name) || "Error";
           const glyph = kind === "Unsupported" ? "·" : kind === "Rejected" ? "⚠" : "✗";
@@ -60,13 +82,15 @@
         }
       }
 
-      // Pull topic pushes until the link closes (disconnect or device removal),
-      // mirroring the native next_event() loop.
+      // The topic pump owns teardown when it first observes link failure.
       async function pumpTopics(c) {
         try {
-          for (;;) log("📡 " + JSON.stringify(await c.next_event()));
+          for (;;) {
+            const ev = await c.next_topic();
+            logTopic(`${new Date().toLocaleTimeString("en-GB")} ${JSON.stringify(ev)}`);
+          }
         } catch {
-          // Disconnected/closed — teardown owns the UI reset.
+          if (client === c) { await teardown(); log("\n— transport disconnected —"); }
         }
       }
 
@@ -94,34 +118,16 @@
         return out;
       }
 
-      // Buffered WebSerial byte link. One reader feeds rx; consumers only read rx.
-      function link(port) {
-        const reader = port.readable.getReader();
-        let writer;
-        try {
-          writer = port.writable.getWriter();
-        } catch (e) {
-          reader.releaseLock();   // don't leak the read lock if acquiring the writer fails
-          throw e;
-        }
+      // Share framing and the pre-wasm version probe across Serial and HID.
+      function framedLink({ label, start, send, close }) {
         let rx = new Uint8Array(0);
         let closed = false;
         let wake = null;          // resolve fn of a consumer waiting on `rx`
-
         const signal = () => { if (wake) { const w = wake; wake = null; w(); } };
-
-        // Drain the port into rx until EOF.
-        (async () => {
-          try {
-            for (;;) {
-              const { value, done } = await reader.read();
-              if (done) break;
-              if (value && value.length) { rx = concat(rx, value); signal(); }
-            }
-          } catch {}
-          closed = true;
-          signal();
-        })();
+        start(
+          (bytes) => { rx = concat(rx, bytes); signal(); },
+          () => { closed = true; signal(); },
+        );
 
         // Check rx and install wake synchronously to avoid missed wakeups.
         async function ready() {
@@ -129,7 +135,7 @@
         }
         async function fill(n) {
           while (rx.length < n) {
-            if (closed) throw new Error("port closed");
+            if (closed) throw new Error("link closed");
             await ready();
           }
         }
@@ -143,9 +149,9 @@
         }
 
         return {
-          // Probe GetVersion before loading wasm.
+          label,
           async probeVersion() {
-            await writer.write(frame(CMD_GET_VERSION, 1, new Uint8Array(0)));
+            await send(frame(CMD_GET_VERSION, 1, new Uint8Array(0)));
             // Ignore topic pushes that arrive before the reply.
             let f;
             do { f = await readFrame(); } while (f.cmd & RYNK_TOPIC_BIT);
@@ -155,13 +161,45 @@
             return { major: f.payload[1], minor: f.payload[2] };
           },
           // JsByteLink API consumed by the wasm core.
-          async send(f) { await writer.write(f); },
-          // Empty array signals EOF to WasmTransport.
+          send,
+          // Empty array signals EOF (the wasm side maps it to Disconnected).
           async recv() {
             await ready();
             if (rx.length > 0) { const c = rx; rx = new Uint8Array(0); return c; }
             return new Uint8Array(0);
           },
+          close,
+        };
+      }
+
+      function link(port) {
+        const { usbVendorId, usbProductId } = port.getInfo();
+        const label = usbVendorId === undefined || usbProductId === undefined
+          ? "Web Serial device"
+          : `USB ${usbVendorId.toString(16).padStart(4, "0")}:${usbProductId.toString(16).padStart(4, "0")}`;
+        const reader = port.readable.getReader();
+        let writer;
+        try {
+          writer = port.writable.getWriter();
+        } catch (e) {
+          reader.releaseLock();   // don't leak the read lock if acquiring the writer fails
+          throw e;
+        }
+        return framedLink({
+          label,
+          start(push, end) {
+            (async () => {
+              try {
+                for (;;) {
+                  const { value, done } = await reader.read();
+                  if (done) break;
+                  if (value && value.length) push(value);
+                }
+              } catch {}
+              end();
+            })();
+          },
+          async send(f) { await writer.write(f); },
           // Release locks so a failed attempt can be retried.
           async close() {
             try { await reader.cancel(); } catch {}
@@ -170,84 +208,51 @@
             writer.releaseLock();
             try { await port.close(); } catch {}
           },
-        };
+        });
       }
 
       // WebHID reaches the vendor HID report on an OS-bonded keyboard.
-      // Each 32-byte report carries a fragment of the same Rynk byte stream as serial.
+      // Serial and HID carry the same Rynk byte stream; only report padding differs.
       function hidLink(device) {
         const N = RYNK_HID_REPORT_SIZE;     // 32
-        let rx = new Uint8Array(0);
         let remaining = 0;   // bytes left in the in-flight rynk frame; 0 at a boundary
-        let closed = false;
-        let wake = null;
-        const signal = () => { if (wake) { const w = wake; wake = null; w(); } };
-
-        // Trim final-report padding using the frame LEN field.
-        const onReport = (event) => {
-          const d = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength);
-          if (remaining === 0) remaining = RYNK_HEADER + (d[3] | (d[4] << 8));
-          const take = Math.min(remaining, d.length);
-          remaining -= take;
-          rx = concat(rx, d.slice(0, take));
-          signal();
-        };
-        device.addEventListener("inputreport", onReport);
-
-        async function ready() {
-          while (rx.length === 0 && !closed) await new Promise((res) => { wake = res; });
-        }
-        async function fill(n) {
-          while (rx.length < n) { if (closed) throw new Error("device closed"); await ready(); }
-        }
-        async function readFrame() {
-          await fill(RYNK_HEADER);
-          const len = rx[3] | (rx[4] << 8);
-          await fill(RYNK_HEADER + len);
-          const f = rx.slice(0, RYNK_HEADER + len);
-          rx = rx.slice(RYNK_HEADER + len);
-          return { cmd: f[0] | (f[1] << 8), seq: f[2], payload: f.slice(RYNK_HEADER) };
-        }
-        // Write one Rynk frame as fixed-size HID reports.
-        async function sendFramed(bytes) {
-          for (let off = 0; off < bytes.length; off += N) {
-            const chunk = bytes.subarray(off, off + N);
-            const report = new Uint8Array(N);
-            report.set(chunk);
-            await device.sendReport(0, report);   // report ID 0
-          }
-        }
-
-        return {
-          async probeVersion() {
-            await sendFramed(frame(CMD_GET_VERSION, 1, new Uint8Array(0)));
-            let f;
-            do { f = await readFrame(); } while (f.cmd & RYNK_TOPIC_BIT);
-            if (f.payload.length < 3 || f.payload[0] !== 0x00) {
-              throw new Error(`bad version reply: [${f.payload}]`);
-            }
-            return { major: f.payload[1], minor: f.payload[2] };
+        let onReport = null;
+        let endLink = null;
+        return framedLink({
+          label: device.productName
+            || `HID ${device.vendorId.toString(16).padStart(4, "0")}:${device.productId.toString(16).padStart(4, "0")}`,
+          start(push, end) {
+            endLink = end;
+            // Trim final-report padding using the frame LEN field.
+            onReport = (event) => {
+              const d = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength);
+              if (remaining === 0) remaining = RYNK_HEADER + (d[3] | (d[4] << 8));
+              const take = Math.min(remaining, d.length);
+              remaining -= take;
+              push(d.slice(0, take));
+            };
+            device.addEventListener("inputreport", onReport);
           },
-          async send(f) { await sendFramed(f); },
-          async recv() {
-            await ready();
-            if (rx.length > 0) { const c = rx; rx = new Uint8Array(0); return c; }
-            return new Uint8Array(0);
+          async send(bytes) {
+            for (let off = 0; off < bytes.length; off += N) {
+              const chunk = bytes.subarray(off, off + N);
+              const report = new Uint8Array(N);
+              report.set(chunk);
+              await device.sendReport(0, report);   // report ID 0
+            }
           },
           async close() {
-            closed = true;
+            endLink();
             device.removeEventListener("inputreport", onReport);
             try { await device.close(); } catch {}
-            signal();
           },
-        };
+        });
       }
 
       // Keep the loader keyed by protocol major even while there is one wasm artifact.
       async function loadCore(major) {
         switch (major) {
           case 0: // protocol v0.x (ProtocolVersion::CURRENT = {0, 1})
-          case 1:
             return await import("./pkg/rynk_wasm.js");
           default:
             throw new Error(`no rynk-core wasm for protocol major ${major}`);
@@ -256,23 +261,28 @@
 
       // One live session across both transports.
       let port = null, device = null, l = null, core = null, client = null, connected = false;
+      let busy = false;
 
       async function teardown() {
-        // Closing the link EOFs the transport, ending any parked next_event() pump.
-        if (l) await l.close();
-        else if (port) { try { await port.close(); } catch {} }
+        // Clear refs before closing: link shutdown rejects pumpTopics, which otherwise re-enters teardown.
+        const link = l, p = port;
         port = null; device = null; l = null; core = null; client = null; connected = false;
+        busy = false;
         serialBtn.textContent = "Connect via Serial (USB)";
         bleBtn.textContent = "Connect via BLE (WebHID)";
         serialBtn.disabled = false; bleBtn.disabled = false;
+        statusBtn.hidden = true; statusBtn.disabled = false;
         unlockBtn.hidden = true; unlockBtn.disabled = false;
+        if (link) await link.close();
+        else if (p) { try { await p.close(); } catch {} }
       }
 
       // Shared connect flow; openLink must run inside the click gesture.
       async function connectVia(thisBtn, otherBtn, label, openLink) {
         if (connected) { await teardown(); log("\n— disconnected —"); return; }
 
-        logEl.textContent = "";
+        reqLogEl.textContent = "";
+        topicLogEl.textContent = "";
         serialBtn.disabled = true; bleBtn.disabled = true;
         try {
           l = await openLink();
@@ -283,14 +293,15 @@
           core = await loadCore(major);
           await core.default();            // wasm-bindgen init (idempotent)
 
-          // WebHID exposes the device name; WebSerial's getInfo() has only VID/PID,
-          // so serial passes null and the wasm side falls back to a default.
-          client = await core.connect(l, device?.productName || null);
+          client = await core.connect(l);
           const caps = await client.get_capabilities();
           connected = true;
-          log(`✓ connected via ${label} (${client.label()}) — ${caps.num_layers}×${caps.num_rows}×${caps.num_cols} keymap, `
+          log(`✓ connected via ${label} (${l.label}) — ${caps.num_layers}×${caps.num_rows}×${caps.num_cols} keymap, `
             + `${caps.max_combos} combos, ${caps.max_forks} forks, ${caps.max_morse} morse, `
             + `${caps.macro_space_size} bytes macro storage, ble=${caps.ble_enabled}\n`);
+
+          pumpTopics(client);
+          logTopic("— listening; type on the keyboard —");
 
           // Exercise the typed client surface.
           await show("version",         () => client.get_version());
@@ -312,12 +323,12 @@
           // Gated behind the lock: shows "⚠ Rejected: Locked" until unlocked.
           await show("matrix state",    () => client.get_matrix_state());
 
+          statusBtn.hidden = false;
           unlockBtn.hidden = false;      // offer the unlock ceremony while connected
-          log("\n— listening for topics (type on the keyboard); click to disconnect —");
+          log("\n— ready; requests run while topics stream; click to disconnect —");
           thisBtn.textContent = "Disconnect";
           thisBtn.disabled = false;       // re-enable so it can disconnect
           otherBtn.disabled = true;       // one transport at a time
-          pumpTopics(client);             // pull topics until the link closes
         } catch (e) {
           log("ERROR: " + e);
           console.error(e);
@@ -341,13 +352,34 @@
         return hidLink(device);
       }));
 
-      // Poll while the user holds the physical unlock keys.
-      unlockBtn.addEventListener("click", async () => {
-        if (!client) return;
+      async function withBusy(fn) {
+        if (!client || busy) return;
+        const c = client;
+        busy = true;
         unlockBtn.disabled = true;
+        statusBtn.disabled = true;
         try {
-          const start = await client.get_lock_status();
-          if (!start.locked) { log("· already unlocked"); return; }
+          await fn(c);
+        } catch (e) {
+          log(`✗ ${(e && e.name) || "Error"}: ${e && e.message}`);
+        } finally {
+          if (client === c && connected) {
+            busy = false;
+            unlockBtn.disabled = false;
+            statusBtn.disabled = false;
+          }
+        }
+      }
+
+      // Unlock polling intentionally overlaps topic pushes from the held keys.
+      unlockBtn.addEventListener("click", () => withBusy(async (c) => {
+          const start = await c.get_lock_status();
+          if (!start.locked) {
+            log("\n· already unlocked — testing gated matrix access");
+            await show("lock status",  () => c.get_lock_status());
+            await show("matrix state", () => c.get_matrix_state());
+            return;
+          }
           if (start.key_positions.length === 0) {
             log("⚠ permanently locked — set [host].unlock_keys in keyboard.toml");
             return;
@@ -355,18 +387,29 @@
           log(`\n— hold ${JSON.stringify(start.key_positions)} to unlock —`);
           const deadline = Date.now() + 30000;
           for (;;) {
-            const s = await client.unlock_poll();
-            if (!s.locked) { log("✓ unlocked — retry the gated action"); break; }
+            const s = await c.unlock_poll();
+            if (!s.locked) {
+              log("✓ unlocked — testing gated matrix access");
+              await show("lock status",  () => c.get_lock_status());
+              await show("matrix state", () => c.get_matrix_state());
+              break;
+            }
             log(`  holding… ${s.remaining_keys} key(s) left`);
             if (Date.now() > deadline) { log("✗ unlock timed out"); break; }
             await new Promise((r) => setTimeout(r, 150));
           }
-        } catch (e) {
-          log(`✗ unlock ${(e && e.name) || "Error"}: ${e && e.message}`);
-        } finally {
-          unlockBtn.disabled = false;
-        }
-      });
+      }));
+
+      statusBtn.addEventListener("click", () => withBusy(async (c) => {
+          log("\n— status —");
+          await show("current layer", () => c.get_current_layer());
+          await show("default layer", () => c.get_default_layer());
+          await show("wpm",           () => c.get_wpm());
+          await show("battery",       () => c.get_battery_status());
+          await show("led indicator", () => c.get_led_indicator());
+          await show("ble status",    () => c.get_ble_status());
+          await show("matrix state",  () => c.get_matrix_state());
+      }));
 
       // Auto-reconnect only to previously granted devices. Prefer USB, then WebHID.
       async function grantedSerialPort() {

@@ -54,6 +54,8 @@ mod payload;
 #[cfg(test)]
 pub(crate) mod tests;
 
+#[cfg(not(feature = "host"))]
+pub use self::command::MAX_TOPIC_PAYLOAD;
 pub use self::command::{Cmd, TopicEvent, bulk_keymap_size_for_buffer, bulk_size_for_buffer};
 pub use self::error::RynkError;
 pub use self::message::{RYNK_HEADER_SIZE, RynkHeader, RynkMessage};

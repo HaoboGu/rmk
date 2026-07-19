@@ -13,17 +13,19 @@ via its `wasm` feature, on the web; the `rmkit layout` CLI in
 
 ## Concepts
 
-- **[`Client`]** drives the protocol over any byte link: handshake, typed
-  methods for the command surface, and pull-based topic delivery via
-  `next_event`, which decodes each push into a typed `IncomingTopic` (topics are
-  best-effort — re-read a missed value with the matching `Get*` call).
-  Requests are serialized through `&mut self` — no background task, no shared
-  state.
-- **The byte link is embedded-io-async `Read + Write`** — the same traits the
-  firmware's session loop reads, re-exported as `rynk::io` so the trait version
-  always matches. A third-party transport is its own crate implementing them
-  (anything with an embedded-io adapter already qualifies); an app depends on
-  `rynk` plus that crate and calls [`Client::connect`].
+- **`RynkDevice`** is a discovered device handle. Its `connect` method opens the
+  byte link, completes the version and capability handshake, and returns a
+  `(Client, Driver)` session.
+- **`Client`** provides typed requests and pull-based topic delivery through
+  `next_topic`. Its methods take `&self`, so one task can issue requests while
+  another consumes topics. Topics are best-effort; re-read missed state with
+  the matching `get_*` method.
+- **`Driver`** owns the link's reader and writer. The caller must run
+  `Driver::run` alongside every future waiting on the client and stop using the
+  client when the driver returns.
+- **The byte link uses embedded-io-async `Read` and `Write`**, re-exported as
+  `rynk::io` so transport crates use the same trait version. A third-party
+  transport implements `RynkDevice::open`, returning `(Read, Write)` halves.
 
 ## Example
 
@@ -31,25 +33,33 @@ via its `wasm` feature, on the web; the `rmkit layout` CLI in
 # async fn run() -> Result<(), Box<dyn std::error::Error>> {
 // Discover marked Rynk keyboards, pick one, and open it (the handshake runs
 // inside `connect`). `rynk-ble` mirrors this flow.
+use embassy_futures::select::{Either, select};
 use rynk::RynkDevice;
 use rynk_serial::SerialDevice;
-let device = SerialDevice::discover()
-    .await?
+let device = SerialDevice::discover()?
     .into_iter()
     .next()
     .ok_or("no Rynk keyboard found")?;
-let mut client = device.connect().await?;
+let (client, mut driver) = device.connect().await?;
 
-let caps = *client.capabilities();
-println!("{}×{}×{} keymap", caps.num_layers, caps.num_rows, caps.num_cols);
+let work = async {
+    let caps = client.get_capabilities().await?;
+    println!("{}×{}×{} keymap", caps.num_layers, caps.num_rows, caps.num_cols);
 
-let key = client.get_key(0, 0, 0).await?;
-println!("L0(0,0) = {key:?}");
+    let key = client.get_key(0, 0, 0).await?;
+    println!("L0(0,0) = {key:?}");
+    Ok::<_, rynk::RynkHostError>(())
+};
+match select(driver.run(&client), work).await {
+    Either::First(err) => return Err(err.into()),
+    Either::Second(result) => result?,
+}
 # Ok(()) }
 ```
 
-Each method returns the response value directly; a device rejection surfaces as
-`RynkHostError::Rejected`, so `?` propagates both transport and firmware errors.
+Each typed method returns its response value directly. Device rejections surface
+as `RynkHostError::Rejected`; link failures return independently from
+`Driver::run`.
 
 ## License
 
