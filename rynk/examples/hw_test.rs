@@ -18,8 +18,8 @@
 use std::fmt::Debug;
 use std::time::Duration;
 
+use embassy_futures::select::{Either, select};
 use log::{error, info, warn};
-use rynk::io::{Read, Write};
 use rynk::rmk_types::action::EncoderAction;
 use rynk::rmk_types::combo::Combo;
 use rynk::rmk_types::morse::MorseProfile;
@@ -86,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Discovery is the one transport-specific call; connect + the command sweep
     // below are generic over `RynkDevice`.
     match std::env::args().nth(1).as_deref().unwrap_or("usb") {
-        "usb" => run_first("USB CDC serial", SerialDevice::discover().await?, false).await,
+        "usb" => run_first("USB CDC serial", SerialDevice::discover()?, false).await,
         "ble" => run_first("BLE GATT", BleDevice::discover().await?, true).await,
         other => Err(format!("unknown transport {other:?}; use 'usb' (default) or 'ble'").into()),
     }
@@ -111,14 +111,17 @@ async fn run_first<D: RynkDevice>(
     }
     // The lifecycle's `connect` is runtime-free and carries no handshake timeout;
     // bound it here so a silent peer can't hang the tool.
-    let client = tokio::time::timeout(HANDSHAKE_TIMEOUT, device.connect())
+    let (client, mut driver) = tokio::time::timeout(HANDSHAKE_TIMEOUT, device.connect())
         .await
         .map_err(|_| format!("handshake timed out over {what}"))??;
-    run_all(client, over_ble).await
+    match select(driver.run(&client), run_all(&client, over_ble)).await {
+        Either::First(err) => Err(format!("link died during the sweep: {err}").into()),
+        Either::Second(res) => res,
+    }
 }
 
 /// Exercise non-reboot Rynk commands.
-async fn run_all<T: Read + Write>(mut client: Client<T>, over_ble: bool) -> Result<(), Box<dyn std::error::Error>> {
+async fn run_all(client: &Client, over_ble: bool) -> Result<(), Box<dyn std::error::Error>> {
     let caps = client.get_capabilities().await?;
     let version = client.get_version().await?;
     let mut fails = 0u32;
@@ -137,7 +140,6 @@ async fn run_all<T: Read + Write>(mut client: Client<T>, over_ble: bool) -> Resu
     );
 
     info!("── system ──");
-    report(&mut fails, "get_version", client.get_version().await);
     report(&mut fails, "get_capabilities", client.get_capabilities().await);
 
     info!("── keymap ──");
@@ -436,7 +438,7 @@ async fn run_all<T: Read + Write>(mut client: Client<T>, over_ble: bool) -> Resu
     info!("── topics (best-effort drain) ──");
     // Drain queued topics and brief late arrivals.
     let mut topic_count = 0;
-    while let Ok(Ok(event)) = tokio::time::timeout(std::time::Duration::from_millis(300), client.next_event()).await {
+    while let Ok(event) = tokio::time::timeout(std::time::Duration::from_millis(300), client.next_topic()).await {
         info!("  ⤷ topic {event:?}");
         topic_count += 1;
     }

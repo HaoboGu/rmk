@@ -10,7 +10,7 @@
 //! layout options — which is exactly what `[layout]` describes. Neither
 //! carries keycodes, so no `[keymap]` is emitted.
 //!
-//! Reverse ([`to_kle::keyboard_toml_to_vial`]): a `keyboard.toml`'s `[layout]`
+//! Reverse ([`keyboard_toml_to_vial`]): a `keyboard.toml`'s `[layout]`
 //! back into a minimal `vial.json`.
 //!
 //! Decode ([`decode_layout`]): any `[layout]` TOML into [`layout::LayoutInfo`]
@@ -18,23 +18,34 @@
 //! firmware serves over `GetLayout`, which is inflated and postcard-decoded
 //! with the host types. What you get is exactly what a Rynk host sees.
 
-pub mod kle;
-pub mod to_kle;
-pub mod to_layout;
+mod kle;
+mod to_kle;
+mod to_layout;
 
 /// The decoded host-side layout types (`LayoutInfo`, `Variant`, `Key`, …),
 /// re-exported from `rynk` so consumers don't need it as a direct dependency.
 pub use rynk::layout;
 use serde_json::Value;
 
-use crate::to_layout::{GenInput, Generated, generate};
+use crate::to_layout::{GenInput, generate};
 
-/// Read `object.matrix.<key>` as a `u32`, defaulting to 0 when absent.
-fn matrix_dim(root: &Value, key: &str) -> u32 {
-    root.get("matrix")
-        .and_then(|m| m.get(key))
-        .and_then(Value::as_u64)
-        .unwrap_or(0) as u32
+/// A generated `[layout]` document and any lossy-conversion warnings.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct Generated {
+    /// A complete TOML snippet containing `[layout]`, shapes, and variants.
+    pub layout_toml: String,
+    pub warnings: Vec<String>,
+}
+
+/// Read `object.matrix.<key>` as a wire-compatible dimension.
+fn matrix_dim(root: &Value, key: &str) -> Result<u8, String> {
+    let Some(value) = root.get("matrix").and_then(|matrix| matrix.get(key)) else {
+        return Ok(0);
+    };
+    let value = value
+        .as_u64()
+        .ok_or_else(|| format!("matrix {key} must be an integer in 0..=255"))?;
+    u8::try_from(value).map_err(|_| format!("matrix {key} must fit in 0..=255, got {value}"))
 }
 
 /// Forward conversion on a parsed JSON input — a raw KLE export or a Vial
@@ -60,13 +71,12 @@ pub fn convert_kle(root: &Value) -> Result<Generated, String> {
     // matrix from key placement instead.
     let fallback = !parsed.has_matrix_or_encoder();
     if fallback {
-        kle::assign_matrix_by_position(&mut parsed);
+        kle::assign_matrix_by_position(&mut parsed)?;
     }
     let mut generated = generate(GenInput {
         keys: &parsed.keys,
-        annotations: &parsed.annotations,
-        matrix_rows: matrix_dim(root, "rows"),
-        matrix_cols: matrix_dim(root, "cols"),
+        matrix_rows: matrix_dim(root, "rows")?,
+        matrix_cols: matrix_dim(root, "cols")?,
         labels,
     })?;
     if fallback {
@@ -80,24 +90,48 @@ pub fn convert_kle(root: &Value) -> Result<Generated, String> {
     Ok(generated)
 }
 
-/// `[layout]` TOML text → decoded [`layout::LayoutInfo`], via the real blob
-/// round-trip. The input is a full keyboard.toml, any TOML with a `[layout]`
-/// section (e.g. [`Generated::inner_layout_toml`]), or a bare `rows`/`cols`/
-/// `map` snippet.
-pub fn decode_layout(text: &str) -> Result<layout::LayoutInfo, String> {
+pub(crate) struct DecodedLayout {
+    pub(crate) info: layout::LayoutInfo,
+    pub(crate) rows: u8,
+    pub(crate) cols: u8,
+}
+
+pub(crate) fn decode_layout_document(text: &str) -> Result<DecodedLayout, String> {
     let doc: toml::Value = toml::from_str(text).map_err(|e| format!("invalid TOML: {e}"))?;
     let layout = match doc.get("layout") {
         Some(l) => l,
-        // A bare snippet (rows/cols/map at top level) is accepted as-is.
         None if doc.get("map").is_some() => &doc,
         None => return Err("no [layout] section (and no top-level `map`) in the input".to_string()),
     };
+    let rows = layout
+        .get("rows")
+        .and_then(toml::Value::as_integer)
+        .ok_or("[layout].rows is missing")?;
+    let cols = layout
+        .get("cols")
+        .and_then(toml::Value::as_integer)
+        .ok_or("[layout].cols is missing")?;
+    let rows = u8::try_from(rows).map_err(|_| format!("[layout].rows must fit in 0..=255, got {rows}"))?;
+    let cols = u8::try_from(cols).map_err(|_| format!("[layout].cols must fit in 0..=255, got {cols}"))?;
     let inner = toml::to_string(layout).map_err(|e| format!("re-serialize [layout]: {e}"))?;
     let blob = rmk_config::layout_blob_from_toml(&inner)?;
     if blob.is_empty() {
         return Err("the [layout] section has no `map` — nothing to render".to_string());
     }
-    layout::LayoutInfo::from_compressed_blob(&blob).map_err(|e| format!("decode layout blob: {e}"))
+    let info = layout::LayoutInfo::from_compressed_blob(&blob).map_err(|e| format!("decode layout blob: {e}"))?;
+    Ok(DecodedLayout { info, rows, cols })
+}
+
+/// `[layout]` TOML text → decoded [`layout::LayoutInfo`], via the real blob
+/// round-trip. Accepts a full keyboard.toml or a bare `rows`/`cols`/`map`
+/// snippet.
+pub fn decode_layout(text: &str) -> Result<layout::LayoutInfo, String> {
+    Ok(decode_layout_document(text)?.info)
+}
+
+/// Convert a `keyboard.toml` layout into a minimal Vial definition.
+pub fn keyboard_toml_to_vial(text: &str) -> Result<Value, String> {
+    to_kle::keyboard_toml_to_vial(text)
 }
 
 /// JS bindings over the same pipeline, string-in / plain-object-out. Built
@@ -110,7 +144,7 @@ mod wasm {
         JsError::new(&e.to_string())
     }
 
-    /// KLE export or vial.json text → `{ display_toml, inner_layout_toml, warnings }`.
+    /// KLE export or vial.json text → `{ layout_toml, warnings }`.
     #[wasm_bindgen]
     pub fn convert_kle(json: &str) -> Result<JsValue, JsError> {
         let root: serde_json::Value = serde_json::from_str(json).map_err(|e| js_err(format!("invalid JSON: {e}")))?;
@@ -121,7 +155,7 @@ mod wasm {
     /// keyboard.toml text → a minimal vial.json, pretty-printed.
     #[wasm_bindgen]
     pub fn keyboard_toml_to_vial(toml_text: &str) -> Result<String, JsError> {
-        let vial = crate::to_kle::keyboard_toml_to_vial(toml_text).map_err(js_err)?;
+        let vial = crate::keyboard_toml_to_vial(toml_text).map_err(js_err)?;
         serde_json::to_string_pretty(&vial).map_err(js_err)
     }
 
@@ -145,13 +179,13 @@ mod tests {
         let vial = json!({"matrix": {"rows": 1, "cols": 2},
                           "layouts": {"keymap": [["0,0", {"w": 2.0}, "0,1"]]}});
         let g = convert_kle(&vial).unwrap();
-        assert!(g.display_toml.contains("(0,1,@2u)"), "{}", g.display_toml);
+        assert!(g.layout_toml.contains("(0,1,@2u)"), "{}", g.layout_toml);
         assert!(g.warnings.is_empty(), "{:?}", g.warnings);
 
         // A raw KLE export: label legends only — row-major fallback + warning.
         let kle = json!([{"name": "plain"}, ["Esc", "Q"], [{"w": 1.5}, "Tab"]]);
         let g = convert_kle(&kle).unwrap();
-        assert!(g.display_toml.contains("(1,0,@1.5u)"), "{}", g.display_toml);
+        assert!(g.layout_toml.contains("(1,0,@1.5u)"), "{}", g.layout_toml);
         assert!(g.warnings.iter().any(|w| w.contains("row-major")), "{:?}", g.warnings);
     }
 
@@ -159,7 +193,7 @@ mod tests {
     fn generated_layout_decodes_to_layout_info() {
         let vial = json!({"layouts": {"keymap": [["0,0", "0,1"]]}});
         let g = convert_kle(&vial).unwrap();
-        let info = decode_layout(&g.inner_layout_toml).unwrap();
+        let info = decode_layout(&g.layout_toml).unwrap();
         assert_eq!(info.variants[0].keys.len(), 2);
     }
 
@@ -184,5 +218,29 @@ mod tests {
     fn non_layout_json_gets_the_shape_hint() {
         let e = convert_kle(&json!({"a": 1})).unwrap_err();
         assert!(e.contains("layouts.keymap"), "{e}");
+    }
+
+    #[test]
+    fn dimensions_and_legends_must_fit_wire_types() {
+        let e = convert_kle(&json!({
+            "matrix": {"rows": 256, "cols": 1},
+            "layouts": {"keymap": [["0,0"]]}
+        }))
+        .unwrap_err();
+        assert!(e.contains("0..=255"), "{e}");
+
+        let e = convert_kle(&json!({"layouts": {"keymap": [["256,0"]]}})).unwrap_err();
+        assert!(e.contains("0..=255"), "{e}");
+
+        let e = convert_kle(&json!({
+            "matrix": {"rows": -1, "cols": 1},
+            "layouts": {"keymap": [["0,0"]]}
+        }))
+        .unwrap_err();
+        assert!(e.contains("integer in 0..=255"), "{e}");
+
+        let huge = format!("{}{},0", u128::MAX, u128::MAX);
+        let e = convert_kle(&json!({"layouts": {"keymap": [[huge]]}})).unwrap_err();
+        assert!(e.contains("0..=255"), "{e}");
     }
 }

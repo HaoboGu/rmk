@@ -1,99 +1,111 @@
-//! `WasmTransport` adapts a JS-owned byte link to `rynk::io::Read`/`Write`.
+//! The JS-owned byte link as a [`RynkDevice`], plus the `rynk::io::Read`/`Write`
+//! halves its `open()` hands out. The page owns the link's lifetime: it opens
+//! the link before `connect` and closes it on teardown — nothing here closes it.
 
-use std::future::Future;
-use std::pin::Pin;
-
-use js_sys::Uint8Array;
+use js_sys::{Promise, Uint8Array};
 use rynk::io::{ErrorKind, ErrorType, Read, Write};
+use rynk::{RynkDevice, RynkHostError};
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::spawn_local;
+use wasm_bindgen_futures::JsFuture;
 
 #[wasm_bindgen]
 extern "C" {
     /// JS byte link. `recv()` returns bytes, or an empty array only at EOF.
+    #[derive(Clone)]
     pub type JsByteLink;
+
+    #[wasm_bindgen(method, getter)]
+    fn label(this: &JsByteLink) -> String;
 
     #[wasm_bindgen(method, catch)]
     async fn send(this: &JsByteLink, frame: Uint8Array) -> Result<(), JsValue>;
 
+    /// A raw `Promise` import (not `async`) so the reader gets a nameable
+    /// future it can park across cancelled `read`s.
     #[wasm_bindgen(method, catch)]
-    async fn recv(this: &JsByteLink) -> Result<JsValue, JsValue>;
-
-    #[wasm_bindgen(method, catch)]
-    async fn close(this: &JsByteLink) -> Result<(), JsValue>;
+    fn recv(this: &JsByteLink) -> Result<Promise, JsValue>;
 }
 
-/// One in-flight `recv()` call, boxed so it can be parked in the transport.
-type RecvFuture = Pin<Box<dyn Future<Output = Result<JsValue, JsValue>>>>;
+/// The browser owns discovery (WebSerial/WebHID chooser) and opens the link, so
+/// the already-open [`JsByteLink`] itself is the transport's [`RynkDevice`]:
+/// `open()` only wraps it into halves, and the trait's `connect()` handshakes.
+impl RynkDevice for JsByteLink {
+    type Read = WasmReader;
+    type Write = WasmWriter;
 
-/// Buffered transport over a JS byte link.
-pub struct WasmTransport {
+    fn label(&self) -> String {
+        self.label()
+    }
+
+    async fn open(self) -> Result<(WasmReader, WasmWriter), RynkHostError> {
+        Ok((
+            WasmReader {
+                link: self.clone(),
+                recv: None,
+                pending: Vec::new(),
+                pos: 0,
+            },
+            WasmWriter { link: self },
+        ))
+    }
+}
+
+/// Read half of the JS byte link, buffering `recv()` chunks.
+pub struct WasmReader {
     link: JsByteLink,
-    label: String,
-    recv: Option<RecvFuture>,
+    /// In-flight `recv()`, parked so a cancelled `read` resumes it.
+    recv: Option<JsFuture>,
+    /// Holds a chunk larger than one `read` buffer across reads.
     pending: Vec<u8>,
+    pos: usize,
 }
 
-impl WasmTransport {
-    /// Wrap an already-open link labeled with the page's device name.
-    pub fn new(link: JsByteLink, label: String) -> Self {
-        Self {
-            link,
-            label,
-            recv: None,
-            pending: Vec::new(),
-        }
-    }
-
-    /// The display name the page supplied for this device.
-    pub fn label(&self) -> &str {
-        &self.label
-    }
-}
-
-impl Drop for WasmTransport {
-    /// Close the JS link.
-    fn drop(&mut self) {
-        let link: JsByteLink = self.link.clone().unchecked_into();
-        spawn_local(async move {
-            let _ = link.close().await;
-        });
-    }
-}
-
-impl ErrorType for WasmTransport {
+impl ErrorType for WasmReader {
     type Error = ErrorKind;
 }
 
-impl Read for WasmTransport {
+impl Read for WasmReader {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
         // Refill once the current chunk is drained.
-        while self.pending.is_empty() {
+        while self.pos >= self.pending.len() {
             if self.recv.is_none() {
-                // Clone the handle into the future so it owns all it borrows.
-                let link: JsByteLink = self.link.clone().unchecked_into();
-                self.recv = Some(Box::pin(async move { link.recv().await }));
+                self.recv = Some(JsFuture::from(self.link.recv().map_err(|_| ErrorKind::Other)?));
             }
-            // Poll in place: a cancelled read() leaves the future parked in `self`.
-            let value = self.recv.as_mut().unwrap().await.map_err(|_| ErrorKind::Other)?;
+            let value = self.recv.as_mut().unwrap().await;
             self.recv = None;
-            let Ok(chunk) = value.dyn_into::<Uint8Array>() else {
-                return Ok(0); // invalid link implementation; `rynk` maps Ok(0) to Disconnected
-            };
+            let value = value.map_err(|_| ErrorKind::Other)?;
+            // Only an empty byte array is EOF; any other JS value is invalid data.
+            let chunk = value.dyn_into::<Uint8Array>().map_err(|_| ErrorKind::InvalidData)?;
             if chunk.length() == 0 {
                 return Ok(0); // EOF
             }
             self.pending = chunk.to_vec();
+            self.pos = 0;
         }
-        let n = buf.len().min(self.pending.len());
-        buf[..n].copy_from_slice(&self.pending[..n]);
-        self.pending.drain(..n);
+        let n = buf.len().min(self.pending.len() - self.pos);
+        buf[..n].copy_from_slice(&self.pending[self.pos..self.pos + n]);
+        self.pos += n;
         Ok(n)
     }
 }
 
-impl Write for WasmTransport {
+/// Write half of the JS byte link.
+pub struct WasmWriter {
+    link: JsByteLink,
+}
+
+impl ErrorType for WasmWriter {
+    type Error = ErrorKind;
+}
+
+impl Write for WasmWriter {
     async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
         self.link
             .send(Uint8Array::from(buf))
             .await

@@ -9,8 +9,8 @@ package owns the Rynk protocol state machine.
 
 ```text
 Web Serial / WebHID / another browser transport
-        -> JsByteLink { send, recv, close }
-        -> transport::WasmTransport
+        -> JsByteLink { label, send, recv, close }
+        -> transport read/write halves
         -> rynk::Client
         -> RynkClient methods exposed to JavaScript
 ```
@@ -54,15 +54,16 @@ await init();
 const link = await openSerialByteLink();
 const client = await connect(link);
 
+// Pull topic pushes (layer changes, WPM, …) until the link closes. Runs
+// concurrently with the requests below — the session is full duplex.
+(async () => {
+  try { for (;;) console.log("topic", await client.next_topic()); }
+  catch (e) { console.log("disconnected:", e.message); }
+})();
+
 console.log("protocol", await client.get_version());
 console.log("capabilities", await client.get_capabilities());
 console.log("current layer", await client.get_current_layer());
-
-// Pull topic pushes (layer changes, WPM, …) until the link closes.
-(async () => {
-  try { for (;;) console.log("topic", await client.next_event()); }
-  catch (e) { console.log("disconnected:", e.message); }
-})();
 
 // Disconnect by closing the byte link; the topic loop above then ends.
 await link.close();
@@ -72,15 +73,13 @@ The object passed to `connect(link)` only needs this shape:
 
 ```js
 {
+  label: "My keyboard",
   async send(bytes) {
     // Uint8Array from wasm -> browser transport
   },
   async recv() {
     // Browser transport -> Uint8Array for wasm.
     // Return an empty Uint8Array only when the link is closed.
-  },
-  async close() {
-    // Release browser resources. Safe to call more than once.
   },
 }
 ```
@@ -93,6 +92,7 @@ major-specific wasm package.
 
 `JsByteLink` is a byte-stream boundary, not a high-level Rynk API.
 
+- `label` is the required device-picker label. It must be a string.
 - `send(bytes)` receives bytes from Rust and must deliver them in order. It should
   resolve only after the browser transport has accepted the bytes.
 - `recv()` must wait until bytes are available or the link is closed. It may
@@ -100,8 +100,9 @@ major-specific wasm package.
   frame.
 - `recv()` returns `new Uint8Array(0)` only for EOF. That becomes
   `Disconnected` in the wasm API.
-- `close()` should release locks, close devices, and wake any pending `recv()`.
-  It should be idempotent.
+- Closing the link is the page's job; `rynk-wasm` never closes it. Close on
+  every exit path — including a rejected `connect()` — releasing locks and
+  waking any pending `recv()`, which then returns the EOF empty array.
 - Only `rynk-wasm` should call `recv()` after `connect()`. If your page needs to
   probe the protocol version first, do it before calling `connect()`.
 - Transport-specific framing must be hidden below this boundary. For example,
@@ -121,8 +122,13 @@ async function openSerialByteLink() {
   const reader = port.readable.getReader();
   const writer = port.writable.getWriter();
   let closed = false;
+  const { usbVendorId, usbProductId } = port.getInfo();
+  const label = usbVendorId === undefined || usbProductId === undefined
+    ? "Web Serial device"
+    : `USB ${usbVendorId.toString(16).padStart(4, "0")}:${usbProductId.toString(16).padStart(4, "0")}`;
 
   return {
+    label,
     async send(bytes) {
       await writer.write(bytes);
     },
@@ -155,43 +161,31 @@ Call `requestPort()` inside a user gesture such as a button click.
 
 ## RynkClient API
 
-`connect(link, label?)` performs the Rynk handshake and returns a live
-`RynkClient` that owns the `rynk::Client` protocol state machine directly. The
-optional `label` is the display name the page showed in its picker (WebHID
-`productName`, or a string the page derived for WebSerial); read it back with
-`client.label()`. Each method borrows the client for one await, so await one call
-before issuing the next — the same single-borrow rule the native serial/BLE
-consumers get from the compiler.
+`connect(link)` performs the Rynk handshake and returns a live `RynkClient`
+that owns the `rynk::Client` protocol state machine directly. The page keeps
+its own display name for the device (WebHID `productName`, or whatever it
+showed in its picker) in `link.label`; the client does not carry one.
+The session is full duplex: a parked `next_topic()` loop and
+request calls run concurrently. Keep requests themselves serialized — await each
+request before issuing the next; the protocol allows a single request in flight.
 
-Topic pushes are pulled, not delivered by callback: drive `next_event()` in a
+Topic pushes are pulled, not delivered by callback: drive `next_topic()` in a
 loop. It parks until the next recognized topic and rejects with `Disconnected`
-at EOF, mirroring the native `Client::next_event()` used by `rynk-serial` /
-`rynk-ble`. `events_dropped()` reports topic queue overflow. If an operation is
-cancelled while reading, close the link and reconnect before issuing another.
+at EOF, mirroring the native `Client::next_topic()` used by `rynk-serial` /
+`rynk-ble`.
 
-Available method groups mirror the native `rynk::Client` API:
+The typed request surface is the `endpoints!` table in `src/client.rs`,
+mirroring the native `rynk::Client` methods (minus the Rust-only conveniences
+such as the `read_all_*`/`write_all_*` pagers); browse it via the generated
+`pkg/rynk_wasm.d.ts` or the `rynk::Client` docs.
 
-- System: `get_version`, `get_capabilities`, `reboot`, `bootloader_jump`,
-  `storage_reset`
-- Keymap: `get_key`, `set_key`, `get_default_layer`, `set_default_layer`,
-  `get_encoder`, `set_encoder`, `get_keymap_bulk`, `set_keymap_bulk`,
-  `get_layout`
-- Combos/forks/morse/macros: `get_combo`, `set_combo`, `get_combo_bulk`,
-  `set_combo_bulk`, `get_fork`, `set_fork`, `get_morse`, `set_morse`,
-  `get_morse_bulk`, `set_morse_bulk`, `get_macro`, `set_macro`
-- Behavior/status/connection: `get_behavior`, `set_behavior`,
-  `get_current_layer`, `get_matrix_state`, `get_battery_status`,
-  `get_peripheral_status`, `get_wpm`, `get_sleep_state`,
-  `get_led_indicator`, `get_connection_type`, `get_connection_status`,
-  `get_ble_status`, `switch_ble_profile`, `clear_ble_profile`
-
-Getter results and topic values are plain JS values produced through
-`serde-wasm-bindgen`. Setter payloads are plain JS objects matching the Rust
-serde shape for the corresponding `rmk-types` type.
+Getter results and topic values are plain JS values produced through the
+tsify-generated wire types. Setter payloads are plain JS objects matching the
+Rust serde shape for the corresponding `rmk-types` type.
 
 Errors are thrown as JS `Error` objects with stable `name` values such as
-`Disconnected`, `Transport`, `Rejected`, `Unsupported`, `Protocol`, and
-`VersionMismatch`.
+`Disconnected`, `TransportError`, `Rejected`, `Unsupported`,
+`ResponseDecodeError`, and `VersionMismatch`.
 
 ## Browser Transports
 

@@ -1,29 +1,18 @@
-//! Cross-stack end-to-end test: the real [`rynk::Client`] driven against the
-//! real firmware [`rmk::host::HostService::run_session`] over an in-memory duplex.
+//! Cross-stack end-to-end test: the real [`rynk::Client`] against the real
+//! firmware [`rmk::host::HostService::run_session`] over an in-memory duplex.
 //!
-//! Every other Rynk test exercises only one half against a hand-written mock of
-//! the other (the firmware's `rynk_loopback` re-implements the host; the client's
-//! unit tests use a `MockTransport`). This is the one test that runs BOTH
-//! production halves against each other, so it locks the protocol conventions
-//! that the shared `rmk-types` codec alone does not pin:
+//! Every other Rynk test mocks one half; this one runs both production halves,
+//! locking the conventions the shared `rmk-types` codec alone does not pin:
+//! the version handshake, the advertised `max_payload_size`, seq correlation
+//! and cmd echo, the `Result<T, RynkError>` response envelope, and topic push
+//! decoding.
 //!
-//! - the version handshake (the only cross-build compatibility signal),
-//! - the negotiated `max_payload_size` (firmware-advertised, host-consumed),
-//! - seq correlation + cmd echo on responses,
-//! - the `Result<T, RynkError>` response envelope (incl. a device rejection),
-//! - server→host topic push decoding.
-//!
-//! It runs on tokio: `run_session` is executor-agnostic (only `embassy_futures`),
-//! and the rynk path reads no clock, so no embassy-time MockDriver pump is needed.
-//! The duplex is two `embassy_sync::pipe::Pipe`s — the same kind the in-firmware
-//! harness (`rmk/tests/common/rynk_link.rs`) uses. Both halves consume the pipes
-//! through the same embedded-io traits; the host side only needs [`Duplex`] to
-//! pair the two directions into one `Read + Write` value.
+//! It runs on tokio: `run_session` is executor-agnostic and the rynk path
+//! reads no clock, so no embassy-time pump is needed.
 
 use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::pipe::Pipe;
-use embedded_io_async::{ErrorType, Read, Write};
 use rmk::config::{BehaviorConfig, PositionalConfig, RmkConfig};
 use rmk::event::{LayerChangeEvent, publish_event};
 use rmk::host::HostService as RynkService;
@@ -33,40 +22,40 @@ use rmk_types::combo::Combo;
 use rmk_types::constants::{MACRO_DATA_SIZE, RYNK_BUFFER_SIZE};
 use rmk_types::protocol::rynk::{MacroData, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, StorageResetMode};
 use rynk::layout::{Key, Rect, Variant};
-use rynk::{Client, IncomingTopic, LayoutInfo, RynkHostError, TopicEvent};
+use rynk::{Client, LayoutInfo, RynkDevice, RynkHostError, TopicEvent};
 
 /// One direction of the in-memory link. Sized to a full Rynk buffer so any
 /// single legal frame fits without the writer blocking on an un-polled reader.
 type Link = Pipe<NoopRawMutex, RYNK_BUFFER_SIZE>;
 
-/// Host-side `Read + Write` over the two pipes — reads device→host, writes
-/// host→device. `&Pipe` already implements the embedded-io traits; this only
-/// pairs the directions.
-struct Duplex<'p> {
+/// The host side of the two pipes as a device — reads device→host, writes
+/// host→device — so the test connects through [`RynkDevice::connect`]. `&Pipe`
+/// implements the embedded-io traits itself; both sides use it directly.
+struct DuplexDevice<'p> {
     rx: &'p Link,
     tx: &'p Link,
 }
 
-impl ErrorType for Duplex<'_> {
-    type Error = core::convert::Infallible;
-}
+impl<'p> RynkDevice for DuplexDevice<'p> {
+    type Read = &'p Link;
+    type Write = &'p Link;
 
-impl Read for Duplex<'_> {
-    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        // Qualified: `Pipe`'s inherent infallible `read` would shadow the trait.
-        let mut rx: &Link = self.rx;
-        Read::read(&mut rx, buf).await
+    fn label(&self) -> String {
+        "loopback".into()
+    }
+
+    async fn open(self) -> Result<(&'p Link, &'p Link), RynkHostError> {
+        Ok((self.rx, self.tx))
     }
 }
 
-impl Write for Duplex<'_> {
-    async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        let mut tx: &Link = self.tx;
-        Write::write(&mut tx, buf).await
-    }
-
-    async fn flush(&mut self) -> Result<(), Self::Error> {
-        Ok(())
+/// Connect over the duplex and run `script` with the driver pumping; panics if
+/// the link dies before the script finishes.
+async fn with_session(device: DuplexDevice<'_>, script: impl AsyncFnOnce(&Client)) {
+    let (client, mut driver) = device.connect().await.expect("handshake should succeed");
+    match select(driver.run(&client), script(&client)).await {
+        Either::First(err) => panic!("link died before the script finished: {err}"),
+        Either::Second(()) => {}
     }
 }
 
@@ -120,12 +109,10 @@ async fn client_against_run_session() {
     let mut dev_rx: &Link = &h2d;
     let mut dev_tx: &Link = &d2h;
 
-    let transport = Duplex { rx: &d2h, tx: &h2d };
+    let device = DuplexDevice { rx: &d2h, tx: &h2d };
 
     // Host side.
-    let script = async {
-        let mut client = Client::connect(transport).await.expect("handshake should succeed");
-
+    let script = with_session(device, async |client| {
         // Version handshake crosses both real stacks.
         assert_eq!(client.get_version().await.unwrap(), ProtocolVersion::CURRENT);
 
@@ -133,6 +120,10 @@ async fn client_against_run_session() {
         assert_eq!((caps.num_layers, caps.num_rows, caps.num_cols), (2, 2, 2));
         // Client consumes the firmware-advertised payload limit.
         assert_eq!(caps.max_payload_size as usize, RYNK_BUFFER_SIZE - RYNK_HEADER_SIZE);
+
+        let info = client.get_device_info().await.unwrap();
+        assert_eq!(info.manufacturer.as_str(), "RMK");
+        assert_eq!(info.product_name.as_str(), "RMK Keyboard");
 
         // Get round-trip: seq correlation, cmd echo, Ok envelope.
         assert_eq!(client.get_current_layer().await.unwrap(), 0);
@@ -191,14 +182,13 @@ async fn client_against_run_session() {
         assert_eq!(layout.variants.len(), 2, "two render variants");
         assert_eq!(layout.variants[1].keys.len(), 2, "variant b hides one key");
 
-        // Server topic push decodes into a typed IncomingTopic.
         publish_event(LayerChangeEvent::new(3));
-        let ev = client.next_event().await.unwrap();
+        let ev = client.next_topic().await;
         assert!(
-            matches!(ev, IncomingTopic::Topic(TopicEvent::LayerChange(3))),
+            matches!(ev, TopicEvent::LayerChange(3)),
             "expected LayerChange(3), got {ev:?}"
         );
-    };
+    });
 
     // Drain flash writes; the session should not finish before the script.
     let device = select(
@@ -211,12 +201,11 @@ async fn client_against_run_session() {
     }
 }
 
-/// The lock gate, end to end through the real client: a locked device refuses a
-/// gated command with `RynkError::Locked` flattened to
-/// [`RynkHostError::Rejected`], advertises its challenge over the wire, and
-/// serves the three lock endpoints. The physical-key-hold → unlock transition
-/// (which needs matrix simulation the external test can't reach) is covered by
-/// the firmware `host::lock` / `host::rynk` tests.
+/// The lock gate end to end: a locked device refuses a gated command with
+/// `RynkError::Locked` flattened to [`RynkHostError::Rejected`], advertises its
+/// challenge over the wire, and serves the three lock endpoints. The key-hold →
+/// unlock transition needs matrix simulation and is covered by the firmware
+/// `host::lock` / `host::rynk` tests.
 #[tokio::test(flavor = "current_thread")]
 async fn lock_gate_rejects_and_reports() {
     let mut behavior = BehaviorConfig::default();
@@ -235,11 +224,9 @@ async fn lock_gate_rejects_and_reports() {
     let d2h = Link::new();
     let mut dev_rx: &Link = &h2d;
     let mut dev_tx: &Link = &d2h;
-    let transport = Duplex { rx: &d2h, tx: &h2d };
+    let device = DuplexDevice { rx: &d2h, tx: &h2d };
 
-    let script = async {
-        let mut client = Client::connect(transport).await.expect("handshake should succeed");
-
+    let script = with_session(device, async |client| {
         // GetLockStatus is open and advertises the challenge across the wire
         // (the `heapless::Vec<(u8,u8)>` round-trips intact).
         let status = client.get_lock_status().await.unwrap();
@@ -254,7 +241,7 @@ async fn lock_gate_rejects_and_reports() {
             "expected Rejected(Locked), got {gated:?}"
         );
 
-        // UnlockPoll arms the attempt; with no key held it counts down but stays locked.
+        // Polling arms the attempt but cannot unlock without the configured key.
         let polled = client.unlock_poll().await.unwrap();
         assert!(polled.locked);
         assert!(polled.unlocking);
@@ -262,7 +249,7 @@ async fn lock_gate_rejects_and_reports() {
 
         // Lock is always dispatchable.
         client.lock().await.unwrap();
-    };
+    });
 
     let device = select(
         service.run_session(&mut dev_rx, &mut dev_tx),

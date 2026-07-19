@@ -9,6 +9,10 @@
 //! The cross-crate match is by hand because `rmk-config` is a build-dependency
 //! of `rmk-types` (no back-edge).
 
+use alloc::format;
+use alloc::string::String;
+use alloc::vec::Vec;
+
 /// A key's outline rectangle in key-units.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
