@@ -593,7 +593,7 @@ Some keys cannot be classified; they never trigger immediate deactivation (only 
 ::: note Rust API
 Configure the layer via `BehaviorConfig` and run the helper future alongside your other keyboard tasks. Subscriber slots are resolved from `keyboard.toml`'s `[event]` section at build time, so point `KEYBOARD_TOML_PATH` (set in `.cargo/config.toml`) to a `keyboard.toml` and increment `[event.pointing].subs` and `[event.layer_change].subs` by `1` there as well. When using `deactivate_on_key` / `reset_timeout_on_key`, also set `[event.action].subs` to `1` (it defaults to `0`) in that file. Otherwise the firmware panics at startup.
 
-The number of entries defaults to `4` without a `keyboard.toml`; with one it is auto-derived from `[[behavior.auto_mouse_layer]]` (`0` when absent), so set `[rmk].auto_mouse_layer_max_num` explicitly to override. `extra_mouse_keys` is a `&'static [KeyCode]`, so its length has no cap.
+The number of entries defaults to `2` without a `keyboard.toml`; with one it is auto-derived from `[[behavior.auto_mouse_layer]]` (`0` when absent), so set `[rmk].auto_mouse_layer_max_num` explicitly to override. `extra_mouse_keys` is a `&'static [KeyCode]`, so its length has no cap.
 
 ```rust
 use embassy_time::Duration;

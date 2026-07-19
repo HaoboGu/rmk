@@ -29,7 +29,7 @@ pub const DEFAULT_AUTO_MOUSE_LAYER_TIMEOUT_MS: u64 = 500;
 pub const DEFAULT_AUTO_MOUSE_LAYER_THRESHOLD: u16 = 1;
 
 /// Fallback for `auto_mouse_layer_max_num` when no `keyboard.toml` is loaded.
-pub const DEFAULT_AUTO_MOUSE_LAYER_MAX_NUM: usize = 4;
+pub const DEFAULT_AUTO_MOUSE_LAYER_MAX_NUM: usize = 2;
 
 pub struct OneShot {
     pub activate_on_keypress: Option<bool>,

@@ -37,7 +37,7 @@ ble_profiles_num = 3
 # BLE Split Central sleep timeout in seconds (0 = disabled)
 split_central_sleep_timeout_seconds = 0
 # Maximum number of auto mouse layer entries (auto-derived from [[behavior.auto_mouse_layer]] if unset)
-auto_mouse_layer_max_num = 4
+auto_mouse_layer_max_num = 2
 ```
 
 ## Parameter Details
