@@ -308,10 +308,17 @@ fn keypress_step(entries: &mut [EntryState], action: Action, now: Instant) -> Ve
                 // The repeated keycode is unknown here; treat as unclassifiable
                 // so a repeated mouse key is not misclassified as non-mouse.
                 Action::Key(KeyCode::Hid(HidKeyCode::Again)) => false,
-                Action::Key(kc) | Action::KeyWithModifier(kc, _) | Action::OneShotKey(kc) => match kc {
+                Action::Key(kc) => match kc {
                     KeyCode::Hid(hid) if hid.is_mouse_key() => false,
                     _ => !cfg.extra_mouse_keys.contains(&kc),
                 },
+                Action::KeyWithModifier(hid, _) | Action::OneShotKey(hid) => {
+                    if hid.is_mouse_key() {
+                        false
+                    } else {
+                        !cfg.extra_mouse_keys.contains(&KeyCode::Hid(hid))
+                    }
+                }
                 // A modifier-only action (e.g. MT hold) deactivates unless every
                 // contained modifier is covered by a modifier keycode listed in
                 // `extra_mouse_keys` — mirroring how plain modifier keys behave.
