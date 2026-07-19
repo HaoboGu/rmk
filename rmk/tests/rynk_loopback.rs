@@ -83,11 +83,11 @@ fn service_3x4() -> RynkService<'static> {
     RynkService::new(km, config)
 }
 
-/// 48-key service for full and over-budget bulk runs.
-fn service_3x4x4() -> RynkService<'static> {
+/// 256-key service for full and over-budget bulk runs.
+fn service_4x8x8() -> RynkService<'static> {
     let behavior: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig::default()));
-    let per_key: &'static PositionalConfig<3, 4> = Box::leak(Box::new(PositionalConfig::default()));
-    let keymap = [[[KeyAction::No; 4]; 3]; 4];
+    let per_key: &'static PositionalConfig<8, 4> = Box::leak(Box::new(PositionalConfig::default()));
+    let keymap = [[[KeyAction::No; 4]; 8]; 8];
     let km = wrap_keymap(keymap, per_key, behavior);
     let config: &'static RmkConfig<'static> = Box::leak(Box::new(RmkConfig::default()));
     RynkService::new(km, config)
@@ -533,7 +533,7 @@ fn keymap_bulk_max_capacity_round_trip() {
     use rmk_types::constants::BULK_KEYMAP_SIZE;
     use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
     // The 48-key keymap holds a full multi-layer bulk run.
-    let service = service_3x4x4();
+    let service = service_4x8x8();
     link_session(&service, async |client| {
         let mut actions: HVec<KeyAction, BULK_KEYMAP_SIZE> = HVec::new();
         for i in 0..BULK_KEYMAP_SIZE {
@@ -641,8 +641,8 @@ fn keymap_bulk_get_caps_page_at_budget() {
     use rmk_types::constants::BULK_KEYMAP_SIZE;
     use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse};
     // GET from 0 is capped by message budget, not keymap span.
-    assert!(BULK_KEYMAP_SIZE < 48, "fixture must hold more than one full run");
-    let service = service_3x4x4();
+    assert!(BULK_KEYMAP_SIZE < 256, "fixture must hold more than one full run");
+    let service = service_4x8x8();
     link_session(&service, async |client| {
         let got = client
             .request::<_, GetKeymapBulkResponse>(
@@ -666,7 +666,7 @@ fn keymap_bulk_get_caps_page_at_budget() {
 
 #[test]
 fn keymap_bulk_set_malformed_element_aborts_whole_write() {
-    let service = service_3x4x4();
+    let service = service_4x8x8();
     link_session(&service, async |client| {
         let good = KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::A)));
         let mut scratch = [0u8; 16];
