@@ -608,7 +608,7 @@ pub(crate) async fn set_conn_params<
             max_latency: 30,
             min_event_length: Duration::from_secs(0),
             max_event_length: Duration::from_secs(0),
-            supervision_timeout: Duration::from_secs(5),
+            supervision_timeout: Duration::from_secs(8),
         },
     )
     .await;
@@ -625,7 +625,7 @@ pub(crate) async fn set_conn_params<
             max_latency: 30,
             min_event_length: Duration::from_secs(0),
             max_event_length: Duration::from_secs(0),
-            supervision_timeout: Duration::from_secs(5),
+            supervision_timeout: Duration::from_secs(8),
         },
     )
     .await;

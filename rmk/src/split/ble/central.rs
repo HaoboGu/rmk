@@ -75,6 +75,10 @@ pub async fn scan_peripherals<
                     let mut scanner = Scanner::new(&mut central);
                     let scan_config = ScanConfig {
                         active: false,
+                        // Duty-cycled passive scan (30% duty cycle) to avoid starving the
+                        // host link on the shared radio. Default is 1s/1s (100% duty cycle).
+                        interval: Duration::from_millis(100),
+                        window: Duration::from_millis(30),
                         ..Default::default()
                     };
                     let _guard = SCANNING_MUTEX.lock().await;
@@ -196,6 +200,15 @@ pub(crate) async fn run_ble_peripheral_manager<
             connect_params: defaul_central_conn_param(),
             scan_config: ScanConfig {
                 filter_accept_list: &[address],
+                // Duty-cycled initiating scan (30% duty cycle) so reconnecting to the
+                // peripheral half does not monopolize the single radio and starve the
+                // concurrent host (central->host) link. The `ScanConfig` default is
+                // 1s interval / 1s window (100% duty cycle), which can keep the radio
+                // busy for the whole 5s connect timeout and trip the host's supervision
+                // timeout, dropping the keyboard from the host.
+                active: false,
+                interval: Duration::from_millis(100),
+                window: Duration::from_millis(30),
                 ..Default::default()
             },
         };
