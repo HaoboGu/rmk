@@ -156,14 +156,11 @@ There are several parameters in `keyboard.toml`'s [`[rmk]`](../configuration/rmk
 - `rynk_buffer_size`: the buffer size used for encoding/decoding Rynk message. A larger buffer moves more per round-trip at the cost of RAM.
 - `protocol_macro_chunk_size`: macro chunk size.
 
-The optional `bulk` Cargo feature turns on faster bulk transfers. The bulk size is limited by `rynk_buffer_size`. Enable it on boards that have room to spare:
-
-```toml title="Cargo.toml"
-rmk = { version = "...", features = ["bulk", "rp2040"] }
-```
-
-Host tools work with or without `bulk` — the keyboard tells the tool whether it
-supports bulk transfers, so the same tool works either way.
+Bulk transfers (faster multi-entry reads and writes) are always available with
+`rynk` — there's no separate feature to enable. Their batch size is derived from
+`rynk_buffer_size`, so a larger buffer also moves more per bulk round-trip. The
+keyboard advertises bulk support in its capabilities, so host tools pick it up
+automatically and the same tool works on boards of any buffer size.
 
 ## For tool authors
 
@@ -175,7 +172,8 @@ don't have to implement the protocol yourself:
 - `rynk-ble` — native Bluetooth discovery and connection.
 - `rynk-wasm` — the browser build, driven from JavaScript over Web Serial / WebHID.
 
-A minimal native USB tool looks like this:
+A minimal native USB tool looks like this (add `embassy-futures` to your
+`Cargo.toml` for `select`):
 
 ```rust
 use embassy_futures::select::{Either, select};

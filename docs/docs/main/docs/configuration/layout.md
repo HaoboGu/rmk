@@ -30,17 +30,17 @@ Both strings are read in the same order, so the key at matrix position `(0,0)` i
 
 ## The layout map
 
-`[layout].map` places your keys in the order you want to define them. **The order matters**: every `[[keymap.layer]]` reads its keys in this same order, so the *n*-th key in the map is the *n*-th key on each layer.
+`[layout].map` places your keys in the order you want to define them. **The order matters**: every `[[keymap.layer]]` reads its keys in this same order, so the _n_-th key in the map is the _n_-th key on each layer.
 
 Each item in the map is one of:
 
-| Item | Meaning |
-| --- | --- |
+| Item                       | Meaning                                                                                                                          |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `(row, col, hand, @shape)` | a key at matrix position `(row, col)`, with an optional [hand marker](#assigning-a-hand-to-each-key) and render [shape](#shapes) |
-| `(e, id)` | a rotary [encoder](#encoders) |
-| `[n]` | a horizontal [gap](#gaps-and-row-steps) of `n` key-units |
-| `[y=n]` | an extra vertical [step](#gaps-and-row-steps) before the next row |
-| newline | a row break |
+| `(e, id)`                  | a rotary [encoder](#encoders)                                                                                                    |
+| `[n]`                      | a horizontal [gap](#gaps-and-row-steps) of `n` key-units                                                                         |
+| `[y=n]`                    | an extra vertical [step](#gaps-and-row-steps) before the next row                                                                |
+| newline                    | a row break                                                                                                                      |
 
 `hand` and `@shape` are independent and optional — include either, both, or neither. When both appear, `hand` comes first, so `(row, col)`, `(row, col, hand)`, `(row, col, @shape)`, and `(row, col, hand, @shape)` are all valid. (The triple quotes `"""..."""` mark a multi-line string.)
 
@@ -74,8 +74,11 @@ map = """
 
 [keymap]
 layers = 3
+```
 
-# split ortho example, with L/R hand information filled in:
+And a split ortholinear example, with L/R hand information filled in:
+
+```toml
 [layout]
 rows = 4
 cols = 10
@@ -104,7 +107,7 @@ Hand names are case-insensitive. The marker is the third element of the tuple, e
 
 ## Rendered layout
 
-Everything in this section changes only how your keyboard is *drawn* in editors like Vial and Rynk — never what a key does. RMK compiles the rendered layout into a compact blob that the firmware streams to the host on request; the firmware itself never reads it. You can skip this section entirely: a bare `(row, col)` renders as a plain 1u key.
+Everything in this section changes only how your keyboard is _drawn_ in editors like Vial and Rynk — never what a key does. RMK compiles the rendered layout into a compact blob that the firmware streams to the host on request; the firmware itself never reads it. You can skip this section entirely: a bare `(row, col)` renders as a plain 1u key.
 
 ### Shapes
 
@@ -175,11 +178,11 @@ map = """
 
 ### Encoders
 
-`(e, id)` places rotary encoder `id` in the rendered layout, e.g. `(e, 0)`. Encoder ids must be unique and cover `0..N` with no gaps. When you declare *any* encoder tokens, their count must match the number of encoders your board declares — but providing no `(e, id)` tokens at all is allowed: the encoders still work, they just have nothing to render. Encoders are render-only — they are *not* keymap positions, so they don't appear in `[[keymap.layer]].keys` (their actions go in `[[keymap.layer]].encoders` instead).
+`(e, id)` places rotary encoder `id` in the rendered layout, e.g. `(e, 0)`. Encoder ids must be unique and cover `0..N` with no gaps. When you declare _any_ encoder tokens, their count must match the number of encoders your board declares — but providing no `(e, id)` tokens at all is allowed: the encoders still work, they just have nothing to render. Encoders are render-only — they are _not_ keymap positions, so they don't appear in `[[keymap.layer]].keys` (their actions go in `[[keymap.layer]].encoders` instead).
 
 ### Variants
 
-One `map` can describe a *superset* of positions that renders in several ways — for example a 60% board that ships as ANSI, ISO, and split-backspace. Each `[[layout.variant]]` is a complete render of the **same keymap**: it hides some keys and reshapes others, and the remaining keys reflow to close the gaps.
+One `map` can describe a _superset_ of positions that renders in several ways — for example a 60% board that ships as ANSI, ISO, and split-backspace. Each `[[layout.variant]]` is a complete render of the **same keymap**: it hides some keys and reshapes others, and the remaining keys reflow to close the gaps.
 
 ```toml
 [layout]
@@ -263,10 +266,10 @@ The `layer.keys` string follows several rules:
 
 2. For a no-key (`KeyAction::No`), use `No`.
 
-3. For a transparent key (`KeyAction::Transparent`), use `_` or `__` (any number of `_`).
+3. For a transparent key (`KeyAction::Transparent`), use `_` or `__` (any number of `_`), or `Trns`.
 
 4. RMK supports many advanced layer operations:
-   1. `DF(n)` — switch the default layer to layer `n`. Use `PDF(n)` for a persistent version that is saved to storage and restored after reboot.
+   1. `DF(n)` — switch the default layer to layer `n`.
    2. `MO(n)` — momentarily activate layer `n`.
    3. `LM(n, modifier)` — activate layer `n` with a modifier held. The modifier chains like `WM`.
    4. `LT(n, key, <profile_name>)` — activate layer `n` on hold, or tap `key` (tap/hold). `key` is an RMK [`KeyCode`](./keymap_configuration/keycodes); the optional `profile_name` sets the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning).
