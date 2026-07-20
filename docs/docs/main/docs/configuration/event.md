@@ -55,7 +55,7 @@ peripheral_battery.subs = 4
 | `pointing`                 | `PointingEvent`               | channel_size=8         |
 | **State Events**           |                               |                        |
 | `layer_change`             | `LayerChangeEvent`            | subs=4                 |
-| `sticky_key_release`       | Internal Sticky Key event     | channel_size=2         |
+| `layer_transition`         | Internal layer transition     | channel_size=2         |
 | `wpm_update`               | `WpmUpdateEvent`              |                        |
 | `led_indicator`            | `LedIndicatorEvent`           |                        |
 | `sleep_state`              | `SleepStateEvent`             |                        |

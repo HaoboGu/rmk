@@ -282,10 +282,11 @@ impl crate::KeyboardTomlConfig {
                         .transpose()?,
                 })
             };
-            if s.profiles.len() > self.rmk.sticky_key_profile_max_num {
+            let sticky_key_profile_max_num = self.sticky_key_profile_capacity();
+            if s.profiles.len() > sticky_key_profile_max_num {
                 return Err(format!(
                     "behavior.sticky_key.profiles defines {} profiles, but `[rmk] sticky_key_profile_max_num` is {}. Raise it in keyboard.toml",
-                    s.profiles.len(), self.rmk.sticky_key_profile_max_num
+                    s.profiles.len(), sticky_key_profile_max_num
                 ));
             }
             let profiles = s.profiles.into_iter()

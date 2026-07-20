@@ -43,6 +43,11 @@
 //!   variant renamed or renumbered. `sys/version` itself is exempt —
 //!   changing its shape is forbidden even across major bumps.
 //! - Neither: no wire change.
+//!
+//! Protocol 1.1 appends `Action::StickyKey`. Existing action discriminants are
+//! unchanged, but endpoint schema keys involving `Action` change. A 1.0 host
+//! must therefore stop after `sys/version`; it must not call those endpoints
+//! using cached 1.0 keys.
 
 mod combo;
 mod encoder;

@@ -3,8 +3,6 @@
 use rmk_macro::event;
 use rmk_types::led_indicator::LedIndicator;
 
-use crate::config::StickyKeyReleaseMode;
-
 /// Active layer changed event
 #[event(channel_size = crate::LAYER_CHANGE_EVENT_CHANNEL_SIZE, pubs = crate::LAYER_CHANGE_EVENT_PUB_SIZE, subs = crate::LAYER_CHANGE_EVENT_SUB_SIZE)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -19,12 +17,19 @@ impl LayerChangeEvent {
 
 impl_payload_wrapper!(LayerChangeEvent, u8);
 
-/// A layer transition that may release an active Sticky Key.
-#[event(channel_size = crate::STICKY_KEY_RELEASE_EVENT_CHANNEL_SIZE, pubs = crate::STICKY_KEY_RELEASE_EVENT_PUB_SIZE, subs = crate::STICKY_KEY_RELEASE_EVENT_SUB_SIZE)]
+/// The direction of a layer state transition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct StickyKeyReleaseEvent(pub StickyKeyReleaseMode);
+pub(crate) enum LayerTransition {
+    Enter,
+    Exit,
+}
 
-impl_payload_wrapper!(StickyKeyReleaseEvent, StickyKeyReleaseMode);
+/// A layer transition produced outside the main keyboard action loop.
+#[event(channel_size = crate::LAYER_TRANSITION_EVENT_CHANNEL_SIZE, pubs = crate::LAYER_TRANSITION_EVENT_PUB_SIZE, subs = crate::LAYER_TRANSITION_EVENT_SUB_SIZE)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct LayerTransitionEvent(pub LayerTransition);
+
+impl_payload_wrapper!(LayerTransitionEvent, LayerTransition);
 
 /// WPM updated event
 #[event(channel_size = crate::WPM_UPDATE_EVENT_CHANNEL_SIZE, pubs = crate::WPM_UPDATE_EVENT_PUB_SIZE, subs = crate::WPM_UPDATE_EVENT_SUB_SIZE)]

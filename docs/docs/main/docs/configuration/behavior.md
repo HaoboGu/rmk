@@ -70,6 +70,11 @@ press with a release.
 Holding an `SK` key longer than the configured timeout will not synthesize a key
 release; releasing the physical key then completes the action normally.
 
+Modifier and layer Sticky Keys have independent latches. They can be active at
+the same time, retain their own profile, deadline, and release policy, and expire
+without clearing each other. Tap-key Sticky Keys are exclusive because starting
+a different tap-key sequence replaces the key/modifier pair being cycled.
+
 For example, an Alt+Tab profile can release on another key press or either
 direction of a layer transition:
 
@@ -117,7 +122,7 @@ For keymap usage, see `SK(...)` in the [keymap configuration](./layout#keyboard-
 
 ### Migration from OSM / OSL
 
-`OSM(mod)` and `OSL(n)` are **still supported** as aliases — they desugar to `SK(mod)` and `SK(MO(n))` respectively, so existing keymaps keep working unchanged. The `SK` forms are the canonical spelling; use whichever you prefer. The old 5-positional `SK` form and the `[behavior.one_shot]` / `[behavior.one_shot_modifiers]` config tables, however, are **removed** — using them is a build error.
+`OSM(mod)` and `OSL(n)` are **still supported** as aliases — they desugar to `SK(mod)` and `SK(MO(n))` respectively, so existing keymaps keep working unchanged. The `SK` forms are the canonical spelling; use whichever you prefer. The old 5-positional `SK` form and the `[behavior.one_shot]` / `[behavior.one_shot_modifiers]` TOML tables, however, are **removed** — using them in `keyboard.toml` is a build error. Rust configurations retain the legacy `BehaviorConfig::one_shot` and `BehaviorConfig::one_shot_modifiers` fields as a compatibility adapter; RMK normalizes them into the default Sticky Key profile once when the keymap is built.
 
 | Old | New (canonical) | Alias still accepted |
 |-----|-----------------|----------------------|
@@ -131,7 +136,7 @@ For keymap usage, see `SK(...)` in the [keymap configuration](./layout#keyboard-
 Accepted breaking changes:
 
 - The old 5-positional `SK(key, [mod], max_repeat, timeout_ms, exit_on_layer_change)` form is **removed** → build error. The trailing knobs now live in `[behavior.sticky_key]`.
-- The `[behavior.one_shot]` and `[behavior.one_shot_modifiers]` config tables are **removed** → use `[behavior.sticky_key]`.
+- The `[behavior.one_shot]` and `[behavior.one_shot_modifiers]` TOML tables are **removed** → use `[behavior.sticky_key]`. The equivalent Rust `BehaviorConfig` fields remain source-compatible.
 - The former `quick_release` and layer-change settings are replaced by `release_mode`; use one or more of `other_key_press`, `other_key_release`, `layer_enter`, `layer_exit`, and `double_tap`.
 - Tap-key (alt-tab) SKs now have a **1s default timeout** (previously they had no timeout). Set `timeout` higher or rely on the default.
 

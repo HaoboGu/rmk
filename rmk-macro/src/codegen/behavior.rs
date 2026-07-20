@@ -9,7 +9,9 @@ use rmk_config::resolved::behavior::{
     MorseProfile, StickyKeyProfile,
 };
 
-use super::action_parser::{expand_profile, expand_profile_name, get_key_with_alias, parse_key};
+use super::action_parser::{
+    expand_profile, expand_profile_name, get_key_with_alias, parse_key, sorted_sticky_profile_names,
+};
 
 fn expand_tri_layer(tri_layer: &Option<[u8; 3]>) -> proc_macro2::TokenStream {
     match tri_layer {
@@ -66,19 +68,14 @@ fn expand_sticky_key(behavior: &Behavior) -> proc_macro2::TokenStream {
             release_mode: sk.release_mode,
         })
         .unwrap_or_default();
-    let default_timeout = default.timeout_ms.unwrap_or(1000);
-    let default_activate_on_keypress = default.activate_on_keypress.unwrap_or(false);
-    let default_max_repeat = default.max_repeat.unwrap_or(0);
     let default_profile = expand_sticky_key_profile(&default, &StickyKeyProfile::default());
     let profile_tokens = behavior
         .sticky_key
         .as_ref()
         .map(|sk| {
-            let mut names: Vec<_> = sk.profiles.keys().collect();
-            names.sort();
-            names
+            sorted_sticky_profile_names(Some(&sk.profiles))
                 .into_iter()
-                .map(|name| expand_sticky_key_profile(&sk.profiles[name], &default))
+                .map(|name| expand_sticky_key_profile(&sk.profiles[&name], &default))
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
@@ -86,10 +83,6 @@ fn expand_sticky_key(behavior: &Behavior) -> proc_macro2::TokenStream {
         ::rmk::config::StickyKeyConfig {
             default_profile: #default_profile,
             profiles: ::rmk::heapless::Vec::from_iter([#(#profile_tokens),*]),
-            timeout: ::rmk::embassy_time::Duration::from_millis(#default_timeout),
-            activate_on_keypress: #default_activate_on_keypress,
-            max_repeat: #default_max_repeat,
-            ..Default::default()
         }
     }
 }
@@ -624,5 +617,44 @@ mod tests {
         let tokens = expand_sticky_key(&behavior).to_string().replace(' ', "");
         assert!(tokens.contains("release_mode:::core::option::Option::Some"));
         assert!(tokens.contains("profiles:::rmk::heapless::Vec::from_iter"));
+    }
+
+    #[test]
+    fn sticky_key_codegen_uses_the_action_parsers_profile_order() {
+        let mut profiles = HashMap::new();
+        profiles.insert(
+            "zebra".to_string(),
+            StickyKeyProfile {
+                timeout_ms: Some(200),
+                ..Default::default()
+            },
+        );
+        profiles.insert(
+            "alpha".to_string(),
+            StickyKeyProfile {
+                timeout_ms: Some(100),
+                ..Default::default()
+            },
+        );
+        let behavior = Behavior {
+            tri_layer: None,
+            combos: None,
+            macros: None,
+            forks: None,
+            morse: None,
+            sticky_key: Some(StickyKeyConfig {
+                timeout_ms: None,
+                activate_on_keypress: None,
+                max_repeat: None,
+                release_mode: None,
+                profiles,
+            }),
+            auto_mouse_layer: Vec::new(),
+        };
+
+        let tokens = expand_sticky_key(&behavior).to_string().replace(' ', "");
+        let alpha = tokens.find("from_millis(100u64)").unwrap();
+        let zebra = tokens.find("from_millis(200u64)").unwrap();
+        assert!(alpha < zebra);
     }
 }

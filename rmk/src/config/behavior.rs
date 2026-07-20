@@ -18,6 +18,9 @@ pub struct BehaviorConfig {
     pub default_layer: u8,
     pub tri_layer: Option<[u8; 3]>,
     pub tap: TapConfig,
+    /// Legacy one-shot inputs, normalized into `sticky_key` when the keymap is built.
+    pub one_shot: OneShotConfig,
+    pub one_shot_modifiers: OneShotModifiersConfig,
     pub combo: CombosConfig,
     pub fork: ForksConfig,
     pub morse: MorsesConfig,
@@ -161,7 +164,8 @@ impl StickyKeyReleaseMode {
     pub const LAYER_EXIT: Self = Self::new().with_layer_exit(true);
     pub const DOUBLE_TAP: Self = Self::new().with_double_tap(true);
 
-    pub const fn contains(self, other: Self) -> bool {
+    /// Returns `true` when the two trigger sets share at least one bit.
+    pub const fn intersects(self, other: Self) -> bool {
         self.into_bits() & other.into_bits() != 0
     }
 }
@@ -197,15 +201,6 @@ impl Default for StickyKeyProfile {
 pub struct StickyKeyConfig {
     pub default_profile: StickyKeyProfile,
     pub profiles: Vec<StickyKeyProfile, STICKY_KEY_PROFILE_MAX_NUM>,
-    /// Legacy Rust-API compatibility knobs. TOML uses `release_mode` instead.
-    pub timeout: Duration,
-    pub activate_on_keypress: bool,
-    pub max_repeat: u16,
-    pub quick_release: bool,
-    pub release_on_layer_change: bool,
-    pub tap_key_release_on_layer_change: Option<bool>,
-    pub one_shot_mod_release_on_layer_change: Option<bool>,
-    pub one_shot_layer_release_on_layer_change: Option<bool>,
 }
 
 impl Default for StickyKeyConfig {
@@ -213,14 +208,46 @@ impl Default for StickyKeyConfig {
         Self {
             default_profile: StickyKeyProfile::default(),
             profiles: Vec::new(),
+        }
+    }
+}
+
+/// Legacy one-shot timeout input retained for Rust keymaps.
+#[derive(Clone, Copy, Debug)]
+pub struct OneShotConfig {
+    pub timeout: Duration,
+}
+
+impl Default for OneShotConfig {
+    fn default() -> Self {
+        Self {
             timeout: Duration::from_secs(1),
-            activate_on_keypress: false,
-            max_repeat: 0,
-            quick_release: false,
-            release_on_layer_change: false,
-            tap_key_release_on_layer_change: None,
-            one_shot_mod_release_on_layer_change: None,
-            one_shot_layer_release_on_layer_change: None,
+        }
+    }
+}
+
+/// Legacy one-shot modifier input retained for Rust keymaps.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OneShotModifiersConfig {
+    pub activate_on_keypress: bool,
+    pub quick_release: bool,
+}
+
+impl BehaviorConfig {
+    /// Convert legacy one-shot inputs to the canonical sticky-key profile.
+    ///
+    /// This runs once at the keymap boundary. Runtime code reads only
+    /// `sticky_key`, so there is no mirrored mutable state to synchronize.
+    pub(crate) fn normalize_sticky_key_compat(&mut self) {
+        let legacy_timeout = OneShotConfig::default().timeout;
+        if self.one_shot.timeout != legacy_timeout {
+            self.sticky_key.default_profile.timeout = self.one_shot.timeout;
+        }
+        if self.one_shot_modifiers.activate_on_keypress {
+            self.sticky_key.default_profile.activate_on_keypress = true;
+        }
+        if self.one_shot_modifiers.quick_release && self.sticky_key.default_profile.release_mode.is_none() {
+            self.sticky_key.default_profile.release_mode = Some(StickyKeyReleaseMode::OTHER_KEY_PRESS);
         }
     }
 }

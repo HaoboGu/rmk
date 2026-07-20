@@ -158,10 +158,9 @@ pub(crate) fn expand_profile_name(
 }
 
 pub(crate) fn sorted_sticky_profile_names(
-    profiles: &Option<HashMap<String, StickyKeyProfile>>,
+    profiles: Option<&HashMap<String, StickyKeyProfile>>,
 ) -> Vec<String> {
     let mut names: Vec<String> = profiles
-        .as_ref()
         .map(|profiles| profiles.keys().cloned().collect())
         .unwrap_or_default();
     names.sort();
@@ -175,11 +174,12 @@ fn sticky_profile_index(
     let Some(name) = name else {
         return quote! { ::core::primitive::u8::MAX };
     };
-    let names = sorted_sticky_profile_names(profiles);
+    let names = sorted_sticky_profile_names(profiles.as_ref());
     let Some(index) = names.iter().position(|candidate| candidate == name) else {
         panic!("\n❌ `{name}` profile name is not found in behavior.sticky_key.profiles");
     };
-    quote! { #index as u8 }
+    let index = index as u8;
+    quote! { #index }
 }
 
 /// Split `s` on commas that are *not* nested inside parentheses.
@@ -711,5 +711,28 @@ mod tests {
         );
 
         parse_key("SK(LShift, @missing)".to_string(), &None, &Some(profiles));
+    }
+
+    #[test]
+    fn sticky_key_profile_indices_are_sorted_by_name() {
+        let profile = || StickyKeyProfile {
+            timeout_ms: None,
+            activate_on_keypress: None,
+            max_repeat: None,
+            release_mode: None,
+        };
+        let profiles = Some(HashMap::from([
+            ("zebra".to_string(), profile()),
+            ("alpha".to_string(), profile()),
+        ]));
+
+        assert!(
+            squash(&parse_key("SK(LShift, @alpha)".into(), &None, &profiles).to_string())
+                .contains(",0u8")
+        );
+        assert!(
+            squash(&parse_key("SK(LShift, @zebra)".into(), &None, &profiles).to_string())
+                .contains(",1u8")
+        );
     }
 }

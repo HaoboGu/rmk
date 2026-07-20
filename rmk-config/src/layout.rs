@@ -244,103 +244,38 @@ impl KeyboardTomlConfig {
     fn alias_resolver(keys: &str, aliases: &HashMap<String, String>) -> Result<String, String> {
         let mut current_keys = keys.to_string();
 
-        let mut iterations = 0;
-
-        loop {
-            let mut next_keys = String::with_capacity(current_keys.capacity());
-            let mut made_replacement = false;
-            let mut last_index = 0; // Keep track of where we are in current_keys
-
-            while let Some(at_index) = current_keys[last_index..].find('@') {
-                let start_index = last_index + at_index;
-
-                // Append the text before the '@'
-                next_keys.push_str(&current_keys[last_index..start_index]);
-
-                // Check if it's a valid alias start (@ followed by a non whitespace)
-                if let Some(first_char) = current_keys.as_bytes().get(start_index + 1) {
-                    if !first_char.is_ascii_whitespace() {
-                        // Find the end of the alias identifier
-                        let mut end_index = start_index + 2;
-                        while let Some(c) = current_keys.as_bytes().get(end_index) {
-                            if c.is_ascii_whitespace() {
-                                break;
-                            } else {
-                                end_index += 1;
-                            }
-                        }
-
-                        // Extract the alias key (except the starting '@')
-                        let alias_key = &current_keys[start_index + 1..end_index];
-
-                        // Look up and replace
-                        match aliases.get(alias_key) {
-                            Some(value) => {
-                                next_keys.push_str(value);
-                                made_replacement = true;
-                            }
-                            None => {
-                                // Sticky-key profiles use the same `@name`
-                                // spelling as keymap aliases, but occur as the
-                                // final argument of SK/OSM/OSL. Preserve that
-                                // reference for the action parser instead of
-                                // trying to resolve it as an alias.
-                                let profile_end = current_keys[start_index + 1..]
-                                    .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-                                    .map(|offset| start_index + 1 + offset)
-                                    .unwrap_or(current_keys.len());
-                                let profile_name = &current_keys[start_index + 1..profile_end];
-                                let follows_comma = current_keys[..start_index].trim_end().ends_with(',');
-                                let closes_action = current_keys[profile_end..].trim_start().starts_with(')');
-                                let valid_profile_name = profile_name
-                                    .as_bytes()
-                                    .first()
-                                    .is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_');
-
-                                if follows_comma && closes_action && valid_profile_name {
-                                    next_keys.push_str(&current_keys[start_index..profile_end]);
-                                    last_index = profile_end;
-                                    continue;
-                                }
-
-                                return Err(format!("Undefined alias: {}", alias_key));
-                            }
-                        }
-                        last_index = end_index; // Move past the processed alias
-                    } else {
-                        // Not a valid alias start, treat '@' literally
-                        next_keys.push('@');
-                        last_index = start_index + 1;
-                    }
-                } else {
-                    // '@' was the last character, treat it literally
-                    next_keys.push('@');
-                    last_index = start_index + 1;
-                    break; // No more characters after '@'
-                }
+        for _ in 0..MAX_ALIAS_RESOLUTION_DEPTH {
+            let pairs = ConfigParser::parse(Rule::key_map, &current_keys)
+                .map_err(|error| format!("Invalid keymap format: {error}"))?;
+            let mut references = Vec::new();
+            for pair in pairs {
+                Self::collect_alias_spans(pair, &mut references);
+            }
+            if references.is_empty() {
+                return Ok(current_keys);
             }
 
-            // Append any remaining part of the string after the last '@' or if no '@' was found
-            next_keys.push_str(&current_keys[last_index..]);
-
-            // Check for termination conditions
-            iterations += 1;
-            if iterations >= MAX_ALIAS_RESOLUTION_DEPTH {
-                return Err(format!(
-                    "Alias resolution exceeded maximum depth ({}), potential infinite loop detected in '{}'",
-                    MAX_ALIAS_RESOLUTION_DEPTH, keys
-                )); // Show original keys for context
+            for (start, end, name) in references.into_iter().rev() {
+                let value = aliases.get(&name).ok_or_else(|| format!("Undefined alias: {name}"))?;
+                current_keys.replace_range(start..end, value);
             }
-
-            if !made_replacement {
-                break; // No more replacements needed
-            }
-
-            // Prepare for the next iteration
-            current_keys = next_keys;
         }
 
-        Ok(current_keys)
+        Err(format!(
+            "Alias resolution exceeded maximum depth ({}), potential infinite loop detected in '{}'",
+            MAX_ALIAS_RESOLUTION_DEPTH, keys
+        ))
+    }
+
+    fn collect_alias_spans(pair: pest::iterators::Pair<Rule>, out: &mut Vec<(usize, usize, String)>) {
+        if pair.as_rule() == Rule::alias_ref {
+            let span = pair.as_span();
+            out.push((span.start(), span.end(), pair.as_str()[1..].to_string()));
+            return;
+        }
+        for inner in pair.into_inner() {
+            Self::collect_alias_spans(inner, out);
+        }
     }
 
     /// Reconstruct an action string from a parsed pair, resolving every named
@@ -859,13 +794,16 @@ mod tests {
 
     #[test]
     fn test_keymap_aliases_still_resolve_next_to_sticky_profile_refs() {
-        let aliases = HashMap::from([("copy".to_string(), "WM(C, LCtrl)".to_string())]);
+        let aliases = HashMap::from([
+            ("copy".to_string(), "WM(C, LCtrl)".to_string()),
+            ("osm".to_string(), "A".to_string()),
+        ]);
         let layer_names = HashMap::new();
-        let keymap = "@copy SK(LGui, @osm)";
+        let keymap = "@copy @osm SK(LGui, @osm)";
 
         let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), vec!["WM(C, LCtrl)", "SK(LGui, @osm)"]);
+        assert_eq!(result.unwrap(), vec!["WM(C, LCtrl)", "A", "SK(LGui, @osm)"]);
     }
 }

@@ -101,7 +101,7 @@ impl crate::KeyboardTomlConfig {
             modifier,
             keyboard,
             layer_change,
-            sticky_key_release,
+            layer_transition,
             wpm_update,
             led_indicator,
             sleep_state,
@@ -162,6 +162,13 @@ impl crate::KeyboardTomlConfig {
         let auto_mouse_layer_max_num = rmk
             .auto_mouse_layer_max_num
             .unwrap_or(crate::resolved::behavior::DEFAULT_AUTO_MOUSE_LAYER_MAX_NUM);
+        let sticky_key_profile_max_num = self.sticky_key_profile_capacity();
+        let sticky_key_profile_count = self.configured_sticky_key_profile_count();
+        if sticky_key_profile_count > sticky_key_profile_max_num {
+            return Err(format!(
+                "behavior.sticky_key.profiles defines {sticky_key_profile_count} profiles, but `[rmk] sticky_key_profile_max_num` is {sticky_key_profile_max_num}. Raise it in keyboard.toml"
+            ));
+        }
         if let Some(entries) = self.behavior.as_ref().and_then(|b| b.auto_mouse_layer.as_ref()) {
             if entries.len() > auto_mouse_layer_max_num {
                 return Err(format!(
@@ -185,7 +192,7 @@ impl crate::KeyboardTomlConfig {
             combo_max_length: rmk.combo_max_length,
             fork_max_num: rmk.fork_max_num,
             morse_max_num: rmk.morse_max_num,
-            sticky_key_profile_max_num: rmk.sticky_key_profile_max_num,
+            sticky_key_profile_max_num,
             max_patterns_per_key: rmk.max_patterns_per_key,
             macro_space_size: rmk.macro_space_size,
             debounce_time: rmk.debounce_time,
@@ -295,6 +302,37 @@ mod tests {
     fn auto_mouse_layer_within_capacity_is_accepted() {
         let toml = "[rmk]\nauto_mouse_layer_max_num = 1\n\n[[behavior.auto_mouse_layer]]\ntarget_layer = 1\nextra_mouse_keys = [\"LCtrl\"]\n";
         assert!(parse(toml).build_constants(&[]).is_ok());
+    }
+
+    #[test]
+    fn sticky_key_profile_capacity_is_derived_from_configuration() {
+        let toml = r#"
+[behavior.sticky_key.profiles.one]
+[behavior.sticky_key.profiles.two]
+[behavior.sticky_key.profiles.three]
+[behavior.sticky_key.profiles.four]
+[behavior.sticky_key.profiles.five]
+"#;
+        let constants = parse(toml).build_constants(&[]).unwrap();
+        assert_eq!(constants.sticky_key_profile_max_num, 5);
+    }
+
+    #[test]
+    fn sticky_key_profile_capacity_can_be_explicitly_disabled() {
+        let constants = parse("[rmk]\nsticky_key_profile_max_num = 0\n")
+            .build_constants(&[])
+            .unwrap();
+        assert_eq!(constants.sticky_key_profile_max_num, 0);
+    }
+
+    #[test]
+    fn sticky_key_profile_capacity_rejects_too_small_override() {
+        let toml = "[rmk]\nsticky_key_profile_max_num = 0\n\n[behavior.sticky_key.profiles.named]\n";
+        let err = match parse(toml).build_constants(&[]) {
+            Ok(_) => panic!("expected sticky_key_profile_max_num validation failure"),
+            Err(err) => err,
+        };
+        assert!(err.contains("sticky_key_profile_max_num"));
     }
 
     #[test]
