@@ -372,6 +372,18 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
         self
     }
 
+    /// Register named morse profiles, indexed by `KeyAction::TapHold(_, _, idx)`.
+    pub fn morse_profiles(mut self, profiles: &[MorseProfile]) -> Self {
+        for &profile in profiles {
+            self.behavior_config
+                .morse
+                .profiles
+                .push(profile)
+                .expect("simulator morse profiles exceed MORSE_PROFILE_MAX_NUM");
+        }
+        self
+    }
+
     pub fn morse_flow_tap(mut self, enable: bool) -> Self {
         self.behavior_config.morse.enable_flow_tap = enable;
         self
@@ -870,6 +882,9 @@ impl<'a> SimKeyboard<'a> {
         let sender = KeyboardEvent::publisher_async();
         #[cfg(feature = "host")]
         let host_service = protocol_config.map(|config| crate::host::HostService::new(keymap, config));
+        // One session per simulator run, like a single host connection.
+        #[cfg(feature = "rynk")]
+        let rynk_session = host_service.as_ref().map(crate::host::HostService::new_session);
         let mut pressed_inputs = Vec::<KeyboardEventPos>::new();
 
         for (idx, step) in steps.into_iter().enumerate() {
@@ -940,9 +955,12 @@ impl<'a> SimKeyboard<'a> {
                     let service = host_service
                         .as_ref()
                         .expect("simulator Rynk config must be enabled before running Rynk steps");
+                    let session = rynk_session
+                        .as_ref()
+                        .expect("simulator Rynk config must be enabled before running Rynk steps");
                     let mut msg = RynkMessage::try_from(request.as_mut_slice())
                         .expect("simulator Rynk request should be a valid frame");
-                    match select(Timer::after(timeout), service.dispatch(&mut msg)).await {
+                    match select(Timer::after(timeout), service.dispatch(session, &mut msg)).await {
                         Either::First(_) => panic!("simulator timed out dispatching Rynk packet at step #{idx}"),
                         Either::Second(()) => {}
                     }

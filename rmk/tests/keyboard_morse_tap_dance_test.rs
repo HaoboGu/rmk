@@ -1151,15 +1151,12 @@ fn test_dusk_tap_hold_cou_rollover_keeps_o_before_u() {
     crate::common::test_block_on(async {
         let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
             .setup(DUSK_SETUP)
+            .morse_profiles(&[DUSK_HRM_PROFILE])
             .key(
                 0,
                 1,
                 6,
-                KeyAction::TapHold(
-                    Action::Key(KeyCode::Hid(HidKeyCode::C)),
-                    Action::LayerOn(1),
-                    DUSK_HRM_PROFILE,
-                ),
+                KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::C)), Action::LayerOn(1), 0u8),
             )
             .build()
             .await;

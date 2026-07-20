@@ -2,7 +2,6 @@ use rmk::sim::{KeymapOverride, SimKeyboardSetup};
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
-use rmk::types::morse::MorseProfile;
 use rmk::{k, lt, mt, td};
 
 pub const SIMPLE_MORSE_KEY_OVERRIDES: [KeymapOverride; 10] = [
@@ -53,18 +52,15 @@ pub const HRM_MORSE_SETUP: SimKeyboardSetup = SimKeyboardSetup::new()
 pub const MORSE_COMBO_KEY: KeyAction = KeyAction::TapHold(
     Action::Key(KeyCode::Hid(HidKeyCode::B)),
     Action::Modifier(ModifierCombination::LSHIFT),
-    MorseProfile::const_default(),
+    u8::MAX,
 );
 pub const MORSE_COMBO_KEY_2: KeyAction = KeyAction::TapHold(
     Action::Key(KeyCode::Hid(HidKeyCode::C)),
     Action::Modifier(ModifierCombination::LGUI),
-    MorseProfile::const_default(),
+    u8::MAX,
 );
-pub const MORSE_COMBO_KEY_3: KeyAction = KeyAction::TapHold(
-    Action::Key(KeyCode::Hid(HidKeyCode::D)),
-    Action::LayerOn(1),
-    MorseProfile::const_default(),
-);
+pub const MORSE_COMBO_KEY_3: KeyAction =
+    KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::D)), Action::LayerOn(1), u8::MAX);
 
 pub const MORSE_2_KEY_COMBOS: [([KeyAction; 2], KeyAction); 2] = [
     ([MORSE_COMBO_KEY, MORSE_COMBO_KEY_2], k!(X)),

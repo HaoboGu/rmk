@@ -16,8 +16,7 @@ use rmk::sim::SimKeyboard;
 use rmk::types::action::EncoderAction;
 #[cfg(any(feature = "steno", feature = "rynk"))]
 use rmk::types::action::{Action, KeyAction};
-use rmk::types::keycode::HidKeyCode;
-use rmk::types::keycode::{ConsumerKey, SystemControlKey};
+use rmk::types::keycode::{ConsumerKey, HidKeyCode, SystemControlKey};
 #[cfg(feature = "vial")]
 use rmk::types::protocol::vial::SettingKey;
 #[cfg(feature = "steno")]
@@ -36,7 +35,7 @@ use rmk_types::protocol::rynk::{
     BehaviorConfig as RynkBehaviorConfig, LayoutChunk, MacroData, SetComboRequest, SetForkRequest, SetMacroRequest,
     SetMorseRequest, command,
 };
-#[cfg(all(feature = "rynk", feature = "bulk"))]
+#[cfg(feature = "rynk")]
 use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
 #[cfg(feature = "vial")]
 use rmk_types::protocol::vial::{VIA_PROTOCOL_VERSION, ViaCommand};
@@ -288,7 +287,7 @@ fn simulator_reports_consumer_system_and_mouse_hid_reports() {
         keyboard
             .press(0, 0)
             .expect_report(Report::MediaKeyboardReport(MediaKeyboardReport {
-                usage_id: ConsumerKey::VolumeIncrement as u16,
+                usage_id: u16::from(ConsumerKey::VolumeIncrement),
             }))
             .release(0, 0)
             .expect_report(Report::MediaKeyboardReport(MediaKeyboardReport { usage_id: 0 }))
@@ -566,7 +565,7 @@ fn simulator_combines_rynk_combo_and_behavior_updates_with_key_reports() {
     });
 }
 
-#[cfg(all(feature = "rynk", feature = "bulk"))]
+#[cfg(feature = "rynk")]
 #[test]
 fn simulator_combines_rynk_bulk_keymap_update_and_key_reports() {
     common::test_block_on(async {

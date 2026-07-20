@@ -20,18 +20,15 @@ const HOLD_ON_OTHER_SETUP: SimKeyboardSetup = SIMPLE_MORSE_SETUP.morse_profile(H
 const HOLD_ON_OTHER_COMBO_KEY: KeyAction = KeyAction::TapHold(
     Action::Key(KeyCode::Hid(HidKeyCode::B)),
     Action::Modifier(ModifierCombination::LSHIFT),
-    HOLD_ON_OTHER_PROFILE,
+    u8::MAX,
 );
 const HOLD_ON_OTHER_COMBO_KEY_2: KeyAction = KeyAction::TapHold(
     Action::Key(KeyCode::Hid(HidKeyCode::C)),
     Action::Modifier(ModifierCombination::LGUI),
-    MorseProfile::new(Some(false), Some(MorseMode::Normal), Some(250u16), Some(250u16)),
+    u8::MAX,
 );
-const HOLD_ON_OTHER_COMBO_KEY_3: KeyAction = KeyAction::TapHold(
-    Action::Key(KeyCode::Hid(HidKeyCode::D)),
-    Action::LayerOn(1),
-    MorseProfile::const_default(),
-);
+const HOLD_ON_OTHER_COMBO_KEY_3: KeyAction =
+    KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::D)), Action::LayerOn(1), u8::MAX);
 const HOLD_ON_OTHER_2_KEY_COMBOS: [([KeyAction; 2], KeyAction); 2] = [
     ([HOLD_ON_OTHER_COMBO_KEY, HOLD_ON_OTHER_COMBO_KEY_2], k!(X)),
     ([k!(A), HOLD_ON_OTHER_COMBO_KEY], k!(Y)),
@@ -1632,9 +1629,10 @@ fn profile_flow_tap_true_overrides_global_false() {
             KeyAction::TapHold(
                 Action::Key(KeyCode::Hid(HidKeyCode::B)),
                 Action::Modifier(ModifierCombination::LSHIFT),
-                profile,
+                0u8,
             ),
         ]]])
+        .morse_profiles(&[profile])
         .morse_default_profile(HOLD_ON_OTHER_PROFILE)
         .morse_prior_idle_ms(120)
         .morse_flow_tap(false)
@@ -1670,9 +1668,10 @@ fn profile_flow_tap_false_overrides_global_true() {
             KeyAction::TapHold(
                 Action::Key(KeyCode::Hid(HidKeyCode::B)),
                 Action::Modifier(ModifierCombination::LSHIFT),
-                profile,
+                0u8,
             ),
         ]]])
+        .morse_profiles(&[profile])
         .morse_default_profile(HOLD_ON_OTHER_PROFILE)
         .morse_prior_idle_ms(120)
         .morse_flow_tap(true)
@@ -1783,19 +1782,16 @@ fn flow_tap_rechecks_current_key_after_held_key_changes_layer() {
         let mut keyboard = SimKeyboard::builder([
             [[
                 k!(A),
-                KeyAction::TapHold(
-                    Action::Key(KeyCode::Hid(HidKeyCode::D)),
-                    Action::LayerOn(1),
-                    disabled_flow_profile,
-                ),
+                KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::D)), Action::LayerOn(1), 0u8),
                 KeyAction::TapHold(
                     Action::Key(KeyCode::Hid(HidKeyCode::B)),
                     Action::Modifier(ModifierCombination::LSHIFT),
-                    enabled_flow_profile,
+                    1u8,
                 ),
             ]],
             [[a!(Transparent), a!(Transparent), k!(Kp1)]],
         ])
+        .morse_profiles(&[disabled_flow_profile, enabled_flow_profile])
         .morse_default_profile(HOLD_ON_OTHER_PROFILE)
         .morse_prior_idle_ms(120)
         .morse_flow_tap(false)
