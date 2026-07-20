@@ -346,13 +346,11 @@ mod tests {
         let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
 
         const UNLOCK_KEYS: &[(u8, u8)] = &[(0, 0)];
-        let config = RmkConfig {
-            lock_config: LockConfig {
-                unlock_keys: UNLOCK_KEYS,
-                insecure: false,
-                write_requires_unlock: false,
-            },
-            ..Default::default()
+        let mut config = RmkConfig::default();
+        config.lock_config = LockConfig {
+            unlock_keys: UNLOCK_KEYS,
+            insecure: false,
+            write_requires_unlock: false,
         };
         let service = RynkService::new(&keymap, &config);
 
