@@ -50,6 +50,8 @@ use crate::core_traits::Runnable;
 use crate::event::KeyboardEvent;
 #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
 use crate::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEventPos};
+#[cfg(feature = "vial")]
+use crate::hid::ViaReport;
 #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
 use crate::hid::{KeyboardReport, Report};
 use crate::input_device::rotary_encoder::Direction;
@@ -942,11 +944,15 @@ impl<'a> SimKeyboard<'a> {
                     let service = host_service
                         .as_ref()
                         .expect("simulator Vial config must be enabled before running Vial steps");
-                    let actual = match select(Timer::after(timeout), service.process_packet(data)).await {
-                        Either::First(_) => panic!("simulator timed out dispatching Vial packet at step #{idx}"),
-                        Either::Second(reply) => reply,
+                    let mut report = ViaReport {
+                        input_data: data,
+                        output_data: data,
                     };
-                    assert_eq!(expected, actual, "on Vial reply at step #{idx}");
+                    match select(Timer::after(timeout), service.process_via_packet(&mut report)).await {
+                        Either::First(_) => panic!("simulator timed out dispatching Vial packet at step #{idx}"),
+                        Either::Second(()) => {}
+                    }
+                    assert_eq!(expected, report.input_data, "on Vial reply at step #{idx}");
                 }
                 #[cfg(feature = "rynk")]
                 SimStep::RynkPacket { mut request, expected } => {
