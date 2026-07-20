@@ -15,11 +15,11 @@
 pub mod common;
 
 use rmk::config::Hand;
-use rmk::sim::{HandOverride, SimKeyboard, SimKeyboardSetup};
 use rmk::types::keycode::HidKeyCode;
 use rmk_types::morse::{MorseMode, MorseProfile};
 
 use crate::common::morse::HRM_MORSE_SETUP;
+use crate::common::sim::{HandOverride, SimKeyboard, SimKeyboardSetup};
 use crate::common::{KC_LSHIFT, TEST_KEYMAP};
 
 const BILATERAL_PROFILE: MorseProfile =

@@ -37,7 +37,7 @@ impl<'a> VialService<'a> {
         }
     }
 
-    pub(crate) async fn process_via_packet(&self, report: &mut ViaReport) {
+    async fn process_via_packet(&self, report: &mut ViaReport) {
         let command_id = report.output_data[0];
 
         // Caller pre-fills `input_data` from `output_data`, so individual arms

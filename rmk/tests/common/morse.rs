@@ -1,8 +1,9 @@
-use rmk::sim::{KeymapOverride, SimKeyboardSetup};
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
 use rmk::{k, lt, mt, td};
+
+use crate::common::sim::{KeymapOverride, SimKeyboardSetup};
 
 pub const SIMPLE_MORSE_KEY_OVERRIDES: [KeymapOverride; 10] = [
     KeymapOverride::new(0, 0, 0, k!(A)),

@@ -1,8 +1,9 @@
 pub mod common;
 
-use rmk::sim::{KeymapOverride, SimKeyboard, SimKeyboardSetup};
 use rmk::types::keycode::HidKeyCode;
 use rmk::types::modifier::ModifierCombination;
+
+use crate::common::sim::{KeymapOverride, SimKeyboard, SimKeyboardSetup};
 
 mod one_shot_test {
     use rmk::{k, osl, osm, th, wm};

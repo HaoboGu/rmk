@@ -2,7 +2,6 @@
 pub mod common;
 
 use rmk::config::Hand;
-use rmk::sim::{HandOverride, KeymapOverride, SimKeyboard, SimKeyboardSetup};
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
@@ -10,6 +9,7 @@ use rmk::types::morse::{HOLD, Morse, MorseMode, MorseProfile};
 use rmk::{k, td};
 
 use crate::common::TEST_KEYMAP;
+use crate::common::sim::{HandOverride, KeymapOverride, SimKeyboard, SimKeyboardSetup};
 
 const TAP_DANCE_PROFILE: MorseProfile = MorseProfile::new(
     Some(false),

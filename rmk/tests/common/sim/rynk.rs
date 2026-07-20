@@ -1,11 +1,11 @@
 use std::marker::PhantomData;
 use std::vec::Vec;
 
+use rmk::types::action::{EncoderAction, KeyAction};
 use rmk_types::protocol::rynk::endpoint::Endpoint;
 use rmk_types::protocol::rynk::{Cmd, RynkError, RynkMessage, command};
 
 use super::{SimHost, SimKeyboard};
-use crate::types::action::{EncoderAction, KeyAction};
 
 impl SimHost {
     pub fn rynk<'k, 'a>(&self, keyboard: &'k mut SimKeyboard<'a>) -> SimRynk<'k, 'a> {
@@ -96,7 +96,9 @@ impl<'k, 'a, E: Endpoint> SimRynkReply<'k, 'a, E> {
 
 fn rynk_request_frame<T: serde::Serialize>(cmd: Cmd, seq: u8, payload: &T) -> Vec<u8> {
     let mut buf = std::vec![0u8; rmk_types::constants::RYNK_BUFFER_SIZE];
-    RynkMessage::build(&mut buf, cmd, seq, payload).expect("simulator Rynk request should encode");
+    let msg = RynkMessage::build(&mut buf, cmd, seq, payload).expect("simulator Rynk request should encode");
+    let frame_len = msg.frame_len();
+    buf.truncate(frame_len);
     buf
 }
 

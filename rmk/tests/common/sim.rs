@@ -5,6 +5,11 @@
 //! reports, and dispatches host requests through the production protocol
 //! services. It does not emulate USB enumeration, BLE radio state, or real GPIO
 //! electrical behavior.
+//!
+//! Lives in the test crate, so it drives only rmk's public API (plus the
+//! `#[doc(hidden)]` `rmk::test_exports` gate for a few internal signals).
+
+#![allow(dead_code)] // the harness API is used piecewise across test binaries
 
 use std::boxed::Box;
 #[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
@@ -19,64 +24,72 @@ use embassy_futures::select::{Either, select};
 use embassy_futures::yield_now;
 #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+#[cfg(feature = "host")]
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+#[cfg(feature = "host")]
+use embassy_sync::pipe::Pipe;
 #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
 use embassy_sync::signal::Signal;
 use embassy_time::Duration;
 #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
 use embassy_time::Timer;
+#[cfg(feature = "host")]
+use embedded_io_async::Read;
 #[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
 use embedded_storage_async::nor_flash::NorFlash as AsyncNorFlash;
 #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
 use futures::join;
+#[cfg(not(feature = "_no_usb"))]
+use rmk::channel::USB_REPORT_CHANNEL;
+#[cfg(any(feature = "host", not(feature = "_no_usb"), feature = "_ble"))]
+use rmk::config::RmkConfig;
+#[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
+use rmk::config::StorageConfig;
+use rmk::config::{BehaviorConfig, Hand, PositionalConfig};
 #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
-use rmk_types::connection::ConnectionStatus;
+use rmk::core_traits::Runnable;
+use rmk::event::KeyboardEvent;
+#[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
+use rmk::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEventPos};
+#[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
+use rmk::hid::{KeyboardReport, Report};
+use rmk::input_device::rotary_encoder::Direction;
+use rmk::keyboard::Keyboard;
+use rmk::keyboard::combo::{Combo, ComboConfig};
+use rmk::keymap::{KeyMap, KeymapData};
+#[cfg(not(feature = "_no_usb"))]
+use rmk::state::set_usb_state;
+#[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
+use rmk::storage::Storage;
+#[cfg(all(feature = "_no_usb", feature = "_ble"))]
+use rmk::test_exports::set_ble_state;
+use rmk::types::action::{Action, EncoderAction, KeyAction};
 #[cfg(not(feature = "_no_usb"))]
 use rmk_types::connection::UsbState;
 #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
 use rmk_types::keycode::HidKeyCode;
 use rmk_types::morse::{Morse, MorsePattern, MorseProfile};
 #[cfg(feature = "rynk")]
-use rmk_types::protocol::rynk::RynkMessage;
-
-#[cfg(not(feature = "_no_usb"))]
-use crate::channel::USB_REPORT_CHANNEL;
-#[cfg(any(feature = "host", not(feature = "_no_usb"), feature = "_ble"))]
-use crate::config::RmkConfig;
-#[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
-use crate::config::StorageConfig;
-use crate::config::{BehaviorConfig, Hand, PositionalConfig};
-#[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
-use crate::core_traits::Runnable;
-use crate::event::KeyboardEvent;
-#[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
-use crate::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEventPos};
-#[cfg(feature = "vial")]
-use crate::hid::ViaReport;
-#[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
-use crate::hid::{KeyboardReport, Report};
-use crate::input_device::rotary_encoder::Direction;
-use crate::keyboard::Keyboard;
-use crate::keyboard::combo::{Combo, ComboConfig};
-use crate::keymap::{KeyMap, KeymapData};
-#[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
-use crate::state::CONNECTION_STATUS;
-#[cfg(all(feature = "_no_usb", feature = "_ble"))]
-use crate::state::set_ble_state;
-#[cfg(not(feature = "_no_usb"))]
-use crate::state::set_usb_state;
-#[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
-use crate::storage::FLASH_OPERATION_FINISHED;
-#[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
-use crate::storage::Storage;
-use crate::types::action::{Action, EncoderAction, KeyAction};
+use rmk_types::protocol::rynk::{RYNK_HEADER_SIZE, RynkHeader};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Bytes per direction of the in-memory host↔device link. One full protocol
+/// frame must fit so a writer never blocks on an unpolled reader.
+#[cfg(feature = "rynk")]
+const SIM_LINK_BYTES: usize = rmk_types::constants::RYNK_BUFFER_SIZE;
+#[cfg(all(feature = "vial", not(feature = "rynk")))]
+const SIM_LINK_BYTES: usize = 64;
+
+/// In-memory host↔device byte link for driving `run_session` in tests.
+#[cfg(feature = "host")]
+type Link = Pipe<NoopRawMutex, SIM_LINK_BYTES>;
 
 #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
 fn reset() {
     KeyboardEvent::publisher_async().clear();
 
-    CONNECTION_STATUS.lock(|c| c.set(ConnectionStatus::default()));
+    rmk::test_exports::reset_connection_status();
     #[cfg(not(feature = "_no_usb"))]
     set_usb_state(UsbState::Configured);
     #[cfg(all(feature = "_no_usb", feature = "_ble"))]
@@ -85,10 +98,10 @@ fn reset() {
     #[cfg(not(feature = "_no_usb"))]
     USB_REPORT_CHANNEL.clear();
     #[cfg(feature = "_ble")]
-    crate::channel::BLE_REPORT_CHANNEL.clear();
+    rmk::channel::BLE_REPORT_CHANNEL.clear();
 
     #[cfg(feature = "storage")]
-    crate::channel::FLASH_CHANNEL.clear();
+    rmk::test_exports::clear_flash_channel();
 }
 
 #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
@@ -99,7 +112,7 @@ async fn receive_sim_report() -> Report {
     }
     #[cfg(all(feature = "_no_usb", feature = "_ble"))]
     {
-        crate::channel::BLE_REPORT_CHANNEL.receive().await
+        rmk::channel::BLE_REPORT_CHANNEL.receive().await
     }
 }
 
@@ -111,7 +124,7 @@ fn try_receive_sim_report() -> Option<Report> {
     }
     #[cfg(all(feature = "_no_usb", feature = "_ble"))]
     {
-        crate::channel::BLE_REPORT_CHANNEL.try_receive().ok()
+        rmk::channel::BLE_REPORT_CHANNEL.try_receive().ok()
     }
 }
 
@@ -162,7 +175,7 @@ where
 
 #[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
 async fn drain_flash_until_done(done: &Signal<CriticalSectionRawMutex, ()>) {
-    match select(crate::channel::drain_flash_channel_for_test(), done.wait()).await {
+    match select(rmk::channel::drain_flash_channel_for_test(), done.wait()).await {
         Either::First(_) => unreachable!("flash drain should never return"),
         Either::Second(()) => {}
     }
@@ -190,7 +203,7 @@ where
     let behavior_config = Box::leak(Box::new(behavior_config));
     let positional_config = Box::leak(Box::new(positional_config));
     let (keymap, storage) =
-        crate::initialize_keymap_and_storage(data, flash, &storage_config, behavior_config, positional_config).await;
+        rmk::initialize_keymap_and_storage(data, flash, &storage_config, behavior_config, positional_config).await;
     (Box::leak(Box::new(keymap)), Box::new(storage))
 }
 
@@ -507,7 +520,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
         self
     }
 
-    pub fn macro_sequences(mut self, macro_sequences: [u8; crate::MACRO_SPACE_SIZE]) -> Self {
+    pub fn macro_sequences(mut self, macro_sequences: [u8; rmk::test_exports::MACRO_SPACE_SIZE]) -> Self {
         self.behavior_config.keyboard_macros.macro_sequences = macro_sequences;
         self
     }
@@ -561,7 +574,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
             self.positional_config,
         )
         .await;
-        let keyboard = SimKeyboard::new(Keyboard::new(keymap));
+        let keyboard = SimKeyboard::new(Keyboard::new(keymap), keymap);
         #[cfg(feature = "host")]
         let keyboard = {
             let mut keyboard = keyboard;
@@ -588,7 +601,7 @@ where
             self.positional_config,
         )
         .await;
-        let keyboard = SimKeyboard::new(Keyboard::new(keymap)).with_storage(storage);
+        let keyboard = SimKeyboard::new(Keyboard::new(keymap), keymap).with_storage(storage);
         #[cfg(feature = "host")]
         let keyboard = {
             let mut keyboard = keyboard;
@@ -636,6 +649,7 @@ enum SimStep {
 /// transport I/O.
 pub struct SimKeyboard<'a> {
     keyboard: Keyboard<'a>,
+    keymap: &'a KeyMap<'a>,
     steps: Vec<SimStep>,
     #[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
     storage: Option<Box<dyn SimStorageRunner>>,
@@ -644,9 +658,10 @@ pub struct SimKeyboard<'a> {
 }
 
 impl<'a> SimKeyboard<'a> {
-    fn new(keyboard: Keyboard<'a>) -> Self {
+    fn new(keyboard: Keyboard<'a>, keymap: &'a KeyMap<'a>) -> Self {
         Self {
             keyboard,
+            keymap,
             steps: Vec::new(),
             #[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
             storage: None,
@@ -662,7 +677,7 @@ impl<'a> SimKeyboard<'a> {
     }
 
     pub fn keymap(&self) -> &'a KeyMap<'a> {
-        self.keyboard.keymap
+        self.keymap
     }
 
     pub fn press(&mut self, row: u8, col: u8) -> &mut Self {
@@ -806,7 +821,7 @@ impl<'a> SimKeyboard<'a> {
         let protocol_config: Option<&RmkConfig<'static>> = None;
 
         reset();
-        let keymap = self.keyboard.keymap;
+        let keymap = self.keymap;
 
         #[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
         if let Some(storage) = self.storage.as_deref_mut() {
@@ -882,156 +897,196 @@ impl<'a> SimKeyboard<'a> {
         let _ = (keymap, protocol_config);
 
         let sender = KeyboardEvent::publisher_async();
+        // A host connection is just a byte stream: drive the production
+        // `run_session` over an in-memory duplex, exactly as a USB/BLE transport
+        // hands it one. `to_device` carries host→device requests, `from_device`
+        // the device→host responses; both ends are shared `&Link`s.
         #[cfg(feature = "host")]
-        let host_service = protocol_config.map(|config| crate::host::HostService::new(keymap, config));
-        // One session per simulator run, like a single host connection.
-        #[cfg(feature = "rynk")]
-        let rynk_session = host_service.as_ref().map(crate::host::HostService::new_session);
-        let mut pressed_inputs = Vec::<KeyboardEventPos>::new();
+        let host_service = protocol_config.map(|config| rmk::host::HostService::new(keymap, config));
+        #[cfg(feature = "host")]
+        let to_device = Link::new();
+        #[cfg(feature = "host")]
+        let from_device = Link::new();
 
-        for (idx, step) in steps.into_iter().enumerate() {
-            match step {
-                SimStep::Event(event) => {
-                    if event.pressed {
-                        assert!(
-                            !pressed_inputs.contains(&event.pos),
-                            "input {:?} was pressed twice without a release at step #{idx}",
-                            event.pos
-                        );
-                        pressed_inputs.push(event.pos);
-                    } else {
-                        let Some(pos) = pressed_inputs.iter().position(|pressed| *pressed == event.pos) else {
-                            panic!(
-                                "input {:?} was released without a matching press at step #{idx}",
+        let run_loop = async {
+            let mut pressed_inputs = Vec::<KeyboardEventPos>::new();
+
+            for (idx, step) in steps.into_iter().enumerate() {
+                match step {
+                    SimStep::Event(event) => {
+                        if event.pressed {
+                            assert!(
+                                !pressed_inputs.contains(&event.pos),
+                                "input {:?} was pressed twice without a release at step #{idx}",
                                 event.pos
                             );
+                            pressed_inputs.push(event.pos);
+                        } else {
+                            let Some(pos) = pressed_inputs.iter().position(|pressed| *pressed == event.pos) else {
+                                panic!(
+                                    "input {:?} was released without a matching press at step #{idx}",
+                                    event.pos
+                                );
+                            };
+                            pressed_inputs.swap_remove(pos);
+                        }
+
+                        match select(Timer::after(timeout), sender.publish_async(event)).await {
+                            Either::First(_) => panic!("simulator timed out publishing keyboard event at step #{idx}"),
+                            Either::Second(()) => {}
+                        }
+                    }
+                    SimStep::Delay(duration) => {
+                        Timer::after(duration).await;
+                    }
+                    SimStep::ExpectKeyboardState { modifier, keycodes } => {
+                        let actual = match select(Timer::after(timeout), receive_sim_report()).await {
+                            Either::First(_) => {
+                                panic!("simulator timed out waiting for keyboard report at step #{idx}")
+                            }
+                            Either::Second(report) => report,
                         };
-                        pressed_inputs.swap_remove(pos);
+                        Self::assert_keyboard_state_eq(modifier, keycodes, actual, idx);
                     }
-
-                    match select(Timer::after(timeout), sender.publish_async(event)).await {
-                        Either::First(_) => panic!("simulator timed out publishing keyboard event at step #{idx}"),
-                        Either::Second(()) => {}
+                    SimStep::ExpectReport(expected) => {
+                        let actual = match select(Timer::after(timeout), receive_sim_report()).await {
+                            Either::First(_) => panic!("simulator timed out waiting for HID report at step #{idx}"),
+                            Either::Second(report) => report,
+                        };
+                        Self::assert_report_eq(expected, actual, idx);
                     }
-                }
-                SimStep::Delay(duration) => {
-                    Timer::after(duration).await;
-                }
-                SimStep::ExpectKeyboardState { modifier, keycodes } => {
-                    let actual = match select(Timer::after(timeout), receive_sim_report()).await {
-                        Either::First(_) => panic!("simulator timed out waiting for keyboard report at step #{idx}"),
-                        Either::Second(report) => report,
-                    };
-                    Self::assert_keyboard_state_eq(modifier, keycodes, actual, idx);
-                }
-                SimStep::ExpectReport(expected) => {
-                    let actual = match select(Timer::after(timeout), receive_sim_report()).await {
-                        Either::First(_) => panic!("simulator timed out waiting for HID report at step #{idx}"),
-                        Either::Second(report) => report,
-                    };
-                    Self::assert_report_eq(expected, actual, idx);
-                }
-                SimStep::ExpectNoReport(duration) => match select(Timer::after(duration), receive_sim_report()).await {
-                    Either::First(_) => {}
-                    Either::Second(report) => {
-                        panic!("unexpected HID report at step #{idx}: {:?}", report);
+                    SimStep::ExpectNoReport(duration) => {
+                        match select(Timer::after(duration), receive_sim_report()).await {
+                            Either::First(_) => {}
+                            Either::Second(report) => {
+                                panic!("unexpected HID report at step #{idx}: {:?}", report);
+                            }
+                        }
                     }
-                },
-                #[cfg(feature = "vial")]
-                SimStep::VialPacket { data, expected } => {
-                    #[cfg(feature = "storage")]
-                    FLASH_OPERATION_FINISHED.reset();
-                    let service = host_service
-                        .as_ref()
-                        .expect("simulator Vial config must be enabled before running Vial steps");
-                    let mut report = ViaReport {
-                        input_data: data,
-                        output_data: data,
-                    };
-                    match select(Timer::after(timeout), service.process_via_packet(&mut report)).await {
-                        Either::First(_) => panic!("simulator timed out dispatching Vial packet at step #{idx}"),
-                        Either::Second(()) => {}
+                    #[cfg(feature = "vial")]
+                    SimStep::VialPacket { data, expected } => {
+                        #[cfg(feature = "storage")]
+                        rmk::test_exports::reset_flash_operation();
+                        // 32-byte request in, 32-byte reply out, across the duplex.
+                        let exchange = async {
+                            to_device.write_all(&data).await;
+                            let mut reply = [0u8; 32];
+                            let mut rx: &Link = &from_device;
+                            rx.read_exact(&mut reply).await.expect("read Vial reply");
+                            reply
+                        };
+                        let reply = match select(Timer::after(timeout), exchange).await {
+                            Either::First(_) => panic!("simulator timed out on Vial packet at step #{idx}"),
+                            Either::Second(reply) => reply,
+                        };
+                        assert_eq!(expected, reply, "on Vial reply at step #{idx}");
                     }
-                    assert_eq!(expected, report.input_data, "on Vial reply at step #{idx}");
-                }
-                #[cfg(feature = "rynk")]
-                SimStep::RynkPacket { mut request, expected } => {
-                    #[cfg(feature = "storage")]
-                    FLASH_OPERATION_FINISHED.reset();
-                    let service = host_service
-                        .as_ref()
-                        .expect("simulator Rynk config must be enabled before running Rynk steps");
-                    let session = rynk_session
-                        .as_ref()
-                        .expect("simulator Rynk config must be enabled before running Rynk steps");
-                    let mut msg = RynkMessage::try_from(request.as_mut_slice())
-                        .expect("simulator Rynk request should be a valid frame");
-                    match select(Timer::after(timeout), service.dispatch(session, &mut msg)).await {
-                        Either::First(_) => panic!("simulator timed out dispatching Rynk packet at step #{idx}"),
-                        Either::Second(()) => {}
+                    #[cfg(feature = "rynk")]
+                    SimStep::RynkPacket { request, expected } => {
+                        #[cfg(feature = "storage")]
+                        rmk::test_exports::reset_flash_operation();
+                        // Send the framed request, then reassemble the response frame
+                        // (fixed header, then its declared payload) off the duplex.
+                        let exchange = async {
+                            to_device.write_all(&request).await;
+                            let mut rx: &Link = &from_device;
+                            let mut header = [0u8; RYNK_HEADER_SIZE];
+                            rx.read_exact(&mut header).await.expect("read Rynk response header");
+                            let payload_len = RynkHeader::parse(&header).payload_len as usize;
+                            let mut frame = std::vec![0u8; RYNK_HEADER_SIZE + payload_len];
+                            frame[..RYNK_HEADER_SIZE].copy_from_slice(&header);
+                            if payload_len > 0 {
+                                rx.read_exact(&mut frame[RYNK_HEADER_SIZE..])
+                                    .await
+                                    .expect("read Rynk response payload");
+                            }
+                            frame
+                        };
+                        let reply = match select(Timer::after(timeout), exchange).await {
+                            Either::First(_) => panic!("simulator timed out on Rynk packet at step #{idx}"),
+                            Either::Second(frame) => frame,
+                        };
+                        assert_eq!(
+                            expected, reply,
+                            "on Rynk reply at step #{idx}: expected {:?}, actual {:?}",
+                            expected, reply
+                        );
                     }
-                    let frame_len = msg.frame_len();
-                    assert_eq!(
-                        expected,
-                        request[..frame_len],
-                        "on Rynk reply at step #{idx}: expected {:?}, actual {:?}",
-                        expected,
-                        &request[..frame_len]
-                    );
-                }
-                #[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
-                SimStep::WaitStorage => match select(Timer::after(timeout), FLASH_OPERATION_FINISHED.wait()).await {
-                    Either::First(_) => panic!("simulator timed out waiting for storage write at step #{idx}"),
-                    Either::Second(true) => {}
-                    Either::Second(false) => panic!("storage write failed at step #{idx}"),
-                },
-                #[cfg(feature = "passkey_entry")]
-                SimStep::BeginPasskeyEntry => {
-                    crate::ble::passkey::begin_passkey_entry_session();
-                }
-                #[cfg(feature = "passkey_entry")]
-                SimStep::ExpectPasskeyResponse(expected) => {
-                    match select(Timer::after(timeout), crate::ble::passkey::PASSKEY_RESPONSE.wait()).await {
-                        Either::First(_) => panic!("simulator timed out waiting for passkey response at step #{idx}"),
-                        Either::Second(actual) => assert_eq!(
-                            expected, actual,
-                            "on passkey response at step #{idx}: expected {:?}, actual {:?}",
-                            expected, actual
-                        ),
+                    #[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
+                    SimStep::WaitStorage => {
+                        match select(Timer::after(timeout), rmk::test_exports::flash_operation_finished()).await {
+                            Either::First(_) => panic!("simulator timed out waiting for storage write at step #{idx}"),
+                            Either::Second(true) => {}
+                            Either::Second(false) => panic!("storage write failed at step #{idx}"),
+                        }
                     }
-                }
-                #[cfg(feature = "passkey_entry")]
-                SimStep::EndPasskeyEntry => {
-                    crate::ble::passkey::end_passkey_entry_session();
+                    #[cfg(feature = "passkey_entry")]
+                    SimStep::BeginPasskeyEntry => {
+                        rmk::ble::passkey::begin_passkey_entry_session();
+                    }
+                    #[cfg(feature = "passkey_entry")]
+                    SimStep::ExpectPasskeyResponse(expected) => {
+                        match select(Timer::after(timeout), rmk::ble::passkey::PASSKEY_RESPONSE.wait()).await {
+                            Either::First(_) => {
+                                panic!("simulator timed out waiting for passkey response at step #{idx}")
+                            }
+                            Either::Second(actual) => assert_eq!(
+                                expected, actual,
+                                "on passkey response at step #{idx}: expected {:?}, actual {:?}",
+                                expected, actual
+                            ),
+                        }
+                    }
+                    #[cfg(feature = "passkey_entry")]
+                    SimStep::EndPasskeyEntry => {
+                        rmk::ble::passkey::end_passkey_entry_session();
+                    }
                 }
             }
-        }
 
-        match select(Timer::after(timeout), async {
-            while !sender.is_empty() {
-                yield_now().await;
+            match select(Timer::after(timeout), async {
+                while !sender.is_empty() {
+                    yield_now().await;
+                }
+            })
+            .await
+            {
+                Either::First(_) => panic!("simulator timed out draining keyboard events after the final step"),
+                Either::Second(()) => {}
             }
-        })
-        .await
-        {
-            Either::First(_) => panic!("simulator timed out draining keyboard events after the final step"),
-            Either::Second(()) => {}
-        }
 
-        // The queue becomes empty when the keyboard receives the final event;
-        // allow that in-flight processing to finish before checking state.
-        Timer::after(Duration::from_millis(1)).await;
-        if let Some(report) = try_receive_sim_report() {
-            panic!(
-                "unexpected trailing HID report after final simulator step: {:?}",
-                report
+            // The queue becomes empty when the keyboard receives the final event;
+            // allow that in-flight processing to finish before checking state.
+            Timer::after(Duration::from_millis(1)).await;
+            if let Some(report) = try_receive_sim_report() {
+                panic!(
+                    "unexpected trailing HID report after final simulator step: {:?}",
+                    report
+                );
+            }
+            assert!(
+                pressed_inputs.is_empty(),
+                "simulator ended with pressed inputs: {:?}",
+                pressed_inputs
             );
+        };
+
+        // Race the host session against the scripted steps. The in-memory pipes
+        // never EOF, so `run_session` would loop forever; it is dropped once the
+        // steps finish. If it resolves first, that's a framing/guard bug.
+        #[cfg(feature = "host")]
+        if let Some(service) = host_service.as_ref() {
+            let mut device_rx: &Link = &to_device;
+            let mut device_tx: &Link = &from_device;
+            match select(service.run_session(&mut device_rx, &mut device_tx), run_loop).await {
+                Either::First(_) => panic!("simulator host session ended before the scripted steps finished"),
+                Either::Second(()) => {}
+            }
+        } else {
+            run_loop.await;
         }
-        assert!(
-            pressed_inputs.is_empty(),
-            "simulator ended with pressed inputs: {:?}",
-            pressed_inputs
-        );
+        #[cfg(not(feature = "host"))]
+        run_loop.await;
     }
 
     #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]

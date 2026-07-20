@@ -1,6 +1,5 @@
 pub mod common;
 
-use rmk::sim::{SimKeyboard, SimKeyboardSetup};
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
@@ -8,6 +7,7 @@ use rmk::{a, k};
 use rmk_types::morse::{MorseMode, MorseProfile};
 
 use crate::common::morse::SIMPLE_MORSE_SETUP;
+use crate::common::sim::{SimKeyboard, SimKeyboardSetup};
 use crate::common::{KC_LGUI, KC_LSHIFT, TEST_KEYMAP};
 
 const HOLD_ON_OTHER_PROFILE: MorseProfile = MorseProfile::new(

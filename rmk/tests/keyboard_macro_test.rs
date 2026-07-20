@@ -3,10 +3,10 @@ pub mod common;
 mod macro_test {
     use heapless::Vec;
     use rmk::keyboard_macros::{MacroOperation, define_macro_sequences, to_macro_sequence};
-    use rmk::sim::{KeymapOverride, SimKeyboard, SimKeyboardSetup};
     use rmk::types::action::{Action, KeyAction};
     use rmk_types::keycode::HidKeyCode;
 
+    use crate::common::sim::{KeymapOverride, SimKeyboard, SimKeyboardSetup};
     use crate::common::{KC_LSHIFT, TEST_KEYMAP};
 
     const MACRO_KEY_OVERRIDES: [KeymapOverride; 2] = [

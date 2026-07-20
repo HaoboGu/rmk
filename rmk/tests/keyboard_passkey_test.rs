@@ -4,7 +4,7 @@
 
 pub mod common;
 
-use rmk::sim::SimKeyboard;
+use crate::common::sim::SimKeyboard;
 
 /// Typing a full 6-digit passkey and pressing Enter submits the passkey
 /// and no keyboard reports are sent to the host.

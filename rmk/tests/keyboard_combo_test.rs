@@ -1,7 +1,6 @@
 pub mod common;
 
 use rmk::hid::Report;
-use rmk::sim::SimKeyboard;
 use rmk::types::action::KeyAction;
 use rmk::types::keycode::HidKeyCode;
 use rmk::types::modifier::ModifierCombination;
@@ -9,6 +8,7 @@ use rmk::{a, k, osm, th, wm};
 use rmk_types::morse::{MorseMode, MorseProfile};
 use usbd_hid::descriptor::MouseReport;
 
+use crate::common::sim::SimKeyboard;
 use crate::common::{KC_LCTRL, KC_LSHIFT};
 
 const STANDARD_2_KEY_COMBOS: [([KeyAction; 2], KeyAction); 4] = [

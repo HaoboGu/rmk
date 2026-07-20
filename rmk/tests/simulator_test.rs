@@ -10,9 +10,6 @@ use rmk::hid::Report;
 #[cfg(feature = "steno")]
 use rmk::hid::StenoReport;
 #[cfg(any(feature = "vial", feature = "rynk"))]
-use rmk::sim::SimHost;
-use rmk::sim::SimKeyboard;
-#[cfg(any(feature = "vial", feature = "rynk"))]
 use rmk::types::action::EncoderAction;
 #[cfg(any(feature = "steno", feature = "rynk"))]
 use rmk::types::action::{Action, KeyAction};
@@ -40,6 +37,10 @@ use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, Set
 #[cfg(feature = "vial")]
 use rmk_types::protocol::vial::{VIA_PROTOCOL_VERSION, ViaCommand};
 use usbd_hid::descriptor::{MediaKeyboardReport, MouseReport, SystemControlReport};
+
+#[cfg(any(feature = "vial", feature = "rynk"))]
+use crate::common::sim::SimHost;
+use crate::common::sim::SimKeyboard;
 
 #[test]
 fn simulator_runs_keyboard_sequence() {
@@ -341,7 +342,7 @@ fn simulator_reports_steno_hid_reports() {
 #[test]
 fn simulator_storage_loaded_keymap_survives_restart() {
     common::test_block_on(async {
-        let flash = rmk::sim::flash::InMemoryFlash::<4096, 256, 4>::new();
+        let flash = crate::common::sim::flash::InMemoryFlash::<4096, 256, 4>::new();
         let host = SimHost::new();
 
         {
@@ -373,7 +374,7 @@ fn simulator_storage_loaded_keymap_survives_restart() {
 #[test]
 fn simulator_storage_loaded_behavior_survives_restart() {
     common::test_block_on(async {
-        let flash = rmk::sim::flash::InMemoryFlash::<4096, 256, 4>::new();
+        let flash = crate::common::sim::flash::InMemoryFlash::<4096, 256, 4>::new();
         let host = SimHost::new();
 
         {
@@ -690,7 +691,7 @@ fn simulator_reads_rynk_layout_from_keyboard_config() {
 #[test]
 fn simulator_rynk_keymap_update_survives_restart() {
     common::test_block_on(async {
-        let flash = rmk::sim::flash::InMemoryFlash::<4096, 256, 4>::new();
+        let flash = crate::common::sim::flash::InMemoryFlash::<4096, 256, 4>::new();
         let host = SimHost::new();
 
         {

@@ -1,10 +1,10 @@
 pub mod common;
 
-use rmk::sim::{KeymapOverride, SimKeyboard, SimKeyboardSetup};
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk_types::modifier::ModifierCombination;
 
+use crate::common::sim::{KeymapOverride, SimKeyboard, SimKeyboardSetup};
 use crate::common::{KC_LSHIFT, TEST_KEYMAP};
 
 const LAYER_KEY_OVERRIDES: [KeymapOverride; 4] = [

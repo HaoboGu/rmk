@@ -1,12 +1,12 @@
 pub mod common;
 
 use rmk::k;
-use rmk::sim::SimKeyboard;
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk::types::modifier::ModifierCombination;
 
 use crate::common::morse::SIMPLE_MORSE_SETUP;
+use crate::common::sim::SimKeyboard;
 use crate::common::{KC_LGUI, KC_LSHIFT, TEST_KEYMAP};
 
 #[test]

@@ -13,13 +13,13 @@ pub mod common;
 use rmk::config::RmkConfig;
 use rmk::event::{WpmUpdateEvent, publish_event};
 use rmk::host::HostService as RynkService;
-use rmk::sim::SimKeyboard;
 use rmk::types::action::{Action, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 use rmk_types::protocol::rynk::{Cmd, DeviceCapabilities, KeyPosition, ProtocolVersion, SetKeyRequest};
 
 use crate::common::rynk_hid_link::link_session_hid;
 use crate::common::rynk_link::RynkHostClient;
+use crate::common::sim::SimKeyboard;
 use crate::common::test_block_on;
 
 /// A 2-layer 2×2 `RynkService`, leaked to `'static` (see `rynk_loopback.rs`).

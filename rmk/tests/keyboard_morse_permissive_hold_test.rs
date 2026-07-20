@@ -1,10 +1,10 @@
 pub mod common;
 
-use rmk::sim::{SimKeyboard, SimKeyboardSetup};
 use rmk::types::keycode::HidKeyCode;
 use rmk_types::morse::{MorseMode, MorseProfile};
 
 use crate::common::morse::{MORSE_2_KEY_COMBOS, MORSE_3_KEY_COMBOS, SIMPLE_MORSE_SETUP};
+use crate::common::sim::{SimKeyboard, SimKeyboardSetup};
 use crate::common::{KC_LGUI, KC_LSHIFT, TEST_KEYMAP};
 
 const PERMISSIVE_HOLD_PROFILE: MorseProfile =

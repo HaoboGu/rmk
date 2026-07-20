@@ -1,8 +1,8 @@
+use rmk::test_exports::to_via_keycode;
+use rmk::types::action::{EncoderAction, KeyAction};
 use rmk_types::protocol::vial::{SettingKey, ViaCommand, VialCommand, VialDynamic};
 
 use super::{SimHost, SimKeyboard};
-use crate::host::via::keycode_convert::to_via_keycode;
-use crate::types::action::{EncoderAction, KeyAction};
 
 impl SimHost {
     pub fn vial<'k, 'a>(&self, keyboard: &'k mut SimKeyboard<'a>) -> SimVial<'k, 'a> {
@@ -163,7 +163,7 @@ impl<'k, 'a> SimVial<'k, 'a> {
         output: KeyAction,
     ) -> SimVialDynamicSetReply<'k, 'a> {
         assert!(
-            N <= crate::COMBO_MAX_LENGTH,
+            N <= rmk::test_exports::COMBO_MAX_LENGTH,
             "simulator combo helper received too many actions"
         );
 
@@ -176,7 +176,7 @@ impl<'k, 'a> SimVial<'k, 'a> {
             let start = 4 + idx * 2;
             data[start..start + 2].copy_from_slice(&to_via_keycode(action).to_le_bytes());
         }
-        let output_start = 4 + crate::COMBO_MAX_LENGTH * 2;
+        let output_start = 4 + rmk::test_exports::COMBO_MAX_LENGTH * 2;
         data[output_start..output_start + 2].copy_from_slice(&to_via_keycode(output).to_le_bytes());
 
         SimVialDynamicSetReply { reply: self.raw(data) }
@@ -281,7 +281,7 @@ pub struct SimVialComboReply<'k, 'a> {
 impl<'k, 'a> SimVialComboReply<'k, 'a> {
     pub fn expect<const N: usize>(self, actions: [KeyAction; N], output: KeyAction) -> &'k mut SimKeyboard<'a> {
         assert!(
-            N <= crate::COMBO_MAX_LENGTH,
+            N <= rmk::test_exports::COMBO_MAX_LENGTH,
             "simulator combo helper received too many actions"
         );
 
@@ -291,7 +291,7 @@ impl<'k, 'a> SimVialComboReply<'k, 'a> {
             let start = 1 + idx * 2;
             expected[start..start + 2].copy_from_slice(&to_via_keycode(action).to_le_bytes());
         }
-        let output_start = 1 + crate::COMBO_MAX_LENGTH * 2;
+        let output_start = 1 + rmk::test_exports::COMBO_MAX_LENGTH * 2;
         expected[output_start..output_start + 2].copy_from_slice(&to_via_keycode(output).to_le_bytes());
         self.reply.expect(expected)
     }

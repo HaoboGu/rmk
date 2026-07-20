@@ -17,7 +17,6 @@ use rmk::event::{
     ConnectionStatusChangeEvent, LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent, publish_event,
 };
 use rmk::host::HostService as RynkService;
-use rmk::sim::SimKeyboard;
 use rmk::types::action::{Action, EncoderAction, KeyAction};
 use rmk::types::keycode::{HidKeyCode, KeyCode};
 #[cfg(feature = "_ble")]
@@ -38,6 +37,7 @@ use rmk_types::protocol::rynk::{
 };
 
 use crate::common::rynk_link::{RynkHostClient, link_session, link_two_sessions};
+use crate::common::sim::SimKeyboard;
 use crate::common::test_block_on;
 
 /// Leak an always-unlocked config so these cases exercise protocol mechanics.

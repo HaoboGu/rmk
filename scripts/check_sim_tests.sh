@@ -10,7 +10,9 @@ forbidden="$forbidden|run_key_sequence_test\(|key_sequence_test!|sim_keyboard_""
 forbidden="$forbidden|run_keyboard_test\(|run_sim_keyboard_sequence\("
 forbidden="$forbidden|USB_REPORT_CHANNEL|HOST_REQUEST_CHANNEL|FLASH_CHANNEL"
 
-if rg -n -e "$forbidden" "$repo_root/rmk/tests" -g '*.rs'; then
+# The simulator harness itself (tests/common/sim) is the implementation of that
+# API, so it's allowed to touch the raw primitives; only scenarios are checked.
+if rg -n -e "$forbidden" "$repo_root/rmk/tests" -g '*.rs' -g '!**/common/sim.rs' -g '!**/common/sim/**'; then
     echo "rmk/tests must use the SimKeyboard end-to-end API for keyboard/input/protocol scenarios." >&2
     exit 1
 fi

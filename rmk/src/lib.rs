@@ -107,12 +107,54 @@ pub mod usb;
 #[cfg(feature = "watchdog")]
 pub mod watchdog;
 
+// Test-only re-exports of crate internals the simulator harness (in
+// `tests/common/sim`) drives. Gated on the dev-only `std` feature, so none of
+// this is part of the shipping firmware API.
 #[cfg(feature = "std")]
 #[doc(hidden)]
-pub mod sim;
+pub mod test_exports {
+    //! Thin accessors for the few `pub(crate)` internals the simulator harness
+    //! (in `tests/common/sim`) drives. Wrappers rather than `pub use` — the
+    //! latter can't widen `pub(crate)` visibility. Std-gated, so none of this is
+    //! compiled into firmware.
 
-// Makes the shared simulator executor available to `#[cfg(test)]` modules
-// while preserving the nextest process guard.
+    pub const COMBO_MAX_LENGTH: usize = crate::COMBO_MAX_LENGTH;
+    pub const MACRO_SPACE_SIZE: usize = crate::MACRO_SPACE_SIZE;
+
+    #[cfg(feature = "vial")]
+    pub fn to_via_keycode(action: rmk_types::action::KeyAction) -> u16 {
+        crate::host::via::keycode_convert::to_via_keycode(action)
+    }
+
+    #[cfg(all(feature = "_no_usb", feature = "_ble"))]
+    pub fn set_ble_state(state: rmk_types::ble::BleState) {
+        crate::state::set_ble_state(state);
+    }
+
+    #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
+    pub fn reset_connection_status() {
+        crate::state::CONNECTION_STATUS.lock(|c| c.set(rmk_types::connection::ConnectionStatus::default()));
+    }
+
+    #[cfg(feature = "storage")]
+    pub fn clear_flash_channel() {
+        crate::channel::FLASH_CHANNEL.clear();
+    }
+
+    #[cfg(feature = "storage")]
+    pub fn reset_flash_operation() {
+        crate::storage::FLASH_OPERATION_FINISHED.reset();
+    }
+
+    #[cfg(feature = "storage")]
+    pub async fn flash_operation_finished() -> bool {
+        crate::storage::FLASH_OPERATION_FINISHED.wait().await
+    }
+}
+
+// Self-contained `block_on` over embassy-time's mock clock for `#[cfg(test)]`
+// modules under `src/` (the simulator harness lives in the separate test crate,
+// out of their reach). Also runs the nextest process guard.
 #[cfg(test)]
 pub(crate) mod test_support;
 

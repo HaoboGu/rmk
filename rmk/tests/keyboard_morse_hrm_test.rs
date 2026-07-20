@@ -11,12 +11,12 @@
 pub mod common;
 
 use rmk::config::Hand;
-use rmk::sim::{HandOverride, KeymapOverride, SimKeyboard, SimKeyboardSetup};
 use rmk::types::keycode::HidKeyCode;
 use rmk::{a, k, mo};
 use rmk_types::morse::{MorseMode, MorseProfile};
 
 use crate::common::morse::{HRM_MORSE_SETUP, MORSE_2_KEY_COMBOS, MORSE_3_KEY_COMBOS};
+use crate::common::sim::{HandOverride, KeymapOverride, SimKeyboard, SimKeyboardSetup};
 use crate::common::{KC_LGUI, KC_LSHIFT, TEST_KEYMAP};
 
 const HRM_PROFILE: MorseProfile =
