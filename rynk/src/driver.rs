@@ -364,7 +364,7 @@ impl<R: Read, W: Write> Driver<R, W> {
             }
         };
 
-        match select(rx_loop, tx_loop).await {
+        match select(tx_loop, rx_loop).await {
             Either::First(e) | Either::Second(e) => e,
         }
     }
