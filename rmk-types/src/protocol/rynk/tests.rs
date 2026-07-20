@@ -204,6 +204,7 @@ struct Exemplars {
     matrix: MatrixState,
     capabilities: DeviceCapabilities,
     device_info: DeviceInfo,
+    build_info: BuildInfo,
     behavior: BehaviorConfig,
     connection: ConnectionStatus,
     state_bits: StateBits,
@@ -255,6 +256,9 @@ fn exemplars() -> Exemplars {
         manufacturer: heapless::String::try_from("RMK").unwrap(),
         product_name: heapless::String::try_from("RMK Keyboard").unwrap(),
         serial_number: heapless::String::try_from("rynk:0001").unwrap(),
+    };
+    let build_info = BuildInfo {
+        label: heapless::String::try_from("my-firmware v4.5.6 / RMK v1.2.3").unwrap(),
     };
     let behavior = BehaviorConfig {
         combo_timeout_ms: 50,
@@ -308,6 +312,7 @@ fn exemplars() -> Exemplars {
         matrix,
         capabilities,
         device_info,
+        build_info,
         behavior,
         connection,
         state_bits,
@@ -464,6 +469,7 @@ fn wire_values_locked() {
         ("MatrixState{[0x05,0x00,0x20]}", encode(&ex.matrix)),
         ("DeviceCapabilities{1..16}", encode(&ex.capabilities)),
         ("DeviceInfo{1.2.3,4,5,RMK,..}", encode(&ex.device_info)),
+        ("BuildInfo{my-firmware..}", encode(&ex.build_info)),
         ("BehaviorConfig{50,500,200,20}", encode(&ex.behavior)),
         ("ConnectionStatus{Configured,{1,Adv},Ble}", encode(&ex.connection)),
         ("ProtocolVersion{1,0}", encode(&ProtocolVersion { major: 1, minor: 0 })),
@@ -672,6 +678,15 @@ fn wire_frames_locked() {
                 Cmd::GetDeviceInfo,
                 SEQ,
                 &Ok::<DeviceInfo, RynkError>(ex.device_info.clone())
+            ),
+        ),
+        ("GetBuildInfo request ()", encode_frame(Cmd::GetBuildInfo, SEQ, &())),
+        (
+            "GetBuildInfo reply Ok(BuildInfo{my-firmware..})",
+            encode_frame(
+                Cmd::GetBuildInfo,
+                SEQ,
+                &Ok::<BuildInfo, RynkError>(ex.build_info.clone())
             ),
         ),
         // Keymap / encoder (0x01xx).
