@@ -1,14 +1,73 @@
 use std::collections::HashMap;
 
+use bitfield_struct::bitfield;
+
+pub struct StickyKeyConfig {
+    pub timeout_ms: Option<u64>,
+    pub activate_on_keypress: Option<bool>,
+    pub max_repeat: Option<u16>,
+    pub release_mode: Option<StickyKeyReleaseMode>,
+    pub profiles: HashMap<String, StickyKeyProfile>,
+}
+
+#[bitfield(u8, order = Lsb, debug = false)]
+#[derive(Debug, PartialEq, Eq)]
+pub struct StickyKeyReleaseMode {
+    pub other_key_press: bool,
+    pub other_key_release: bool,
+    pub layer_enter: bool,
+    pub layer_exit: bool,
+    pub double_tap: bool,
+    #[bits(3)]
+    __: u8,
+}
+
+impl StickyKeyReleaseMode {
+    pub const OTHER_KEY_PRESS: Self = Self::new().with_other_key_press(true);
+    pub const OTHER_KEY_RELEASE: Self = Self::new().with_other_key_release(true);
+    pub const LAYER_ENTER: Self = Self::new().with_layer_enter(true);
+    pub const LAYER_EXIT: Self = Self::new().with_layer_exit(true);
+    pub const DOUBLE_TAP: Self = Self::new().with_double_tap(true);
+
+    pub fn parse(value: &str) -> Result<Self, String> {
+        let mut result = Self::default();
+        for part in value.split('|').map(str::trim).filter(|part| !part.is_empty()) {
+            result = match part {
+                "other_key_press" => result.with_other_key_press(true),
+                "other_key_release" => result.with_other_key_release(true),
+                "layer_enter" => result.with_layer_enter(true),
+                "layer_exit" => result.with_layer_exit(true),
+                "double_tap" => result.with_double_tap(true),
+                _ => {
+                    return Err(format!(
+                        "unknown Sticky Key release_mode `{part}`; expected other_key_press, other_key_release, layer_enter, layer_exit, or double_tap"
+                    ));
+                }
+            };
+        }
+        if result.into_bits() == 0 {
+            return Err("Sticky Key release_mode must contain at least one trigger".to_string());
+        }
+        Ok(result)
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct StickyKeyProfile {
+    pub timeout_ms: Option<u64>,
+    pub activate_on_keypress: Option<bool>,
+    pub max_repeat: Option<u16>,
+    pub release_mode: Option<StickyKeyReleaseMode>,
+}
+
 /// Resolved behavioral configuration.
 pub struct Behavior {
     pub tri_layer: Option<[u8; 3]>,
-    pub one_shot_timeout_ms: Option<u64>,
-    pub one_shot_modifiers: Option<OneShot>,
     pub combos: Option<Combos>,
     pub macros: Option<Macros>,
     pub forks: Option<Forks>,
     pub morse: Option<Morse>,
+    pub sticky_key: Option<StickyKeyConfig>,
     pub auto_mouse_layer: Vec<AutoMouseLayer>,
 }
 
@@ -30,11 +89,6 @@ pub const DEFAULT_AUTO_MOUSE_LAYER_THRESHOLD: u16 = 1;
 
 /// Fallback for `auto_mouse_layer_max_num` when no `keyboard.toml` is loaded.
 pub const DEFAULT_AUTO_MOUSE_LAYER_MAX_NUM: usize = 2;
-
-pub struct OneShot {
-    pub activate_on_keypress: Option<bool>,
-    pub quick_release: Option<bool>,
-}
 
 pub struct Combos {
     pub combos: Vec<Combo>,
@@ -121,13 +175,6 @@ impl crate::KeyboardTomlConfig {
         let toml_behavior = self.get_behavior_config()?;
 
         let tri_layer = toml_behavior.tri_layer.map(|t| [t.upper, t.lower, t.adjust]);
-
-        let one_shot_timeout_ms = toml_behavior.one_shot.and_then(|o| o.timeout.map(|t| t.0));
-
-        let one_shot_modifiers = toml_behavior.one_shot_modifiers.map(|o| OneShot {
-            activate_on_keypress: o.activate_on_keypress,
-            quick_release: o.quick_release,
-        });
 
         let combos = toml_behavior.combo.map(|c| Combos {
             combos: c
@@ -223,6 +270,36 @@ impl crate::KeyboardTomlConfig {
             }
         });
 
+        let sticky_key = toml_behavior.sticky_key.map(|s| {
+            let parse_profile = |p: crate::StickyKeyProfile| -> Result<StickyKeyProfile, String> {
+                Ok(StickyKeyProfile {
+                    timeout_ms: p.timeout.map(|t| t.0),
+                    activate_on_keypress: p.activate_on_keypress,
+                    max_repeat: p.max_repeat,
+                    release_mode: p.release_mode
+                        .as_deref()
+                        .map(StickyKeyReleaseMode::parse)
+                        .transpose()?,
+                })
+            };
+            if s.profiles.len() > self.rmk.sticky_key_profile_max_num {
+                return Err(format!(
+                    "behavior.sticky_key.profiles defines {} profiles, but `[rmk] sticky_key_profile_max_num` is {}. Raise it in keyboard.toml",
+                    s.profiles.len(), self.rmk.sticky_key_profile_max_num
+                ));
+            }
+            let profiles = s.profiles.into_iter()
+                .map(|(name, profile)| parse_profile(profile).map(|profile| (name, profile)))
+                .collect::<Result<HashMap<_, _>, _>>()?;
+            Ok(StickyKeyConfig {
+                timeout_ms: s.timeout.as_ref().map(|t| t.0),
+                activate_on_keypress: s.activate_on_keypress,
+                max_repeat: s.max_repeat,
+                release_mode: s.release_mode.as_deref().map(StickyKeyReleaseMode::parse).transpose()?,
+                profiles,
+            })
+        }).transpose()?;
+
         let auto_mouse_layer = toml_behavior
             .auto_mouse_layer
             .unwrap_or_default()
@@ -240,12 +317,11 @@ impl crate::KeyboardTomlConfig {
 
         Ok(Behavior {
             tri_layer,
-            one_shot_timeout_ms,
-            one_shot_modifiers,
             combos,
             macros,
             forks,
             morse,
+            sticky_key,
             auto_mouse_layer,
         })
     }
@@ -280,6 +356,7 @@ mod tests {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    use super::StickyKeyReleaseMode;
     use crate::KeyboardTomlConfig;
 
     #[test]
@@ -322,5 +399,59 @@ hold_timeout = "200ms"
         assert_eq!(morse.profiles["flow_on"].enable_flow_tap, Some(true));
         assert_eq!(morse.profiles["flow_off"].enable_flow_tap, Some(false));
         assert_eq!(morse.profiles["inherit"].enable_flow_tap, None);
+    }
+
+    #[test]
+    fn sticky_key_profiles_and_release_modes_are_resolved() {
+        let toml = r#"
+[layout]
+rows = 1
+cols = 1
+layers = 1
+keymap = [
+  [
+    ["A"],
+  ],
+]
+
+[behavior.sticky_key]
+release_mode = "other_key_release | layer_exit | double_tap"
+
+[behavior.sticky_key.profiles.alt_tab]
+timeout = "5s"
+release_mode = "other_key_press | layer_enter"
+"#;
+
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "rmk-config-sticky-layer-change-{}-{}.toml",
+            std::process::id(),
+            unique
+        ));
+
+        fs::write(&path, toml).unwrap();
+        let config = KeyboardTomlConfig::new_from_toml_path_with_event_defaults(&path);
+        let _ = fs::remove_file(&path);
+
+        let sticky_key = config.behavior().unwrap().sticky_key.unwrap();
+        assert_eq!(
+            sticky_key.release_mode,
+            Some(
+                StickyKeyReleaseMode::new()
+                    .with_other_key_release(true)
+                    .with_layer_exit(true)
+                    .with_double_tap(true)
+            )
+        );
+        let alt_tab = &sticky_key.profiles["alt_tab"];
+        assert_eq!(alt_tab.timeout_ms, Some(5000));
+        assert_eq!(
+            alt_tab.release_mode,
+            Some(
+                StickyKeyReleaseMode::new()
+                    .with_other_key_press(true)
+                    .with_layer_enter(true)
+            )
+        );
     }
 }

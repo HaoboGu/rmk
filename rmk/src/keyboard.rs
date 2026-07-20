@@ -1,13 +1,12 @@
 use core::fmt::Debug;
 
-#[cfg(all(feature = "split", feature = "_ble"))]
-use embassy_futures::select::{Either, select};
+use embassy_futures::select::{Either, Either3, select, select3};
 use embassy_futures::yield_now;
 #[cfg(feature = "_ble")]
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Timer, with_deadline};
 use heapless::Vec;
-use rmk_types::action::{Action, KeyAction, KeyboardAction};
+use rmk_types::action::{Action, KeyAction, KeyboardAction, StickyKeyAction, StickyKeyEffect};
 use rmk_types::fork::StateBits;
 use rmk_types::keycode::{ConsumerKey, HidKeyCode, KeyCode, SpecialKey, SystemControlKey};
 use rmk_types::led_indicator::LedIndicator;
@@ -21,16 +20,17 @@ use crate::core_traits::Runnable;
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::event::ClearPeerEvent;
 use crate::event::{
-    ActionEvent, KeyboardEvent, KeyboardEventPos, ModifierEvent, SubscribableEvent, publish_event, publish_event_async,
+    ActionEvent, KeyboardEvent, KeyboardEventPos, ModifierEvent, StickyKeyReleaseEvent, SubscribableEvent,
+    publish_event, publish_event_async,
 };
 use crate::hid::{KeyboardReport, Report};
 use crate::keyboard::combo::Combo;
 use crate::keyboard::fork::ActiveFork;
 use crate::keyboard::held_buffer::{HeldBuffer, HeldKey, KeyState};
 use crate::keyboard::mouse::{MouseAction, MouseState};
-use crate::keyboard::oneshot::OneShotState;
+use crate::keyboard::sticky_key::StickyKeyState;
 use crate::keyboard_macros::MacroOperation;
-use crate::keymap::KeyMap;
+use crate::keymap::{KeyMap, StickyKeyShape};
 #[cfg(all(feature = "split", feature = "_ble"))]
 use crate::split::ble::central::update_activity_time;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, boot};
@@ -41,9 +41,9 @@ pub(crate) mod fork;
 pub(crate) mod held_buffer;
 pub(crate) mod morse;
 pub(crate) mod mouse;
-pub(crate) mod oneshot;
 #[cfg(feature = "steno")]
 pub(crate) mod steno;
+pub(crate) mod sticky_key;
 
 use crate::keymap::HOLD_BUFFER_SIZE;
 
@@ -142,8 +142,11 @@ impl Runnable for Keyboard<'_> {
     /// The report is sent using `send_report`.
     async fn run(&mut self) -> ! {
         loop {
-            // TODO: Now the unprocessed_events is only used in one-shot keys and clear peer key.
-            // Maybe it can be removed in the future?
+            // `unprocessed_events` is still required: the Clear Peer BLE path
+            // (`#[cfg(feature = "split")]`, see below) pushes events here for re-processing.
+            // Do NOT delete the queue or this consumer.
+            // (The OSM/OSL producers were removed once those behaviors moved to the SK engine,
+            // whose timeout is now driven by the inline race below.)
             if !self.unprocessed_events.is_empty() {
                 // Process unprocessed events
                 let e = self.unprocessed_events.remove(0);
@@ -153,22 +156,51 @@ impl Runnable for Keyboard<'_> {
                 // Process buffered held key
                 self.process_buffered_key(key).await
             } else {
-                // If mouse repeat is pending, race subscriber against deadline
-                let event = if let Some(deadline) = self.mouse.next_deadline() {
-                    match with_deadline(deadline, self.keyboard_event_subscriber.next_message_pure()).await {
-                        Ok(event) => event,
-                        Err(_) => {
-                            // Repeat deadline expired, fire repeat
-                            self.fire_mouse_repeat().await;
-                            continue;
+                // Race subscriber against the nearest pending deadline.
+                let deadline = self
+                    .sticky_key_state
+                    .deadline()
+                    .into_iter()
+                    .chain(self.mouse.next_deadline())
+                    .reduce(|a, b| a.min(b));
+                if let Some(deadline) = deadline {
+                    match select3(
+                        self.keyboard_event_subscriber.next_message_pure(),
+                        self.sticky_key_release_event_subscriber.next_message_pure(),
+                        Timer::at(deadline),
+                    )
+                    .await
+                    {
+                        Either3::First(event) => {
+                            self.process_inner(event).await;
                         }
+                        Either3::Second(layer_event) => {
+                            self.release_sticky_key_on_layer_event(layer_event.0).await;
+                        }
+                        Either3::Third(_) => {}
                     }
                 } else {
-                    // No repeat pending, wait indefinitely
-                    self.keyboard_event_subscriber.next_message_pure().await
-                };
-                self.process_inner(event).await
+                    match select(
+                        self.keyboard_event_subscriber.next_message_pure(),
+                        self.sticky_key_release_event_subscriber.next_message_pure(),
+                    )
+                    .await
+                    {
+                        Either::First(event) => self.process_inner(event).await,
+                        Either::Second(layer_event) => {
+                            self.release_sticky_key_on_layer_event(layer_event.0).await;
+                        }
+                    }
+                }
             };
+
+            // Check deadlines after processing / timeout.
+            if self.sticky_key_state.deadline().is_some_and(|d| Instant::now() >= d) {
+                self.release_sticky_key_if_active_on_timeout().await;
+            }
+            if self.mouse.next_deadline().is_some_and(|d| Instant::now() >= d) {
+                self.fire_mouse_repeat().await;
+            }
         }
     }
 }
@@ -187,6 +219,15 @@ pub struct Keyboard<'a> {
         { crate::KEYBOARD_EVENT_PUB_SIZE },
     >,
 
+    sticky_key_release_event_subscriber: embassy_sync::pubsub::Subscriber<
+        'static,
+        crate::RawMutex,
+        StickyKeyReleaseEvent,
+        { crate::STICKY_KEY_RELEASE_EVENT_CHANNEL_SIZE },
+        { crate::STICKY_KEY_RELEASE_EVENT_SUB_SIZE },
+        { crate::STICKY_KEY_RELEASE_EVENT_PUB_SIZE },
+    >,
+
     /// Unprocessed events
     pub unprocessed_events: Vec<KeyboardEvent, 4>,
 
@@ -201,11 +242,8 @@ pub struct Keyboard<'a> {
     /// Used in repeat-key
     last_key_code: HidKeyCode,
 
-    /// Oneshot Layer state
-    osl_state: OneShotState<u8>,
-
-    /// Oneshot Modifier state
-    osm_state: OneShotState<ModifierCombination>,
+    /// StickyKey state — holds a modifier+key combination across key presses
+    sticky_key_state: StickyKeyState,
 
     /// Caps Word state machine
     caps_word: CapsWordState,
@@ -257,9 +295,9 @@ impl<'a> Keyboard<'a> {
         Keyboard {
             keymap,
             keyboard_event_subscriber: KeyboardEvent::subscriber(),
+            sticky_key_release_event_subscriber: StickyKeyReleaseEvent::subscriber(),
             last_press_time: Instant::now(),
-            osl_state: OneShotState::default(),
-            osm_state: OneShotState::default(),
+            sticky_key_state: StickyKeyState::default(),
             caps_word: CapsWordState::default(),
             with_modifiers: ModifierCombination::default(),
             macro_texting: false,
@@ -1216,6 +1254,40 @@ impl<'a> Keyboard<'a> {
         })
         .await;
 
+        // Release the tap-key StickyKey when any non-SK, non-modifier key is pressed.
+        //
+        // Pure-mod SKs are deliberately NOT released here: the modifier must remain applied
+        // THROUGH the terminating key's report (and is then consumed by `update_sticky_key`
+        // in `process_action_key`, per `quick_release`). Only the tap-key shape releases its
+        // held modifier cleanly before the foreign key registers.
+        let mut release_tap_key_after_action = false;
+        if self.sticky_key_state.is_tap_key() {
+            let is_sk_or_modifier = match action {
+                Action::StickyKey(_) | Action::OneShotModifier(_) | Action::OneShotLayer(_) | Action::Modifier(_) => {
+                    true
+                }
+                Action::Key(KeyCode::Hid(hid_key)) if hid_key.is_modifier() => true,
+                _ => false,
+            };
+            let release_mode = self.sticky_key_state.profile().and_then(|index| {
+                self.keymap
+                    .sticky_key_profile(index, StickyKeyShape::TapKey)
+                    .release_mode
+            });
+            let should_release = match release_mode {
+                Some(mode) if event.pressed => mode.contains(crate::config::StickyKeyReleaseMode::OTHER_KEY_PRESS),
+                Some(mode) => mode.contains(crate::config::StickyKeyReleaseMode::OTHER_KEY_RELEASE),
+                None => event.pressed,
+            };
+            if !is_sk_or_modifier && should_release {
+                if event.pressed {
+                    self.release_sticky_key_if_active().await;
+                } else {
+                    release_tap_key_after_action = true;
+                }
+            }
+        }
+
         match action {
             Action::No => {}
             Action::Key(key) => match key {
@@ -1223,28 +1295,34 @@ impl<'a> Keyboard<'a> {
                 // Consumer/system keys with no HID alias are dispatched directly here.
                 KeyCode::Consumer(consumer) => {
                     self.process_action_consumer_control(consumer, event).await;
-                    self.update_osm(event);
-                    self.update_osl(event);
+                    self.update_sticky_key(event);
                 }
                 KeyCode::SystemControl(system_control) => {
                     self.process_action_system_control(system_control, event).await;
-                    self.update_osm(event);
-                    self.update_osl(event);
+                    self.update_sticky_key(event);
                 }
                 _ => warn!("KeyCode variant not supported: {:?}", key),
             },
-            Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, event),
+            Action::LayerOn(layer_num) => self.process_action_layer_switch(layer_num, event).await,
             Action::LayerOff(layer_num) => {
                 // Turn off a layer temporarily when the key is pressed
                 // Reactivate the layer after the key is released
-                if event.pressed {
-                    self.keymap.deactivate_layer(layer_num);
+                if event.pressed && self.keymap.deactivate_layer(layer_num) {
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
+                        .await;
                 }
             }
             Action::LayerToggle(layer_num) => {
-                // Toggle a layer when the key is release
-                if !event.pressed {
-                    self.keymap.toggle_layer(layer_num);
+                // Toggle a layer when the key is released
+                if !event.pressed
+                    && let Some(active) = self.keymap.toggle_layer(layer_num)
+                {
+                    let mode = if active {
+                        crate::config::StickyKeyReleaseMode::LAYER_ENTER
+                    } else {
+                        crate::config::StickyKeyReleaseMode::LAYER_EXIT
+                    };
+                    self.release_sticky_key_on_layer_event(mode).await;
                 }
             }
             Action::LayerToggleOnly(layer_num) => {
@@ -1253,22 +1331,41 @@ impl<'a> Keyboard<'a> {
                     // Disable all layers except the default layer
                     let default_layer = self.keymap.get_default_layer();
                     let (_, _, num_layer) = self.keymap.get_keymap_config();
+                    let mut exited = false;
                     for i in 0..num_layer as u8 {
                         if i != default_layer {
-                            self.keymap.deactivate_layer(i);
+                            exited |= self.keymap.deactivate_layer(i);
                         }
                     }
                     // Activate the target layer
-                    self.keymap.activate_layer(layer_num);
+                    let entered = self.keymap.activate_layer(layer_num);
+                    if exited {
+                        self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
+                            .await;
+                    }
+                    if entered {
+                        self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER)
+                            .await;
+                    }
                 }
             }
             Action::DefaultLayer(layer_num) => {
                 // Set the default layer
-                self.keymap.set_default_layer(layer_num);
+                if event.pressed && self.keymap.set_default_layer(layer_num) {
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
+                        .await;
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER)
+                        .await;
+                }
             }
             Action::PersistentDefaultLayer(layer_num) => {
                 // Set the default layer and persist it so it survives a reboot
-                self.keymap.set_default_layer(layer_num);
+                if event.pressed && self.keymap.set_default_layer(layer_num) {
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
+                        .await;
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER)
+                        .await;
+                }
                 // Persist only if the layer was valid (set_default_layer rejects out-of-range)
                 #[cfg(feature = "storage")]
                 if event.pressed && self.keymap.get_default_layer() == layer_num {
@@ -1285,7 +1382,6 @@ impl<'a> Keyboard<'a> {
                 }
                 //report the modifier press/release in its own hid report
                 self.send_keyboard_report_with_resolved_modifiers(event.pressed).await;
-                self.update_osl(event);
             }
             Action::TriggerMacro(macro_idx) => self.execute_macro(macro_idx, event).await,
             Action::KeyWithModifier(key_code, modifiers) => {
@@ -1310,18 +1406,31 @@ impl<'a> Keyboard<'a> {
                     // they will be "released" the same time as the key (in same hid report)
                     self.held_modifiers &= !(modifiers);
                 }
-                self.process_action_layer_switch(layer_num, event);
+                self.process_action_layer_switch(layer_num, event).await;
                 self.send_keyboard_report_with_resolved_modifiers(event.pressed).await
             }
-            Action::OneShotLayer(l) => {
-                self.process_action_osl(l, event).await;
-                // Process OSM to avoid the OSL state stuck when an OSL is followed by an OSM
-                self.update_osm(event);
+            Action::StickyKey(params) => {
+                self.process_action_sticky_key(params, event).await;
             }
-            Action::OneShotModifier(m) => {
-                self.process_action_osm(m, event).await;
-                // Process OSL to avoid the OSM state stuck when an OSM is followed by an OSL
-                self.update_osl(event);
+            Action::OneShotModifier(modifiers) => {
+                self.process_action_sticky_key(
+                    StickyKeyAction {
+                        effect: StickyKeyEffect::Modifier(modifiers),
+                        profile: u8::MAX,
+                    },
+                    event,
+                )
+                .await;
+            }
+            Action::OneShotLayer(layer) => {
+                self.process_action_sticky_key(
+                    StickyKeyAction {
+                        effect: StickyKeyEffect::Layer(layer),
+                        profile: u8::MAX,
+                    },
+                    event,
+                )
+                .await;
             }
             Action::OneShotKey(_k) => warn!("One-shot key is not supported: {:?}", action),
             Action::Light(_light_action) => warn!("Light controll is not supported"),
@@ -1330,12 +1439,12 @@ impl<'a> Keyboard<'a> {
             Action::User(id) => self.process_user(id, event).await,
             Action::TriLayerLower => {
                 // Tri-layer lower, turn layer 1 on and update layer state
-                self.process_action_layer_switch(1, event);
+                self.process_action_layer_switch(1, event).await;
                 self.keymap.update_fn_layer_state();
             }
             Action::TriLayerUpper => {
                 // Tri-layer upper, turn layer 2 on and update layer state
-                self.process_action_layer_switch(2, event);
+                self.process_action_layer_switch(2, event).await;
                 self.keymap.update_fn_layer_state();
             }
             #[cfg(feature = "steno")]
@@ -1345,6 +1454,10 @@ impl<'a> Keyboard<'a> {
                 }
             }
             _ => warn!("Action variant not supported: {:?}", action),
+        }
+
+        if release_tap_key_after_action {
+            self.release_sticky_key_if_active().await;
         }
     }
 
@@ -1375,21 +1488,27 @@ impl<'a> Keyboard<'a> {
     /// - registered modifiers
     /// - one-shot modifiers
     pub fn resolve_explicit_modifiers(&self, pressed: bool) -> ModifierCombination {
-        // if a one-shot modifier is active, decorate the hid report of keypress with those modifiers
+        // if a sticky key is active, decorate the hid report of keypress with its modifiers
         let mut result = self.held_modifiers;
 
-        // OneShotState::Held keeps the temporary modifiers active until the key is released
-        if pressed {
-            if let Some(osm) = self.osm_state.value() {
-                result |= *osm;
+        // Add StickyKey modifiers.
+        //
+        // - Tap-key shape (alt-tab): the modifier is held continuously between presses, so
+        //   it is included on both press and release reports (its own HID key is what gets
+        //   registered/unregistered).
+        // - Pure-mod shape (OSM): the modifier usually applies only on the terminating key's
+        //   press report and is "released" together with the key release — except in held
+        //   mode (key pressed while SK still physically held), where the modifier behaves
+        //   like a normal held modifier and stays applied until the SK itself is released.
+        if let Some(mods) = self.sticky_key_state.value().copied() {
+            if self.sticky_key_state.is_pure_mod() || self.sticky_key_state.is_layer() {
+                if pressed || self.sticky_key_state.is_held() {
+                    result |= mods;
+                }
+            } else {
+                result |= mods;
             }
-        } else if let OneShotState::Held(osm) = self.osm_state {
-            // One shot modifiers usually "released" together with the key release,
-            // except when oneshot is in "held mode" (to allow Alt+Tab like use cases)
-            // In this later case Held -> None state change will report
-            // the "modifier released" change in a separate hid report
-            result |= osm;
-        };
+        }
 
         result
     }
@@ -1579,22 +1698,33 @@ impl<'a> Keyboard<'a> {
             true
         };
 
-        // Consume any pending one-shot; on quick-release of a basic key, re-send the report.
-        let quick_release = self.keymap.one_shot_modifiers_config().quick_release;
-        let osm_consumed = self.update_osm(event);
-        if quick_release && osm_consumed && is_basic_keyboard_key && event.pressed {
+        // Consume any pending one-shot StickyKey. A press-triggered release needs a
+        // follow-up report after the terminating key has been registered.
+        let press_release = self.sticky_key_state.profile().is_some_and(|index| {
+            self.keymap
+                .sticky_key_profile(index, StickyKeyShape::PureMod)
+                .release_mode
+                .is_some_and(|mode| mode.contains(crate::config::StickyKeyReleaseMode::OTHER_KEY_PRESS))
+        });
+        let sk_consumed = self.update_sticky_key(event);
+        if press_release && sk_consumed && is_basic_keyboard_key && event.pressed {
             self.send_keyboard_report_with_resolved_modifiers(true).await;
         }
-        self.update_osl(event);
     }
 
     /// Process layer switch action.
-    fn process_action_layer_switch(&mut self, layer_num: u8, event: KeyboardEvent) {
+    async fn process_action_layer_switch(&mut self, layer_num: u8, event: KeyboardEvent) {
         // Change layer state only when the key's state is changed
         if event.pressed {
-            self.keymap.activate_layer(layer_num);
+            if self.keymap.activate_layer(layer_num) {
+                self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER)
+                    .await;
+            }
         } else {
-            self.keymap.deactivate_layer(layer_num);
+            if self.keymap.deactivate_layer(layer_num) {
+                self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
+                    .await;
+            }
         }
     }
 
@@ -2237,7 +2367,9 @@ mod test {
             let mut keyboard = create_test_keyboard();
 
             // Activate layer 1
-            keyboard.process_action_layer_switch(1, KeyboardEvent::key(0, 0, true));
+            keyboard
+                .process_action_layer_switch(1, KeyboardEvent::key(0, 0, true))
+                .await;
 
             // Press Transparent key (Q on lower layer)
             keyboard.process_inner(KeyboardEvent::key(1, 1, true)).await;

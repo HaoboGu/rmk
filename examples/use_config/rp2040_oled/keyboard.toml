@@ -35,7 +35,7 @@ keymap = [
             "LShift",
         ],
         [
-            "OSL(1)",
+            "SK(MO(1))",
             "LT(2, Kc9)",
             "LM(1, LShift | LGui)",
         ],

@@ -3,9 +3,7 @@ pub mod common;
 use embassy_futures::select::{Either, select};
 use embassy_time::{Duration, Instant, Timer};
 use rmk::channel::USB_REPORT_CHANNEL;
-use rmk::config::{
-    BehaviorConfig, CombosConfig, MorsesConfig, OneShotConfig, OneShotModifiersConfig, PositionalConfig,
-};
+use rmk::config::{BehaviorConfig, CombosConfig, MorsesConfig, PositionalConfig, StickyKeyConfig};
 use rmk::core_traits::Runnable;
 use rmk::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEvent};
 use rmk::hid::Report;
@@ -16,7 +14,7 @@ use rmk::types::action::KeyAction;
 use rmk::types::connection::UsbState;
 use rmk::types::keycode::HidKeyCode;
 use rmk::types::modifier::ModifierCombination;
-use rmk::{a, k, layer, osm, th, wm};
+use rmk::{a, k, layer, sk_mod, th, wm};
 use rmk_types::morse::{MorseMode, MorseProfile};
 
 use crate::common::test_block_on::test_block_on;
@@ -51,7 +49,7 @@ pub fn get_combos_config() -> CombosConfig {
                     k!(T), //1,5
                 ]
                 .to_vec(),
-                osm!(ModifierCombination::new_from(false, false, false, true, false)), // one-shot LShift
+                sk_mod!(ModifierCombination::new_from(false, false, false, true, false)), // one-shot LShift
                 Some(0),
             ))),
             Some(Combo::new(ComboConfig::new(
@@ -162,7 +160,7 @@ fn test_combo_with_one_shot_modifier() {
     key_sequence_test! {
         keyboard: create_test_keyboard_with_config(BehaviorConfig {
             combo: get_combos_config(),
-            one_shot: OneShotConfig {
+            sticky_key: StickyKeyConfig {
                 timeout: Duration::from_millis(300),
                 ..Default::default()
             },
@@ -467,11 +465,8 @@ fn test_combo_with_one_shot_modifier_quick_release() {
     key_sequence_test! {
         keyboard: create_test_keyboard_with_config(BehaviorConfig {
             combo: get_combos_config(),
-            one_shot: OneShotConfig {
+            sticky_key: StickyKeyConfig {
                 timeout: Duration::from_millis(300),
-                ..Default::default()
-            },
-            one_shot_modifiers: OneShotModifiersConfig {
                 quick_release: true,
                 ..Default::default()
             },
@@ -498,7 +493,7 @@ fn test_overlapped_combo_quick_release() {
     key_sequence_test! {
         keyboard: create_test_keyboard_with_config(BehaviorConfig {
             combo: get_combos_config(),
-            one_shot_modifiers: OneShotModifiersConfig {
+            sticky_key: StickyKeyConfig {
                 quick_release: true,
                 ..Default::default()
             },

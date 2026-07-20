@@ -24,10 +24,11 @@ use rmk_types::keycode::{HidKeyCode, KeyCode};
 use rmk_types::modifier::ModifierCombination;
 
 use crate::AUTO_MOUSE_LAYER_MAX_NUM;
-use crate::config::AutoMouseLayerConfig;
+use crate::config::{AutoMouseLayerConfig, StickyKeyReleaseMode};
 use crate::core_traits::Runnable;
 use crate::event::{
-    ActionEvent, Axis, AxisValType, EventSubscriber, LayerChangeEvent, PointingEvent, SubscribableEvent,
+    ActionEvent, Axis, AxisValType, EventSubscriber, LayerChangeEvent, PointingEvent, StickyKeyReleaseEvent,
+    SubscribableEvent, publish_event,
 };
 use crate::keymap::KeyMap;
 use crate::processor::Processor;
@@ -105,6 +106,9 @@ impl<'a, 'k> AutoMouseLayerRunner<'a, 'k> {
         }
         let target_layer = self.entries[idx].config.target_layer;
         let activated_by_us = self.keymap.activate_layer_if_inactive(target_layer);
+        if activated_by_us {
+            publish_event(StickyKeyReleaseEvent(StickyKeyReleaseMode::LAYER_ENTER));
+        }
         if pointing_step(&mut self.entries, idx, Instant::now(), activated_by_us) == PointingOutcome::OverlapFirstSeen {
             warn!(
                 "auto_mouse_layer: layer {} is already active when motion was detected; \
@@ -138,7 +142,9 @@ impl<'a, 'k> AutoMouseLayerRunner<'a, 'k> {
             return;
         }
         for layer in keypress_step(&mut self.entries, event.action, Instant::now()) {
-            self.keymap.deactivate_layer_if_active(layer);
+            if self.keymap.deactivate_layer_if_active(layer) {
+                publish_event(StickyKeyReleaseEvent(StickyKeyReleaseMode::LAYER_EXIT));
+            }
         }
     }
 }
@@ -172,7 +178,9 @@ impl AutoMouseLayerRunner<'_, '_> {
 
     async fn on_deadline(&mut self) {
         for layer in timeout_step(&mut self.entries, Instant::now()) {
-            self.keymap.deactivate_layer_if_active(layer);
+            if self.keymap.deactivate_layer_if_active(layer) {
+                publish_event(StickyKeyReleaseEvent(StickyKeyReleaseMode::LAYER_EXIT));
+            }
         }
     }
 }

@@ -1,3 +1,4 @@
+use bitfield_struct::bitfield;
 use embassy_time::Duration;
 use heapless::Vec;
 use rmk_types::fork::Fork;
@@ -7,7 +8,7 @@ use rmk_types::morse::{Morse, MorseMode, MorseProfile};
 use crate::keyboard::combo::Combo;
 use crate::{
     AUTO_MOUSE_LAYER_MAX_NUM, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MOUSE_KEY_INTERVAL,
-    MOUSE_WHEEL_INTERVAL,
+    MOUSE_WHEEL_INTERVAL, STICKY_KEY_PROFILE_MAX_NUM,
 };
 
 /// Config for configurable action behavior
@@ -17,13 +18,12 @@ pub struct BehaviorConfig {
     pub default_layer: u8,
     pub tri_layer: Option<[u8; 3]>,
     pub tap: TapConfig,
-    pub one_shot: OneShotConfig,
-    pub one_shot_modifiers: OneShotModifiersConfig,
     pub combo: CombosConfig,
     pub fork: ForksConfig,
     pub morse: MorsesConfig,
     pub keyboard_macros: KeyboardMacrosConfig,
     pub mouse_key: MouseKeyConfig,
+    pub sticky_key: StickyKeyConfig,
     pub auto_mouse_layer: Vec<AutoMouseLayerConfig, AUTO_MOUSE_LAYER_MAX_NUM>,
 }
 
@@ -142,27 +142,87 @@ impl Default for MorsesConfig {
     }
 }
 
-/// Config for one shot behavior
-#[derive(Clone, Copy, Debug)]
-pub struct OneShotConfig {
-    /// Timeout after which modifiers/layers are canceled/released
-    pub timeout: Duration,
+#[bitfield(u8, order = Lsb, debug = false)]
+#[derive(Debug, PartialEq, Eq)]
+pub struct StickyKeyReleaseMode {
+    pub other_key_press: bool,
+    pub other_key_release: bool,
+    pub layer_enter: bool,
+    pub layer_exit: bool,
+    pub double_tap: bool,
+    #[bits(3)]
+    __: u8,
 }
 
-impl Default for OneShotConfig {
+impl StickyKeyReleaseMode {
+    pub const OTHER_KEY_PRESS: Self = Self::new().with_other_key_press(true);
+    pub const OTHER_KEY_RELEASE: Self = Self::new().with_other_key_release(true);
+    pub const LAYER_ENTER: Self = Self::new().with_layer_enter(true);
+    pub const LAYER_EXIT: Self = Self::new().with_layer_exit(true);
+    pub const DOUBLE_TAP: Self = Self::new().with_double_tap(true);
+
+    pub const fn contains(self, other: Self) -> bool {
+        self.into_bits() & other.into_bits() != 0
+    }
+}
+
+/// A resolved Sticky Key profile. `release_mode = None` preserves the legacy
+/// shape-native release behavior for keymaps that do not opt into explicit modes.
+#[derive(Clone, Copy, Debug)]
+pub struct StickyKeyProfile {
+    /// Applies to every SK shape. Default 1s.
+    pub timeout: Duration,
+    /// Honored only by pure-mod SK. Default false.
+    pub activate_on_keypress: bool,
+    /// 0 = infinite; governs tap-key cycling. Default 0.
+    pub max_repeat: u16,
+    /// Explicit release triggers. `None` retains legacy shape-native behavior.
+    pub release_mode: Option<StickyKeyReleaseMode>,
+}
+
+impl Default for StickyKeyProfile {
     fn default() -> Self {
         Self {
             timeout: Duration::from_secs(1),
+            activate_on_keypress: false,
+            max_repeat: 0,
+            release_mode: None,
         }
     }
 }
-/// Config for one-shot behavior
-#[derive(Clone, Copy, Debug, Default)]
-pub struct OneShotModifiersConfig {
-    /// Should modifiers be active from keypress (sticky modifiers)
+
+/// Unified Sticky Key configuration with a default profile and compact named
+/// profile table. Actions retain only a `u8` profile index.
+#[derive(Clone, Debug)]
+pub struct StickyKeyConfig {
+    pub default_profile: StickyKeyProfile,
+    pub profiles: Vec<StickyKeyProfile, STICKY_KEY_PROFILE_MAX_NUM>,
+    /// Legacy Rust-API compatibility knobs. TOML uses `release_mode` instead.
+    pub timeout: Duration,
     pub activate_on_keypress: bool,
-    /// If true, OSM releases on next key press (ZMK skq); if false, on next key release (ZMK skn)
+    pub max_repeat: u16,
     pub quick_release: bool,
+    pub release_on_layer_change: bool,
+    pub tap_key_release_on_layer_change: Option<bool>,
+    pub one_shot_mod_release_on_layer_change: Option<bool>,
+    pub one_shot_layer_release_on_layer_change: Option<bool>,
+}
+
+impl Default for StickyKeyConfig {
+    fn default() -> Self {
+        Self {
+            default_profile: StickyKeyProfile::default(),
+            profiles: Vec::new(),
+            timeout: Duration::from_secs(1),
+            activate_on_keypress: false,
+            max_repeat: 0,
+            quick_release: false,
+            release_on_layer_change: false,
+            tap_key_release_on_layer_change: None,
+            one_shot_mod_release_on_layer_change: None,
+            one_shot_layer_release_on_layer_change: None,
+        }
+    }
 }
 
 /// Config for combo behavior

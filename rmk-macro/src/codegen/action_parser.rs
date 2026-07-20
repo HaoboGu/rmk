@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
 use rmk_config::resolved::KEYCODE_ALIAS;
-use rmk_config::resolved::behavior::MorseProfile;
+use rmk_config::resolved::behavior::{MorseProfile, StickyKeyProfile};
 use strum::VariantNames;
 
 struct ModifierCombinationMacro {
@@ -157,6 +157,31 @@ pub(crate) fn expand_profile_name(
     }
 }
 
+pub(crate) fn sorted_sticky_profile_names(
+    profiles: &Option<HashMap<String, StickyKeyProfile>>,
+) -> Vec<String> {
+    let mut names: Vec<String> = profiles
+        .as_ref()
+        .map(|profiles| profiles.keys().cloned().collect())
+        .unwrap_or_default();
+    names.sort();
+    names
+}
+
+fn sticky_profile_index(
+    name: Option<&str>,
+    profiles: &Option<HashMap<String, StickyKeyProfile>>,
+) -> TokenStream2 {
+    let Some(name) = name else {
+        return quote! { ::core::primitive::u8::MAX };
+    };
+    let names = sorted_sticky_profile_names(profiles);
+    let Some(index) = names.iter().position(|candidate| candidate == name) else {
+        panic!("\n❌ `{name}` profile name is not found in behavior.sticky_key.profiles");
+    };
+    quote! { #index as u8 }
+}
+
 /// Split `s` on commas that are *not* nested inside parentheses.
 ///
 /// Each piece is trimmed and empty pieces are dropped. This lets an argument
@@ -228,14 +253,6 @@ fn parse_action(key: &str) -> TokenStream2 {
                 #modifiers,
             )
         };
-    } else if lower.starts_with("osm(") {
-        let modifiers = parse_modifiers(strip_call(key));
-        if modifiers.is_empty() {
-            panic!(
-                "\n\u{274c} keyboard.toml: modifier in OSM(modifier) is not valid! Please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
-            );
-        }
-        return quote! { ::rmk::types::action::Action::OneShotModifier(#modifiers) };
     } else if lower.starts_with("lm(") {
         let keys = split_top_level(strip_call(key));
         if keys.len() != 2 {
@@ -254,9 +271,6 @@ fn parse_action(key: &str) -> TokenStream2 {
     } else if lower.starts_with("mo(") {
         let layer = parse_layer(key);
         return quote! { ::rmk::types::action::Action::LayerOn(#layer) };
-    } else if lower.starts_with("osl(") {
-        let layer = parse_layer(key);
-        return quote! { ::rmk::types::action::Action::OneShotLayer(#layer) };
     } else if lower.starts_with("tg(") {
         let layer = parse_layer(key);
         return quote! { ::rmk::types::action::Action::LayerToggle(#layer) };
@@ -371,6 +385,7 @@ fn parse_action(key: &str) -> TokenStream2 {
 pub(crate) fn parse_key(
     key: String,
     profiles: &Option<HashMap<String, MorseProfile>>,
+    sticky_profiles: &Option<HashMap<String, StickyKeyProfile>>,
 ) -> TokenStream2 {
     if !key.is_empty() && (key.trim_start_matches("_").is_empty() || key.to_lowercase() == "trns") {
         return quote! { ::rmk::a!(Transparent) };
@@ -428,6 +443,104 @@ pub(crate) fn parse_key(
     } else if lower.starts_with("td(") || lower.starts_with("morse(") {
         let index = strip_call(&key).trim().parse::<u8>().unwrap();
         quote! { ::rmk::types::action::KeyAction::Morse(#index) }
+    } else if lower.starts_with("osl(") {
+        // OSL(n) — user-facing alias for the layer sticky key SK(MO(n)).
+        // Emits the same `sk_layer!` as SK(MO(n)), so the action is byte-identical.
+        let args = split_top_level(strip_call(&key));
+        let layer = args[0].parse::<u8>().unwrap();
+        let profile = sticky_profile_index(
+            args.get(1).map(|p| p.trim_start_matches('@')),
+            sticky_profiles,
+        );
+        quote! { ::rmk::sk_layer!(#layer, #profile) }
+    } else if lower.starts_with("osm(") {
+        // OSM(modifier) — user-facing alias for the pure-mod sticky key SK(modifier).
+        // Emits the same `sk_mod!` as SK(modifier), so the action is byte-identical.
+        let args = split_top_level(strip_call(&key));
+        let modifiers = parse_modifiers(&args[0]);
+        if modifiers.is_empty() {
+            panic!(
+                "\n\u{274c} keyboard.toml: OSM(modifier) is not valid! \
+                 OSM is an alias for SK(modifier). Usage: OSM(LGui) | OSM(LCtrl | LShift)"
+            );
+        }
+        let profile = sticky_profile_index(
+            args.get(1).map(|p| p.trim_start_matches('@')),
+            sticky_profiles,
+        );
+        quote! { ::rmk::sk_mod!(#modifiers, #profile) }
+    } else if lower.starts_with("sk(") {
+        let inner = strip_call(&key).trim();
+        let args = split_top_level(inner);
+        let profile_name = args
+            .last()
+            .filter(|part| part.starts_with('@'))
+            .map(|part| part.trim_start_matches('@'));
+        let profile = sticky_profile_index(profile_name, sticky_profiles);
+        let action_args = if profile_name.is_some() {
+            &args[..args.len() - 1]
+        } else {
+            &args[..]
+        };
+        let action_inner = action_args.join(", ");
+        let inner = action_inner.trim();
+        let inner_lower = inner.to_lowercase();
+        if inner_lower.starts_with("mo(") {
+            // Layer shape: SK(MO(n)) — OSL replacement.
+            let layer = parse_layer(inner);
+            quote! { ::rmk::sk_layer!(#layer, #profile) }
+        } else if inner.contains('[') {
+            // Tap-key shape: SK(key, [mods]).
+            let bracket_start = inner.find('[').unwrap();
+            let bracket_end = inner.find(']').unwrap_or_else(|| {
+                panic!(
+                    "\n\u{274c} keyboard.toml: SK has unclosed '['. \
+                     Usage: SK(LGui) | SK(Tab, [LAlt]) | SK(MO(n))"
+                )
+            });
+
+            let key_str = inner[..bracket_start].trim().trim_end_matches(',').trim();
+            let ident = get_key_with_alias(key_str.to_string());
+
+            let keep_mods_str = &inner[bracket_start + 1..bracket_end];
+            let keep_modifiers = if keep_mods_str.trim().is_empty() {
+                ModifierCombinationMacro::new()
+            } else {
+                parse_modifiers(keep_mods_str)
+            };
+
+            // Legacy-tail guard: reject the old 5-positional form.
+            let after_bracket = inner[bracket_end + 1..].trim_start_matches(',').trim();
+            if !after_bracket.is_empty() {
+                panic!(
+                    "\n\u{274c} keyboard.toml: the 5-positional SK(...) form is removed; use SK(key, [mods]). max_repeat/timeout/release_on_layer_change now live in [behavior.sticky_key]."
+                );
+            }
+
+            quote! { ::rmk::sk!(#ident, #keep_modifiers, #profile) }
+        } else {
+            // Pure-mod shape: SK(LGui) — OSM replacement.
+            //
+            // A nested action other than MO(n) (e.g. SK(TG(1)), SK(TO(2))) parses as a
+            // valid `sk_action` in the pest grammar (it accepts the broad `layer_action`)
+            // but is NOT a supported SK layer shape. Catch it here with a targeted message
+            // instead of falling through to the generic "not a modifier" panic below.
+            if inner.contains('(') {
+                panic!(
+                    "\n\u{274c} keyboard.toml: SK only supports MO(n) as its layer shape (got `{inner}`). \
+                     Usage: SK(LGui) | SK(Tab, [LAlt]) | SK(MO(n))"
+                );
+            }
+
+            let modifiers = parse_modifiers(inner);
+            if modifiers.is_empty() {
+                panic!(
+                    "\n\u{274c} keyboard.toml: SK(modifier) is not valid! \
+                     Usage: SK(LGui) | SK(Tab, [LAlt]) | SK(MO(n))"
+                );
+            }
+            quote! { ::rmk::sk_mod!(#modifiers, #profile) }
+        }
     } else {
         let action = parse_action(&key);
         quote! { ::rmk::types::action::KeyAction::Single(#action) }
@@ -462,10 +575,10 @@ pub(crate) fn get_key_with_alias(key: String) -> Ident {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmk_config::resolved::behavior::MorseProfile;
+    use rmk_config::resolved::behavior::{MorseProfile, StickyKeyProfile};
 
     fn expand(key: &str) -> String {
-        parse_key(key.to_string(), &None).to_string()
+        parse_key(key.to_string(), &None, &None).to_string()
     }
 
     fn profile(enable_flow_tap: Option<bool>) -> MorseProfile {
@@ -513,7 +626,9 @@ mod tests {
                 .contains("KeyAction::Single(::rmk::types::action::Action::LayerOn(1u8))")
         );
         assert!(squash(&expand("WM(C,LCtrl)")).contains("Action::KeyWithModifier"));
-        assert!(squash(&expand("OSM(LShift)")).contains("Action::OneShotModifier"));
+        // OSM/OSL are now aliases for the unified sticky key, so they desugar to
+        // `sk_mod!`/`sk_layer!` rather than the removed `OneShotModifier` variant.
+        assert!(squash(&expand("OSM(LShift)")).contains("::rmk::sk_mod!"));
     }
 
     #[test]
@@ -550,5 +665,51 @@ mod tests {
                 .contains("TapHold(::rmk::types::action::Action::Key")
         );
         assert!(squash(&expand("LT(2, Enter)")).contains("Action::LayerOn(2u8)"));
+    }
+
+    /// OSM(modifier)/OSL(n) are aliases that must expand to the exact same
+    /// action tokens as their SK equivalents (sk_mod! / sk_layer!).
+    #[test]
+    fn osm_osl_aliases_match_sk_tokens() {
+        // (alias form, canonical SK form, macro the action must emit)
+        let cases = [
+            ("OSM(LGui)", "SK(LGui)", "sk_mod"),
+            ("OSM(LCtrl | LShift)", "SK(LCtrl | LShift)", "sk_mod"),
+            ("osm(lalt)", "sk(lalt)", "sk_mod"),
+            ("OSL(1)", "SK(MO(1))", "sk_layer"),
+            ("OSL(3)", "SK(MO(3))", "sk_layer"),
+        ];
+
+        for (alias, sk, expected_macro) in cases {
+            let alias_tokens = parse_key(alias.to_string(), &None, &None).to_string();
+            let sk_tokens = parse_key(sk.to_string(), &None, &None).to_string();
+            assert_eq!(
+                alias_tokens, sk_tokens,
+                "{alias} must expand identically to {sk}"
+            );
+            // ...and the shared expansion is the real sticky-key action, not
+            // just two strings that happen to match.
+            assert!(
+                alias_tokens.contains(expected_macro),
+                "{alias} should emit {expected_macro}!, got: {alias_tokens}"
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "profile name is not found in behavior.sticky_key.profiles")]
+    fn unknown_sticky_key_profile_is_rejected() {
+        let mut profiles = HashMap::new();
+        profiles.insert(
+            "known".to_string(),
+            StickyKeyProfile {
+                timeout_ms: None,
+                activate_on_keypress: None,
+                max_repeat: None,
+                release_mode: None,
+            },
+        );
+
+        parse_key("SK(LShift, @missing)".to_string(), &None, &Some(profiles));
     }
 }

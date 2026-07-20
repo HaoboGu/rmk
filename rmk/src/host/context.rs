@@ -225,8 +225,8 @@ impl<'a> KeyboardContext<'a> {
         self.keymap.combo_timeout()
     }
 
-    pub fn one_shot_timeout(&self) -> Duration {
-        self.keymap.one_shot_timeout()
+    pub fn sticky_key_timeout(&self) -> Duration {
+        self.keymap.sticky_key_timeout()
     }
 
     pub fn tap_interval(&self) -> u16 {
@@ -253,8 +253,9 @@ impl<'a> KeyboardContext<'a> {
         FLASH_CHANNEL.send(FlashOperationMessage::ComboTimeout(ms)).await;
     }
 
-    pub async fn set_one_shot_timeout(&self, ms: u16) {
-        self.keymap.set_one_shot_timeout(Duration::from_millis(ms as u64));
+    pub async fn set_sticky_key_timeout(&self, ms: u16) {
+        self.keymap.set_sticky_key_timeout(Duration::from_millis(ms as u64));
+        // `OneShotTimeout` variant label is kept for storage-format stability; it persists the sticky_key timeout.
         #[cfg(feature = "storage")]
         FLASH_CHANNEL.send(FlashOperationMessage::OneShotTimeout(ms)).await;
     }

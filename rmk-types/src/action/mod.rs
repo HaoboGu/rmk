@@ -31,6 +31,35 @@ use crate::modifier::ModifierCombination;
 #[cfg(feature = "steno")]
 use crate::steno::StenoKey;
 
+/// Effect produced by a sticky-key action.
+///
+/// Each variant carries only the data that is meaningful for that effect, so
+/// invalid combinations cannot be constructed.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
+pub enum StickyKeyEffect {
+    /// Apply modifiers to the next key (the legacy OSM behavior).
+    Modifier(ModifierCombination),
+    /// Activate a layer for the next key (the legacy OSL behavior).
+    Layer(u8),
+    /// Tap a HID key while retaining modifiers between repetitions.
+    TapKey {
+        key: HidKeyCode,
+        modifiers: ModifierCombination,
+    },
+}
+
+/// Parameters for a sticky-key action.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
+pub struct StickyKeyAction {
+    pub effect: StickyKeyEffect,
+    /// Profile-table index. `u8::MAX` selects the default Sticky Key profile.
+    pub profile: u8,
+}
+
 /// A single basic action that a keyboard can execute.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -85,4 +114,30 @@ pub enum Action {
     /// sent to the host as a vendor HID report.
     #[cfg(feature = "steno")]
     Steno(StenoKey),
+    /// Configurable sticky modifier, layer, or tap-key behavior.
+    ///
+    /// This variant is appended after the pre-existing action variants to
+    /// preserve their serialized discriminants.
+    StickyKey(StickyKeyAction),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sticky_key_action_profile_round_trips() {
+        let action = Action::StickyKey(StickyKeyAction {
+            effect: StickyKeyEffect::TapKey {
+                key: HidKeyCode::Tab,
+                modifiers: ModifierCombination::LALT,
+            },
+            profile: 7,
+        });
+        let mut bytes = [0; 32];
+        let encoded = postcard::to_slice(&action, &mut bytes).unwrap();
+        let decoded: Action = postcard::from_bytes(encoded).unwrap();
+
+        assert_eq!(decoded, action);
+    }
 }

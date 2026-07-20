@@ -42,7 +42,7 @@ name = "second_layer"
 keys = """
 TD(1)  TO(0)        WM(W,LShift)         No
 DF(0)  LT(1, Space) LM(0, LShift | RGui) 
-OSL(0) OSM(LAlt)    TH(Kp1, Kp2)        SHIFTED(Kp2)
+SK(MO(0)) SK(LAlt)    TH(Kp1, Kp2)        SHIFTED(Kp2)
     @my_copy        @my_paste
 """
 # Encoder 0 - CW: BrightnessUp, CCW: BrightnessDown

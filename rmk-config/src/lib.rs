@@ -232,6 +232,10 @@ pub(crate) struct RmkConstantsConfig {
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_morse_max_num")]
     pub morse_max_num: usize,
+    /// Capacity of the named Sticky Key profile table (maximum 255).
+    #[serde_inline_default(16)]
+    #[serde(deserialize_with = "check_sticky_key_profile_max_num")]
+    pub sticky_key_profile_max_num: usize,
     /// Maximum number of patterns a morse key can handle
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_max_patterns_per_key")]
@@ -295,6 +299,17 @@ where
     Ok(value)
 }
 
+fn check_sticky_key_profile_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let value = Deserialize::deserialize(deserializer)?;
+    if value > 255 {
+        panic!("❌ Parse `keyboard.toml` error: sticky_key_profile_max_num must be between 0 and 255, got {value}");
+    }
+    Ok(value)
+}
+
 fn check_max_patterns_per_key<'de, D>(deserializer: D) -> Result<usize, D::Error>
 where
     D: de::Deserializer<'de>,
@@ -327,6 +342,7 @@ impl Default for RmkConstantsConfig {
             combo_max_length: 4,
             fork_max_num: 8,
             morse_max_num: 8,
+            sticky_key_profile_max_num: 16,
             max_patterns_per_key: 8,
             macro_space_size: 256,
             debounce_time: 20,
@@ -402,6 +418,7 @@ define_event_config!(
     keyboard,
     // Keyboard state events
     layer_change,
+    sticky_key_release,
     wpm_update,
     led_indicator,
     sleep_state,
@@ -622,13 +639,12 @@ pub struct KeyInfo {
 #[serde(deny_unknown_fields)]
 pub(crate) struct BehaviorConfig {
     pub tri_layer: Option<TriLayerConfig>,
-    pub one_shot: Option<OneShotConfig>,
-    pub one_shot_modifiers: Option<OneShotModifiersConfig>,
     pub combo: Option<CombosConfig>,
     #[serde(alias = "macro")]
     pub macros: Option<MacrosConfig>,
     pub fork: Option<ForksConfig>,
     pub morse: Option<MorsesConfig>,
+    pub sticky_key: Option<StickyKeyConfig>,
     pub auto_mouse_layer: Option<Vec<AutoMouseLayerConfig>>,
 }
 
@@ -693,19 +709,31 @@ pub(crate) struct TriLayerConfig {
     pub adjust: u8,
 }
 
-/// Configurations for oneshot modifiers/layers
-#[derive(Clone, Debug, Deserialize)]
+/// Configurations for sticky key
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct OneShotConfig {
+pub struct StickyKeyConfig {
+    /// Timeout before an unused sticky key auto-releases (e.g., "1000ms", "1s"). Default 1s.
     pub timeout: Option<DurationMillis>,
+    /// Pure-modifier sticky keys only: activate on the next key press instead of release. Default false.
+    pub activate_on_keypress: Option<bool>,
+    /// Max number of held keys the sticky modifier applies to; 0 = unlimited. Default 0.
+    pub max_repeat: Option<u16>,
+    /// `|`-separated release triggers, e.g. "other_key_press | layer_exit".
+    pub release_mode: Option<String>,
+    /// Named profiles overriding this default configuration.
+    #[serde(default)]
+    pub profiles: HashMap<String, StickyKeyProfile>,
 }
 
-/// Configurations for oneshot modifiers
-#[derive(Clone, Debug, Deserialize)]
+/// Per-profile Sticky Key overrides. Omitted fields inherit the default table.
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct OneShotModifiersConfig {
+pub struct StickyKeyProfile {
+    pub timeout: Option<DurationMillis>,
     pub activate_on_keypress: Option<bool>,
-    pub quick_release: Option<bool>,
+    pub max_repeat: Option<u16>,
+    pub release_mode: Option<String>,
 }
 
 /// Configurations for combos
@@ -888,7 +916,7 @@ pub struct SerialConfig {
 
 /// Duration in milliseconds
 #[derive(Clone, Debug, Deserialize)]
-pub(crate) struct DurationMillis(#[serde(deserialize_with = "parse_duration_millis")] pub u64);
+pub struct DurationMillis(#[serde(deserialize_with = "parse_duration_millis")] pub u64);
 
 const fn default_true() -> bool {
     true

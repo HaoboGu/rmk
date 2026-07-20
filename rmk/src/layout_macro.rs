@@ -311,47 +311,111 @@ macro_rules! thp {
     };
 }
 
-/// Create a one-shot layer action.
-///
-/// This macro creates a key that activates a layer for the next keypress only.
-/// After the next key is pressed, the layer automatically deactivates.
+/// Create a StickyKey tap-key action (alt-tab shape).
 ///
 /// # Parameters
-/// - `$x`: Layer number (0-255)
+/// - `$key`: HID keycode identifier (e.g., `Tab`, `A`)
+/// - `$keep`: `ModifierCombination` held between presses
 ///
 /// # Example
 /// ```ignore
-/// osl!(1)  // Next key will be from layer 1, then return to current layer
-/// osl!(2)  // Next key will be from layer 2, then return to current layer
+/// sk!(Tab, ModifierCombination::LALT)  // SK(Tab, [LAlt])
 /// ```
 #[macro_export]
-macro_rules! osl {
-    ($x: literal) => {
-        $crate::types::action::KeyAction::Single($crate::types::action::Action::OneShotLayer($x))
+macro_rules! sk {
+    ($key:ident, $keep:expr) => {
+        $crate::sk!($key, $keep, ::core::primitive::u8::MAX)
+    };
+    ($key:ident, $keep:expr, $profile:expr) => {
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
+            $crate::types::action::StickyKeyAction {
+                effect: $crate::types::action::StickyKeyEffect::TapKey {
+                    key: $crate::types::keycode::HidKeyCode::$key,
+                    modifiers: $keep,
+                },
+                profile: $profile,
+            },
+        ))
     };
 }
 
-/// Create a one-shot modifier action.
-///
-/// This macro creates a key that applies modifiers for the next keypress only.
-/// They automatically deactivate if:
-/// - other key that sends keyboard report is pressed,
-/// - timeout has passed before next key is triggered.
+/// Create a StickyKey pure-modifier action (one-shot modifier shape).
 ///
 /// # Parameters
 /// - `$m`: `ModifierCombination` to apply for the next keypress
 ///
 /// # Example
 /// ```ignore
-/// // Next key will be shifted
-/// osm!(ModifierCombination::LSHIFT)
-/// // Next key will have both Shift and Ctrl applied
-/// osm!(ModifierCombination::LSHIFT | ModifierCombination::LCTRL)
+/// sk_mod!(ModifierCombination::LSHIFT)  // SK(LShift)
+/// ```
+#[macro_export]
+macro_rules! sk_mod {
+    ($m:expr) => {
+        $crate::sk_mod!($m, ::core::primitive::u8::MAX)
+    };
+    ($m:expr, $profile:expr) => {
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
+            $crate::types::action::StickyKeyAction {
+                effect: $crate::types::action::StickyKeyEffect::Modifier($m),
+                profile: $profile,
+            },
+        ))
+    };
+}
+
+/// Create a StickyKey layer action (one-shot layer shape).
+///
+/// # Parameters
+/// - `$n`: Layer number (0-255)
+///
+/// # Example
+/// ```ignore
+/// sk_layer!(1)  // SK(MO(1))
+/// ```
+#[macro_export]
+macro_rules! sk_layer {
+    ($n:literal) => {
+        $crate::sk_layer!($n, ::core::primitive::u8::MAX)
+    };
+    ($n:literal, $profile:expr) => {
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
+            $crate::types::action::StickyKeyAction {
+                effect: $crate::types::action::StickyKeyEffect::Layer($n),
+                profile: $profile,
+            },
+        ))
+    };
+}
+
+/// Create a one-shot modifier action (alias for `sk_mod!`).
+///
+/// # Example
+/// ```ignore
+/// osm!(ModifierCombination::LSHIFT)  // equivalent to sk_mod!(ModifierCombination::LSHIFT)
 /// ```
 #[macro_export]
 macro_rules! osm {
-    ($m: expr) => {
-        $crate::types::action::KeyAction::Single($crate::types::action::Action::OneShotModifier($m))
+    ($m:expr) => {
+        $crate::sk_mod!($m)
+    };
+    ($m:expr, $profile:expr) => {
+        $crate::sk_mod!($m, $profile)
+    };
+}
+
+/// Create a one-shot layer action (alias for `sk_layer!`).
+///
+/// # Example
+/// ```ignore
+/// osl!(1)  // equivalent to sk_layer!(1)
+/// ```
+#[macro_export]
+macro_rules! osl {
+    ($n:literal) => {
+        $crate::sk_layer!($n)
+    };
+    ($n:literal, $profile:expr) => {
+        $crate::sk_layer!($n, $profile)
     };
 }
 
