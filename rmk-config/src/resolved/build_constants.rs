@@ -105,6 +105,7 @@ impl crate::KeyboardTomlConfig {
             wpm_update,
             led_indicator,
             sleep_state,
+            lighting_changed,
             battery_status,
             battery_adc,
             charging_state,
@@ -267,7 +268,9 @@ mod tests {
     #[test]
     fn reserves_led_subscribers_for_display_split_and_dual_rynk_sessions() {
         let config: KeyboardTomlConfig = toml::from_str("").unwrap();
-        let constants = config.build_constants(&["display", "split", "rynk", "_ble"]).unwrap();
+        let constants = config
+            .build_constants(&["display", "split", "rynk", "lighting", "_ble"])
+            .unwrap();
         let led_indicator = constants
             .events
             .iter()
@@ -276,6 +279,14 @@ mod tests {
 
         // Three indicator processors, the display, two split peripherals, and USB/BLE Rynk sessions.
         assert_eq!(led_indicator.subs, 8);
+
+        let lighting_changed = constants
+            .events
+            .iter()
+            .find(|event| event.name == "lighting_changed")
+            .unwrap();
+        // One public subscriber plus USB and BLE Rynk sessions.
+        assert_eq!(lighting_changed.subs, 3);
     }
 
     #[test]

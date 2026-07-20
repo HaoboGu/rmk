@@ -69,6 +69,12 @@ events = [
 ]
 
 [[subscriber]]
+features = ["rynk", "lighting"]
+events = [
+    { name = "lighting_changed" },
+]
+
+[[subscriber]]
 features = ["rynk", "_ble"]
 events = [
     # battery_status is only subscribed under `_ble`; needs one slot per
@@ -80,6 +86,13 @@ events = [
     { name = "connection_status_change" },
     { name = "sleep_state" },
     { name = "led_indicator" },
+]
+
+[[subscriber]]
+features = ["rynk", "lighting", "_ble"]
+events = [
+    # Second Rynk session slot on dual-transport boards.
+    { name = "lighting_changed" },
 ]
 
 # --- Split-gated internal subscribers ---
