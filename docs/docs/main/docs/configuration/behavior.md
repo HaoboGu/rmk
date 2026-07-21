@@ -72,8 +72,15 @@ release; releasing the physical key then completes the action normally.
 
 Modifier and layer Sticky Keys have independent latches. They can be active at
 the same time, retain their own profile, deadline, and release policy, and expire
-without clearing each other. Tap-key Sticky Keys are exclusive because starting
-a different tap-key sequence replaces the key/modifier pair being cycled.
+without clearing each other. A tap-key Sticky Key is exclusive with both: starting
+one releases any modifier/layer latch, and starting a modifier or layer Sticky Key
+releases the tap-key sequence being cycled.
+
+RMK's layer state is a boolean rather than a reference-counted owner set. A layer
+Sticky Key therefore never claims a layer that was already active, and its cleanup
+will not turn that pre-existing layer off. Overlapping the same layer with `MO`,
+`TG`, or another automatic layer producer is still subject to the normal boolean
+layer semantics; prefer a one-shot layer that is not simultaneously owned elsewhere.
 
 For example, an Alt+Tab profile can release on another key press or either
 direction of a layer transition:
@@ -94,7 +101,7 @@ Default values:
 timeout = "1s"
 activate_on_keypress = false
 max_repeat = 0
-# release_mode = "other_key_release | layer_exit | double_tap"
+# release_mode is intentionally unset; shape-native defaults apply
 ```
 
 OSSM example (pure-mod SK activates on key press):
@@ -122,7 +129,7 @@ For keymap usage, see `SK(...)` in the [keymap configuration](./layout#keyboard-
 
 ### Migration from OSM / OSL
 
-`OSM(mod)` and `OSL(n)` are **still supported** as aliases — they desugar to `SK(mod)` and `SK(MO(n))` respectively, so existing keymaps keep working unchanged. The `SK` forms are the canonical spelling; use whichever you prefer. The old 5-positional `SK` form and the `[behavior.one_shot]` / `[behavior.one_shot_modifiers]` TOML tables, however, are **removed** — using them in `keyboard.toml` is a build error. Rust configurations retain the legacy `BehaviorConfig::one_shot` and `BehaviorConfig::one_shot_modifiers` fields as a compatibility adapter; RMK normalizes them into the default Sticky Key profile once when the keymap is built.
+`OSM(mod)` and `OSL(n)` are **still supported** as aliases — they desugar to `SK(mod)` and `SK(MO(n))` respectively, so existing keymaps keep working unchanged. The `SK` forms are the canonical spelling; use whichever you prefer. The old 5-positional `SK` form and the `[behavior.one_shot]` / `[behavior.one_shot_modifiers]` TOML tables, however, are **removed** — using them in `keyboard.toml` is a build error. Rust configurations retain the legacy `BehaviorConfig::one_shot` and `BehaviorConfig::one_shot_modifiers` fields as a compatibility adapter. RMK resolves them before the keymap is built; legacy `quick_release` remains specific to pure-mod/OSM behavior rather than changing layer or tap-key defaults.
 
 | Old | New (canonical) | Alias still accepted |
 |-----|-----------------|----------------------|
