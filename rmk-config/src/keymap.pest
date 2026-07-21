@@ -99,7 +99,7 @@ layer_action = _{
 // accepted as a slot argument.
 nestable_action = _{
     wm_action | osm_action | shifted_action | trigger_macro_action | alias_ref |
-    df_action | mo_action | lm_action | osl_action | tg_action | to_action |
+    df_action | mo_action | lm_action | osl_action | tg_action | to_action | sk_action |
     keycode_name
 }
 

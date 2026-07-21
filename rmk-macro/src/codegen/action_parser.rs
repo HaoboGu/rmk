@@ -221,6 +221,103 @@ fn strip_call(s: &str) -> &str {
     })
 }
 
+/// Parse all user-facing Sticky Key spellings into the one nested `Action`.
+/// `parse_key` wraps this action for top-level use; tap-hold slots use it directly.
+fn parse_sticky_action(
+    key: &str,
+    sticky_profiles: &Option<HashMap<String, StickyKeyProfile>>,
+) -> Option<TokenStream2> {
+    let lower = key.to_lowercase();
+    let (inner, alias) = if lower.starts_with("osm(") {
+        (strip_call(key).trim(), Some("modifier"))
+    } else if lower.starts_with("osl(") {
+        (strip_call(key).trim(), Some("layer"))
+    } else if lower.starts_with("sk(") {
+        (strip_call(key).trim(), None)
+    } else {
+        return None;
+    };
+
+    let args = split_top_level(inner);
+    let profile_name = args
+        .last()
+        .filter(|part| part.starts_with('@'))
+        .map(|part| part.trim_start_matches('@'));
+    let profile = sticky_profile_index(profile_name, sticky_profiles);
+    let action_args = if profile_name.is_some() {
+        &args[..args.len() - 1]
+    } else {
+        &args[..]
+    };
+    let action = action_args.join(", ");
+
+    let effect = match alias {
+        Some("modifier") => {
+            let modifiers = parse_modifiers(&action);
+            if modifiers.is_empty() {
+                panic!(
+                    "\n❌ keyboard.toml: OSM(modifier) is not valid; use OSM(LGui) or OSM(LCtrl | LShift)"
+                );
+            }
+            quote! { ::rmk::types::action::StickyKeyEffect::Modifier(#modifiers) }
+        }
+        Some("layer") => {
+            let layer = action.parse::<u8>().unwrap();
+            quote! { ::rmk::types::action::StickyKeyEffect::Layer(#layer) }
+        }
+        None if action.to_lowercase().starts_with("mo(") => {
+            let layer = parse_layer(&action);
+            quote! { ::rmk::types::action::StickyKeyEffect::Layer(#layer) }
+        }
+        None if action.contains('[') => {
+            let start = action.find('[').unwrap();
+            let end = action
+                .find(']')
+                .unwrap_or_else(|| panic!("\n❌ keyboard.toml: SK has unclosed '['"));
+            let key_ident = get_key_with_alias(
+                action[..start]
+                    .trim()
+                    .trim_end_matches(',')
+                    .trim()
+                    .to_string(),
+            );
+            let after = action[end + 1..].trim_start_matches(',').trim();
+            if !after.is_empty() {
+                panic!(
+                    "\n❌ keyboard.toml: the 5-positional SK(...) form is removed; use SK(key, [mods])."
+                );
+            }
+            let modifiers = if action[start + 1..end].trim().is_empty() {
+                ModifierCombinationMacro::new()
+            } else {
+                parse_modifiers(&action[start + 1..end])
+            };
+            quote! { ::rmk::types::action::StickyKeyEffect::TapKey { key: ::rmk::types::keycode::HidKeyCode::#key_ident, modifiers: #modifiers } }
+        }
+        None => {
+            if action.contains('(') {
+                panic!(
+                    "\n❌ keyboard.toml: SK only supports MO(n) as its layer shape (got `{action}`)."
+                );
+            }
+            let modifiers = parse_modifiers(&action);
+            if modifiers.is_empty() {
+                panic!(
+                    "\n❌ keyboard.toml: SK(modifier) is not valid; use SK(LGui), SK(Tab, [LAlt]), or SK(MO(n))."
+                );
+            }
+            quote! { ::rmk::types::action::StickyKeyEffect::Modifier(#modifiers) }
+        }
+        _ => unreachable!(),
+    };
+    Some(quote! {
+        ::rmk::types::action::Action::StickyKey(::rmk::types::action::StickyKeyAction {
+            effect: #effect,
+            profile: #profile,
+        })
+    })
+}
+
 /// Parse a single "action expression" into an [`rmk_types::action::Action`] token stream.
 ///
 /// These forms each map to exactly one `Action`, so they may appear both at the
@@ -228,10 +325,15 @@ fn strip_call(s: &str) -> &str {
 /// tap/hold slots of `MT`/`TH`/`LT`. Composite forms (`MT`/`TH`/`LT`/`TT`/`TD`)
 /// and `Transparent` are *not* handled here — they only exist at the top level
 /// and are dispatched by [`parse_key`].
-fn parse_action(key: &str) -> TokenStream2 {
+fn parse_action(
+    key: &str,
+    sticky_profiles: &Option<HashMap<String, StickyKeyProfile>>,
+) -> TokenStream2 {
     let lower = key.to_lowercase();
 
-    if lower == "no" {
+    if let Some(action) = parse_sticky_action(key, sticky_profiles) {
+        return action;
+    } else if lower == "no" {
         return quote! { ::rmk::types::action::Action::No };
     } else if lower.starts_with("wm(") {
         let keys = split_top_level(strip_call(key));
@@ -395,6 +497,10 @@ pub(crate) fn parse_key(
 
     let lower = key.to_lowercase();
 
+    if let Some(action) = parse_sticky_action(&key, sticky_profiles) {
+        return quote! { ::rmk::types::action::KeyAction::Single(#action) };
+    }
+
     if lower.starts_with("mt(") {
         let keys = split_top_level(strip_call(&key));
         if keys.len() < 2 || keys.len() > 3 {
@@ -402,7 +508,7 @@ pub(crate) fn parse_key(
                 "\n\u{274c} keyboard.toml: MT(key, modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
             );
         }
-        let tap = parse_action(&keys[0]);
+        let tap = parse_action(&keys[0], sticky_profiles);
         let modifiers = parse_modifiers(&keys[1]);
         if modifiers.is_empty() {
             panic!(
@@ -420,8 +526,8 @@ pub(crate) fn parse_key(
                 "\n\u{274c} keyboard.toml: TH(key_tap, key_hold) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
             );
         }
-        let tap = parse_action(&keys[0]);
-        let hold = parse_action(&keys[1]);
+        let tap = parse_action(&keys[0], sticky_profiles);
+        let hold = parse_action(&keys[1], sticky_profiles);
         let profile = morse_profile(keys.get(2), profiles);
         quote! { ::rmk::types::action::KeyAction::TapHold(#tap, #hold, #profile) }
     } else if lower.starts_with("lt(") {
@@ -432,7 +538,7 @@ pub(crate) fn parse_key(
             );
         }
         let layer = keys[0].parse::<u8>().unwrap();
-        let tap = parse_action(&keys[1]);
+        let tap = parse_action(&keys[1], sticky_profiles);
         let profile = morse_profile(keys.get(2), profiles);
         quote! {
             ::rmk::types::action::KeyAction::TapHold(#tap, ::rmk::types::action::Action::LayerOn(#layer), #profile)
@@ -542,7 +648,7 @@ pub(crate) fn parse_key(
             quote! { ::rmk::sk_mod!(#modifiers, #profile) }
         }
     } else {
-        let action = parse_action(&key);
+        let action = parse_action(&key, sticky_profiles);
         quote! { ::rmk::types::action::KeyAction::Single(#action) }
     }
 }
@@ -626,9 +732,7 @@ mod tests {
                 .contains("KeyAction::Single(::rmk::types::action::Action::LayerOn(1u8))")
         );
         assert!(squash(&expand("WM(C,LCtrl)")).contains("Action::KeyWithModifier"));
-        // OSM/OSL are now aliases for the unified sticky key, so they desugar to
-        // `sk_mod!`/`sk_layer!` rather than the removed `OneShotModifier` variant.
-        assert!(squash(&expand("OSM(LShift)")).contains("::rmk::sk_mod!"));
+        assert!(squash(&expand("OSM(LShift)")).contains("Action::StickyKey"));
     }
 
     #[test]
@@ -656,6 +760,25 @@ mod tests {
     }
 
     #[test]
+    fn sticky_key_is_a_single_action_at_top_level_and_when_nested() {
+        let top = squash(&expand("SK(Tab, [LAlt])"));
+        assert!(top.contains("KeyAction::Single(::rmk::types::action::Action::StickyKey"));
+        assert!(!top.contains("KeyAction::Single(::rmk::types::action::KeyAction::Single"));
+
+        let nested = squash(&expand("TH(SK(LShift), SK(MO(1)))"));
+        assert_eq!(nested.matches("Action::StickyKey").count(), 2);
+        assert!(nested.contains("StickyKeyEffect::Modifier"));
+        assert!(nested.contains("StickyKeyEffect::Layer(1u8)"));
+    }
+
+    #[test]
+    fn nested_sticky_aliases_use_the_same_action() {
+        let canonical = squash(&expand("TH(SK(LShift), SK(MO(1)))"));
+        let aliases = squash(&expand("TH(OSM(LShift), OSL(1))"));
+        assert_eq!(canonical, aliases);
+    }
+
+    #[test]
     fn plain_mt_th_lt_still_expand() {
         assert!(
             squash(&expand("MT(A, LShift)")).contains("TapHold(::rmk::types::action::Action::Key")
@@ -668,16 +791,20 @@ mod tests {
     }
 
     /// OSM(modifier)/OSL(n) are aliases that must expand to the exact same
-    /// action tokens as their SK equivalents (sk_mod! / sk_layer!).
+    /// sticky-key action tokens as their canonical equivalents.
     #[test]
     fn osm_osl_aliases_match_sk_tokens() {
-        // (alias form, canonical SK form, macro the action must emit)
+        // (alias form, canonical SK form, effect the action must emit)
         let cases = [
-            ("OSM(LGui)", "SK(LGui)", "sk_mod"),
-            ("OSM(LCtrl | LShift)", "SK(LCtrl | LShift)", "sk_mod"),
-            ("osm(lalt)", "sk(lalt)", "sk_mod"),
-            ("OSL(1)", "SK(MO(1))", "sk_layer"),
-            ("OSL(3)", "SK(MO(3))", "sk_layer"),
+            ("OSM(LGui)", "SK(LGui)", "StickyKeyEffect::Modifier"),
+            (
+                "OSM(LCtrl | LShift)",
+                "SK(LCtrl | LShift)",
+                "StickyKeyEffect::Modifier",
+            ),
+            ("osm(lalt)", "sk(lalt)", "StickyKeyEffect::Modifier"),
+            ("OSL(1)", "SK(MO(1))", "StickyKeyEffect::Layer"),
+            ("OSL(3)", "SK(MO(3))", "StickyKeyEffect::Layer"),
         ];
 
         for (alias, sk, expected_macro) in cases {
@@ -690,8 +817,8 @@ mod tests {
             // ...and the shared expansion is the real sticky-key action, not
             // just two strings that happen to match.
             assert!(
-                alias_tokens.contains(expected_macro),
-                "{alias} should emit {expected_macro}!, got: {alias_tokens}"
+                squash(&alias_tokens).contains(expected_macro),
+                "{alias} should emit {expected_macro}, got: {alias_tokens}"
             );
         }
     }
@@ -728,11 +855,11 @@ mod tests {
 
         assert!(
             squash(&parse_key("SK(LShift, @alpha)".into(), &None, &profiles).to_string())
-                .contains(",0u8")
+                .contains("profile:0u8")
         );
         assert!(
             squash(&parse_key("SK(LShift, @zebra)".into(), &None, &profiles).to_string())
-                .contains(",1u8")
+                .contains("profile:1u8")
         );
     }
 }

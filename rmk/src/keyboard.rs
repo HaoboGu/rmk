@@ -175,10 +175,13 @@ impl Runnable for Keyboard<'_> {
                             self.process_inner(event).await;
                         }
                         Either3::Second(layer_event) => {
-                            self.release_sticky_key_on_layer_event(match layer_event.0 {
-                                LayerTransition::Enter => crate::config::StickyKeyReleaseMode::LAYER_ENTER,
-                                LayerTransition::Exit => crate::config::StickyKeyReleaseMode::LAYER_EXIT,
-                            })
+                            self.release_sticky_key_on_layer_event(
+                                match layer_event.transition {
+                                    LayerTransition::Enter => crate::config::StickyKeyReleaseMode::LAYER_ENTER,
+                                    LayerTransition::Exit => crate::config::StickyKeyReleaseMode::LAYER_EXIT,
+                                },
+                                Some(layer_event.occurred_at),
+                            )
                             .await;
                         }
                         Either3::Third(_) => {}
@@ -192,10 +195,13 @@ impl Runnable for Keyboard<'_> {
                     {
                         Either::First(event) => self.process_inner(event).await,
                         Either::Second(layer_event) => {
-                            self.release_sticky_key_on_layer_event(match layer_event.0 {
-                                LayerTransition::Enter => crate::config::StickyKeyReleaseMode::LAYER_ENTER,
-                                LayerTransition::Exit => crate::config::StickyKeyReleaseMode::LAYER_EXIT,
-                            })
+                            self.release_sticky_key_on_layer_event(
+                                match layer_event.transition {
+                                    LayerTransition::Enter => crate::config::StickyKeyReleaseMode::LAYER_ENTER,
+                                    LayerTransition::Exit => crate::config::StickyKeyReleaseMode::LAYER_EXIT,
+                                },
+                                Some(layer_event.occurred_at),
+                            )
                             .await;
                         }
                     }
@@ -1294,11 +1300,17 @@ impl<'a> Keyboard<'a> {
                 // Consumer/system keys with no HID alias are dispatched directly here.
                 KeyCode::Consumer(consumer) => {
                     self.process_action_consumer_control(consumer, event).await;
-                    self.update_sticky_key(event);
+                    let update = self.update_sticky_key(event);
+                    if update.modifier_consumed && update.modifier_was_host_visible {
+                        self.send_keyboard_report_with_resolved_modifiers(false).await;
+                    }
                 }
                 KeyCode::SystemControl(system_control) => {
                     self.process_action_system_control(system_control, event).await;
-                    self.update_sticky_key(event);
+                    let update = self.update_sticky_key(event);
+                    if update.modifier_consumed && update.modifier_was_host_visible {
+                        self.send_keyboard_report_with_resolved_modifiers(false).await;
+                    }
                 }
                 _ => warn!("KeyCode variant not supported: {:?}", key),
             },
@@ -1307,7 +1319,7 @@ impl<'a> Keyboard<'a> {
                 // Turn off a layer temporarily when the key is pressed
                 // Reactivate the layer after the key is released
                 if event.pressed && self.keymap.deactivate_layer(layer_num) {
-                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT, None)
                         .await;
                 }
             }
@@ -1321,7 +1333,7 @@ impl<'a> Keyboard<'a> {
                     } else {
                         crate::config::StickyKeyReleaseMode::LAYER_EXIT
                     };
-                    self.release_sticky_key_on_layer_event(mode).await;
+                    self.release_sticky_key_on_layer_event(mode, None).await;
                 }
             }
             Action::LayerToggleOnly(layer_num) => {
@@ -1339,11 +1351,11 @@ impl<'a> Keyboard<'a> {
                     // Activate the target layer
                     let entered = self.keymap.activate_layer(layer_num);
                     if exited {
-                        self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
+                        self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT, None)
                             .await;
                     }
                     if entered {
-                        self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER)
+                        self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER, None)
                             .await;
                     }
                 }
@@ -1351,18 +1363,18 @@ impl<'a> Keyboard<'a> {
             Action::DefaultLayer(layer_num) => {
                 // Set the default layer
                 if event.pressed && self.keymap.set_default_layer(layer_num) {
-                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT, None)
                         .await;
-                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER)
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER, None)
                         .await;
                 }
             }
             Action::PersistentDefaultLayer(layer_num) => {
                 // Set the default layer and persist it so it survives a reboot
                 if event.pressed && self.keymap.set_default_layer(layer_num) {
-                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT, None)
                         .await;
-                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER)
+                    self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER, None)
                         .await;
                 }
                 // Persist only if the layer was valid (set_default_layer rejects out-of-range)
@@ -1691,9 +1703,11 @@ impl<'a> Keyboard<'a> {
 
         // Consume any pending one-shot StickyKey. A press-triggered release needs a
         // follow-up report after the terminating key has been registered.
-        let press_release = self.sticky_key_state.modifier_releases_on_press();
-        let sk_consumed = self.update_sticky_key(event);
-        if press_release && sk_consumed && is_basic_keyboard_key && event.pressed {
+        let modifier_releases_on_press = self.sticky_key_state.modifier_releases_on_press();
+        let update = self.update_sticky_key(event);
+        if (is_basic_keyboard_key && event.pressed && modifier_releases_on_press && update.modifier_consumed)
+            || (!is_basic_keyboard_key && update.modifier_consumed && update.modifier_was_host_visible)
+        {
             self.send_keyboard_report_with_resolved_modifiers(true).await;
         }
     }
@@ -1703,12 +1717,12 @@ impl<'a> Keyboard<'a> {
         // Change layer state only when the key's state is changed
         if event.pressed {
             if self.keymap.activate_layer(layer_num) {
-                self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER)
+                self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_ENTER, None)
                     .await;
             }
         } else {
             if self.keymap.deactivate_layer(layer_num) {
-                self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT)
+                self.release_sticky_key_on_layer_event(crate::config::StickyKeyReleaseMode::LAYER_EXIT, None)
                     .await;
             }
         }

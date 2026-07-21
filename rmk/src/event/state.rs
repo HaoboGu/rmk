@@ -1,5 +1,6 @@
 //! Keyboard state events
 
+use embassy_time::Instant;
 use rmk_macro::event;
 use rmk_types::led_indicator::LedIndicator;
 
@@ -27,9 +28,20 @@ pub(crate) enum LayerTransition {
 /// A layer transition produced outside the main keyboard action loop.
 #[event(channel_size = crate::LAYER_TRANSITION_EVENT_CHANNEL_SIZE, pubs = crate::LAYER_TRANSITION_EVENT_PUB_SIZE, subs = crate::LAYER_TRANSITION_EVENT_SUB_SIZE)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct LayerTransitionEvent(pub LayerTransition);
+pub(crate) struct LayerTransitionEvent {
+    pub(crate) transition: LayerTransition,
+    /// Timestamp at which the layer state was actually changed.
+    pub(crate) occurred_at: Instant,
+}
 
-impl_payload_wrapper!(LayerTransitionEvent, LayerTransition);
+impl LayerTransitionEvent {
+    pub(crate) fn new(transition: LayerTransition) -> Self {
+        Self {
+            transition,
+            occurred_at: Instant::now(),
+        }
+    }
+}
 
 /// WPM updated event
 #[event(channel_size = crate::WPM_UPDATE_EVENT_CHANNEL_SIZE, pubs = crate::WPM_UPDATE_EVENT_PUB_SIZE, subs = crate::WPM_UPDATE_EVENT_SUB_SIZE)]

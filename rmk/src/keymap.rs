@@ -371,7 +371,6 @@ impl<'a> KeyMap<'a> {
         behavior: &'a mut BehaviorConfig,
         positional_config: &'a PositionalConfig<ROW, COL>,
     ) -> Self {
-        behavior.normalize_sticky_key_compat();
         let layers = data.keymap.as_mut_slice().as_flattened_mut().as_flattened_mut();
         let encoders = if NUM_ENCODER > 0 {
             Some(data.encoder_map.as_mut_slice().as_flattened_mut())
@@ -411,6 +410,8 @@ impl<'a> KeyMap<'a> {
     ) -> Self {
         fill_vec(&mut behavior.fork.forks);
         fill_vec(&mut behavior.morse.morses);
+        // Resolve source-level compatibility before runtime construction.
+        behavior.normalize_sticky_key_compat();
         Self::build(data, behavior, positional_config)
     }
 
@@ -429,6 +430,8 @@ impl<'a> KeyMap<'a> {
     ) -> Self {
         fill_vec(&mut behavior.fork.forks);
         fill_vec(&mut behavior.morse.morses);
+        // Storage is applied after legacy source defaults and therefore wins at boot.
+        behavior.normalize_sticky_key_compat();
 
         // Read from storage BEFORE flattening (storage expects typed arrays).
         if let Some(storage) = storage

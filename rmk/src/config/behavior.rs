@@ -240,7 +240,9 @@ impl BehaviorConfig {
     /// `sticky_key`, so there is no mirrored mutable state to synchronize.
     pub(crate) fn normalize_sticky_key_compat(&mut self) {
         let legacy_timeout = OneShotConfig::default().timeout;
-        if self.one_shot.timeout != legacy_timeout {
+        if self.one_shot.timeout != legacy_timeout
+            && self.sticky_key.default_profile.timeout == StickyKeyProfile::default().timeout
+        {
             self.sticky_key.default_profile.timeout = self.one_shot.timeout;
         }
         if self.one_shot_modifiers.activate_on_keypress {

@@ -187,6 +187,34 @@ impl crate::KeyboardTomlConfig {
             }
         }
 
+        // The keyboard always subscribes to this internal event. Auto-mouse
+        // additionally publishes it when configured, so validate the generated
+        // pubsub resources at their configuration boundary rather than panicking
+        // during runtime initialization.
+        let layer_transition = events
+            .iter()
+            .find(|event| event.name == "layer_transition")
+            .expect("layer_transition is a built-in event");
+        if layer_transition.channel_size == 0 {
+            return Err("[event.layer_transition].channel_size must be at least 1".to_string());
+        }
+        if layer_transition.subs == 0 {
+            return Err(
+                "[event.layer_transition].subs must be at least 1 because Keyboard subscribes to it".to_string(),
+            );
+        }
+        let auto_mouse_configured = self
+            .behavior
+            .as_ref()
+            .and_then(|behavior| behavior.auto_mouse_layer.as_ref())
+            .is_some_and(|entries| !entries.is_empty());
+        if auto_mouse_configured && layer_transition.pubs == 0 {
+            return Err(
+                "[event.layer_transition].pubs must be at least 1 when [[behavior.auto_mouse_layer]] is configured"
+                    .to_string(),
+            );
+        }
+
         Ok(BuildConstants {
             combo_max_num: rmk.combo_max_num,
             combo_max_length: rmk.combo_max_length,
@@ -349,5 +377,32 @@ mod tests {
     fn deactivate_on_key_with_action_subs_set_is_accepted() {
         let toml = "[event.action]\nchannel_size = 16\npubs = 1\nsubs = 1\n\n[[behavior.auto_mouse_layer]]\ntarget_layer = 1\ndeactivate_on_key = true\n";
         assert!(parse(toml).build_constants(&[]).is_ok());
+    }
+
+    #[test]
+    fn layer_transition_requires_keyboard_resources() {
+        for field in ["channel_size", "subs"] {
+            let toml = if field == "channel_size" {
+                "[event.layer_transition]\nchannel_size = 0\npubs = 1\nsubs = 1\n"
+            } else {
+                "[event.layer_transition]\nchannel_size = 2\npubs = 1\nsubs = 0\n"
+            };
+            let err = match parse(&toml).build_constants(&[]) {
+                Err(err) => err,
+                Ok(_) => panic!("expected layer-transition validation failure"),
+            };
+            assert!(err.contains("[event.layer_transition]"));
+            assert!(err.contains(field));
+        }
+    }
+
+    #[test]
+    fn auto_mouse_requires_layer_transition_publisher() {
+        let toml = "[event.layer_transition]\nchannel_size = 1\npubs = 0\nsubs = 1\n\n[[behavior.auto_mouse_layer]]\ntarget_layer = 1\n";
+        let err = match parse(toml).build_constants(&[]) {
+            Err(err) => err,
+            Ok(_) => panic!("expected layer-transition publisher validation failure"),
+        };
+        assert!(err.contains("[event.layer_transition].pubs"));
     }
 }
