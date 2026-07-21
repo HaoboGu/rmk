@@ -140,4 +140,17 @@ mod tests {
 
         assert_eq!(decoded, action);
     }
+
+    #[test]
+    fn existing_action_discriminants_remain_stable() {
+        fn discriminant(action: Action) -> u8 {
+            let mut bytes = [0; 32];
+            postcard::to_slice(&action, &mut bytes).unwrap()[0]
+        }
+
+        assert_eq!(discriminant(Action::No), 0);
+        assert_eq!(discriminant(Action::OneShotLayer(1)), 13);
+        assert_eq!(discriminant(Action::OneShotModifier(ModifierCombination::LSHIFT)), 14);
+        assert_eq!(discriminant(Action::PersistentDefaultLayer(1)), 20);
+    }
 }

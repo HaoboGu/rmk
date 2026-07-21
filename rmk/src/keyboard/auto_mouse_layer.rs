@@ -107,7 +107,7 @@ impl<'a, 'k> AutoMouseLayerRunner<'a, 'k> {
         let target_layer = self.entries[idx].config.target_layer;
         let activated_by_us = self.keymap.activate_layer_if_inactive(target_layer);
         if activated_by_us {
-            publish_event_async(LayerTransitionEvent::new(LayerTransition::Enter)).await;
+            publish_event_async(LayerTransitionEvent::new(target_layer, LayerTransition::Enter)).await;
         }
         if pointing_step(&mut self.entries, idx, Instant::now(), activated_by_us) == PointingOutcome::OverlapFirstSeen {
             warn!(
@@ -143,7 +143,7 @@ impl<'a, 'k> AutoMouseLayerRunner<'a, 'k> {
         }
         for layer in keypress_step(&mut self.entries, event.action, Instant::now()) {
             if self.keymap.deactivate_layer_if_active(layer) {
-                publish_event_async(LayerTransitionEvent::new(LayerTransition::Exit)).await;
+                publish_event_async(LayerTransitionEvent::new(layer, LayerTransition::Exit)).await;
             }
         }
     }
@@ -179,7 +179,7 @@ impl AutoMouseLayerRunner<'_, '_> {
     async fn on_deadline(&mut self) {
         for layer in timeout_step(&mut self.entries, Instant::now()) {
             if self.keymap.deactivate_layer_if_active(layer) {
-                publish_event_async(LayerTransitionEvent::new(LayerTransition::Exit)).await;
+                publish_event_async(LayerTransitionEvent::new(layer, LayerTransition::Exit)).await;
             }
         }
     }

@@ -236,8 +236,10 @@ pub struct OneShotModifiersConfig {
 impl BehaviorConfig {
     /// Convert legacy one-shot inputs to the canonical sticky-key profile.
     ///
-    /// This runs once at the keymap boundary. Runtime code reads only
-    /// `sticky_key`, so there is no mirrored mutable state to synchronize.
+    /// This runs once at the keymap boundary. Runtime policy comes from the
+    /// canonical profile; the legacy pure-mod-only quick-release bit is
+    /// captured separately by `KeyMap` because applying it to the shared
+    /// profile would also change OSL behavior.
     pub(crate) fn normalize_sticky_key_compat(&mut self) {
         let legacy_timeout = OneShotConfig::default().timeout;
         if self.one_shot.timeout != legacy_timeout
@@ -248,9 +250,9 @@ impl BehaviorConfig {
         if self.one_shot_modifiers.activate_on_keypress {
             self.sticky_key.default_profile.activate_on_keypress = true;
         }
-        if self.one_shot_modifiers.quick_release && self.sticky_key.default_profile.release_mode.is_none() {
-            self.sticky_key.default_profile.release_mode = Some(StickyKeyReleaseMode::OTHER_KEY_PRESS);
-        }
+        // `quick_release` is intentionally not copied into the shared default
+        // profile: the legacy option applied only to OSM/pure-mod behavior.
+        // KeyMap resolves that compatibility input once for the pure-mod shape.
     }
 }
 

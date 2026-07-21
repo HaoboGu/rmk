@@ -113,6 +113,8 @@ struct KeyMapInner<'a> {
     encoder_layer_cache: &'a mut [u8],
     /// Behavior configuration
     behavior: &'a mut BehaviorConfig,
+    /// Legacy OSM-only quick release, resolved at construction time.
+    pure_mod_quick_release: bool,
     /// Hand info: row * col (read-only)
     hand: &'a [Hand],
     /// Mouse button state
@@ -381,6 +383,7 @@ impl<'a> KeyMap<'a> {
         let layer_cache = data.layer_cache.as_mut_slice().as_flattened_mut();
         let encoder_layer_cache = data.encoder_layer_cache.as_mut_slice().as_flattened_mut();
         let hand = positional_config.hand.as_slice().as_flattened();
+        let pure_mod_quick_release = behavior.one_shot_modifiers.quick_release;
 
         KeyMap {
             inner: RefCell::new(KeyMapInner {
@@ -394,6 +397,7 @@ impl<'a> KeyMap<'a> {
                 layer_cache,
                 encoder_layer_cache,
                 behavior,
+                pure_mod_quick_release,
                 hand,
                 mouse_buttons: 0,
                 #[cfg(feature = "host_security")]
@@ -603,14 +607,19 @@ impl<'a> KeyMap<'a> {
     }
 
     pub(crate) fn sticky_key_profile(&self, index: u8, shape: StickyKeyShape) -> StickyKeyPolicy {
-        let config = &self.inner.borrow().behavior.sticky_key;
+        let inner = self.inner.borrow();
+        let config = &inner.behavior.sticky_key;
+        let uses_default = index as usize >= config.profiles.len();
         let profile = config
             .profiles
             .get(index as usize)
             .copied()
             .unwrap_or(config.default_profile);
-        let release_mode = profile.release_mode.unwrap_or(match shape {
+        let release_mode = profile.release_mode.unwrap_or_else(|| match shape {
             StickyKeyShape::TapKey => StickyKeyReleaseMode::OTHER_KEY_PRESS,
+            StickyKeyShape::PureMod if uses_default && inner.pure_mod_quick_release => {
+                StickyKeyReleaseMode::OTHER_KEY_PRESS
+            }
             StickyKeyShape::PureMod | StickyKeyShape::Layer => StickyKeyReleaseMode::OTHER_KEY_RELEASE,
         });
         StickyKeyPolicy {
@@ -1009,5 +1018,44 @@ mod test {
         let tap_key = keymap.sticky_key_profile(u8::MAX, StickyKeyShape::TapKey);
         assert_eq!(pure_mod.release_mode, StickyKeyReleaseMode::OTHER_KEY_RELEASE);
         assert_eq!(tap_key.release_mode, StickyKeyReleaseMode::OTHER_KEY_PRESS);
+    }
+
+    #[test]
+    fn legacy_quick_release_only_changes_the_pure_mod_default() {
+        let mut data = KeymapData::<1, 1, 1>::new([[[k!(A)]]]);
+        let mut behavior = BehaviorConfig::default();
+        behavior.one_shot_modifiers.quick_release = true;
+        behavior.normalize_sticky_key_compat();
+        let positional = PositionalConfig::<1, 1>::default();
+        let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
+
+        assert_eq!(
+            keymap.sticky_key_profile(u8::MAX, StickyKeyShape::PureMod).release_mode,
+            StickyKeyReleaseMode::OTHER_KEY_PRESS
+        );
+        assert_eq!(
+            keymap.sticky_key_profile(u8::MAX, StickyKeyShape::Layer).release_mode,
+            StickyKeyReleaseMode::OTHER_KEY_RELEASE
+        );
+        assert_eq!(
+            keymap.sticky_key_profile(u8::MAX, StickyKeyShape::TapKey).release_mode,
+            StickyKeyReleaseMode::OTHER_KEY_PRESS
+        );
+    }
+
+    #[test]
+    fn canonical_release_mode_wins_over_legacy_quick_release() {
+        let mut data = KeymapData::<1, 1, 1>::new([[[k!(A)]]]);
+        let mut behavior = BehaviorConfig::default();
+        behavior.one_shot_modifiers.quick_release = true;
+        behavior.sticky_key.default_profile.release_mode = Some(StickyKeyReleaseMode::DOUBLE_TAP);
+        behavior.normalize_sticky_key_compat();
+        let positional = PositionalConfig::<1, 1>::default();
+        let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
+
+        assert_eq!(
+            keymap.sticky_key_profile(u8::MAX, StickyKeyShape::PureMod).release_mode,
+            StickyKeyReleaseMode::DOUBLE_TAP
+        );
     }
 }
