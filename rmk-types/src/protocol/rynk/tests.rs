@@ -1712,7 +1712,8 @@ mod protocol_reference {
              ## Compatibility\n\n\
              - `GetVersion` (`0x0001`) and its `Result<ProtocolVersion, RynkError>` reply are frozen across all versions.\n\
              - Within a major version, adding a CMD or topic is a `minor` bump: old firmware answers `UnknownCmd`, old hosts ignore unknown topics.\n\
-             - Reshaping an existing request/response — including appending a field — is a `major` bump.\n",
+             - Reshaping an existing request/response — including appending a field — is a `major` bump.\n\
+             - Version numbers are minted upstream only. Downstream extensions never bump `ProtocolVersion`; hosts discover them through capability surfaces (`DeviceCapabilities`, `LightingCapabilities.features`, `GetLightingSceneStatus`) and per-command probing (an unsupported command answers `UnknownCmd`), never by comparing `minor`.\n",
             header = "<!-- GENERATED — do not edit. Rendered from the `endpoints!`/`topics!` tables in\n     rmk-types/src/protocol/rynk/command.rs. Regenerate with:\n     UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rynk protocol_reference -->",
             major = v.major,
             minor = v.minor,
