@@ -940,4 +940,19 @@ mod test {
 
         assert_eq!(to_via_keycode(tap_key_sticky_key), 0);
     }
+
+    #[test]
+    fn test_vial_does_not_convert_profiled_sticky_keys_to_osm_or_osl() {
+        let profiled_modifier = KeyAction::Single(Action::StickyKey(StickyKeyAction {
+            effect: StickyKeyEffect::Modifier(ModifierCombination::LCTRL),
+            profile: 0,
+        }));
+        let profiled_layer = KeyAction::Single(Action::StickyKey(StickyKeyAction {
+            effect: StickyKeyEffect::Layer(1),
+            profile: 0,
+        }));
+
+        assert_eq!(to_via_keycode(profiled_modifier), 0);
+        assert_eq!(to_via_keycode(profiled_layer), 0);
+    }
 }

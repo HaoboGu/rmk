@@ -549,104 +549,6 @@ pub(crate) fn parse_key(
     } else if lower.starts_with("td(") || lower.starts_with("morse(") {
         let index = strip_call(&key).trim().parse::<u8>().unwrap();
         quote! { ::rmk::types::action::KeyAction::Morse(#index) }
-    } else if lower.starts_with("osl(") {
-        // OSL(n) — user-facing alias for the layer sticky key SK(MO(n)).
-        // Emits the same `sk_layer!` as SK(MO(n)), so the action is byte-identical.
-        let args = split_top_level(strip_call(&key));
-        let layer = args[0].parse::<u8>().unwrap();
-        let profile = sticky_profile_index(
-            args.get(1).map(|p| p.trim_start_matches('@')),
-            sticky_profiles,
-        );
-        quote! { ::rmk::sk_layer!(#layer, #profile) }
-    } else if lower.starts_with("osm(") {
-        // OSM(modifier) — user-facing alias for the pure-mod sticky key SK(modifier).
-        // Emits the same `sk_mod!` as SK(modifier), so the action is byte-identical.
-        let args = split_top_level(strip_call(&key));
-        let modifiers = parse_modifiers(&args[0]);
-        if modifiers.is_empty() {
-            panic!(
-                "\n\u{274c} keyboard.toml: OSM(modifier) is not valid! \
-                 OSM is an alias for SK(modifier). Usage: OSM(LGui) | OSM(LCtrl | LShift)"
-            );
-        }
-        let profile = sticky_profile_index(
-            args.get(1).map(|p| p.trim_start_matches('@')),
-            sticky_profiles,
-        );
-        quote! { ::rmk::sk_mod!(#modifiers, #profile) }
-    } else if lower.starts_with("sk(") {
-        let inner = strip_call(&key).trim();
-        let args = split_top_level(inner);
-        let profile_name = args
-            .last()
-            .filter(|part| part.starts_with('@'))
-            .map(|part| part.trim_start_matches('@'));
-        let profile = sticky_profile_index(profile_name, sticky_profiles);
-        let action_args = if profile_name.is_some() {
-            &args[..args.len() - 1]
-        } else {
-            &args[..]
-        };
-        let action_inner = action_args.join(", ");
-        let inner = action_inner.trim();
-        let inner_lower = inner.to_lowercase();
-        if inner_lower.starts_with("mo(") {
-            // Layer shape: SK(MO(n)) — OSL replacement.
-            let layer = parse_layer(inner);
-            quote! { ::rmk::sk_layer!(#layer, #profile) }
-        } else if inner.contains('[') {
-            // Tap-key shape: SK(key, [mods]).
-            let bracket_start = inner.find('[').unwrap();
-            let bracket_end = inner.find(']').unwrap_or_else(|| {
-                panic!(
-                    "\n\u{274c} keyboard.toml: SK has unclosed '['. \
-                     Usage: SK(LGui) | SK(Tab, [LAlt]) | SK(MO(n))"
-                )
-            });
-
-            let key_str = inner[..bracket_start].trim().trim_end_matches(',').trim();
-            let ident = get_key_with_alias(key_str.to_string());
-
-            let keep_mods_str = &inner[bracket_start + 1..bracket_end];
-            let keep_modifiers = if keep_mods_str.trim().is_empty() {
-                ModifierCombinationMacro::new()
-            } else {
-                parse_modifiers(keep_mods_str)
-            };
-
-            // Legacy-tail guard: reject the old 5-positional form.
-            let after_bracket = inner[bracket_end + 1..].trim_start_matches(',').trim();
-            if !after_bracket.is_empty() {
-                panic!(
-                    "\n\u{274c} keyboard.toml: the 5-positional SK(...) form is removed; use SK(key, [mods]). max_repeat/timeout/release_on_layer_change now live in [behavior.sticky_key]."
-                );
-            }
-
-            quote! { ::rmk::sk!(#ident, #keep_modifiers, #profile) }
-        } else {
-            // Pure-mod shape: SK(LGui) — OSM replacement.
-            //
-            // A nested action other than MO(n) (e.g. SK(TG(1)), SK(TO(2))) parses as a
-            // valid `sk_action` in the pest grammar (it accepts the broad `layer_action`)
-            // but is NOT a supported SK layer shape. Catch it here with a targeted message
-            // instead of falling through to the generic "not a modifier" panic below.
-            if inner.contains('(') {
-                panic!(
-                    "\n\u{274c} keyboard.toml: SK only supports MO(n) as its layer shape (got `{inner}`). \
-                     Usage: SK(LGui) | SK(Tab, [LAlt]) | SK(MO(n))"
-                );
-            }
-
-            let modifiers = parse_modifiers(inner);
-            if modifiers.is_empty() {
-                panic!(
-                    "\n\u{274c} keyboard.toml: SK(modifier) is not valid! \
-                     Usage: SK(LGui) | SK(Tab, [LAlt]) | SK(MO(n))"
-                );
-            }
-            quote! { ::rmk::sk_mod!(#modifiers, #profile) }
-        }
     } else {
         let action = parse_action(&key, sticky_profiles);
         quote! { ::rmk::types::action::KeyAction::Single(#action) }
@@ -779,6 +681,40 @@ mod tests {
     }
 
     #[test]
+    fn profiled_sticky_aliases_use_the_same_action() {
+        let profile = || StickyKeyProfile {
+            timeout_ms: None,
+            activate_on_keypress: None,
+            max_repeat: None,
+            release_mode: None,
+        };
+        let profiles = Some(HashMap::from([("nav".to_string(), profile())]));
+
+        for (alias, canonical) in [
+            ("OSM(LShift, @nav)", "SK(LShift, @nav)"),
+            ("OSL(2, @nav)", "SK(MO(2), @nav)"),
+        ] {
+            assert_eq!(
+                squash(&parse_key(alias.into(), &None, &profiles).to_string()),
+                squash(&parse_key(canonical.into(), &None, &profiles).to_string()),
+            );
+        }
+    }
+
+    #[test]
+    fn sticky_aliases_match_canonical_actions_in_supported_tap_hold_slots() {
+        let cases = [
+            ("MT(OSM(LShift), LCtrl)", "MT(SK(LShift), LCtrl)"),
+            ("TH(OSM(LShift), OSL(2))", "TH(SK(LShift), SK(MO(2)))"),
+            ("LT(1, OSL(2))", "LT(1, SK(MO(2)))"),
+        ];
+
+        for (alias, canonical) in cases {
+            assert_eq!(squash(&expand(alias)), squash(&expand(canonical)));
+        }
+    }
+
+    #[test]
     fn plain_mt_th_lt_still_expand() {
         assert!(
             squash(&expand("MT(A, LShift)")).contains("TapHold(::rmk::types::action::Action::Key")
@@ -861,5 +797,29 @@ mod tests {
             squash(&parse_key("SK(LShift, @zebra)".into(), &None, &profiles).to_string())
                 .contains("profile:1u8")
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "the 5-positional SK(...) form is removed")]
+    fn legacy_five_positional_sticky_key_is_rejected() {
+        parse_key("SK(Tab, [LAlt], 2, 1000, true)".into(), &None, &None);
+    }
+
+    #[test]
+    fn unsupported_sticky_layer_actions_share_the_canonical_error() {
+        for action in ["SK(TG(1))", "SK(TO(1))", "SK(DF(1))"] {
+            let panic = std::panic::catch_unwind(|| parse_key(action.into(), &None, &None))
+                .expect_err("unsupported sticky layer action should panic");
+            let message = panic
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| panic.downcast_ref::<&str>().copied())
+                .expect("parser panic should contain a message");
+
+            assert!(
+                message.contains("SK only supports MO(n) as its layer shape"),
+                "unexpected error for {action}: {message}"
+            );
+        }
     }
 }

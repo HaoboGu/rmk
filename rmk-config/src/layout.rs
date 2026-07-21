@@ -661,6 +661,45 @@ mod tests {
     }
 
     #[test]
+    fn test_sticky_layer_names_resolve_at_top_level_and_nested() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::from([("nav".to_string(), 3u32)]);
+        let keymap = "OSL(nav) SK(MO(nav)) TH(OSL(nav), SK(MO(nav))) LT(nav, OSL(nav))";
+
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok(), "{:?}", result);
+        assert_eq!(
+            result.unwrap(),
+            vec!["OSL(3)", "SK(MO(3))", "TH(OSL(3), SK(MO(3)))", "LT(3, OSL(3))",]
+        );
+    }
+
+    #[test]
+    fn test_keymap_aliases_resolve_to_sticky_actions_at_top_level_and_nested() {
+        let aliases = HashMap::from([
+            ("shift_once".to_string(), "OSM(LShift)".to_string()),
+            ("nav_once".to_string(), "OSL(nav)".to_string()),
+        ]);
+        let layer_names = HashMap::from([("nav".to_string(), 2u32)]);
+        let keymap = "@shift_once @nav_once MT(@shift_once, LCtrl) TH(@shift_once, @nav_once) LT(nav, @nav_once)";
+
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert!(result.is_ok(), "{:?}", result);
+        assert_eq!(
+            result.unwrap(),
+            vec![
+                "OSM(LShift)",
+                "OSL(2)",
+                "MT(OSM(LShift), LCtrl)",
+                "TH(OSM(LShift), OSL(2))",
+                "LT(2, OSL(2))",
+            ]
+        );
+    }
+
+    #[test]
     fn test_composite_actions_rejected_in_slots() {
         // Tap-hold / morse forms are not single `Action`s, so they cannot nest
         // inside a slot. The grammar must reject these.
@@ -724,6 +763,15 @@ mod tests {
             }
             assert!(found_sk, "Input should be parsed as sk_action: {}", input);
         }
+    }
+
+    #[test]
+    fn test_removed_five_positional_sticky_form_is_rejected_by_the_grammar() {
+        let input = "SK(Tab, [LAlt], 2, 1000, true)";
+        assert!(
+            ConfigParser::parse(Rule::key_map, input).is_err(),
+            "removed input should be rejected: {input}"
+        );
     }
 
     #[test]

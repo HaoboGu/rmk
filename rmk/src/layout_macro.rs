@@ -760,3 +760,26 @@ macro_rules! steno {
         ))
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::types::modifier::ModifierCombination;
+
+    #[test]
+    fn one_shot_aliases_equal_canonical_sticky_key_macros() {
+        assert_eq!(
+            crate::osm!(ModifierCombination::LSHIFT),
+            crate::sk_mod!(ModifierCombination::LSHIFT)
+        );
+        assert_eq!(crate::osl!(2), crate::sk_layer!(2));
+    }
+
+    #[test]
+    fn profiled_one_shot_aliases_equal_canonical_sticky_key_macros() {
+        assert_eq!(
+            crate::osm!(ModifierCombination::LCTRL, 3),
+            crate::sk_mod!(ModifierCombination::LCTRL, 3)
+        );
+        assert_eq!(crate::osl!(4, 3), crate::sk_layer!(4, 3));
+    }
+}
