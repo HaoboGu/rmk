@@ -619,6 +619,7 @@ fn wire_frames_locked() {
         default_layer: 2,
         active_bitmap: [0x05, 0, 0, 0, 0, 0, 0, 0x80],
     };
+    let modifiers = ModifierCombination::LSHIFT | ModifierCombination::RALT;
 
     let entries: alloc::vec::Vec<(&str, alloc::vec::Vec<u8>)> = alloc::vec![
         // System (0x00xx).
@@ -948,6 +949,18 @@ fn wire_frames_locked() {
             "GetLayerState reply Ok(LayerState{default:2,active:[0x05,..,0x80]})",
             encode_frame(Cmd::GetLayerState, SEQ, &Ok::<LayerState, RynkError>(layer_state)),
         ),
+        (
+            "GetModifierState request ()",
+            encode_frame(Cmd::GetModifierState, SEQ, &())
+        ),
+        (
+            "GetModifierState reply Ok(ModifierCombination(LShift|RAlt))",
+            encode_frame(
+                Cmd::GetModifierState,
+                SEQ,
+                &Ok::<ModifierCombination, RynkError>(modifiers),
+            ),
+        ),
         // Topics (0x80xx, server→host push, SEQ 0).
         ("LayerChange topic 3", encode_frame(Cmd::LayerChange, 0, &3u8)),
         ("WpmUpdate topic 42", encode_frame(Cmd::WpmUpdate, 0, &42u16)),
@@ -959,6 +972,10 @@ fn wire_frames_locked() {
         (
             "LedIndicatorChange topic LedIndicator(Num|Scroll)",
             encode_frame(Cmd::LedIndicatorChange, 0, &led)
+        ),
+        (
+            "ModifierChange topic ModifierCombination(LShift|RAlt)",
+            encode_frame(Cmd::ModifierChange, 0, &modifiers),
         ),
     ];
     let view: alloc::vec::Vec<(&str, &[u8])> = entries.iter().map(|(l, b)| (*l, b.as_slice())).collect();

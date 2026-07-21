@@ -262,6 +262,7 @@ Which commands a firmware answers depends on the RMK Cargo features it was built
 | `0x0806` | `GetSleepState`                  | `()`                                  | `bool`                              |            | Latest sleep flag, sourced from the `SleepState` topic snapshot.                                                               |
 | `0x0807` | `GetLedIndicator`                | `()`                                  | `LedIndicator`                      |            | Latest HID LED bitmap, sourced from the `LedIndicatorChange` topic snapshot.                                                   |
 | `0x0808` | `GetLayerState`                  | `()`                                  | `LayerState`                        |            | Default layer and complete active-layer bitmap.                                                                                |
+| `0x0809` | `GetModifierState`               | `()`                                  | `ModifierCombination`               |            | Final resolved modifier bitmap used by the HID keyboard report.                                                                |
 | `0x0901` | `GetLightingCapabilities`        | `()`                                  | `LightingCapabilitiesResult`        | `lighting` |                                                                                                                                |
 | `0x0902` | `GetLightingState`               | `()`                                  | `LightingStateResult`               | `lighting` |                                                                                                                                |
 | `0x0903` | `SetLightingState`               | `SetLightingStateRequest`             | `LightingStateResult`               | `lighting` |                                                                                                                                |
@@ -296,15 +297,16 @@ Which commands a firmware answers depends on the RMK Cargo features it was built
 
 Topics are best-effort pushes; the `Get*` endpoints above mirror their payloads so a host can recover a missed push.
 
-| CMD      | Name                  | Payload            | Feature    | Notes |
-| -------- | --------------------- | ------------------ | ---------- | ----- |
-| `0x8001` | `LayerChange`         | `u8`               |            |       |
-| `0x8002` | `WpmUpdate`           | `u16`              |            |       |
-| `0x8003` | `ConnectionChange`    | `ConnectionStatus` |            |       |
-| `0x8004` | `SleepState`          | `bool`             |            |       |
-| `0x8005` | `LedIndicatorChange`  | `LedIndicator`     |            |       |
-| `0x8006` | `BatteryStatusChange` | `BatteryStatus`    | `_ble`     |       |
-| `0x8007` | `LightingChange`      | `LightingChanged`  | `lighting` |       |
+| CMD      | Name                  | Payload               | Feature    | Notes                                   |
+| -------- | --------------------- | --------------------- | ---------- | --------------------------------------- |
+| `0x8001` | `LayerChange`         | `u8`                  |            |                                         |
+| `0x8002` | `WpmUpdate`           | `u16`                 |            |                                         |
+| `0x8003` | `ConnectionChange`    | `ConnectionStatus`    |            |                                         |
+| `0x8004` | `SleepState`          | `bool`                |            |                                         |
+| `0x8005` | `LedIndicatorChange`  | `LedIndicator`        |            |                                         |
+| `0x8006` | `BatteryStatusChange` | `BatteryStatus`       | `_ble`     |                                         |
+| `0x8007` | `LightingChange`      | `LightingChanged`     | `lighting` |                                         |
+| `0x8008` | `ModifierChange`      | `ModifierCombination` |            | Final resolved modifier bitmap changed. |
 
 ## Compatibility
 
