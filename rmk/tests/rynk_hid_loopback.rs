@@ -88,6 +88,7 @@ fn set_then_get_key_action_round_trip() {
 fn topic_push_over_hid_framing() {
     let service = service();
     let v = link_session_hid(&service, async |client| {
+        client.handshake().await;
         publish_event(WpmUpdateEvent::new(42));
         let frame = client.recv_topic().await;
         assert_eq!(frame.header.cmd, Cmd::WpmUpdate);

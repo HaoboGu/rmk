@@ -34,7 +34,7 @@ use embassy_sync::pipe::Pipe;
 use embedded_io_async::Read;
 use rmk::host::HostService as RynkService;
 use rmk_types::constants::RYNK_BUFFER_SIZE;
-use rmk_types::protocol::rynk::{Cmd, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage};
+use rmk_types::protocol::rynk::{Cmd, DeviceCapabilities, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -118,6 +118,15 @@ pub trait RynkHostClient {
         let frame = self.recv_response(seq).await;
         assert_eq!(frame.header.cmd, cmd, "response must echo the request cmd");
         frame.envelope()
+    }
+
+    /// Complete the version handshake: `run_session` mutes topic pushes until
+    /// the client has requested `GetCapabilities`, as every real host does at
+    /// connect.
+    async fn handshake(&mut self) {
+        self.request::<(), DeviceCapabilities>(Cmd::GetCapabilities, 0x7E, &())
+            .await
+            .expect("handshake");
     }
 
     /// Await the next unsolicited topic push.
