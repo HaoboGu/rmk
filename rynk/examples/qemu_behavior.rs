@@ -20,7 +20,7 @@ use rynk::rmk_types::led_indicator::LedIndicator;
 use rynk::rmk_types::modifier::ModifierCombination;
 use rynk::rmk_types::morse::{Morse, MorseProfile};
 use rynk::rmk_types::protocol::rynk::{MacroData, ProtocolVersion, RynkError, StorageResetMode};
-use rynk::{Client, RynkDevice, RynkHostError};
+use rynk::{Client, LayoutInfo, RynkDevice, RynkHostError};
 use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
@@ -260,15 +260,109 @@ async fn script(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
         }
     );
 
+    // Every capability-gated command the fixture lacks is rejected client-side,
+    // before touching the wire.
     expect_unsupported("get_ble_status", client.get_ble_status().await);
+    expect_unsupported("switch_ble_profile", client.switch_ble_profile(0).await);
+    expect_unsupported("clear_ble_profile", client.clear_ble_profile(0).await);
     expect_unsupported("get_battery_status", client.get_battery_status().await);
     expect_unsupported("get_peripheral_status", client.get_peripheral_status(0).await);
     expect_unsupported(
         "storage_reset",
         client.storage_reset(StorageResetMode::LayoutOnly).await,
     );
+
+    // Device identity — the fixture uses the default USB config.
+    let info = client.get_device_info().await?;
+    assert_eq!(info.manufacturer.as_str(), "RMK");
+    assert_eq!(info.product_name.as_str(), "RMK Keyboard");
+
+    // The fixture is `insecure`, so the lock gate stays open: no challenge, no
+    // armed attempt, and `lock` is a no-op that leaves the device unlocked.
+    let status = client.get_lock_status().await?;
+    assert!(!status.locked);
+    assert!(!status.unlocking);
+    assert_eq!(status.remaining_keys, 0);
+    assert!(status.key_positions.is_empty());
+    assert!(!client.unlock_poll().await?.locked);
+    client.lock().await?;
+    assert!(!client.get_lock_status().await?.locked);
+
+    // The second encoder layer is independently addressable; an out-of-range
+    // layer is rejected. Round-trip a probe so the exact layer-1 config need not
+    // be hardcoded here.
+    let layer1_encoder = client.get_encoder(0, 1).await?;
+    let probe_encoder = encoder(HidKeyCode::Kp1, HidKeyCode::Kp2);
+    client.set_encoder(0, 1, probe_encoder).await?;
+    assert_eq!(client.get_encoder(0, 1).await?, probe_encoder);
+    client.set_encoder(0, 1, layer1_encoder).await?;
+    assert_eq!(client.get_encoder(0, 1).await?, layer1_encoder);
+    expect_rejected(
+        "get_encoder layer out of range",
+        client.get_encoder(0, 2).await,
+        RynkError::Invalid,
+    );
+
+    // Single-page bulk read matches the head of the keymap; an out-of-geometry
+    // start position is rejected.
     let keymap_bulk = client.get_keymap_bulk(0, 0, 0).await?;
     assert_eq!(keymap_bulk.actions.first(), Some(&key(HidKeyCode::Kp1)));
+    expect_rejected(
+        "get_keymap_bulk out of range",
+        client.get_keymap_bulk(0, 3, 0).await,
+        RynkError::Invalid,
+    );
+
+    // Whole-keymap paging: `read_all` reassembles the flat, layer-major keymap,
+    // `write_all` pages a mutation back, then restores the original.
+    let flat_expected: Vec<KeyAction> = expected_layers.iter().flatten().flatten().copied().collect();
+    let all_keys = client.read_all_keymap().await?;
+    assert_eq!(all_keys, flat_expected);
+    let mut mutated_keys = all_keys.clone();
+    mutated_keys[0] = key(HidKeyCode::Kp9);
+    client.write_all_keymap(&mutated_keys).await?;
+    assert_eq!(client.read_all_keymap().await?, mutated_keys);
+    client.write_all_keymap(&all_keys).await?;
+    assert_eq!(client.read_all_keymap().await?, all_keys);
+
+    // Combo table: every slot pages back (empty slots as the empty config), a
+    // page-wide write round-trips, then restores.
+    let all_combos = client.read_all_combos().await?;
+    assert_eq!(all_combos.len(), caps.max_combos as usize);
+    assert!(all_combos.iter().all(|c| *c == Combo::empty()));
+    let mut mutated_combos = all_combos.clone();
+    mutated_combos[0] = Combo::new(
+        [key(HidKeyCode::Kp1), key(HidKeyCode::Kp4)],
+        key(HidKeyCode::Kp1),
+        Some(1),
+    );
+    client.write_all_combos(&mutated_combos).await?;
+    assert_eq!(client.read_all_combos().await?, mutated_combos);
+    client.write_all_combos(&all_combos).await?;
+
+    // Morse table pages back every slot (the list is padded to `max_morse`);
+    // slot 0 carries the configured profile, and a page at the slot count is empty.
+    let all_morses = client.read_all_morses().await?;
+    assert_eq!(all_morses.len(), caps.max_morse as usize);
+    assert_eq!(all_morses[0], empty_morse(MorseProfile::const_default()));
+    assert!(client.get_morse_bulk(caps.max_morse).await?.configs.is_empty());
+    let mut mutated_morses = all_morses.clone();
+    mutated_morses[0] = empty_morse(MorseProfile::const_default().with_hold_timeout_ms(Some(200)));
+    client.write_all_morses(&mutated_morses).await?;
+    assert_eq!(client.read_all_morses().await?, mutated_morses);
+    client.write_all_morses(&all_morses).await?;
+
+    // The fixture has no `[layout].map`, so the served blob is empty and decodes
+    // to the empty layout rather than erroring.
+    assert_eq!(client.get_layout().await?, LayoutInfo::empty());
+
+    // Fire-and-forget commands: no-ops on this riscv fixture (the reset path is
+    // cortex-m/esp only), so the session survives and the orphaned reply is
+    // absorbed by seq matching on the next request.
+    client.reboot().await?;
+    assert_eq!(client.get_version().await?, ProtocolVersion::CURRENT);
+    client.bootloader_jump().await?;
+    assert_eq!(client.get_version().await?, ProtocolVersion::CURRENT);
 
     println!("QEMU Rynk behavior verification passed.");
     Ok(())
