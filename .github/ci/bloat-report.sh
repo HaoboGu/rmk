@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Assemble a bloat report from size-data artifact files.
 # Input directory structure per example:
 #   <safe_name>/size-data.txt       — dir|bin_label|base_total|head_total|text_diff|data_diff|bss_diff

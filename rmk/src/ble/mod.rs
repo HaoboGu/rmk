@@ -604,7 +604,7 @@ pub(crate) async fn set_conn_params<
             max_latency: 30,
             min_event_length: Duration::from_secs(0),
             max_event_length: Duration::from_secs(0),
-            supervision_timeout: Duration::from_secs(5),
+            supervision_timeout: Duration::from_secs(10),
         },
     )
     .await;
@@ -621,7 +621,7 @@ pub(crate) async fn set_conn_params<
             max_latency: 30,
             min_event_length: Duration::from_secs(0),
             max_event_length: Duration::from_secs(0),
-            supervision_timeout: Duration::from_secs(5),
+            supervision_timeout: Duration::from_secs(10),
         },
     )
     .await;
@@ -665,8 +665,12 @@ async fn run_ble_keyboard<
         }
     }
 
-    // Use 2M Phy
-    update_ble_phy(stack, conn.raw()).await;
+    let host_phy = if cfg!(feature = "use_1m_phy") {
+        PhyKind::Le1M
+    } else {
+        PhyKind::Le2M
+    };
+    update_ble_phy(stack, conn.raw(), host_phy).await;
 
     let communication_task = async {
         if let Either3::First(e) = select3(
@@ -700,13 +704,14 @@ async fn run_ble_keyboard<
     select(communication_task, inner).await;
 }
 
-// Update the PHY to 2M
+// Set the connection PHY.
 pub(crate) async fn update_ble_phy<P: PacketPool>(
     stack: &Stack<'_, impl Controller + ControllerCmdAsync<LeSetPhy>, P>,
     conn: &Connection<'_, P>,
+    phy: PhyKind,
 ) {
     loop {
-        match conn.set_phy(stack, PhyKind::Le2M).await {
+        match conn.set_phy(stack, phy).await {
             Err(BleHostError::BleHost(Error::Hci(error))) => {
                 if 0x2A == error.to_status().into_inner() {
                     // Busy, retry

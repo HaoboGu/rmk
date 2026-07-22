@@ -219,11 +219,14 @@ mod macro_test {
 
         use crate::common::KC_LCTRL;
 
-        let macro_sequences = &[Vec::from_slice(&[MacroOperation::TapAction(Action::KeyWithModifier(
-            HidKeyCode::A,
-            ModifierCombination::LCTRL,
-        ))])
-        .expect("too many elements")];
+        let macro_sequences =
+            &[
+                Vec::from_slice(&[MacroOperation::TapAction(KeyAction::Single(Action::KeyWithModifier(
+                    HidKeyCode::A,
+                    ModifierCombination::LCTRL,
+                )))])
+                .expect("too many elements"),
+            ];
 
         let macro_data = define_macro_sequences(macro_sequences);
         let mut config = BehaviorConfig::default();
@@ -252,7 +255,7 @@ mod macro_test {
     fn test_macro_cannot_trigger_macro() {
         let macro_sequences = &[
             Vec::from_slice(&[
-                MacroOperation::TapAction(Action::TriggerMacro(1)),
+                MacroOperation::TapAction(KeyAction::Single(Action::TriggerMacro(1))),
                 MacroOperation::Tap(HidKeyCode::A),
             ])
             .expect("too many elements"),
@@ -273,6 +276,126 @@ mod macro_test {
             expected_reports: [
                 [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A only; macro 1 was not triggered
                 [0, [0, 0, 0, 0, 0, 0]],
+            ]
+        );
+    }
+
+    // A mod-tap keycode (LSFT_T(A)) tapped in a macro resolves to its tap action: plain A, no
+    // shift. Full tap-hold resolution can't run inside synchronous macro playback, so a macro
+    // TAP is by definition the tap side.
+    #[cfg(feature = "vial")]
+    #[test]
+    fn test_macro_extended_tap_mod_tap_sends_tap_action() {
+        use rmk::types::keycode::KeyCode;
+        use rmk::types::modifier::ModifierCombination;
+
+        let macro_sequences = &[Vec::from_slice(&[MacroOperation::TapAction(KeyAction::TapHold(
+            Action::Key(KeyCode::Hid(HidKeyCode::A)),
+            Action::Modifier(ModifierCombination::LSHIFT),
+            Default::default(),
+        ))])
+        .expect("too many elements")];
+
+        let macro_data = define_macro_sequences(macro_sequences);
+        let mut config = BehaviorConfig::default();
+        config.keyboard_macros.macro_sequences = macro_data;
+
+        let keyboard = create_simple_macro_keyboard(config);
+
+        key_sequence_test!(
+            keyboard: keyboard,
+            sequence: [
+                [0, 0, true, 0],    // press Macro0
+                [0, 0, false, 100], // release Macro0
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // press A — tap side, no shift
+                [0, [0, 0, 0, 0, 0, 0]],            // release A
+            ]
+        );
+    }
+
+    // DOWN/UP of a mod-tap in a macro resolve to the hold action: shift wraps the B tap,
+    // matching what holding the physical key would do.
+    #[cfg(feature = "vial")]
+    #[test]
+    fn test_macro_extended_down_up_mod_tap_sends_hold_action() {
+        use rmk::types::keycode::KeyCode;
+        use rmk::types::modifier::ModifierCombination;
+
+        let mod_tap = KeyAction::TapHold(
+            Action::Key(KeyCode::Hid(HidKeyCode::A)),
+            Action::Modifier(ModifierCombination::LSHIFT),
+            Default::default(),
+        );
+        let macro_sequences = &[Vec::from_slice(&[
+            MacroOperation::PressAction(mod_tap),
+            MacroOperation::Tap(HidKeyCode::B),
+            MacroOperation::ReleaseAction(mod_tap),
+        ])
+        .expect("too many elements")];
+
+        let macro_data = define_macro_sequences(macro_sequences);
+        let mut config = BehaviorConfig::default();
+        config.keyboard_macros.macro_sequences = macro_data;
+
+        let keyboard = create_simple_macro_keyboard(config);
+
+        key_sequence_test!(
+            keyboard: keyboard,
+            sequence: [
+                [0, 0, true, 0],    // press Macro0
+                [0, 0, false, 100], // release Macro0
+            ],
+            expected_reports: [
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],            // press shift — hold side
+                [KC_LSHIFT, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // press B with shift held
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],            // release B
+                [0, [0, 0, 0, 0, 0, 0]],                    // release shift
+            ]
+        );
+    }
+
+    // A tap-dance keycode in a macro resolves through the keymap's morse table: TAP plays the
+    // morse TAP action, DOWN/UP play the HOLD action.
+    #[cfg(feature = "vial")]
+    #[test]
+    fn test_macro_extended_tap_dance() {
+        use rmk::types::keycode::KeyCode;
+        use rmk::types::modifier::ModifierCombination;
+        use rmk::types::morse::{HOLD, Morse, TAP};
+
+        let macro_sequences = &[Vec::from_slice(&[
+            MacroOperation::TapAction(KeyAction::Morse(0)),
+            MacroOperation::PressAction(KeyAction::Morse(0)),
+            MacroOperation::Tap(HidKeyCode::B),
+            MacroOperation::ReleaseAction(KeyAction::Morse(0)),
+        ])
+        .expect("too many elements")];
+
+        let macro_data = define_macro_sequences(macro_sequences);
+        let mut config = BehaviorConfig::default();
+        config.keyboard_macros.macro_sequences = macro_data;
+        let mut tap_dance = Morse::default();
+        let _ = tap_dance.put(TAP, Action::Key(KeyCode::Hid(HidKeyCode::A)));
+        let _ = tap_dance.put(HOLD, Action::Modifier(ModifierCombination::LSHIFT));
+        config.morse.morses.push(tap_dance).unwrap();
+
+        let keyboard = create_simple_macro_keyboard(config);
+
+        key_sequence_test!(
+            keyboard: keyboard,
+            sequence: [
+                [0, 0, true, 0],    // press Macro0
+                [0, 0, false, 100], // release Macro0
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],         // tap: morse TAP action (A)
+                [0, [0, 0, 0, 0, 0, 0]],                    // release A
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],            // down: morse HOLD action (shift)
+                [KC_LSHIFT, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // press B with shift held
+                [KC_LSHIFT, [0, 0, 0, 0, 0, 0]],            // release B
+                [0, [0, 0, 0, 0, 0, 0]],                    // up: release shift
             ]
         );
     }

@@ -12,6 +12,8 @@ use rmk_types::fork::StateBits;
 use rmk_types::keycode::{ConsumerKey, HidKeyCode, KeyCode, SpecialKey, SystemControlKey};
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::modifier::ModifierCombination;
+#[cfg(feature = "vial")]
+use rmk_types::morse::HOLD;
 use rmk_types::morse::{MorseMode, MorsePattern, TAP};
 use rmk_types::mouse_button::MouseButtons;
 use usbd_hid::descriptor::{MediaKeyboardReport, SystemControlReport};
@@ -1750,25 +1752,19 @@ impl<'a> Keyboard<'a> {
                         self.unregister_key(k, event);
                         self.send_keyboard_report_with_resolved_modifiers(false).await;
                     }
-                    // A macro can't trigger another macro: that would re-enter this queue, and a
-                    // self- or cycle-triggering macro would loop here forever. Drop it at the source.
-                    #[cfg(feature = "vial")]
-                    MacroOperation::PressAction(Action::TriggerMacro(_))
-                    | MacroOperation::ReleaseAction(Action::TriggerMacro(_))
-                    | MacroOperation::TapAction(Action::TriggerMacro(_)) => {
-                        warn!("A macro cannot trigger another macro");
-                    }
-                    // Extended (16-bit) keycodes (BT profile, PDF, ...) run the decoded action
+                    // Extended (16-bit) keycodes (BT profile, PDF, mod-tap, tap dance, ...) run
                     // through the normal dispatcher, with press/release synthesized from the event.
                     #[cfg(feature = "vial")]
-                    MacroOperation::PressAction(action) => {
+                    MacroOperation::PressAction(key_action) => {
                         self.macro_texting = false;
+                        let action = self.macro_action(key_action, HOLD);
                         self.process_key_action_normal(action, KeyboardEvent { pressed: true, ..event })
                             .await;
                     }
                     #[cfg(feature = "vial")]
-                    MacroOperation::ReleaseAction(action) => {
+                    MacroOperation::ReleaseAction(key_action) => {
                         self.macro_texting = false;
+                        let action = self.macro_action(key_action, HOLD);
                         self.process_key_action_normal(
                             action,
                             KeyboardEvent {
@@ -1779,8 +1775,9 @@ impl<'a> Keyboard<'a> {
                         .await;
                     }
                     #[cfg(feature = "vial")]
-                    MacroOperation::TapAction(action) => {
+                    MacroOperation::TapAction(key_action) => {
                         self.macro_texting = false;
+                        let action = self.macro_action(key_action, TAP);
                         self.process_key_action_normal(action, KeyboardEvent { pressed: true, ..event })
                             .await;
                         embassy_time::Timer::after_millis(2).await;
@@ -1833,6 +1830,25 @@ impl<'a> Keyboard<'a> {
         } else {
             error!("Macro not found");
         }
+    }
+
+    /// Effective action of an extended-macro key action. Composite key actions can't run their
+    /// full state machine inside synchronous macro playback, so they resolve by pattern: TAP for
+    /// macro taps, HOLD for macro press/release (holding a mod-tap in a macro means "apply the
+    /// modifier/layer").
+    #[cfg(feature = "vial")]
+    fn macro_action(&self, key_action: KeyAction, pattern: MorsePattern) -> Action {
+        let action = match key_action {
+            KeyAction::Single(action) | KeyAction::Tap(action) => action,
+            composite => Self::action_from_pattern(self.keymap, &composite, pattern),
+        };
+        // A macro can't trigger another macro: that would re-enter the trigger queue, and a
+        // self- or cycle-triggering macro would loop forever. Drop it at the source.
+        if matches!(action, Action::TriggerMacro(_)) {
+            warn!("A macro cannot trigger another macro");
+            return Action::No;
+        }
+        action
     }
 
     pub(crate) async fn send_keyboard_report_with_resolved_modifiers(&mut self, pressed: bool) {

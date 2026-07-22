@@ -58,12 +58,13 @@ display-interface-i2c = { version = "0.5", optional = true }
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { git = "https://github.com/embassy-rs/trouble", rev = "c21b1239fb86de712fc99da803def88378d81177", features = [
+trouble-host = { git = "https://github.com/embassy-rs/trouble", rev = "18df47dcf9907eb810ecbf9c613af3694d75f520", features = [
     "gatt",
     "scan",
     "derive",
     "security",
     "serde",
+    "default-packet-pool-size-32",
 ], optional = true }
 bt-hci = { version = "0.9", optional = true }
 
@@ -203,10 +204,17 @@ st7796 = ["lcd_async"]
 ## Enable async matrix scanning
 async_matrix = []
 
+## Use 1M PHY.
+## Some legacy adapters cannot connect to devices using 2M PHY. 
+use_1m_phy = []
+
 ## Enable split keyboard support.
 split = [
     "dep:embedded-io-async",
-    "trouble-host?/gatt-client-notification-queue-size-4",
+    "trouble-host?/connection-event-queue-size-2",
+    "trouble-host?/l2cap-rx-queue-size-16",
+    "trouble-host?/l2cap-tx-queue-size-16",
+    "trouble-host?/gatt-client-notification-queue-size-8",
     "rmk-types/split",
 ]
 
@@ -285,5 +293,3 @@ _ble = ["dep:trouble-host", "dep:bt-hci", "storage", "rmk-types/_ble"]
 [lib]
 # Don't run doctest for lib
 doctest = false
-[workspace.dependencies]
-embassy-nrf = { version = "0.10", features = ["nrf52840"] }

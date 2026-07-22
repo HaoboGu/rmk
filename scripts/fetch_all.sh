@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Run `cargo fetch` in every directory with a Cargo.toml.
 #

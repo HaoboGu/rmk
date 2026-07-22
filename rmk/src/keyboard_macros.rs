@@ -1,5 +1,5 @@
 #[cfg(feature = "vial")]
-use rmk_types::action::{Action, KeyAction};
+use rmk_types::action::KeyAction;
 use rmk_types::keycode::{HidKeyCode, from_ascii, to_ascii};
 
 use crate::MACRO_SPACE_SIZE;
@@ -32,13 +32,13 @@ pub enum MacroOperation {
     /// 0x01 05 + 2 byte 16-bit keycode: tap an extended (>8-bit) keycode, e.g. a
     /// Bluetooth-profile or persistent-default-layer key, decoded via the Vial keycode table.
     #[cfg(feature = "vial")]
-    TapAction(Action),
+    TapAction(KeyAction),
     /// 0x01 06 + 2 byte 16-bit keycode: press (hold down) an extended keycode.
     #[cfg(feature = "vial")]
-    PressAction(Action),
+    PressAction(KeyAction),
     /// 0x01 07 + 2 byte 16-bit keycode: release an extended keycode.
     #[cfg(feature = "vial")]
-    ReleaseAction(Action),
+    ReleaseAction(KeyAction),
 }
 
 impl MacroOperation {
@@ -99,11 +99,11 @@ impl MacroOperation {
                     } else {
                         raw
                     };
-                    let action = from_via_keycode(keycode).to_action();
+                    let key_action = from_via_keycode(keycode);
                     let operation = match kind {
-                        5 => MacroOperation::TapAction(action),
-                        6 => MacroOperation::PressAction(action),
-                        _ => MacroOperation::ReleaseAction(action),
+                        5 => MacroOperation::TapAction(key_action),
+                        6 => MacroOperation::PressAction(key_action),
+                        _ => MacroOperation::ReleaseAction(key_action),
                     };
                     (operation, offset + 4)
                 } else {
@@ -253,19 +253,19 @@ fn serialize(macro_operation: &MacroOperation) -> heapless::Vec<u8, 4> {
         }
         MacroOperation::Text(key_code, shifted) => heapless::Vec::from_slice(&[to_ascii(*key_code, *shifted)]).unwrap(),
         #[cfg(feature = "vial")]
-        MacroOperation::TapAction(action) => serialize_extended_keycode(0x05, *action),
+        MacroOperation::TapAction(key_action) => serialize_extended_keycode(0x05, *key_action),
         #[cfg(feature = "vial")]
-        MacroOperation::PressAction(action) => serialize_extended_keycode(0x06, *action),
+        MacroOperation::PressAction(key_action) => serialize_extended_keycode(0x06, *key_action),
         #[cfg(feature = "vial")]
-        MacroOperation::ReleaseAction(action) => serialize_extended_keycode(0x07, *action),
+        MacroOperation::ReleaseAction(key_action) => serialize_extended_keycode(0x07, *key_action),
     }
 }
 
 /// Inverse of the EXT decode in `get_next_macro_operation`: `0x01`, the kind
 /// (`0x05`/`0x06`/`0x07`), then the keycode little-endian with the zero-low-byte escape.
 #[cfg(feature = "vial")]
-fn serialize_extended_keycode(kind: u8, action: Action) -> heapless::Vec<u8, 4> {
-    let keycode = to_via_keycode(KeyAction::Single(action));
+fn serialize_extended_keycode(kind: u8, key_action: KeyAction) -> heapless::Vec<u8, 4> {
+    let keycode = to_via_keycode(key_action);
     // Mirror Vial's zero-low-byte escape so the payload never contains 0x00.
     let word = if keycode.is_multiple_of(256) {
         0xFF00 | (keycode >> 8)
@@ -488,13 +488,16 @@ mod test {
         let start = MacroOperation::get_macro_sequence_start(&seq, 0).unwrap();
 
         let (op, off) = MacroOperation::get_next_macro_operation(&seq, start, 0);
-        assert!(matches!(op, MacroOperation::TapAction(Action::User(0))));
+        assert!(matches!(
+            op,
+            MacroOperation::TapAction(KeyAction::Single(Action::User(0)))
+        ));
         let (op, off) = MacroOperation::get_next_macro_operation(&seq, start, off);
         assert!(matches!(op, MacroOperation::Delay(100)));
         let (op, off) = MacroOperation::get_next_macro_operation(&seq, start, off);
         assert!(matches!(
             op,
-            MacroOperation::TapAction(Action::PersistentDefaultLayer(0))
+            MacroOperation::TapAction(KeyAction::Single(Action::PersistentDefaultLayer(0)))
         ));
         let (op, _) = MacroOperation::get_next_macro_operation(&seq, start, off);
         assert!(matches!(op, MacroOperation::End));
@@ -515,13 +518,16 @@ mod test {
         let start = MacroOperation::get_macro_sequence_start(&seq, 0).unwrap();
 
         let (op, off) = MacroOperation::get_next_macro_operation(&seq, start, 0);
-        assert!(matches!(op, MacroOperation::TapAction(Action::User(1))));
+        assert!(matches!(
+            op,
+            MacroOperation::TapAction(KeyAction::Single(Action::User(1)))
+        ));
         let (op, off) = MacroOperation::get_next_macro_operation(&seq, start, off);
         assert!(matches!(op, MacroOperation::Delay(100)));
         let (op, _) = MacroOperation::get_next_macro_operation(&seq, start, off);
         assert!(matches!(
             op,
-            MacroOperation::TapAction(Action::PersistentDefaultLayer(1))
+            MacroOperation::TapAction(KeyAction::Single(Action::PersistentDefaultLayer(1)))
         ));
     }
 
@@ -535,9 +541,61 @@ mod test {
         let start = MacroOperation::get_macro_sequence_start(&seq, 0).unwrap();
 
         let (op, off) = MacroOperation::get_next_macro_operation(&seq, start, 0);
-        assert!(matches!(op, MacroOperation::PressAction(Action::User(0))));
+        assert!(matches!(
+            op,
+            MacroOperation::PressAction(KeyAction::Single(Action::User(0)))
+        ));
         let (op, _) = MacroOperation::get_next_macro_operation(&seq, start, off);
-        assert!(matches!(op, MacroOperation::ReleaseAction(Action::User(0))));
+        assert!(matches!(
+            op,
+            MacroOperation::ReleaseAction(KeyAction::Single(Action::User(0)))
+        ));
+    }
+
+    // Composite keycodes — mod-tap (0x2204 = LSFT_T(A)), layer-tap (0x4104 = LT1(A)) and
+    // tap dance (0x5700 = TD(0), zero low byte escaped) — keep their full KeyAction so the
+    // keyboard can resolve the tap/hold side at execution time.
+    #[cfg(feature = "vial")]
+    #[test]
+    fn test_parse_extended_macro_composite_keycodes() {
+        use rmk_types::action::Action;
+        use rmk_types::keycode::KeyCode;
+        use rmk_types::modifier::ModifierCombination;
+
+        let seq = wire(&[
+            0x01, 0x05, 0x04, 0x22, // TAP(LSFT_T(A))
+            0x01, 0x06, 0x04, 0x41, // DOWN(LT1(A))
+            0x01, 0x05, 0x57, 0xFF, // TAP(TD(0)): 0x5700, zero-byte escaped
+            0x00,
+        ]);
+        let start = MacroOperation::get_macro_sequence_start(&seq, 0).unwrap();
+
+        let (op, off) = MacroOperation::get_next_macro_operation(&seq, start, 0);
+        let MacroOperation::TapAction(key_action) = op else {
+            panic!("expected TapAction, got {:?}", op)
+        };
+        assert_eq!(
+            key_action,
+            KeyAction::TapHold(
+                Action::Key(KeyCode::Hid(HidKeyCode::A)),
+                Action::Modifier(ModifierCombination::LSHIFT),
+                Default::default()
+            )
+        );
+        let (op, off) = MacroOperation::get_next_macro_operation(&seq, start, off);
+        let MacroOperation::PressAction(key_action) = op else {
+            panic!("expected PressAction, got {:?}", op)
+        };
+        assert_eq!(
+            key_action,
+            KeyAction::TapHold(
+                Action::Key(KeyCode::Hid(HidKeyCode::A)),
+                Action::LayerOn(1),
+                Default::default()
+            )
+        );
+        let (op, _) = MacroOperation::get_next_macro_operation(&seq, start, off);
+        assert!(matches!(op, MacroOperation::TapAction(KeyAction::Morse(0))));
     }
 
     // Serializing the decoded actions reproduces the exact wire bytes, including the
@@ -547,14 +605,28 @@ mod test {
     #[test]
     fn test_serialize_extended_macro_keycodes() {
         use rmk_types::action::Action;
+        use rmk_types::keycode::KeyCode;
+        use rmk_types::modifier::ModifierCombination;
 
         let sequences = [heapless::Vec::from_slice(&[
-            MacroOperation::TapAction(Action::User(0)),
-            MacroOperation::TapAction(Action::PersistentDefaultLayer(0)),
+            MacroOperation::TapAction(KeyAction::Single(Action::User(0))),
+            MacroOperation::TapAction(KeyAction::Single(Action::PersistentDefaultLayer(0))),
+            MacroOperation::TapAction(KeyAction::TapHold(
+                Action::Key(KeyCode::Hid(HidKeyCode::A)),
+                Action::Modifier(ModifierCombination::LSHIFT),
+                Default::default(),
+            )),
+            MacroOperation::PressAction(KeyAction::Morse(0)),
         ])
         .expect("too many elements")];
         let binary = define_macro_sequences(&sequences);
-        let expected = [0x01, 0x05, 0x7E, 0xFF, 0x01, 0x05, 0xE0, 0x52, 0x00];
+        let expected = [
+            0x01, 0x05, 0x7E, 0xFF, // TAP(USER00), zero-byte escaped
+            0x01, 0x05, 0xE0, 0x52, // TAP(PDF0)
+            0x01, 0x05, 0x04, 0x22, // TAP(LSFT_T(A))
+            0x01, 0x06, 0x57, 0xFF, // DOWN(TD(0)), zero-byte escaped
+            0x00,
+        ];
         assert_eq!(&binary[..expected.len()], &expected);
     }
 
