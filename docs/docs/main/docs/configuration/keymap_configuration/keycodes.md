@@ -271,7 +271,7 @@ When used in configuration files, all keycodes are case-insensitive.
 
 ## Special keys
 
-| Keycode       | Aliases                                                | Usage                                   |
-| ------------- | ------------------------------------------------------ | --------------------------------------- |
-| `No`          |                                                        | Ignore this key                         |
-| `Transparent` | `TRNS`, `_` (you can repeat as many times as you like) | Use the next lowest non-transparent key |
+| Keycode | Aliases                                                               | Usage                                   |
+| ------- | --------------------------------------------------------------------- | --------------------------------------- |
+| `No`    |                                                                       | Ignore this key                         |
+| `TRNS`  |  `_`, `__`, ... (you can repeat underscore as many times as you like) | Use the next lowest non-transparent key |
