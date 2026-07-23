@@ -1,4 +1,40 @@
+use core::sync::atomic::{AtomicPtr, Ordering};
+
+/// User-registered bootloader jump, invoked by the `Bootloader` keycode in place of
+/// the built-in chip support.
+///
+/// A raw pointer so it fits in an atomic; null means unregistered. Pointee type is
+/// `fn() -> !`.
+static BOOTLOADER_JUMP: AtomicPtr<()> = AtomicPtr::new(core::ptr::null_mut());
+
+/// Registers a custom bootloader jump for chips without built-in support.
+///
+/// Entering the ROM bootloader is board-specific on some chips, so firmware supplies
+/// the sequence here and the `Bootloader` keycode calls it instead of the built-in
+/// default.
+///
+/// `jump` must not return. End it by resetting the chip or jumping to the bootloader.
+/// Register it before the keyboard starts processing keys, for example inside
+/// `#[Override(chip_config)]`.
+pub fn register_bootloader_jump(jump: fn() -> !) {
+    BOOTLOADER_JUMP.store(jump as *mut (), Ordering::Relaxed);
+}
+
+#[cfg(all(
+    target_arch = "arm",
+    target_os = "none",
+    any(target_abi = "eabi", target_abi = "eabihf")
+))]
+pub mod stm32;
+
 pub fn jump_to_bootloader() {
+    let jump = BOOTLOADER_JUMP.load(Ordering::Relaxed);
+    if !jump.is_null() {
+        // Cast back to the fn pointer stored in `register_bootloader_jump`
+        let jump: fn() -> ! = unsafe { core::mem::transmute(jump) };
+        jump();
+    }
+
     #[cfg(feature = "adafruit_bl")]
     // Reference: https://github.com/adafruit/Adafruit_nRF52_Bootloader/blob/d6b28e66053eea467166f44875e3c7ec741cb471/src/main.c#L107
     embassy_nrf::pac::POWER

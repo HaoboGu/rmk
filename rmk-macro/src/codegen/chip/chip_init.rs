@@ -5,6 +5,7 @@ use rmk_config::resolved::Hardware;
 use rmk_config::resolved::hardware::{BoardConfig, ChipModel, ChipSeries, CommunicationConfig};
 use syn::{ItemFn, ItemMod};
 
+use crate::codegen::chip::stm32_bootloader::stm32_bootloader_prelude;
 use crate::codegen::override_helper::Overwritten;
 
 /// Expand chip initialization code
@@ -29,9 +30,13 @@ pub(crate) fn expand_chip_init(
                             return Some(override_chip_config(&hardware.chip, item_fn));
                         }
                         Ok(Overwritten::ChipInit) => {
-                            // Override the whole chip initialization
+                            // Override the whole chip initialization, keeping the bootloader check
                             let stmts = &item_fn.block.stmts;
-                            return Some(quote! { #(#stmts)* });
+                            let stm32_bootloader = stm32_bootloader_prelude(&hardware.chip);
+                            return Some(quote! {
+                                #stm32_bootloader
+                                #(#stmts)*
+                            });
                         }
                         _ => (),
                     }
@@ -59,10 +64,14 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
         quote! {}
     };
     match chip.series {
-        ChipSeries::Stm32 => quote! {
+        ChipSeries::Stm32 => {
+            let stm32_bootloader = stm32_bootloader_prelude(chip);
+            quote! {
+                #stm32_bootloader
                 let config = ::embassy_stm32::Config::default();
                 let mut p = ::embassy_stm32::init(config);
-        },
+            }
+        }
         ChipSeries::Nrf52 => {
             let chip_cfg = &hardware.chip_config;
             let dcdc_config = if chip.chip == "nrf52840" {
@@ -246,7 +255,10 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
 
 fn override_chip_config(chip: &ChipModel, item_fn: &ItemFn) -> TokenStream2 {
     let initialization = item_fn.block.to_token_stream();
+    // The ROM bootloader expects the chip in its reset state, so check before the user's config
+    let stm32_bootloader = stm32_bootloader_prelude(chip);
     let mut initialization_tokens = quote! {
+        #stm32_bootloader
         let config = #initialization;
     };
     match chip.series {

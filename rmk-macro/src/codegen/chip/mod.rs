@@ -4,3 +4,4 @@ pub(crate) mod chip_init;
 pub(crate) mod comm;
 pub(crate) mod flash;
 pub(crate) mod gpio;
+pub(crate) mod stm32_bootloader;
