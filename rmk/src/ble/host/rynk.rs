@@ -13,6 +13,7 @@
 use core::sync::atomic::{AtomicU8, Ordering};
 
 use embedded_io_async::{ErrorType, Write};
+#[cfg(test)]
 use heapless::Vec;
 use rmk_types::protocol::rynk::{RYNK_BLE_CHUNK_SIZE, RYNK_HID_REPORT_SIZE};
 use trouble_host::prelude::*;
@@ -63,7 +64,7 @@ impl HostGattHandler {
                     warn!("Rynk: dropping {}-byte write on unencrypted link", data.len());
                 }
             }
-            HostWriteOutcome::Handled
+            HostWriteOutcome::HandledUnprocessed
         } else if handle == self.custom_input_cccd_handle {
             // A subscription alone must not bind the reply transport. OS HOGP
             // drivers may subscribe automatically when restoring a bond.
@@ -71,6 +72,8 @@ impl HostGattHandler {
         } else if handle == self.hid_output_handle {
             if encrypted {
                 if data.len() == RYNK_HID_REPORT_SIZE {
+                    // Feed the whole report; the session's Deframer skips the
+                    // report's trailing zero-padding as empty COBS frames.
                     RYNK_BLE_RX_PIPE.write_all(data).await;
                     RynkBleSource::Hid.activate();
                 } else {
@@ -143,7 +146,7 @@ impl RynkBleSource {
 /// characteristic — MTU-chunked on the custom char, or fixed 32-byte report
 /// fragments on the HID char.
 struct RynkBleTx<'a, 'b, 'c, P: PacketPool> {
-    custom_input: Characteristic<Vec<u8, RYNK_BLE_CHUNK_SIZE>>,
+    custom_input: Characteristic<u8>,
     hid_input: Characteristic<[u8; RYNK_HID_REPORT_SIZE]>,
     conn: &'a GattConnection<'b, 'c, P>,
 }
@@ -159,6 +162,7 @@ impl<P: PacketPool> Write for RynkBleTx<'_, '_, '_, P> {
         }
         match RynkBleSource::active() {
             RynkBleSource::Hid => {
+                // Fragment into fixed 32-byte reports; the receiver's Deframer skips the padding.
                 for chunk in buf.chunks(RYNK_HID_REPORT_SIZE) {
                     let mut report = [0u8; RYNK_HID_REPORT_SIZE];
                     report[..chunk.len()].copy_from_slice(chunk);
@@ -174,9 +178,7 @@ impl<P: PacketPool> Write for RynkBleTx<'_, '_, '_, P> {
                 let max_notify = (self.conn.raw().att_mtu() as usize).saturating_sub(3);
                 let chunk_size = RYNK_BLE_CHUNK_SIZE.min(max_notify).max(1);
                 for chunk in buf.chunks(chunk_size) {
-                    let payload =
-                        Vec::<u8, RYNK_BLE_CHUNK_SIZE>::from_slice(chunk).expect("chunk size <= RYNK_BLE_CHUNK_SIZE");
-                    if let Err(e) = self.custom_input.notify(self.conn, &payload, true).await {
+                    if let Err(e) = self.custom_input.notify_raw(self.conn, chunk, false).await {
                         error!("Failed to notify Rynk reply: {:?}", e);
                         return Err(HostTransportError);
                     }
@@ -209,7 +211,7 @@ mod tests {
 
         assert_eq!(
             block_on(handler.handle_write(server.rynk_service.output_data.handle, &[], true)),
-            HostWriteOutcome::Handled
+            HostWriteOutcome::HandledUnprocessed
         );
         assert_eq!(
             block_on(handler.handle_write(server.rynk_hid_service.output_data.handle, &[], true,)),

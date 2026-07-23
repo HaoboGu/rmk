@@ -7,10 +7,10 @@ use rmk_types::protocol::rynk::{GetMorseBulkRequest, RynkError, RynkMessage, Set
 
 use super::super::RynkService;
 use super::bulk::{bulk_page, bulk_write_start, take_element, take_seq_len, validate_bulk_elements};
-use super::{Handle, HandleBulk};
+use super::{Handle, HandleBulk, HandleBulkSync, HandleSync};
 
-impl Handle<GetMorse> for RynkService<'_> {
-    async fn handle(&self, idx: u8) -> Result<Morse, RynkError> {
+impl HandleSync<GetMorse> for RynkService<'_> {
+    fn handle(&self, idx: u8) -> Result<Morse, RynkError> {
         self.ctx.get_morse(idx).ok_or(RynkError::Invalid)
     }
 }
@@ -29,8 +29,8 @@ impl Handle<SetMorse> for RynkService<'_> {
     }
 }
 
-impl HandleBulk<GetMorseBulk> for RynkService<'_> {
-    async fn handle_bulk(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
+impl HandleBulkSync<GetMorseBulk> for RynkService<'_> {
+    fn handle_bulk(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
         let req = msg.decode_request::<GetMorseBulkRequest>()?;
         let page = bulk_page(req.start_index as usize, BULK_SIZE, self.ctx.morses_len());
         msg.encode_bulk(page.map(|idx| self.ctx.get_morse(idx as u8).unwrap_or_default()))

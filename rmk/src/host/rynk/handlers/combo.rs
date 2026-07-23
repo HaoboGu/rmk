@@ -7,10 +7,10 @@ use rmk_types::protocol::rynk::{GetComboBulkRequest, RynkError, RynkMessage, Set
 
 use super::super::RynkService;
 use super::bulk::{bulk_page, bulk_write_start, take_element, take_seq_len, validate_bulk_elements};
-use super::{Handle, HandleBulk};
+use super::{Handle, HandleBulk, HandleBulkSync, HandleSync};
 
-impl Handle<GetCombo> for RynkService<'_> {
-    async fn handle(&self, idx: u8) -> Result<ComboConfig, RynkError> {
+impl HandleSync<GetCombo> for RynkService<'_> {
+    fn handle(&self, idx: u8) -> Result<ComboConfig, RynkError> {
         // Empty in-range slots return the empty config; OOR is an error.
         self.ctx.with_combos(|combos| {
             if (idx as usize) >= combos.len() {
@@ -34,8 +34,8 @@ impl Handle<SetCombo> for RynkService<'_> {
     }
 }
 
-impl HandleBulk<GetComboBulk> for RynkService<'_> {
-    async fn handle_bulk(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
+impl HandleBulkSync<GetComboBulk> for RynkService<'_> {
+    fn handle_bulk(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
         let req = msg.decode_request::<GetComboBulkRequest>()?;
         // Empty slots read back as the empty config, same as the single Get; an
         // out-of-range `start_index` yields an empty page.

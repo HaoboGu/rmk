@@ -2,12 +2,12 @@
 //!
 //! One frame is the 3-byte header plus a postcard-encoded payload,
 //! COBS-encoded and `0x00`-terminated on the wire (layout in the
-//! [module docs](super)). [`encode_frame`] builds a frame straight into the
-//! caller's buffer; a [`Deframer`](super::Deframer) cuts frames back out of
-//! the received stream, and [`RynkMessage`] wraps one received frame to
-//! answer it in place.
+//! [module docs](super)). [`encode_frame`] serializes the logical frame a few
+//! bytes into the caller's buffer, then COBS-encodes it forward in place — one
+//! physical buffer, without monomorphizing a COBS serializer for every payload
+//! type. A [`Deframer`](super::Deframer) cuts frames back out of the received
+//! stream, and [`RynkMessage`] wraps one received frame to answer it in place.
 
-use postcard::ser_flavors::{Cobs, Flavor, Slice};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -65,18 +65,97 @@ pub const RYNK_MAX_PAYLOAD_SIZE: usize = {
     logical - RYNK_HEADER_SIZE
 };
 
+/// Start offset that leaves enough spare bytes in front of the logical frame
+/// to absorb worst-case COBS growth when [`encode_shifted`] runs forward.
+fn logical_start(physical_len: usize) -> Result<usize, RynkError> {
+    let mut start = 1;
+    while physical_len > start + 1 && cobs::max_encoding_overhead(physical_len - start - 1) > start {
+        start += 1;
+    }
+    if physical_len <= start + 1 {
+        Err(RynkError::Internal)
+    } else {
+        Ok(start)
+    }
+}
+
+/// Write `[cmd, seq]` (plus postcard's `Result` tag: 0 = `Ok`, 1 = `Err`) at
+/// the logical start; return that offset and the payload slice after it.
+#[inline(never)]
+fn begin_frame(buf: &mut [u8], header: RynkHeader, result_tag: Option<u8>) -> Result<(usize, &mut [u8]), RynkError> {
+    let start = logical_start(buf.len())?;
+    let logical_capacity = buf.len() - start - 1;
+    let prefix_len = RYNK_HEADER_SIZE + usize::from(result_tag.is_some());
+    if logical_capacity < prefix_len {
+        return Err(RynkError::Internal);
+    }
+    buf[start..start + RYNK_HEADER_SIZE].copy_from_slice(&header.to_bytes());
+    if let Some(tag) = result_tag {
+        buf[start + RYNK_HEADER_SIZE] = tag;
+    }
+    Ok((start, &mut buf[start + prefix_len..start + logical_capacity]))
+}
+
+/// COBS-encode `buf[start..start + len]` forward into `buf[..]` and append the
+/// delimiter, returning the framed length. The write cursor never catches the
+/// read cursor because `start` covers the worst-case COBS overhead.
+fn encode_shifted(buf: &mut [u8], start: usize, len: usize) -> Result<usize, RynkError> {
+    let end = start.checked_add(len).ok_or(RynkError::Internal)?;
+    if end > buf.len() {
+        return Err(RynkError::Internal);
+    }
+
+    let mut read = start;
+    let mut write = 1;
+    let mut code_index = 0;
+    let mut code = 1u8;
+    while read < end {
+        let byte = buf[read];
+        read += 1;
+        if byte == 0 {
+            buf[code_index] = code;
+            code_index = write;
+            write += 1;
+            code = 1;
+        } else {
+            if write >= buf.len() {
+                return Err(RynkError::Internal);
+            }
+            buf[write] = byte;
+            write += 1;
+            code += 1;
+            if code == 0xff {
+                buf[code_index] = code;
+                if read < end {
+                    code_index = write;
+                    write += 1;
+                    code = 1;
+                } else {
+                    code_index = usize::MAX;
+                }
+            }
+        }
+    }
+
+    if code_index != usize::MAX {
+        buf[code_index] = code;
+    }
+    if write >= buf.len() {
+        return Err(RynkError::Internal);
+    }
+    buf[write] = 0;
+    Ok(write + 1)
+}
+
 /// COBS-encode the frame `header ++ postcard(value)` into `buf`, returning the
-/// total framed length. The header goes through the COBS encoder too, so a
-/// `0x00` in it never aliases the delimiter.
+/// total framed length. The header is encoded with the payload, so a `0x00` in
+/// it (e.g. cmd `0x0004`) never aliases the delimiter.
 pub fn encode_frame<T: Serialize>(buf: &mut [u8], header: RynkHeader, value: &T) -> Result<usize, RynkError> {
-    let mut ser = postcard::Serializer {
-        output: Cobs::try_new(Slice::new(buf)).map_err(|_| RynkError::Internal)?,
-    };
-    ser.output
-        .try_extend(&header.to_bytes())
-        .map_err(|_| RynkError::Internal)?;
-    value.serialize(&mut ser).map_err(|_| RynkError::Internal)?;
-    Ok(ser.output.finalize().map_err(|_| RynkError::Internal)?.len())
+    let (start, payload) = begin_frame(buf, header, None)?;
+    let payload_len = postcard::to_slice(value, payload)
+        .map_err(|_| RynkError::Internal)?
+        .len();
+    encode_shifted(buf, start, RYNK_HEADER_SIZE + payload_len)
 }
 
 /// One page of bulk-response items. Serializes as a postcard seq — the wire
@@ -142,23 +221,38 @@ impl<'a> RynkMessage<'a> {
 
     /// Encode `Ok(value)` as the response frame, replacing the buffer contents.
     pub fn encode_response<T: Serialize>(&mut self, value: &T) -> Result<(), RynkError> {
-        self.len = encode_frame(self.buf, self.header, &Ok::<&T, RynkError>(value))?;
+        let (start, payload) = begin_frame(self.buf, self.header, Some(0))?;
+        let payload_len = postcard::to_slice(value, payload)
+            .map_err(|_| RynkError::Internal)?
+            .len();
+        self.len = encode_shifted(self.buf, start, RYNK_HEADER_SIZE + 1 + payload_len)?;
         Ok(())
     }
 
     /// Encode `Err(err)` as the response frame.
     pub fn encode_error(&mut self, err: RynkError) {
-        self.len = encode_frame(self.buf, self.header, &Err::<(), RynkError>(err)).unwrap_or(0);
+        let encoded = (|| {
+            let (start, payload) = begin_frame(self.buf, self.header, Some(1))?;
+            let payload_len = postcard::to_slice(&err, payload)
+                .map_err(|_| RynkError::Internal)?
+                .len();
+            encode_shifted(self.buf, start, RYNK_HEADER_SIZE + 1 + payload_len)
+        })();
+        self.len = encoded.unwrap_or(0);
     }
 
-    /// Encode `Ok(items)` as a bulk response frame, streaming the page through
-    /// the COBS encoder — no `Vec` needed.
+    /// Encode `Ok(items)` as a bulk response frame, serializing the page into
+    /// the frame buffer and COBS-encoding it in place — no `Vec` needed.
     pub fn encode_bulk<I>(&mut self, items: I) -> Result<(), RynkError>
     where
         I: ExactSizeIterator + Clone,
         I::Item: Serialize,
     {
-        self.len = encode_frame(self.buf, self.header, &Ok::<_, RynkError>(BulkItems(items)))?;
+        let (start, payload) = begin_frame(self.buf, self.header, Some(0))?;
+        let payload_len = postcard::to_slice(&BulkItems(items), payload)
+            .map_err(|_| RynkError::Internal)?
+            .len();
+        self.len = encode_shifted(self.buf, start, RYNK_HEADER_SIZE + 1 + payload_len)?;
         Ok(())
     }
 }
@@ -178,6 +272,8 @@ impl<'a> TryFrom<&'a mut [u8]> for RynkMessage<'a> {
 
 #[cfg(test)]
 mod tests {
+    use postcard::ser_flavors::{Cobs, Flavor, Slice};
+
     use super::*;
 
     #[test]
@@ -306,6 +402,43 @@ mod tests {
             RYNK_MAX_PAYLOAD_SIZE,
             max_logical_len(crate::constants::RYNK_BUFFER_SIZE) - RYNK_HEADER_SIZE
         );
+    }
+
+    #[test]
+    fn overlapping_encoder_matches_reference_at_every_length() {
+        const CAPACITY: usize = cobs::max_encoding_length(crate::constants::RYNK_BUFFER_SIZE) + 1;
+        let mut source = [0u8; crate::constants::RYNK_BUFFER_SIZE];
+        let mut overlap = [0u8; CAPACITY];
+        let mut expected = [0u8; CAPACITY];
+
+        for len in RYNK_HEADER_SIZE..=source.len() {
+            let capacity = cobs::max_encoding_length(len) + 1;
+            let start = logical_start(capacity).unwrap();
+            for pattern in 0..3 {
+                for (i, byte) in source[..len].iter_mut().enumerate() {
+                    *byte = match pattern {
+                        0 => 1,
+                        1 => u8::from(i % 2 == 0),
+                        _ => (i as u8).wrapping_mul(73),
+                    };
+                }
+
+                overlap[..capacity].fill(0);
+                overlap[start..start + len].copy_from_slice(&source[..len]);
+                let actual_len = encode_shifted(&mut overlap[..capacity], start, len).unwrap();
+
+                let encoded_len = cobs::try_encode(&source[..len], &mut expected[..capacity - 1]).unwrap();
+                expected[encoded_len] = 0;
+                let expected_len = encoded_len + 1;
+
+                assert_eq!(actual_len, expected_len, "len={len}, pattern={pattern}");
+                assert_eq!(
+                    &overlap[..actual_len],
+                    &expected[..expected_len],
+                    "len={len}, pattern={pattern}"
+                );
+            }
+        }
     }
 
     #[test]

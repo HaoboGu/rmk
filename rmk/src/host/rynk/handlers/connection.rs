@@ -9,25 +9,25 @@ use rmk_types::protocol::rynk::command::{ClearBleProfile, GetBleStatus, SwitchBl
 use rmk_types::protocol::rynk::command::{GetConnectionStatus, GetConnectionType};
 
 use super::super::RynkService;
-use super::Handle;
+use super::HandleSync;
 
-impl Handle<GetConnectionType> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<ConnectionType, RynkError> {
+impl HandleSync<GetConnectionType> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<ConnectionType, RynkError> {
         Ok(self.ctx.preferred_connection())
     }
 }
 
 /// `Cmd::GetConnectionStatus` — the same payload the `ConnectionChange`
 /// topic pushes, so a host can recover a missed push.
-impl Handle<GetConnectionStatus> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<ConnectionStatus, RynkError> {
+impl HandleSync<GetConnectionStatus> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<ConnectionStatus, RynkError> {
         Ok(self.ctx.connection_status())
     }
 }
 
 #[cfg(feature = "_ble")]
-impl Handle<GetBleStatus> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<BleStatus, RynkError> {
+impl HandleSync<GetBleStatus> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<BleStatus, RynkError> {
         Ok(self.ctx.connection_status().ble)
     }
 }
@@ -37,8 +37,8 @@ impl Handle<GetBleStatus> for RynkService<'_> {
 /// running observes the queue-full error rather than blocking the
 /// dispatch loop.
 #[cfg(feature = "_ble")]
-impl Handle<SwitchBleProfile> for RynkService<'_> {
-    async fn handle(&self, slot: u8) -> Result<(), RynkError> {
+impl HandleSync<SwitchBleProfile> for RynkService<'_> {
+    fn handle(&self, slot: u8) -> Result<(), RynkError> {
         Self::check_ble_profile_slot(slot)?;
         crate::channel::BLE_PROFILE_CHANNEL
             .try_send(crate::ble::profile::BleProfileAction::Switch(slot))
@@ -49,8 +49,8 @@ impl Handle<SwitchBleProfile> for RynkService<'_> {
 /// `Cmd::ClearBleProfile` — wipes the bond at the given slot without
 /// requiring a prior switch (uses [`BleProfileAction::ClearSlot`]).
 #[cfg(feature = "_ble")]
-impl Handle<ClearBleProfile> for RynkService<'_> {
-    async fn handle(&self, slot: u8) -> Result<(), RynkError> {
+impl HandleSync<ClearBleProfile> for RynkService<'_> {
+    fn handle(&self, slot: u8) -> Result<(), RynkError> {
         Self::check_ble_profile_slot(slot)?;
         crate::channel::BLE_PROFILE_CHANNEL
             .try_send(crate::ble::profile::BleProfileAction::ClearSlot(slot))

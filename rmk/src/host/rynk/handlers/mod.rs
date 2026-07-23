@@ -21,10 +21,18 @@ pub(super) trait Handle<E: Endpoint> {
     async fn handle(&self, req: E::Request) -> Result<E::Response, RynkError>;
 }
 
+pub(super) trait HandleSync<E: Endpoint> {
+    fn handle(&self, req: E::Request) -> Result<E::Response, RynkError>;
+}
+
 /// Bulk endpoints stream a page straight through the session buffer, so no `Vec`
 /// is ever materialized. Implemented instead of [`Handle`].
 pub(super) trait HandleBulk<E: Endpoint> {
     async fn handle_bulk(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError>;
+}
+
+pub(super) trait HandleBulkSync<E: Endpoint> {
+    fn handle_bulk(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError>;
 }
 
 /// Dispatch-mode markers so the two [`Serve`] blanket impls don't overlap; bounds
@@ -36,6 +44,24 @@ pub(super) struct Bulk;
 /// (`Fixed`) or [`HandleBulk`] (`Bulk`). Handlers never implement it directly.
 pub(super) trait Serve<E: Endpoint, Mode> {
     async fn serve(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError>;
+}
+
+pub(super) trait ServeSync<E: Endpoint, Mode> {
+    fn serve_sync(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError>;
+}
+
+impl<E: Endpoint, T: HandleSync<E>> ServeSync<E, Fixed> for T {
+    fn serve_sync(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
+        let req = msg.decode_request::<E::Request>()?;
+        let resp = HandleSync::<E>::handle(self, req)?;
+        msg.encode_response(&resp)
+    }
+}
+
+impl<E: Endpoint, T: HandleBulkSync<E>> ServeSync<E, Bulk> for T {
+    fn serve_sync(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
+        self.handle_bulk(msg)
+    }
 }
 
 impl<E: Endpoint, T: Handle<E>> Serve<E, Fixed> for T {

@@ -12,10 +12,10 @@ use rmk_types::protocol::rynk::{
 
 use super::super::RynkService;
 use super::bulk::{bulk_page, bulk_write_start, take_element, take_seq_len, validate_bulk_elements};
-use super::{Handle, HandleBulk};
+use super::{Handle, HandleBulk, HandleBulkSync, HandleSync};
 
-impl Handle<GetKeyAction> for RynkService<'_> {
-    async fn handle(&self, pos: KeyPosition) -> Result<KeyAction, RynkError> {
+impl HandleSync<GetKeyAction> for RynkService<'_> {
+    fn handle(&self, pos: KeyPosition) -> Result<KeyAction, RynkError> {
         self.check_key_position(&pos)?;
         Ok(self.ctx.get_action(pos.layer, pos.row, pos.col))
     }
@@ -31,8 +31,8 @@ impl Handle<SetKeyAction> for RynkService<'_> {
     }
 }
 
-impl Handle<GetDefaultLayer> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<u8, RynkError> {
+impl HandleSync<GetDefaultLayer> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<u8, RynkError> {
         Ok(self.ctx.default_layer())
     }
 }
@@ -48,8 +48,8 @@ impl Handle<SetDefaultLayer> for RynkService<'_> {
     }
 }
 
-impl Handle<GetEncoderAction> for RynkService<'_> {
-    async fn handle(&self, r: GetEncoderRequest) -> Result<EncoderAction, RynkError> {
+impl HandleSync<GetEncoderAction> for RynkService<'_> {
+    fn handle(&self, r: GetEncoderRequest) -> Result<EncoderAction, RynkError> {
         self.check_encoder_bounds(r.layer, r.encoder_id)?;
         self.ctx.get_encoder(r.layer, r.encoder_id).ok_or(RynkError::Invalid)
     }
@@ -101,8 +101,8 @@ impl RynkService<'_> {
     }
 }
 
-impl HandleBulk<GetKeymapBulk> for RynkService<'_> {
-    async fn handle_bulk(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
+impl HandleBulkSync<GetKeymapBulk> for RynkService<'_> {
+    fn handle_bulk(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
         let req = msg.decode_request::<GetKeymapBulkRequest>()?;
         // From the start key the page reads forward through the flat keymap,
         // crossing row and layer boundaries freely, and stops at the keymap's end.

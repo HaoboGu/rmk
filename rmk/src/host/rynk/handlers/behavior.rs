@@ -4,10 +4,10 @@ use rmk_types::protocol::rynk::command::{GetBehaviorConfig, SetBehaviorConfig};
 use rmk_types::protocol::rynk::{BehaviorConfig, RynkError};
 
 use super::super::RynkService;
-use super::Handle;
+use super::{Handle, HandleSync};
 
-impl Handle<GetBehaviorConfig> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<BehaviorConfig, RynkError> {
+impl HandleSync<GetBehaviorConfig> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<BehaviorConfig, RynkError> {
         Ok(BehaviorConfig {
             combo_timeout_ms: self.ctx.combo_timeout().as_millis() as u16,
             oneshot_timeout_ms: self.ctx.one_shot_timeout().as_millis() as u16,

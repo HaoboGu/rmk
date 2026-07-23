@@ -20,6 +20,8 @@ pub(crate) const HOST_WRITE_BUFFER_SIZE: usize = 32;
 pub(crate) enum HostWriteOutcome {
     /// The protocol consumed the write or rejected its payload.
     Handled,
+    /// The protocol consumed the bytes before the generated characteristic value is updated.
+    HandledUnprocessed,
     /// A notification subscription changed and the bonded CCCD table must be saved.
     CccdUpdated,
     /// An HID control-point write should use the common suspend/resume handling.

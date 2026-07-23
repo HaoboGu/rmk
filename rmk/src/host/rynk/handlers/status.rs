@@ -15,16 +15,16 @@ use rmk_types::protocol::rynk::command::{GetCurrentLayer, GetLedIndicator, GetMa
 use rmk_types::protocol::rynk::{MATRIX_BITMAP_SIZE, MatrixState, RynkError};
 
 use super::super::RynkService;
-use super::Handle;
+use super::HandleSync;
 
-impl Handle<GetCurrentLayer> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<u8, RynkError> {
+impl HandleSync<GetCurrentLayer> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<u8, RynkError> {
         Ok(self.ctx.active_layer())
     }
 }
 
-impl Handle<GetMatrixState> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<MatrixState, RynkError> {
+impl HandleSync<GetMatrixState> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<MatrixState, RynkError> {
         // Sized for the maximum supported matrix — host slices it down
         // using num_rows / num_cols from `DeviceCapabilities`.
         let mut bitmap: heapless::Vec<u8, MATRIX_BITMAP_SIZE> = heapless::Vec::new();
@@ -38,8 +38,8 @@ impl Handle<GetMatrixState> for RynkService<'_> {
 }
 
 #[cfg(feature = "_ble")]
-impl Handle<GetBatteryStatus> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<BatteryStatus, RynkError> {
+impl HandleSync<GetBatteryStatus> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<BatteryStatus, RynkError> {
         Ok(self.ctx.battery_status())
     }
 }
@@ -49,26 +49,26 @@ impl Handle<GetBatteryStatus> for RynkService<'_> {
 /// ([`current_peripheral_status`](crate::split::driver::current_peripheral_status)),
 /// fed at the `PeripheralConnectedEvent` / `PeripheralBatteryEvent` publish sites.
 #[cfg(feature = "split")]
-impl Handle<GetPeripheralStatus> for RynkService<'_> {
-    async fn handle(&self, id: u8) -> Result<PeripheralStatus, RynkError> {
+impl HandleSync<GetPeripheralStatus> for RynkService<'_> {
+    fn handle(&self, id: u8) -> Result<PeripheralStatus, RynkError> {
         crate::split::driver::current_peripheral_status(id as usize).ok_or(RynkError::Invalid)
     }
 }
 
-impl Handle<GetWpm> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<u16, RynkError> {
+impl HandleSync<GetWpm> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<u16, RynkError> {
         Ok(crate::processor::builtin::wpm::current_wpm())
     }
 }
 
-impl Handle<GetSleepState> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<bool, RynkError> {
+impl HandleSync<GetSleepState> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<bool, RynkError> {
         Ok(crate::state::current_sleep_state())
     }
 }
 
-impl Handle<GetLedIndicator> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<LedIndicator, RynkError> {
+impl HandleSync<GetLedIndicator> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<LedIndicator, RynkError> {
         Ok(self.ctx.led_indicator())
     }
 }

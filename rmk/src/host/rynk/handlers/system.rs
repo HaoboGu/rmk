@@ -10,16 +10,16 @@ use rmk_types::protocol::rynk::{
 };
 
 use super::super::{RMK_VERSION, RynkService, RynkSession};
-use super::Handle;
+use super::{Handle, HandleSync};
 
-impl Handle<GetVersion> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<ProtocolVersion, RynkError> {
+impl HandleSync<GetVersion> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<ProtocolVersion, RynkError> {
         Ok(ProtocolVersion::CURRENT)
     }
 }
 
-impl Handle<GetCapabilities> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<DeviceCapabilities, RynkError> {
+impl HandleSync<GetCapabilities> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<DeviceCapabilities, RynkError> {
         let (rows, cols, num_layers) = self.ctx.keymap_dimensions();
         Ok(DeviceCapabilities {
             // Layout (live, from the configured keymap)
@@ -56,16 +56,16 @@ impl Handle<GetCapabilities> for RynkService<'_> {
     }
 }
 
-impl Handle<Reboot> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<(), RynkError> {
+impl HandleSync<Reboot> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<(), RynkError> {
         // Fire-and-forget: synchronous reset never returns on real hardware.
         crate::boot::reboot_keyboard();
         Ok(())
     }
 }
 
-impl Handle<BootloaderJump> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<(), RynkError> {
+impl HandleSync<BootloaderJump> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<(), RynkError> {
         // Fire-and-forget, same reasoning as `Reboot`.
         crate::boot::jump_to_bootloader();
         Ok(())
@@ -85,27 +85,27 @@ impl Handle<StorageReset> for RynkService<'_> {
 
 // Lock endpoints stay dispatchable while locked.
 
-impl Handle<GetLockStatus> for RynkSession<'_> {
-    async fn handle(&self, _: ()) -> Result<LockStatus, RynkError> {
+impl HandleSync<GetLockStatus> for RynkSession<'_> {
+    fn handle(&self, _: ()) -> Result<LockStatus, RynkError> {
         Ok(self.locker.status())
     }
 }
 
-impl Handle<UnlockPoll> for RynkSession<'_> {
-    async fn handle(&self, _: ()) -> Result<LockStatus, RynkError> {
+impl HandleSync<UnlockPoll> for RynkSession<'_> {
+    fn handle(&self, _: ()) -> Result<LockStatus, RynkError> {
         Ok(self.locker.poll())
     }
 }
 
-impl Handle<Lock> for RynkSession<'_> {
-    async fn handle(&self, _: ()) -> Result<(), RynkError> {
+impl HandleSync<Lock> for RynkSession<'_> {
+    fn handle(&self, _: ()) -> Result<(), RynkError> {
         self.locker.lock();
         Ok(())
     }
 }
 
-impl Handle<GetDeviceInfo> for RynkService<'_> {
-    async fn handle(&self, _: ()) -> Result<DeviceInfo, RynkError> {
+impl HandleSync<GetDeviceInfo> for RynkService<'_> {
+    fn handle(&self, _: ()) -> Result<DeviceInfo, RynkError> {
         Ok(DeviceInfo {
             rmk_version: RMK_VERSION,
             vendor_id: self.device.vid,

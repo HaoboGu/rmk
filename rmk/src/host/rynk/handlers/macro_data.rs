@@ -6,10 +6,10 @@ use rmk_types::protocol::rynk::command::{GetMacro, SetMacro};
 use rmk_types::protocol::rynk::{GetMacroRequest, MacroData, RynkError, SetMacroRequest};
 
 use super::super::RynkService;
-use super::Handle;
+use super::{Handle, HandleSync};
 
-impl Handle<GetMacro> for RynkService<'_> {
-    async fn handle(&self, r: GetMacroRequest) -> Result<MacroData, RynkError> {
+impl HandleSync<GetMacro> for RynkService<'_> {
+    fn handle(&self, r: GetMacroRequest) -> Result<MacroData, RynkError> {
         // Full chunks are zero-filled; length is not an end signal.
         let mut data: Vec<u8, MACRO_DATA_SIZE> = Vec::new();
         data.resize_default(MACRO_DATA_SIZE).expect("MACRO_DATA_SIZE matches");

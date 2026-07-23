@@ -5,10 +5,10 @@ use rmk_types::protocol::rynk::command::GetLayout;
 use rmk_types::protocol::rynk::{LayoutChunk, RYNK_BLE_CHUNK_SIZE, RynkError};
 
 use super::super::RynkService;
-use super::Handle;
+use super::HandleSync;
 
-impl Handle<GetLayout> for RynkService<'_> {
-    async fn handle(&self, offset: u32) -> Result<LayoutChunk, RynkError> {
+impl HandleSync<GetLayout> for RynkService<'_> {
+    fn handle(&self, offset: u32) -> Result<LayoutChunk, RynkError> {
         let blob = self.ctx.layout_blob();
         let total_len = blob.len() as u32;
         let start = (offset as usize).min(blob.len());

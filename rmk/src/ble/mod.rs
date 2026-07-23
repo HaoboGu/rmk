@@ -344,6 +344,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
             }
             GattConnectionEvent::Gatt { event: gatt_event } => {
                 let mut cccd_updated = false;
+                let mut accept_unprocessed = false;
                 let result = match &gatt_event {
                     GattEvent::Read(event) => {
                         if event.handle() == level.handle {
@@ -398,6 +399,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             #[cfg(feature = "host")]
                             match host_gatt_handler.handle_write(event.handle(), data, encrypted).await {
                                 HostWriteOutcome::Handled => {}
+                                HostWriteOutcome::HandledUnprocessed => accept_unprocessed = true,
                                 HostWriteOutcome::CccdUpdated => cccd_updated = true,
                                 HostWriteOutcome::ControlPoint => control_point_write = true,
                                 HostWriteOutcome::Unhandled => {
@@ -440,6 +442,11 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                 // in order to ensure reply is sent.
                 let result = if let Some(code) = result {
                     gatt_event.reject(code)
+                } else if accept_unprocessed {
+                    match gatt_event {
+                        GattEvent::Write(event) => event.accept_unprocessed(),
+                        _ => unreachable!(),
+                    }
                 } else {
                     gatt_event.accept()
                 };

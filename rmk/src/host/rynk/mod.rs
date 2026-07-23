@@ -14,7 +14,7 @@ use rmk_types::protocol::rynk::{Cmd, Deframer, FirmwareVersion, RynkError, RynkM
 #[allow(unused_imports)] // re-exported at `crate::host` for downstream users
 pub use uart::run_rynk_uart;
 
-use self::handlers::Serve;
+use self::handlers::{Serve, ServeSync};
 use super::context::KeyboardContext;
 use super::lock::HostLock;
 use crate::config::{DeviceConfig, LockConfig, RmkConfig};
@@ -90,6 +90,54 @@ impl<'a> RynkService<'a> {
         }
     }
 
+    fn dispatch_sync(&self, session: &RynkSession<'_>, msg: &mut RynkMessage<'_>) -> Option<Result<(), RynkError>> {
+        Some(match msg.header().cmd {
+            Cmd::GetVersion => ServeSync::<command::GetVersion, _>::serve_sync(self, msg),
+            Cmd::GetCapabilities => ServeSync::<command::GetCapabilities, _>::serve_sync(self, msg),
+            Cmd::Reboot => ServeSync::<command::Reboot, _>::serve_sync(self, msg),
+            Cmd::BootloaderJump => ServeSync::<command::BootloaderJump, _>::serve_sync(self, msg),
+            Cmd::GetLockStatus => ServeSync::<command::GetLockStatus, _>::serve_sync(session, msg),
+            Cmd::UnlockPoll => ServeSync::<command::UnlockPoll, _>::serve_sync(session, msg),
+            Cmd::Lock => ServeSync::<command::Lock, _>::serve_sync(session, msg),
+            Cmd::GetDeviceInfo => ServeSync::<command::GetDeviceInfo, _>::serve_sync(self, msg),
+
+            Cmd::GetKeyAction => ServeSync::<command::GetKeyAction, _>::serve_sync(self, msg),
+            Cmd::GetDefaultLayer => ServeSync::<command::GetDefaultLayer, _>::serve_sync(self, msg),
+            Cmd::GetEncoderAction => ServeSync::<command::GetEncoderAction, _>::serve_sync(self, msg),
+            Cmd::GetKeymapBulk => ServeSync::<command::GetKeymapBulk, _>::serve_sync(self, msg),
+
+            Cmd::GetMacro => ServeSync::<command::GetMacro, _>::serve_sync(self, msg),
+            Cmd::GetCombo => ServeSync::<command::GetCombo, _>::serve_sync(self, msg),
+            Cmd::GetComboBulk => ServeSync::<command::GetComboBulk, _>::serve_sync(self, msg),
+            Cmd::GetMorse => ServeSync::<command::GetMorse, _>::serve_sync(self, msg),
+            Cmd::GetMorseBulk => ServeSync::<command::GetMorseBulk, _>::serve_sync(self, msg),
+            Cmd::GetFork => ServeSync::<command::GetFork, _>::serve_sync(self, msg),
+
+            Cmd::GetBehaviorConfig => ServeSync::<command::GetBehaviorConfig, _>::serve_sync(self, msg),
+            Cmd::GetConnectionType => ServeSync::<command::GetConnectionType, _>::serve_sync(self, msg),
+            Cmd::GetConnectionStatus => ServeSync::<command::GetConnectionStatus, _>::serve_sync(self, msg),
+            #[cfg(feature = "_ble")]
+            Cmd::GetBleStatus => ServeSync::<command::GetBleStatus, _>::serve_sync(self, msg),
+            #[cfg(feature = "_ble")]
+            Cmd::SwitchBleProfile => ServeSync::<command::SwitchBleProfile, _>::serve_sync(self, msg),
+            #[cfg(feature = "_ble")]
+            Cmd::ClearBleProfile => ServeSync::<command::ClearBleProfile, _>::serve_sync(self, msg),
+
+            Cmd::GetCurrentLayer => ServeSync::<command::GetCurrentLayer, _>::serve_sync(self, msg),
+            Cmd::GetMatrixState => ServeSync::<command::GetMatrixState, _>::serve_sync(self, msg),
+            #[cfg(feature = "_ble")]
+            Cmd::GetBatteryStatus => ServeSync::<command::GetBatteryStatus, _>::serve_sync(self, msg),
+            #[cfg(feature = "split")]
+            Cmd::GetPeripheralStatus => ServeSync::<command::GetPeripheralStatus, _>::serve_sync(self, msg),
+            Cmd::GetWpm => ServeSync::<command::GetWpm, _>::serve_sync(self, msg),
+            Cmd::GetSleepState => ServeSync::<command::GetSleepState, _>::serve_sync(self, msg),
+            Cmd::GetLedIndicator => ServeSync::<command::GetLedIndicator, _>::serve_sync(self, msg),
+            Cmd::GetLayout => ServeSync::<command::GetLayout, _>::serve_sync(self, msg),
+
+            _ => return None,
+        })
+    }
+
     /// Process one inbound message in place and replace its payload with a
     /// response envelope. `cmd` and `seq` remain unchanged.
     async fn dispatch(&self, session: &RynkSession<'_>, msg: &mut RynkMessage<'_>) {
@@ -100,65 +148,26 @@ impl<'a> RynkService<'a> {
             return;
         }
 
+        if let Some(result) = self.dispatch_sync(session, msg) {
+            if let Err(error) = result {
+                msg.encode_error(error);
+            }
+            return;
+        }
+
         if let Err(error) = match cmd {
-            Cmd::GetVersion => Serve::<command::GetVersion, _>::serve(self, msg).await,
-            Cmd::GetCapabilities => Serve::<command::GetCapabilities, _>::serve(self, msg).await,
-            Cmd::Reboot => Serve::<command::Reboot, _>::serve(self, msg).await,
-            Cmd::BootloaderJump => Serve::<command::BootloaderJump, _>::serve(self, msg).await,
             Cmd::StorageReset => Serve::<command::StorageReset, _>::serve(self, msg).await,
-            Cmd::GetLockStatus => Serve::<command::GetLockStatus, _>::serve(session, msg).await,
-            Cmd::UnlockPoll => Serve::<command::UnlockPoll, _>::serve(session, msg).await,
-            Cmd::Lock => Serve::<command::Lock, _>::serve(session, msg).await,
-            Cmd::GetDeviceInfo => Serve::<command::GetDeviceInfo, _>::serve(self, msg).await,
-
-            Cmd::GetKeyAction => Serve::<command::GetKeyAction, _>::serve(self, msg).await,
             Cmd::SetKeyAction => Serve::<command::SetKeyAction, _>::serve(self, msg).await,
-            Cmd::GetDefaultLayer => Serve::<command::GetDefaultLayer, _>::serve(self, msg).await,
             Cmd::SetDefaultLayer => Serve::<command::SetDefaultLayer, _>::serve(self, msg).await,
-            Cmd::GetEncoderAction => Serve::<command::GetEncoderAction, _>::serve(self, msg).await,
             Cmd::SetEncoderAction => Serve::<command::SetEncoderAction, _>::serve(self, msg).await,
-            Cmd::GetKeymapBulk => Serve::<command::GetKeymapBulk, _>::serve(self, msg).await,
             Cmd::SetKeymapBulk => Serve::<command::SetKeymapBulk, _>::serve(self, msg).await,
-
-            Cmd::GetMacro => Serve::<command::GetMacro, _>::serve(self, msg).await,
             Cmd::SetMacro => Serve::<command::SetMacro, _>::serve(self, msg).await,
-
-            Cmd::GetCombo => Serve::<command::GetCombo, _>::serve(self, msg).await,
             Cmd::SetCombo => Serve::<command::SetCombo, _>::serve(self, msg).await,
-            Cmd::GetComboBulk => Serve::<command::GetComboBulk, _>::serve(self, msg).await,
             Cmd::SetComboBulk => Serve::<command::SetComboBulk, _>::serve(self, msg).await,
-            Cmd::GetMorse => Serve::<command::GetMorse, _>::serve(self, msg).await,
             Cmd::SetMorse => Serve::<command::SetMorse, _>::serve(self, msg).await,
-            Cmd::GetMorseBulk => Serve::<command::GetMorseBulk, _>::serve(self, msg).await,
             Cmd::SetMorseBulk => Serve::<command::SetMorseBulk, _>::serve(self, msg).await,
-
-            Cmd::GetFork => Serve::<command::GetFork, _>::serve(self, msg).await,
             Cmd::SetFork => Serve::<command::SetFork, _>::serve(self, msg).await,
-
-            Cmd::GetBehaviorConfig => Serve::<command::GetBehaviorConfig, _>::serve(self, msg).await,
             Cmd::SetBehaviorConfig => Serve::<command::SetBehaviorConfig, _>::serve(self, msg).await,
-
-            Cmd::GetConnectionType => Serve::<command::GetConnectionType, _>::serve(self, msg).await,
-            Cmd::GetConnectionStatus => Serve::<command::GetConnectionStatus, _>::serve(self, msg).await,
-            #[cfg(feature = "_ble")]
-            Cmd::GetBleStatus => Serve::<command::GetBleStatus, _>::serve(self, msg).await,
-            #[cfg(feature = "_ble")]
-            Cmd::SwitchBleProfile => Serve::<command::SwitchBleProfile, _>::serve(self, msg).await,
-            #[cfg(feature = "_ble")]
-            Cmd::ClearBleProfile => Serve::<command::ClearBleProfile, _>::serve(self, msg).await,
-
-            Cmd::GetCurrentLayer => Serve::<command::GetCurrentLayer, _>::serve(self, msg).await,
-            Cmd::GetMatrixState => Serve::<command::GetMatrixState, _>::serve(self, msg).await,
-            #[cfg(feature = "_ble")]
-            Cmd::GetBatteryStatus => Serve::<command::GetBatteryStatus, _>::serve(self, msg).await,
-            #[cfg(feature = "split")]
-            Cmd::GetPeripheralStatus => Serve::<command::GetPeripheralStatus, _>::serve(self, msg).await,
-            Cmd::GetWpm => Serve::<command::GetWpm, _>::serve(self, msg).await,
-            Cmd::GetSleepState => Serve::<command::GetSleepState, _>::serve(self, msg).await,
-            Cmd::GetLedIndicator => Serve::<command::GetLedIndicator, _>::serve(self, msg).await,
-
-            Cmd::GetLayout => Serve::<command::GetLayout, _>::serve(self, msg).await,
-
             _ => Err(RynkError::UnknownCmd),
         } {
             msg.encode_error(error);

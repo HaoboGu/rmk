@@ -14,9 +14,7 @@ use crate::hid::{BleCompositeReport, CompositeReportType, HidError, HidWriterTra
 pub(crate) const CCCD_TABLE_SIZE: usize = trouble_host::config::CLIENT_ATT_TABLE_SIZE;
 
 #[cfg(feature = "rynk")]
-use rmk_types::protocol::rynk::{
-    RYNK_BLE_CHUNK_SIZE, RYNK_HID_REPORT_SIZE, RYNK_INPUT_CHAR_UUID, RYNK_OUTPUT_CHAR_UUID, RYNK_SERVICE_UUID,
-};
+use rmk_types::protocol::rynk::{RYNK_HID_REPORT_SIZE, RYNK_INPUT_CHAR_UUID, RYNK_OUTPUT_CHAR_UUID, RYNK_SERVICE_UUID};
 
 #[cfg(feature = "vial")]
 #[gatt_server]
@@ -46,9 +44,9 @@ pub(crate) struct Server {
 }
 
 /// Rynk-over-GATT transport. The host writes request chunks to `output_data`;
-/// the firmware replies via `input_data` notify. Variable-length values use
-/// `heapless::Vec` so each notify only spends MTU − 3 bytes for the bytes it
-/// actually carries (a fixed `[u8; N]` would always send N).
+/// the firmware replies via raw `input_data` notifications. The scalar
+/// characteristic values avoid reserving a maximum-sized value in the server;
+/// the event loop and transport consume the variable-length bytes directly.
 ///
 /// `gatt_events_task` forwards `output_data` writes into
 /// [`crate::channel::RYNK_BLE_RX_PIPE`] for [`crate::ble::host::HostGattHandler::run`] to drain.
@@ -57,10 +55,10 @@ pub(crate) struct Server {
 pub(crate) struct RynkGattService {
     // ATT enforces encryption; the event loop still filters the data path.
     #[descriptor(uuid = "2908", read, value = [0u8, 1u8])]
-    #[characteristic(uuid = RYNK_INPUT_CHAR_UUID, read, notify, permissions(encrypted))]
-    pub(crate) input_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
-    #[characteristic(uuid = RYNK_OUTPUT_CHAR_UUID, read, write, write_without_response, permissions(encrypted))]
-    pub(crate) output_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
+    #[characteristic(uuid = RYNK_INPUT_CHAR_UUID, notify, permissions(encrypted))]
+    pub(crate) input_data: u8,
+    #[characteristic(uuid = RYNK_OUTPUT_CHAR_UUID, write, write_without_response, permissions(encrypted))]
+    pub(crate) output_data: u8,
 }
 
 /// Rynk HID-over-GATT service.
