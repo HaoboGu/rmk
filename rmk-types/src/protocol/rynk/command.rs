@@ -426,7 +426,7 @@ mod tests {
     use postcard::experimental::max_size::MaxSize;
 
     use super::*;
-    use crate::protocol::rynk::{RYNK_HEADER_SIZE, RynkError};
+    use crate::protocol::rynk::{RYNK_HEADER_SIZE, RynkError, RynkHeader};
 
     #[test]
     fn topic_mask_is_the_high_bit() {
@@ -464,14 +464,20 @@ mod tests {
         // the same variant — the producer and consumer halves share one table.
         let mut buf = [0u8; 64];
         let ev = TopicEvent::LayerChange(7);
-        let msg = ev.encode(&mut buf).unwrap();
+        let (cmd, seq, framed_len) = {
+            let msg = ev.encode(&mut buf).unwrap();
+            let header = msg.header();
+            (header.cmd, header.seq, msg.frame().len())
+        };
+        assert_eq!(cmd, Cmd::LayerChange);
+        assert_eq!(cmd, ev.cmd());
+        assert_eq!(seq, 0, "topics push with SEQ 0");
 
-        let header = msg.header();
+        // Decode the COBS frame back to the logical [cmd, seq, payload].
+        let n = cobs::decode_in_place(&mut buf[..framed_len - 1]).unwrap();
+        let header = RynkHeader::parse(buf[..RYNK_HEADER_SIZE].try_into().unwrap());
         assert_eq!(header.cmd, Cmd::LayerChange);
-        assert_eq!(header.cmd, ev.cmd());
-        assert_eq!(header.seq, 0, "topics push with SEQ 0");
-
-        let decoded = TopicEvent::decode(header.cmd, &msg.frame()[RYNK_HEADER_SIZE..]);
+        let decoded = TopicEvent::decode(header.cmd, &buf[RYNK_HEADER_SIZE..n]);
         assert!(matches!(decoded, Some(TopicEvent::LayerChange(7))));
     }
 

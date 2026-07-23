@@ -20,8 +20,9 @@ pub struct ProtocolVersion {
 
 impl ProtocolVersion {
     /// Current protocol version for this firmware release.
-    /// Now the protocol is still being developed, so the version is v0.1
-    pub const CURRENT: Self = Self { major: 0, minor: 1 };
+    /// Still in development; v0.2 introduced COBS self-synchronizing framing
+    /// (a breaking wire change from the v0.1 length-prefixed header).
+    pub const CURRENT: Self = Self { major: 0, minor: 2 };
 }
 
 /// Device capabilities discovered during the connection handshake.

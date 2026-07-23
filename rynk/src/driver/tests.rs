@@ -108,7 +108,10 @@ impl Write for MockWrite {
         if self.fail_send {
             return Err(ErrorKind::Other);
         }
-        self.writes.send_modify(|c| *c += 1);
+        // The driver leads with a lone 0x00 sync delimiter; count frames, not it.
+        if !matches!(buf, [0]) {
+            self.writes.send_modify(|c| *c += 1);
+        }
         Ok(buf.len())
     }
 
@@ -135,9 +138,11 @@ async fn drive<F: Future>(driver: &mut Driver<MockRead, MockWrite>, client: &Cli
 }
 
 /// A bare frame: header + postcard(value). Used for raw headers and topics.
+/// Sized generously so large-payload frames (bigger than the host's `READ_CHUNK`
+/// grow step) can be built for the buffer-growth test.
 fn frame<T: Serialize>(cmd: Cmd, seq: u8, value: &T) -> Vec<u8> {
-    let mut buf = vec![0u8; 4096];
-    let msg = RynkMessage::build(&mut buf, cmd, seq, value).unwrap();
+    let mut buf = vec![0u8; 32 * 1024];
+    let msg = RynkMessage::build(&mut buf, RynkHeader { cmd, seq }, value).unwrap();
     msg.frame().to_vec()
 }
 
@@ -207,12 +212,56 @@ async fn rejected_response_flattens() {
 
 #[tokio::test]
 async fn trailing_bytes_rejected() {
-    let mut chunk = reply(Cmd::GetWpm, 1, 42u16);
-    chunk[3] += 2; // LEN low byte
-    chunk.extend_from_slice(&[0xAA, 0xBB]);
+    // A reply whose payload is a valid `Ok(42)` followed by stray bytes: the host
+    // must reject it rather than silently accept the prefix.
+    let chunk = frame(Cmd::GetWpm, 1, &(Ok::<u16, RynkError>(42u16), [0xAAu8, 0xBB]));
     let (client, mut driver) = raw_session(vec![Step::AwaitWrites(1), Step::Chunk(chunk), Step::Hang]);
     let r = drive(&mut driver, &client, client.get_wpm()).await;
     assert!(matches!(r, Err(RynkHostError::TrailingBytes { cmd: Cmd::GetWpm })));
+}
+
+#[tokio::test]
+async fn driver_resyncs_after_garbage() {
+    // Undecodable bytes terminated by a delimiter arrive before the real reply;
+    // the Deframer skips them and the reply still round-trips.
+    let (client, mut driver) = raw_session(vec![
+        Step::AwaitWrites(1),
+        Step::Chunk(vec![0xDE, 0xAD, 0xBE, 0xEF, 0x00]),
+        Step::Chunk(reply(Cmd::GetWpm, 1, 42u16)),
+        Step::Hang,
+    ]);
+    let got = drive(&mut driver, &client, client.get_wpm()).await.unwrap();
+    assert_eq!(got, 42);
+}
+
+#[tokio::test]
+async fn driver_grows_to_hold_a_frame_larger_than_read_chunk() {
+    // A reply whose COBS frame exceeds the alloc RX buffer's READ_CHUNK grow step
+    // must be held by growing the buffer, not dropped as a false overflow when a
+    // read happens to fill the buffer exactly.
+    let mut supported = caps();
+    supported.bulk_transfer_supported = true;
+    supported.max_bulk_keys = 255;
+    let big = GetKeymapBulkResponse {
+        actions: (0..4000u32).map(|i| KeyAction::Morse((i % 256) as u8)).collect(),
+    };
+    assert!(
+        reply(Cmd::GetKeymapBulk, 3, big.clone()).len() > READ_CHUNK,
+        "reply must exceed READ_CHUNK to exercise buffer growth"
+    );
+    let (client, mut driver) = connect_session(
+        handshake_steps(supported),
+        vec![
+            Step::AwaitWrites(3),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, big.clone())),
+            Step::Hang,
+        ],
+    )
+    .await;
+    let got = drive(&mut driver, &client, client.get_keymap_bulk(0, 0, 0))
+        .await
+        .unwrap();
+    assert_eq!(got, big);
 }
 
 #[tokio::test]

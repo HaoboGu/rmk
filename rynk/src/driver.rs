@@ -4,10 +4,11 @@
 //!
 //! ## Frame flow
 //!
-//! A frame is a 5-byte header (`CMD u16 | SEQ u8 | LEN u16`) plus a postcard
-//! payload. Frames cross between [`Client`] and [`Driver`] as plain owned
-//! bytes over three channels; [`RynkMessage`] is the view used to build and
-//! parse them at each end:
+//! A frame is a 3-byte header (`CMD u16 LE | SEQ u8`) plus a postcard payload,
+//! COBS-encoded and `0x00`-terminated on the wire so the stream self-resyncs.
+//! Frames cross between [`Client`] and [`Driver`] as plain owned bytes over
+//! three channels; [`RynkMessage`] builds and parses them at each end, and a
+//! [`Deframer`] cuts them back out of the received byte stream:
 //!
 //! ```text
 //! request()    encode → message ─→ Driver: write_all
@@ -33,19 +34,21 @@ use embassy_sync::signal::Signal;
 use embedded_io_async::{Error as _, ErrorKind, Read, Write};
 use rmk_types::protocol::rynk::endpoint::Endpoint;
 use rmk_types::protocol::rynk::{
-    Cmd, DeviceCapabilities, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage, TopicEvent, command,
+    Cmd, Deframer, DeviceCapabilities, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage,
+    TopicEvent, command, frame_capacity,
 };
 use serde::Serialize;
 use thiserror::Error;
 
 type CS = CriticalSectionRawMutex;
 
-/// One whole frame (header + payload) as owned bytes. The no-alloc bound is
-/// the firmware's own full-frame buffer size, so any frame it can send fits.
+/// One whole frame as owned bytes: a COBS-encoded request queued for the writer,
+/// or a decoded logical reply handed back to the requester. The no-alloc bound is
+/// the firmware's COBS-frame size, so any frame it can send or reply with fits.
 #[cfg(feature = "alloc")]
 type FrameBytes = Vec<u8>;
 #[cfg(not(feature = "alloc"))]
-type FrameBytes = heapless::Vec<u8, { rmk_types::constants::RYNK_BUFFER_SIZE }>;
+type FrameBytes = heapless::Vec<u8, { rmk_types::protocol::rynk::RYNK_FRAME_BUFFER_SIZE }>;
 
 /// A topic frame. The no-alloc bound tracks the topic table exactly, so a
 /// newer-minor firmware's extended topic (trailing bytes) is dropped there.
@@ -222,8 +225,9 @@ impl Client {
         let (Ok(seq) | Err(seq)) = self.next_seq.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |s| {
             Some(if s == u8::MAX { 1 } else { s + 1 })
         });
-        // Encode against the device's limit so oversized requests fail before touching the link.
-        let limit = RYNK_HEADER_SIZE + self.capabilities.max_payload_size as usize;
+        // Size the buffer for the COBS-encoded form of a max-payload request, so an
+        // oversized request fails to encode before touching the link.
+        let limit = frame_capacity(RYNK_HEADER_SIZE + self.capabilities.max_payload_size as usize);
         #[cfg(feature = "alloc")]
         let mut buf: FrameBytes = vec![0; limit];
         #[cfg(not(feature = "alloc"))]
@@ -233,9 +237,10 @@ impl Client {
             b.resize(n, 0).map_err(|_| RynkHostError::Encode(cmd))?;
             b
         };
-        let frame_len = RynkMessage::build(&mut buf, cmd, seq, req)
+        let frame_len = RynkMessage::build(&mut buf, RynkHeader { cmd, seq }, req)
             .map_err(|_| RynkHostError::Encode(cmd))?
-            .frame_len();
+            .frame()
+            .len();
         buf.truncate(frame_len);
         self.message.send(buf).await;
         Ok(seq)
@@ -297,41 +302,22 @@ impl<R: Read, W: Write> Driver<R, W> {
         let rx_loop = async {
             loop {
                 // Commit in the same poll so cancelling `run` cannot lose received bytes.
-                let n = match reader.read(rx.unfilled()).await {
+                let n = match reader.read(rx.tail()).await {
                     Ok(0) => break RynkHostError::Disconnected,
                     Ok(n) => n,
                     Err(e) => break RynkHostError::Io(e.kind()),
                 };
                 rx.commit(n);
-                while let Some(header) = rx.filled().first_chunk().map(RynkHeader::parse) {
-                    let frame_len = header.frame_len();
-                    // Fixed buffers cannot grow; discard the declared frame length to resynchronize.
-                    #[cfg(not(feature = "alloc"))]
-                    if frame_len > rx.buf.len() {
-                        log::debug!("rynk: dropping {frame_len}-byte frame exceeding the RX buffer");
-                        let mut remaining = frame_len - rx.filled().len();
-                        rx.clear();
-                        while remaining > 0 {
-                            let cap = rx.buf.len().min(remaining);
-                            match reader.read(&mut rx.buf[..cap]).await {
-                                Ok(0) => return RynkHostError::Disconnected,
-                                Ok(n) => remaining -= n,
-                                Err(e) => return RynkHostError::Io(e.kind()),
-                            }
-                        }
-                        continue;
-                    }
-                    if rx.filled().len() < frame_len {
-                        break;
-                    }
-                    let frame = &rx.filled()[..frame_len];
-                    if header.cmd.is_topic() {
+                // Cut out every whole COBS frame this read completed; the Deframer
+                // decodes in place and resyncs past any garbage on its own.
+                while let Some(frame) = rx.next_frame() {
+                    let cmd = RynkHeader::parse(frame[..RYNK_HEADER_SIZE].try_into().unwrap()).cmd;
+                    if cmd.is_topic() {
                         #[cfg(feature = "alloc")]
                         let bytes = TopicBytes::from(frame);
                         #[cfg(not(feature = "alloc"))]
                         let Ok(bytes) = TopicBytes::try_from(frame) else {
                             log::debug!("rynk: oversized topic dropped");
-                            rx.consume(frame_len);
                             continue;
                         };
                         if let Err(TrySendError::Full(bytes)) = client.topics.try_send(bytes) {
@@ -343,19 +329,26 @@ impl<R: Read, W: Write> Driver<R, W> {
                     } else {
                         #[cfg(feature = "alloc")]
                         let bytes = FrameBytes::from(frame);
-                        // Cannot fail: the oversize guard above caps frame_len at the RX
-                        // buffer size, which is exactly FrameBytes' capacity.
+                        // A decoded frame is never larger than the RX buffer, so this fits.
                         #[cfg(not(feature = "alloc"))]
-                        let bytes = FrameBytes::try_from(frame).unwrap();
+                        let Ok(bytes) = FrameBytes::try_from(frame) else {
+                            continue;
+                        };
                         // A pending reply is stale after request cancellation; keep the latest.
                         client.resp.signal(bytes);
                     }
-                    rx.consume(frame_len);
                 }
             }
         };
 
         let tx_loop = async {
+            // Lead with a lone `0x00` delimiter so any stale bytes in the peer's
+            // RX (an OS port probe like ModemManager's `AT…`, a half-frame from a
+            // prior session) are terminated as their own junk frame instead of
+            // being merged with our first real frame and swallowing it.
+            if let Err(e) = writer.write_all(&[0]).await {
+                return RynkHostError::Io(e.kind());
+            }
             loop {
                 let frame = client.message.receive().await;
                 if let Err(e) = writer.write_all(&frame).await {
@@ -370,24 +363,27 @@ impl<R: Read, W: Write> Driver<R, W> {
     }
 }
 
-/// RX reassembly buffer: bytes land in the tail, whole frames are consumed
-/// from the front by advancing a head cursor — compaction happens once per
-/// `read` (in [`unfilled`](Self::unfilled)), not once per frame, so a batch
-/// of frames in one read costs one memmove. Alloc builds grow the buffer on
-/// demand; no-alloc builds fix it at the firmware's full-frame size and drain
-/// larger frames by length.
+/// RX reassembly buffer: bytes land in the tail via [`tail`](Self::tail), whole
+/// COBS frames are cut out and decoded in place by an embedded [`Deframer`],
+/// which also resyncs the stream past any garbage. Alloc builds grow the buffer
+/// on demand up to [`MAX_RX_ALLOC`]; no-alloc builds fix it at the firmware's
+/// full COBS-frame size and resync past anything larger.
 struct RxBuf {
     #[cfg(feature = "alloc")]
     buf: Vec<u8>,
     #[cfg(not(feature = "alloc"))]
-    buf: [u8; rmk_types::constants::RYNK_BUFFER_SIZE],
-    head: usize,
-    filled: usize,
+    buf: [u8; rmk_types::protocol::rynk::RYNK_FRAME_BUFFER_SIZE],
+    df: Deframer,
 }
 
 /// Tail headroom kept available for each `read` on alloc builds.
 #[cfg(feature = "alloc")]
 const READ_CHUNK: usize = 4096;
+
+/// Upper bound on the alloc RX buffer, so a delimiter-less stream resyncs
+/// (Deframer overflow) instead of growing without bound.
+#[cfg(feature = "alloc")]
+const MAX_RX_ALLOC: usize = 128 * 1024;
 
 impl RxBuf {
     fn new() -> Self {
@@ -395,41 +391,41 @@ impl RxBuf {
             #[cfg(feature = "alloc")]
             buf: vec![0; READ_CHUNK],
             #[cfg(not(feature = "alloc"))]
-            buf: [0; rmk_types::constants::RYNK_BUFFER_SIZE],
-            head: 0,
-            filled: 0,
+            buf: [0; rmk_types::protocol::rynk::RYNK_FRAME_BUFFER_SIZE],
+            df: Deframer::new(),
         }
     }
 
-    fn filled(&self) -> &[u8] {
-        &self.buf[self.head..self.filled]
-    }
-
-    fn unfilled(&mut self) -> &mut [u8] {
-        if self.head > 0 {
-            self.buf.copy_within(self.head..self.filled, 0);
-            self.filled -= self.head;
-            self.head = 0;
-        }
+    /// The free tail to read the next chunk into. Alloc builds keep `READ_CHUNK`
+    /// of headroom here; the paired grow in [`commit`](Self::commit) covers a
+    /// read that fills the buffer exactly, so `next` never false-overflows.
+    fn tail(&mut self) -> &mut [u8] {
         #[cfg(feature = "alloc")]
-        if self.buf.len() - self.filled < READ_CHUNK {
-            self.buf.resize(self.filled + READ_CHUNK, 0);
+        {
+            let target = (self.df.filled() + READ_CHUNK).min(MAX_RX_ALLOC);
+            if self.buf.len() < target {
+                self.buf.resize(target, 0);
+            }
         }
-        &mut self.buf[self.filled..]
+        self.df.tail(&mut self.buf)
     }
 
     fn commit(&mut self, n: usize) {
-        self.filled += n;
+        self.df.commit(n);
+        // If a read filled the buffer, grow before the Deframer sees `filled ==
+        // buf.len()` and mistakes a still-growing frame for an overflow. Only at
+        // MAX_RX_ALLOC does the buffer stay full and the Deframer drain (real
+        // overflow). `resize` appends, so the Deframer's cursors stay valid.
+        #[cfg(feature = "alloc")]
+        if self.df.filled() == self.buf.len() && self.buf.len() < MAX_RX_ALLOC {
+            self.buf.resize((self.buf.len() + READ_CHUNK).min(MAX_RX_ALLOC), 0);
+        }
     }
 
-    fn consume(&mut self, n: usize) {
-        self.head += n;
-    }
-
-    #[cfg(not(feature = "alloc"))]
-    fn clear(&mut self) {
-        self.head = 0;
-        self.filled = 0;
+    /// The next decoded frame, or `None` for "read more".
+    fn next_frame(&mut self) -> Option<&[u8]> {
+        let len = self.df.next(&mut self.buf)?;
+        Some(&self.buf[..len])
     }
 }
 

@@ -1,23 +1,27 @@
 //! Rynk protocol ICD — RMK's native host-communication protocol.
 //!
 //! Carries RMK's canonical types (`KeyAction`, `Combo`, `Morse`, `Fork`,
-//! `EncoderAction`, `BatteryStatus`, `BleStatus`) on the wire as a 5-byte
-//! fixed header + postcard-encoded payload.
+//! `EncoderAction`, `BatteryStatus`, `BleStatus`) on the wire as a 3-byte
+//! fixed header + postcard-encoded payload, COBS-framed.
 //!
 //! ## Wire format
 //!
 //! ```text
-//! ┌──────────────┬───────────┬────────────────────┐
-//! │ CMD u16 LE   │ SEQ u8    │ LEN u16 LE         │  ← 5-byte header
-//! ├──────────────┴───────────┴────────────────────┤
-//! │              postcard-encoded payload         │  ← LEN bytes
-//! └───────────────────────────────────────────────┘
+//! ┌──────────────┬───────────┐
+//! │ CMD u16 LE   │ SEQ u8    │  ← 3-byte header
+//! ├──────────────┴───────────┤
+//! │  postcard-encoded payload │
+//! └──────────────────────────┘
 //! ```
+//!
+//! On the wire the whole frame is COBS-encoded and terminated by a single
+//! `0x00` delimiter (see [`framing`]), so the byte stream is
+//! self-synchronizing: a receiver drops to the next delimiter to resync after
+//! any corruption.
 //!
 //! - **CMD** — `0x0000..=0x7FFF` request/response, `0x8000..=0xFFFF` topic
 //!   (server→host push).
 //! - **SEQ** — the sequence number of current request. Topics send SEQ = 0.
-//! - **LEN** — payload byte count.
 //!
 //! Responses wrap the payload in postcard `Result<T, RynkError>` (`T = ()` for
 //! `Set*`); requests are the bare postcard struct, unwrapped.
@@ -46,6 +50,7 @@
 
 pub mod command;
 pub mod endpoint;
+pub mod framing;
 pub mod message;
 
 mod error;
@@ -58,6 +63,7 @@ pub(crate) mod tests;
 pub use self::command::MAX_TOPIC_PAYLOAD;
 pub use self::command::{Cmd, TopicEvent, bulk_keymap_size_for_buffer, bulk_size_for_buffer};
 pub use self::error::RynkError;
+pub use self::framing::{Deframer, RYNK_FRAME_BUFFER_SIZE, encode_frame, frame_capacity};
 pub use self::message::{RYNK_HEADER_SIZE, RynkHeader, RynkMessage};
 pub use self::payload::*;
 

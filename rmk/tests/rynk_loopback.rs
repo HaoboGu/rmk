@@ -9,6 +9,7 @@
 
 pub mod common;
 
+use embassy_futures::yield_now;
 use heapless::Vec as HVec;
 use rmk::config::{BehaviorConfig, PositionalConfig, RmkConfig};
 #[cfg(feature = "_ble")]
@@ -25,14 +26,14 @@ use rmk_types::battery::{BatteryStatus, ChargeState};
 use rmk_types::ble::BleStatus;
 use rmk_types::combo::Combo as ComboConfig;
 use rmk_types::connection::{ConnectionStatus, ConnectionType};
-use rmk_types::constants::RYNK_BUFFER_SIZE;
 use rmk_types::fork::Fork;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::morse::{Morse, MorseMode, MorseProfile};
 use rmk_types::protocol::rynk::{
     BehaviorConfig as WireBehaviorConfig, Cmd, DeviceCapabilities, DeviceInfo, GetEncoderRequest, GetMacroRequest,
-    KeyPosition, LockStatus, MacroData, MatrixState, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, SetComboRequest,
-    SetEncoderRequest, SetForkRequest, SetKeyRequest, SetMacroRequest, SetMorseRequest, StorageResetMode,
+    KeyPosition, LockStatus, MacroData, MatrixState, ProtocolVersion, RYNK_FRAME_BUFFER_SIZE, RynkError,
+    SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetMacroRequest, SetMorseRequest,
+    StorageResetMode,
 };
 
 use crate::common::rynk_link::{RynkHostClient, link_session, link_two_sessions};
@@ -308,11 +309,8 @@ fn get_set_default_layer() {
 fn set_default_layer_rejects_truncated_payload() {
     let service = service_2_layers();
     link_session(&service, async |client| {
-        let mut header = [0u8; RYNK_HEADER_SIZE];
-        header[0..2].copy_from_slice(&Cmd::SetDefaultLayer.to_le_bytes());
-        header[2] = 0x16;
-        header[3..5].copy_from_slice(&0u16.to_le_bytes());
-        client.send_raw(&header).await;
+        // A SetDefaultLayer with no payload — the u8 argument can't decode.
+        client.send(Cmd::SetDefaultLayer, 0x16, &()).await;
 
         let reply = client.recv_response(0x16).await;
         assert_eq!(reply.header.cmd, Cmd::SetDefaultLayer);
@@ -677,12 +675,7 @@ fn keymap_bulk_set_malformed_element_aborts_whole_write() {
         payload.extend_from_slice(good_bytes);
         payload.push(0x7F);
 
-        let mut frame = vec![0u8; RYNK_HEADER_SIZE];
-        frame[0..2].copy_from_slice(&Cmd::SetKeymapBulk.to_le_bytes());
-        frame[2] = 0x40;
-        frame[3..5].copy_from_slice(&(payload.len() as u16).to_le_bytes());
-        frame.extend_from_slice(&payload);
-        client.send_raw(&frame).await;
+        client.send_logical(Cmd::SetKeymapBulk, 0x40, &payload).await;
 
         let reply = client.recv_response(0x40).await;
         assert_eq!(
@@ -1226,8 +1219,10 @@ fn get_led_indicator_returns_snapshot() {
 fn drops_topic_cmd_from_host() {
     let service = service();
     link_session(&service, async |client| {
+        client.handshake().await;
         // Topic CMD requests must not create phantom topic replies.
         client.send(Cmd::LayerChange, 0x13, &0u8).await;
+        yield_now().await;
         // Next request proves there is no stray reply.
         let version = client.request::<(), ProtocolVersion>(Cmd::GetVersion, 0x14, &()).await;
         assert_eq!(version, Ok(ProtocolVersion::CURRENT), "session in sync after drop");
@@ -1240,9 +1235,11 @@ fn drops_battery_topic_cmd_from_host() {
     // Cover the one `_ble`-gated topic explicitly.
     let service = service();
     link_session(&service, async |client| {
+        client.handshake().await;
         client
             .send(Cmd::BatteryStatusChange, 0x19, &BatteryStatus::Unavailable)
             .await;
+        yield_now().await;
         let version = client.request::<(), ProtocolVersion>(Cmd::GetVersion, 0x1A, &()).await;
         assert_eq!(version, Ok(ProtocolVersion::CURRENT), "session in sync after drop");
     });
@@ -1253,10 +1250,8 @@ fn unknown_cmd_over_the_wire_gets_unknown_cmd_reply() {
     let service = service();
     // Unknown request tags reply UnknownCmd; unknown topic tags are dropped.
     link_session(&service, async |client| {
-        let mut header = [0u8; RYNK_HEADER_SIZE];
-        header[0..2].copy_from_slice(&0x00FFu16.to_le_bytes());
-        header[2] = 0x21; // seq — echoed on the error reply
-        client.send_raw(&header).await;
+        client.handshake().await;
+        client.send(Cmd::from_raw(0x00FF), 0x21, &()).await;
         let reply = client.recv_response(0x21).await;
         assert_eq!(
             reply.header.cmd,
@@ -1265,10 +1260,8 @@ fn unknown_cmd_over_the_wire_gets_unknown_cmd_reply() {
         );
         assert_eq!(reply.envelope::<()>(), Err(RynkError::UnknownCmd));
 
-        let mut header = [0u8; RYNK_HEADER_SIZE];
-        header[0..2].copy_from_slice(&0xFFFFu16.to_le_bytes());
-        header[2] = 0x22;
-        client.send_raw(&header).await;
+        client.send(Cmd::from_raw(0xFFFF), 0x22, &()).await;
+        yield_now().await;
 
         // Session stays in sync afterwards.
         let version = client.request::<(), ProtocolVersion>(Cmd::GetVersion, 0x23, &()).await;
@@ -1327,27 +1320,16 @@ fn pipelines_multiple_requests_in_one_session() {
 }
 
 #[test]
-fn oversized_frame_is_rejected_then_stream_resyncs() {
+fn oversized_garbage_resyncs() {
     let service = service();
-    // Oversized payload declarations must drain and resync.
+    // A delimiter-less blob larger than the buffer overflows the Deframer and is
+    // dropped; the stream then resyncs to the next clean frame.
     let recovered = link_session(&service, async |client| {
-        let payload_n = (RYNK_BUFFER_SIZE - RYNK_HEADER_SIZE + 1) as u16;
-        let mut bad = [0u8; RYNK_HEADER_SIZE];
-        bad[0..2].copy_from_slice(&Cmd::GetVersion.to_le_bytes());
-        bad[2] = 0x55; // seq — echoed on the error reply
-        bad[3..5].copy_from_slice(&payload_n.to_le_bytes());
-        client.send_raw(&bad).await;
-        // Bogus payload to drain.
-        client.send_raw(&vec![0xAB; payload_n as usize]).await;
+        let mut garbage = vec![0xABu8; RYNK_FRAME_BUFFER_SIZE + 50];
+        garbage.push(0x00); // terminating delimiter clears the drain
+        client.send_raw(&garbage).await;
 
-        let err = client.recv_response(0x55).await;
-        assert_eq!(
-            err.envelope::<()>(),
-            Err(RynkError::Malformed),
-            "oversized frame → Malformed"
-        );
-
-        // Clean request after resync still round-trips.
+        // A clean request after resync still round-trips.
         client.request::<(), ProtocolVersion>(Cmd::GetVersion, 0x56, &()).await
     });
     assert_eq!(recovered, Ok(ProtocolVersion::CURRENT));

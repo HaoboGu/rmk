@@ -178,7 +178,7 @@ mod tests {
 
     use rynk::io::{Read as _, Write as _};
     use rynk::rmk_types::protocol::rynk::{
-        Cmd, DeviceCapabilities, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage,
+        Cmd, Deframer, DeviceCapabilities, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage,
     };
     use serde::Serialize;
     use tokio::io::AsyncReadExt as _;
@@ -221,20 +221,25 @@ mod tests {
     fn frame<T: Serialize>(cmd: Cmd, seq: u8, value: &T) -> Vec<u8> {
         // Scratch large enough for any test frame.
         let mut buf = vec![0u8; 4096];
-        let msg = RynkMessage::build(&mut buf, cmd, seq, value).unwrap();
+        let msg = RynkMessage::build(&mut buf, RynkHeader { cmd, seq }, value).unwrap();
         msg.frame().to_vec()
     }
 
-    /// Read one request frame off the peer end; returns its cmd + seq.
+    /// Read one COBS frame off the peer end and return its cmd + seq. The
+    /// `Deframer` skips empty frames, so the host's leading `0x00` sync is
+    /// transparent.
     async fn read_request(peer: &mut SerialStream) -> (Cmd, u8) {
-        let mut bytes = [0u8; RYNK_HEADER_SIZE];
-        peer.read_exact(&mut bytes).await.unwrap();
-        let header = RynkHeader::parse(&bytes);
-        let mut payload = vec![0u8; header.payload_len as usize];
-        if !payload.is_empty() {
-            peer.read_exact(&mut payload).await.unwrap();
+        let mut df = Deframer::new();
+        let mut buf = [0u8; 4096];
+        loop {
+            let n = peer.read(df.tail(&mut buf)).await.unwrap();
+            assert!(n > 0, "peer closed before a full request");
+            df.commit(n);
+            if df.next(&mut buf).is_some() {
+                let header = RynkHeader::parse(buf[..RYNK_HEADER_SIZE].try_into().unwrap());
+                return (header.cmd, header.seq);
+            }
         }
-        (header.cmd, header.seq)
     }
 
     /// Script a Rynk firmware on `peer`: answer the GetVersion/GetCapabilities

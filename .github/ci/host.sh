@@ -8,7 +8,6 @@ cd "$repo_root/rynk"
 
 export CARGO_TERM_COLOR=always
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$target_root/host}"
-mkdir -p "$CARGO_TARGET_DIR"
 
 log_section "Tests"
 cargo +stable test --workspace --lib --tests
