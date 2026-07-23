@@ -111,6 +111,8 @@ When used in configuration files, all keycodes are case-insensitive.
 | `RAlt`   | `r_alt`, `rightalt`, `right_alt`, `ropt`         | Right Alt     |
 | `RGui`   | `r_gui`, `rightgui`, `right_gui`, `rcmd`, `rwin` | Right GUI     |
 
+For simple keycodes with shift active you can use `SHIFTED(key)` in your [layout](../layout#layout), or more generally expressions like `WM(key, LShift | RGui)` with modifiers.
+
 ## Function keys
 
 | Keycode | Aliases | Usage |
