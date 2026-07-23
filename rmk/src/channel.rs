@@ -12,6 +12,7 @@ use {crate::ble::profile::BleProfileAction, rmk_types::led_indicator::LedIndicat
 
 #[cfg(feature = "host")]
 use crate::VIAL_CHANNEL_SIZE;
+use crate::event::KeyboardEvent;
 use crate::hid::{KeyboardReport, Report};
 #[cfg(feature = "storage")]
 use crate::{FLASH_CHANNEL_SIZE, storage::FlashOperationMessage};
@@ -91,6 +92,11 @@ pub(crate) fn clear_and_release_report_channel(transport: ConnectionType) {
 pub(crate) static FLASH_CHANNEL: Channel<RawMutex, FlashOperationMessage, FLASH_CHANNEL_SIZE> = Channel::new();
 #[cfg(feature = "_ble")]
 pub(crate) static BLE_PROFILE_CHANNEL: Channel<RawMutex, BleProfileAction, 1> = Channel::new();
+
+/// Macros are triggered on key press but run by the keyboard loop to avoid recursion
+/// (`execute_macro` dispatches a macro's ops back through the action path).
+/// Producer: the `TriggerMacro` action. Consumer: the keyboard loop.
+pub(crate) static MACRO_TRIGGER_CHANNEL: Channel<RawMutex, (u8, KeyboardEvent), 4> = Channel::new();
 
 /// Vial host requests from any active transport (USB or BLE) to the central `HostService`.
 /// Items carry the originating transport tag so replies can be routed back to the right

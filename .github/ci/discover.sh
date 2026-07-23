@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Discover buildable examples and emit GitHub Actions matrix JSON.
 # Outputs:
 #   stable  — JSON array of {dir, target, bloat, bloat_bins} for stable-toolchain examples

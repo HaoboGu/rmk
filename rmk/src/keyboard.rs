@@ -210,6 +210,11 @@ impl Runnable for Keyboard<'_> {
                 }
             };
 
+            // Run any macros triggered while handling the event.
+            while let Ok((macro_idx, event)) = crate::channel::MACRO_TRIGGER_CHANNEL.try_receive() {
+                self.execute_macro(macro_idx, event).await;
+            }
+
             // Check deadlines after processing / timeout.
             if self.sticky_key_state.deadline().is_some_and(|d| Instant::now() >= d) {
                 self.release_sticky_key_if_active_on_timeout().await;
@@ -1413,7 +1418,16 @@ impl<'a> Keyboard<'a> {
                 //report the modifier press/release in its own hid report
                 self.send_keyboard_report_with_resolved_modifiers(event.pressed).await;
             }
-            Action::TriggerMacro(macro_idx) => self.execute_macro(macro_idx, event).await,
+            Action::TriggerMacro(macro_idx) => {
+                // Macros are fired on press.
+                if event.pressed
+                    && crate::channel::MACRO_TRIGGER_CHANNEL
+                        .try_send((macro_idx, event))
+                        .is_err()
+                {
+                    warn!("Macro trigger queue full, dropped macro {}", macro_idx);
+                }
+            }
             Action::KeyWithModifier(key_code, modifiers) => {
                 if event.pressed {
                     // These modifiers will be combined into the hid report, so
@@ -1866,11 +1880,6 @@ impl<'a> Keyboard<'a> {
     }
 
     async fn execute_macro(&mut self, macro_idx: u8, event: KeyboardEvent) {
-        // Execute the macro only when releasing the key
-        if event.pressed {
-            return;
-        }
-
         // Read macro operations until the end of the macro
         let macro_idx = self.keymap.get_macro_sequence_start(macro_idx);
         if let Some(macro_start_idx) = macro_idx {
@@ -1897,6 +1906,49 @@ impl<'a> Keyboard<'a> {
                         embassy_time::Timer::after_millis(2).await;
                         self.unregister_key(k, event);
                         self.send_keyboard_report_with_resolved_modifiers(false).await;
+                    }
+                    // A macro can't trigger another macro: that would re-enter this queue, and a
+                    // self- or cycle-triggering macro would loop here forever. Drop it at the source.
+                    #[cfg(feature = "vial")]
+                    MacroOperation::PressAction(Action::TriggerMacro(_))
+                    | MacroOperation::ReleaseAction(Action::TriggerMacro(_))
+                    | MacroOperation::TapAction(Action::TriggerMacro(_)) => {
+                        warn!("A macro cannot trigger another macro");
+                    }
+                    // Extended (16-bit) keycodes (BT profile, PDF, ...) run the decoded action
+                    // through the normal dispatcher, with press/release synthesized from the event.
+                    #[cfg(feature = "vial")]
+                    MacroOperation::PressAction(action) => {
+                        self.macro_texting = false;
+                        self.process_key_action_normal(action, KeyboardEvent { pressed: true, ..event })
+                            .await;
+                    }
+                    #[cfg(feature = "vial")]
+                    MacroOperation::ReleaseAction(action) => {
+                        self.macro_texting = false;
+                        self.process_key_action_normal(
+                            action,
+                            KeyboardEvent {
+                                pressed: false,
+                                ..event
+                            },
+                        )
+                        .await;
+                    }
+                    #[cfg(feature = "vial")]
+                    MacroOperation::TapAction(action) => {
+                        self.macro_texting = false;
+                        self.process_key_action_normal(action, KeyboardEvent { pressed: true, ..event })
+                            .await;
+                        embassy_time::Timer::after_millis(2).await;
+                        self.process_key_action_normal(
+                            action,
+                            KeyboardEvent {
+                                pressed: false,
+                                ..event
+                            },
+                        )
+                        .await;
                     }
                     MacroOperation::Text(k, is_cap) => {
                         self.macro_texting = true;

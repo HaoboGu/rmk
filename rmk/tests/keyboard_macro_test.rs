@@ -48,6 +48,34 @@ mod macro_test {
         );
     }
 
+    // Macros fire on key *press* (matching QMK/ZMK), not release: the macro key is pressed and
+    // never released here, yet the macro still runs to completion.
+    #[test]
+    fn test_macro_triggers_on_press() {
+        let macro_sequences = &[Vec::from_slice(&[
+            MacroOperation::Press(HidKeyCode::A),
+            MacroOperation::Release(HidKeyCode::A),
+        ])
+        .expect("too many elements")];
+
+        let macro_data = define_macro_sequences(macro_sequences);
+        let mut config = BehaviorConfig::default();
+        config.keyboard_macros.macro_sequences = macro_data;
+
+        let keyboard = create_simple_macro_keyboard(config);
+
+        key_sequence_test!(
+            keyboard: keyboard,
+            sequence: [
+                [0, 0, true, 0], // press Macro0 only (no release)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A down — emitted on press
+                [0, [0, 0, 0, 0, 0, 0]],            // A up
+            ]
+        );
+    }
+
     #[test]
     fn test_macro_text() {
         let macro_sequences = &[to_macro_sequence("AbCd123456")];
@@ -176,6 +204,75 @@ mod macro_test {
                 // Delay 50 ms
                 [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]], // press B
                 [0, [0, 0, 0, 0, 0, 0]],            // release B
+            ]
+        );
+    }
+
+    // A 16-bit Vial keycode (LCtrl(A) = 0x0104) used as a macro TAP action is serialized as
+    // VIAL_MACRO_EXT_TAP, decoded, and routed through the shared action path so the modifier
+    // is applied exactly like a physical key. This is the mechanism that makes BT/PDF (and any
+    // other 16-bit keycode) work inside a macro.
+    #[cfg(feature = "vial")]
+    #[test]
+    fn test_macro_extended_tap_key_with_modifier() {
+        use rmk::types::modifier::ModifierCombination;
+
+        use crate::common::KC_LCTRL;
+
+        let macro_sequences = &[Vec::from_slice(&[MacroOperation::TapAction(Action::KeyWithModifier(
+            HidKeyCode::A,
+            ModifierCombination::LCTRL,
+        ))])
+        .expect("too many elements")];
+
+        let macro_data = define_macro_sequences(macro_sequences);
+        let mut config = BehaviorConfig::default();
+        config.keyboard_macros.macro_sequences = macro_data;
+
+        let keyboard = create_simple_macro_keyboard(config);
+
+        key_sequence_test!(
+            keyboard: keyboard,
+            sequence: [
+                [0, 0, true, 0],    // press Macro0
+                [0, 0, false, 100], // release Macro0
+            ],
+            expected_reports: [
+                [KC_LCTRL, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // press A with Left Ctrl
+                [0, [0, 0, 0, 0, 0, 0]],                   // release
+            ]
+        );
+    }
+
+    // A macro cannot trigger another macro (which would re-enter the trigger queue and could loop
+    // forever). Macro 0 tries to trigger macro 1, then taps A: the nested trigger is dropped, so
+    // only A is emitted — B (macro 1) never runs — and the rest of macro 0 still executes.
+    #[cfg(feature = "vial")]
+    #[test]
+    fn test_macro_cannot_trigger_macro() {
+        let macro_sequences = &[
+            Vec::from_slice(&[
+                MacroOperation::TapAction(Action::TriggerMacro(1)),
+                MacroOperation::Tap(HidKeyCode::A),
+            ])
+            .expect("too many elements"),
+            Vec::from_slice(&[MacroOperation::Tap(HidKeyCode::B)]).expect("too many elements"),
+        ];
+
+        let macro_data = define_macro_sequences(macro_sequences);
+        let mut config = BehaviorConfig::default();
+        config.keyboard_macros.macro_sequences = macro_data;
+
+        let keyboard = create_simple_macro_keyboard(config);
+
+        key_sequence_test!(
+            keyboard: keyboard,
+            sequence: [
+                [0, 0, true, 0], // press Macro0 (no release needed — fires on press)
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A only; macro 1 was not triggered
+                [0, [0, 0, 0, 0, 0, 0]],
             ]
         );
     }
