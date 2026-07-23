@@ -2261,6 +2261,7 @@ dependencies = [
 name = "rmk"
 version = "0.8.2"
 dependencies = [
+ "bitfield-struct",
  "bt-hci",
  "byteorder",
  "cortex-m",
@@ -2294,6 +2295,7 @@ dependencies = [
 name = "rmk-config"
 version = "0.6.1"
 dependencies = [
+ "bitfield-struct",
  "config",
  "once_cell",
  "paste",

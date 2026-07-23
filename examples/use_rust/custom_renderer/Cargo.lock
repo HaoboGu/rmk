@@ -1277,6 +1277,7 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 name = "rmk"
 version = "0.8.2"
 dependencies = [
+ "bitfield-struct",
  "bt-hci",
  "cortex-m",
  "crc32fast",
@@ -1309,6 +1310,7 @@ dependencies = [
 name = "rmk-config"
 version = "0.6.1"
 dependencies = [
+ "bitfield-struct",
  "config",
  "once_cell",
  "paste",
