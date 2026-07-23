@@ -331,9 +331,7 @@ impl<R: Read, W: Write> Driver<R, W> {
                         let bytes = FrameBytes::from(frame);
                         // A decoded frame is never larger than the RX buffer, so this fits.
                         #[cfg(not(feature = "alloc"))]
-                        let Ok(bytes) = FrameBytes::try_from(frame) else {
-                            continue;
-                        };
+                        let bytes = FrameBytes::try_from(frame).unwrap();
                         // A pending reply is stale after request cancellation; keep the latest.
                         client.resp.signal(bytes);
                     }
@@ -342,10 +340,8 @@ impl<R: Read, W: Write> Driver<R, W> {
         };
 
         let tx_loop = async {
-            // Lead with a lone `0x00` delimiter so any stale bytes in the peer's
-            // RX (an OS port probe like ModemManager's `AT…`, a half-frame from a
-            // prior session) are terminated as their own junk frame instead of
-            // being merged with our first real frame and swallowing it.
+            // Lead with a lone `0x00` so stale bytes in the peer's RX (an OS port probe,
+            // a prior session's half-frame) terminate as junk instead of merging with our first request.
             if let Err(e) = writer.write_all(&[0]).await {
                 return RynkHostError::Io(e.kind());
             }
@@ -363,11 +359,9 @@ impl<R: Read, W: Write> Driver<R, W> {
     }
 }
 
-/// RX reassembly buffer: bytes land in the tail via [`tail`](Self::tail), whole
-/// COBS frames are cut out and decoded in place by an embedded [`Deframer`],
-/// which also resyncs the stream past any garbage. Alloc builds grow the buffer
-/// on demand up to [`MAX_RX_ALLOC`]; no-alloc builds fix it at the firmware's
-/// full COBS-frame size and resync past anything larger.
+/// RX reassembly buffer: bytes land in the tail, an embedded [`Deframer`] cuts
+/// whole COBS frames back out in place. Alloc builds grow on demand up to
+/// [`MAX_RX_ALLOC`]; no-alloc builds fix the firmware's full COBS-frame size.
 struct RxBuf {
     #[cfg(feature = "alloc")]
     buf: Vec<u8>,
@@ -396,9 +390,8 @@ impl RxBuf {
         }
     }
 
-    /// The free tail to read the next chunk into. Alloc builds keep `READ_CHUNK`
-    /// of headroom here; the paired grow in [`commit`](Self::commit) covers a
-    /// read that fills the buffer exactly, so `next` never false-overflows.
+    /// The free tail to read the next chunk into; alloc builds keep `READ_CHUNK`
+    /// of headroom.
     fn tail(&mut self) -> &mut [u8] {
         #[cfg(feature = "alloc")]
         {
@@ -412,10 +405,8 @@ impl RxBuf {
 
     fn commit(&mut self, n: usize) {
         self.df.commit(n);
-        // If a read filled the buffer, grow before the Deframer sees `filled ==
-        // buf.len()` and mistakes a still-growing frame for an overflow. Only at
-        // MAX_RX_ALLOC does the buffer stay full and the Deframer drain (real
-        // overflow). `resize` appends, so the Deframer's cursors stay valid.
+        // Grow before the Deframer sees a full buffer and mistakes a still-growing
+        // frame for overflow; a full buffer is real overflow only at MAX_RX_ALLOC.
         #[cfg(feature = "alloc")]
         if self.df.filled() == self.buf.len() && self.buf.len() < MAX_RX_ALLOC {
             self.buf.resize((self.buf.len() + READ_CHUNK).min(MAX_RX_ALLOC), 0);

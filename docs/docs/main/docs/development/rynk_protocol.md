@@ -4,19 +4,19 @@
 
 # Rynk Protocol Reference
 
-Current protocol version: **0.2**.
+Current protocol version: **0.1**.
 
 Every transport (USB CDC, BLE GATT, BLE HID) carries the same frame — a 3-byte header plus a [postcard](https://docs.rs/postcard)-encoded payload:
 
 ```text
 ┌──────────────┬───────────┐
-│ CMD u16 LE   │ SEQ u8    │  ← 3-byte header
+│  CMD u16 LE  │  SEQ u8   │  ← 3-byte header
 ├──────────────┴───────────┤
-│  postcard-encoded payload │
+│ postcard-encoded payload │
 └──────────────────────────┘
 ```
 
-On the wire the whole frame is COBS-encoded and terminated by a single `0x00` delimiter, so the byte stream is self-synchronizing: a receiver drops to the next delimiter to resynchronize after any corruption.
+On the wire the whole frame is COBS-encoded and terminated by a single `0x00` delimiter, so the byte stream is self-synchronizing.
 
 - **Requests** use CMD `0x0000..=0x7FFF`. The response echoes CMD and SEQ and wraps its payload in postcard `Result<T, RynkError>` (`T = ()` for `Set*`).
 - **Topics** use CMD `0x8000..=0xFFFF` (server → host push, SEQ `0`, bare payload).

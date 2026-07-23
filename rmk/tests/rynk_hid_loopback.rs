@@ -1,7 +1,7 @@
 //! HID-framed loopback: the same production [`RynkService::run_session`] as
 //! `rynk_loopback.rs`, but every exchange crosses the fixed 32-byte HID report
-//! framing (firmware `RynkHidService`; de-framed at the `ble::rynk` seam via
-//! `RynkHidFrameTracker`, reply-framed by `ble::rynk::RynkBleTx`). Proves the
+//! framing (firmware `RynkHidService`; reports fed whole into the session's
+//! COBS `Deframer`, reply-framed by `ble::rynk::RynkBleTx`). Proves the
 //! framing round-trips through the real dispatcher: single-report frames,
 //! multi-report reassembly (`GetCapabilities` > 32 B), a pipelined two-request
 //! session, and a server→host topic push.

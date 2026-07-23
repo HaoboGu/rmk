@@ -93,8 +93,6 @@ embassy-usb-dfu = { version = "0.3.0", optional = true, features = ["cortex-m", 
 [dev-dependencies]
 # A hack for enabling 'std' feature in testing, ref: https://github.com/rust-lang/cargo/issues/2911
 rmk = { path = ".", default-features = false, features = ["std", "log"] }
-# COBS framing helper for the Rynk loopback tests (already in-tree via rmk-types).
-cobs = { version = "0.3", default-features = false }
 critical-section = { version = "1.2", features = ["std"] }
 env_logger = "0.11"
 ctor = "1.0"

@@ -185,11 +185,8 @@ impl<'a> RynkService<'a> {
         let mut handshaked = false;
 
         loop {
-            // Dispatch one complete frame in place, then discard the rest of the
-            // buffer. RMK's client is one-in-flight, so a read holds at most one
-            // request; anything trailing it — a batching host's next frame, or a
-            // BLE-HID report's zero padding — is dropped, which lets the reply
-            // grow into the whole buffer instead of reserving space for it.
+            // The client is one-in-flight: serve one frame, then drop anything trailing
+            // it (BLE-HID padding, a batcher) so the reply gets the whole buffer.
             if let Some(frame_len) = df.next(&mut buf) {
                 let mut msg = RynkMessage::from_decoded(&mut buf, frame_len);
                 let cmd = msg.header().cmd;
@@ -207,9 +204,8 @@ impl<'a> RynkService<'a> {
                 df = Deframer::new();
             }
 
-            // No complete frame buffered. A half-received frame must be finished by
-            // reading only (a topic emit would clobber it); with an empty buffer,
-            // race a read against the next topic to forward.
+            // A half-received frame must be finished by reading only (a topic emit
+            // would clobber it); with an empty buffer, race a read against the next topic.
             if df.has_pending() {
                 match rx.read(df.tail(&mut buf)).await {
                     Ok(0) | Err(_) => return,
@@ -527,9 +523,8 @@ mod tests {
         assert!(state.pressed_bitmap[4..].iter().all(|&b| b == 0));
     }
 
-    /// A read carrying more than one frame (a batching host — which RMK's
-    /// one-in-flight client never is) serves the first and discards the rest:
-    /// the session stays alive and uncorrupted instead of clobbering a reply.
+    /// A read carrying more than one frame serves the first and discards the
+    /// rest: the session stays alive instead of clobbering a reply.
     #[test]
     fn run_session_serves_first_frame_of_a_coalesced_read() {
         let mut behavior = BehaviorConfig::default();

@@ -7,17 +7,16 @@
 //! ## Wire format
 //!
 //! ```text
-//! ┌──────────────┬───────────┐
-//! │ CMD u16 LE   │ SEQ u8    │  ← 3-byte header
-//! ├──────────────┴───────────┤
-//! │  postcard-encoded payload │
-//! └──────────────────────────┘
+//! ┌──────────────┬────────────┐
+//! │  CMD u16 LE  │   SEQ u8   │  ← 3-byte header
+//! ├──────────────┴────────────┤
+//! │ postcard-encoded payload  │
+//! └───────────────────────────┘
 //! ```
 //!
 //! On the wire the whole frame is COBS-encoded and terminated by a single
-//! `0x00` delimiter (see [`framing`]), so the byte stream is
-//! self-synchronizing: a receiver drops to the next delimiter to resync after
-//! any corruption.
+//! `0x00` delimiter (see [`message`] and [`Deframer`]), making the byte
+//! stream self-synchronizing.
 //!
 //! - **CMD** — `0x0000..=0x7FFF` request/response, `0x8000..=0xFFFF` topic
 //!   (server→host push).
@@ -34,8 +33,9 @@
 //! - [`endpoint`] — the [`Endpoint`](endpoint::Endpoint) / [`Topic`](endpoint::Topic)
 //!   traits those table entries implement.
 //! - [`message`] — the header, the [`RynkMessage`] buffer view, and the envelope.
-//! - `error` / `payload` (private) — [`RynkError`] and the per-domain payload
-//!   types, re-exported flat at `protocol::rynk::*`.
+//! - `deframer` / `error` / `payload` (private) — the COBS [`Deframer`],
+//!   [`RynkError`], and the per-domain payload types, re-exported flat at
+//!   `protocol::rynk::*`.
 //!
 //! ## Compatibility
 //!
@@ -50,9 +50,9 @@
 
 pub mod command;
 pub mod endpoint;
-pub mod framing;
 pub mod message;
 
+mod deframer;
 mod error;
 mod payload;
 
@@ -62,9 +62,9 @@ pub(crate) mod tests;
 #[cfg(not(feature = "host"))]
 pub use self::command::MAX_TOPIC_PAYLOAD;
 pub use self::command::{Cmd, TopicEvent, bulk_keymap_size_for_buffer, bulk_size_for_buffer};
+pub use self::deframer::Deframer;
 pub use self::error::RynkError;
-pub use self::framing::{Deframer, RYNK_FRAME_BUFFER_SIZE, encode_frame, frame_capacity};
-pub use self::message::{RYNK_HEADER_SIZE, RynkHeader, RynkMessage};
+pub use self::message::{RYNK_FRAME_BUFFER_SIZE, RYNK_HEADER_SIZE, RynkHeader, RynkMessage, frame_capacity};
 pub use self::payload::*;
 
 /// Largest single GATT write/notification on the Rynk BLE characteristics.

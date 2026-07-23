@@ -137,9 +137,8 @@ async fn drive<F: Future>(driver: &mut Driver<MockRead, MockWrite>, client: &Cli
     }
 }
 
-/// A bare frame: header + postcard(value). Used for raw headers and topics.
-/// Sized generously so large-payload frames (bigger than the host's `READ_CHUNK`
-/// grow step) can be built for the buffer-growth test.
+/// A bare frame: header + postcard(value). Used for raw headers and topics;
+/// sized so the buffer-growth test can build frames larger than `READ_CHUNK`.
 fn frame<T: Serialize>(cmd: Cmd, seq: u8, value: &T) -> Vec<u8> {
     let mut buf = vec![0u8; 32 * 1024];
     let msg = RynkMessage::build(&mut buf, RynkHeader { cmd, seq }, value).unwrap();
@@ -236,9 +235,8 @@ async fn driver_resyncs_after_garbage() {
 
 #[tokio::test]
 async fn driver_grows_to_hold_a_frame_larger_than_read_chunk() {
-    // A reply whose COBS frame exceeds the alloc RX buffer's READ_CHUNK grow step
-    // must be held by growing the buffer, not dropped as a false overflow when a
-    // read happens to fill the buffer exactly.
+    // A reply larger than the READ_CHUNK grow step must be held by growing the
+    // buffer, not dropped as a false overflow when a read fills it exactly.
     let mut supported = caps();
     supported.bulk_transfer_supported = true;
     supported.max_bulk_keys = 255;

@@ -307,7 +307,7 @@ pub(crate) struct RmkConstantsConfig {
     pub auto_mouse_layer_max_num: Option<usize>,
     /// Rynk RX/TX buffer size (bytes); the single knob for bulk transfer
     /// throughput.
-    #[serde_inline_default(512)]
+    #[serde_inline_default(480)]
     pub rynk_buffer_size: usize,
 }
 
@@ -399,7 +399,7 @@ impl Default for RmkConstantsConfig {
             split_central_sleep_timeout_seconds: 0,
             protocol_macro_chunk_size: 64,
             auto_mouse_layer_max_num: None,
-            rynk_buffer_size: 512,
+            rynk_buffer_size: 480,
         }
     }
 }

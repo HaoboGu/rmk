@@ -1,22 +1,21 @@
 //! HID-framed variant of [`super::rynk_link`]: interposes the fixed 32-byte HID
-//! report framing (firmware `RynkHidService`, de-framed at the `ble::rynk` seam
-//! via `RynkHidFrameTracker` and reply-framed by `RynkBleTx`) between the host
-//! client and `run_session`, so the framing round-trips through the *real*
+//! report framing (firmware `RynkHidService`, fed whole into `RYNK_BLE_RX_PIPE`
+//! by the `ble::rynk` WebHID arm and reply-framed by `RynkBleTx`) between the
+//! host client and `run_session`, so the framing round-trips through the *real*
 //! dispatcher.
 //!
-//! The two pipes carry whole 32-byte reports, each a fragment of the rynk frame
-//! stream (final report zero-padded); the frame header's LEN delimits the frame.
-//! The device-side `HidRx`/`HidTx` and the client mirror the firmware framing;
-//! `run_session` itself sees a clean contiguous byte stream and is unchanged.
+//! The two pipes carry whole 32-byte reports, each a fragment of the COBS frame
+//! stream (final report zero-padded); the `0x00` delimiter bounds each frame and
+//! the padding drops out as empty frames in the receiver's `Deframer`. The
+//! device-side `HidRx`/`HidTx` and the client mirror the firmware framing;
+//! `run_session` itself sees the raw report byte stream and is unchanged.
 
 use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::pipe::Pipe;
 use embedded_io_async::{ErrorType, Read, Write};
 use rmk::host::HostService as RynkService;
-use rmk_types::protocol::rynk::{
-    Cmd, Deframer, RYNK_FRAME_BUFFER_SIZE, RYNK_HEADER_SIZE, RYNK_HID_REPORT_SIZE, RynkHeader, RynkMessage,
-};
+use rmk_types::protocol::rynk::{Cmd, Deframer, RYNK_FRAME_BUFFER_SIZE, RYNK_HID_REPORT_SIZE, RynkHeader, RynkMessage};
 use serde::Serialize;
 
 use super::rynk_link::{Frame, RynkHostClient};
@@ -38,10 +37,9 @@ async fn write_framed(link: &Link, data: &[u8]) {
     }
 }
 
-/// Device-side Rx: reads whole reports off the pipe and hands their raw bytes
-/// (padding included) to `run_session`, exactly as the firmware's WebHID arm
-/// feeds `RYNK_BLE_RX_PIPE`; `run_session`'s Deframer skips the padding as empty
-/// frames. `pending`/`pos` stand in for the pipe's byte buffering.
+/// Device-side Rx: hands whole reports (padding included) to `run_session`,
+/// exactly as the firmware's WebHID arm feeds `RYNK_BLE_RX_PIPE`;
+/// `pending`/`pos` stand in for the pipe's byte buffering.
 struct HidRx<'p> {
     link: &'p Link,
     pending: Vec<u8>,
@@ -109,19 +107,13 @@ impl RynkHostClient for RynkHidClient<'_> {
         write_framed(self.tx, msg.frame()).await;
     }
 
-    /// Read whole reports and reassemble exactly one rynk frame — reports carry a
-    /// fragment of the frame, so this may consume several; the header LEN delimits
-    /// it and the final report's padding is dropped.
+    /// Read whole reports until the Deframer yields one rynk frame; the reports'
+    /// zero-padding is skipped as empty frames.
     async fn recv_frame(&mut self) -> Frame {
         loop {
-            if let Some(frame_len) = self.df.next(&mut self.rxbuf) {
-                let frame = &self.rxbuf[..frame_len];
-                let header = RynkHeader::parse(frame[..RYNK_HEADER_SIZE].try_into().unwrap());
-                let payload = frame[RYNK_HEADER_SIZE..].to_vec();
-                return Frame { header, payload };
+            if let Some(frame) = Frame::next_from(&mut self.df, &mut self.rxbuf) {
+                return frame;
             }
-            // Read one whole report (padding included) into the deframer, which
-            // decodes the frame and skips the padding as empty frames.
             let mut link: &Link = self.rx;
             let mut report = [0u8; RYNK_HID_REPORT_SIZE];
             link.read_exact(&mut report).await.expect("read report");

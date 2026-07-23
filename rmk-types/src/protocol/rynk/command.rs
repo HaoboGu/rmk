@@ -426,7 +426,7 @@ mod tests {
     use postcard::experimental::max_size::MaxSize;
 
     use super::*;
-    use crate::protocol::rynk::{RYNK_HEADER_SIZE, RynkError, RynkHeader};
+    use crate::protocol::rynk::{Deframer, RYNK_HEADER_SIZE, RynkError, RynkHeader};
 
     #[test]
     fn topic_mask_is_the_high_bit() {
@@ -474,7 +474,9 @@ mod tests {
         assert_eq!(seq, 0, "topics push with SEQ 0");
 
         // Decode the COBS frame back to the logical [cmd, seq, payload].
-        let n = cobs::decode_in_place(&mut buf[..framed_len - 1]).unwrap();
+        let mut df = Deframer::new();
+        df.commit(framed_len);
+        let n = df.next(&mut buf).expect("one whole topic frame");
         let header = RynkHeader::parse(buf[..RYNK_HEADER_SIZE].try_into().unwrap());
         assert_eq!(header.cmd, Cmd::LayerChange);
         let decoded = TopicEvent::decode(header.cmd, &buf[RYNK_HEADER_SIZE..n]);

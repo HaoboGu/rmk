@@ -266,10 +266,8 @@ mod tests {
         }
     }
 
-    /// Seam → pipe: fragment a frame into fixed 32-byte reports (zero-padded like
-    /// the firmware sends), feed each RAW report to `RYNK_BLE_RX_PIPE` exactly as
-    /// the WebHID arm of `handle_write` does, and read it back through a Deframer —
-    /// the padding drops out as skipped empty frames.
+    /// Fragment a frame into zero-padded 32-byte reports fed to `RYNK_BLE_RX_PIPE`
+    /// as `handle_write`'s WebHID arm does; the padding drops out as empty frames.
     #[test]
     fn fragments_reassemble_through_pipe_for_session() {
         RYNK_BLE_RX_PIPE.clear();

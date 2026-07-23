@@ -569,12 +569,11 @@ fn wire_values_locked() {
     snapshot::assert_snapshot("snapshots/wire_values.snap", actual);
 }
 
-/// Lock down full Rynk frames — the 3-byte header (CMD u16 LE + SEQ u8) plus
-/// postcard payload, COBS-encoded with a trailing `0x00` delimiter — one per
-/// feature-independent protocol message: every request, its `Ok` reply, a
-/// representative `Err` reply, and every topic push. A diff here means the header layout, a `Cmd` number,
-/// the `Result<T, RynkError>` reply envelope, or a message's frame changed;
-/// if intentional, regenerate and bump `ProtocolVersion::CURRENT`.
+/// Lock down full Rynk frames — the 3-byte header plus postcard payload,
+/// COBS-encoded with a trailing `0x00` delimiter — one per feature-independent
+/// protocol message: every request, its `Ok` reply, a representative `Err`
+/// reply, and every topic push. A diff means the wire format changed; if
+/// intentional, regenerate and bump `ProtocolVersion::CURRENT`.
 ///
 /// Requests and replies use SEQ 1 (a reply echoes its request's SEQ); topics
 /// always use SEQ 0. The `GetVersion` probe and reply are frozen across all
@@ -1074,12 +1073,12 @@ mod protocol_reference {
              Every transport (USB CDC, BLE GATT, BLE HID) carries the same frame — a 3-byte header plus a [postcard](https://docs.rs/postcard)-encoded payload:\n\n\
              ```text\n\
              ┌──────────────┬───────────┐\n\
-             │ CMD u16 LE   │ SEQ u8    │  ← 3-byte header\n\
+             │  CMD u16 LE  │  SEQ u8   │  ← 3-byte header\n\
              ├──────────────┴───────────┤\n\
-             │  postcard-encoded payload │\n\
+             │ postcard-encoded payload │\n\
              └──────────────────────────┘\n\
              ```\n\n\
-             On the wire the whole frame is COBS-encoded and terminated by a single `0x00` delimiter, so the byte stream is self-synchronizing: a receiver drops to the next delimiter to resynchronize after any corruption.\n\n\
+             On the wire the whole frame is COBS-encoded and terminated by a single `0x00` delimiter, so the byte stream is self-synchronizing.\n\n\
              - **Requests** use CMD `0x0000..=0x7FFF`. The response echoes CMD and SEQ and wraps its payload in postcard `Result<T, RynkError>` (`T = ()` for `Set*`).\n\
              - **Topics** use CMD `0x8000..=0xFFFF` (server → host push, SEQ `0`, bare payload).\n\n\
              Which commands a firmware answers depends on the RMK Cargo features it was built with: a row with no **Feature** is present once `rynk` is on, and the rest need their feature (`_ble`, `split`, …) compiled in. A command the firmware wasn't built with answers `UnknownCmd`.\n\n\

@@ -43,7 +43,7 @@ protocol_macro_chunk_size = 64
 # Maximum number of auto mouse layer entries (auto-derived from [[behavior.auto_mouse_layer]] if unset)
 auto_mouse_layer_max_num = 2
 # Rynk RX/TX buffer size in bytes.
-# rynk_buffer_size = 512
+# rynk_buffer_size = 480
 ```
 
 ## Parameter Details

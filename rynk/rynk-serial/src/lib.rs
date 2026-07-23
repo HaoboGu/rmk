@@ -225,9 +225,8 @@ mod tests {
         msg.frame().to_vec()
     }
 
-    /// Read one COBS frame off the peer end and return its cmd + seq. The
-    /// `Deframer` skips empty frames, so the host's leading `0x00` sync is
-    /// transparent.
+    /// Read one COBS frame off the peer end and return its cmd + seq; the
+    /// Deframer skips empty frames, so the host's leading `0x00` sync is transparent.
     async fn read_request(peer: &mut SerialStream) -> (Cmd, u8) {
         let mut df = Deframer::new();
         let mut buf = [0u8; 4096];

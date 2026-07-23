@@ -31,9 +31,11 @@ use embassy_futures::join::join;
 use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::pipe::Pipe;
+use postcard::ser_flavors::{Cobs, Flavor, Slice};
 use rmk::host::HostService as RynkService;
 use rmk_types::protocol::rynk::{
     Cmd, Deframer, DeviceCapabilities, RYNK_FRAME_BUFFER_SIZE, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage,
+    frame_capacity,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -69,6 +71,14 @@ impl Frame {
         let (value, rest) = postcard::take_from_bytes::<T>(&self.payload).expect("topic payload must decode");
         assert!(rest.is_empty(), "topic payload has {} trailing byte(s)", rest.len());
         value
+    }
+
+    pub fn next_from(df: &mut Deframer, rxbuf: &mut [u8]) -> Option<Self> {
+        let frame_len = df.next(rxbuf)?;
+        let frame = &rxbuf[..frame_len];
+        let header = RynkHeader::parse(frame[..RYNK_HEADER_SIZE].try_into().unwrap());
+        let payload = frame[RYNK_HEADER_SIZE..].to_vec();
+        Some(Frame { header, payload })
     }
 }
 
@@ -159,18 +169,17 @@ impl RynkClient<'_> {
         self.tx.write_all(bytes).await;
     }
 
-    /// COBS-frame and send a hand-built LOGICAL frame (`[cmd, seq] ++ payload`),
-    /// for adversarial payloads the typed `send` can't express (e.g. a corrupt
-    /// bulk element).
+    /// COBS-frame and send a hand-built logical frame (`[cmd, seq] ++ payload`),
+    /// for adversarial payloads the typed `send` can't express.
     pub async fn send_logical(&mut self, cmd: Cmd, seq: u8, payload: &[u8]) {
-        let mut logical = vec![0u8; RYNK_HEADER_SIZE + payload.len()];
-        logical[0..2].copy_from_slice(&cmd.to_le_bytes());
-        logical[2] = seq;
-        logical[RYNK_HEADER_SIZE..].copy_from_slice(payload);
-        let mut framed = vec![0u8; cobs::max_encoding_length(logical.len()) + 1];
-        let n = cobs::encode(&logical, &mut framed);
-        framed[n] = 0; // trailing delimiter
-        framed.truncate(n + 1);
+        let mut framed = vec![0u8; frame_capacity(RYNK_HEADER_SIZE + payload.len())];
+        let n = {
+            let mut cobs = Cobs::try_new(Slice::new(&mut framed)).unwrap();
+            cobs.try_extend(&RynkHeader { cmd, seq }.to_bytes()).unwrap();
+            cobs.try_extend(payload).unwrap();
+            cobs.finalize().unwrap().len()
+        };
+        framed.truncate(n);
         self.tx.write_all(&framed).await;
     }
 }
@@ -186,11 +195,8 @@ impl RynkHostClient for RynkClient<'_> {
     /// Read exactly one frame off the wire, deframing the COBS byte stream.
     async fn recv_frame(&mut self) -> Frame {
         loop {
-            if let Some(frame_len) = self.df.next(&mut self.rxbuf) {
-                let frame = &self.rxbuf[..frame_len];
-                let header = RynkHeader::parse(frame[..RYNK_HEADER_SIZE].try_into().unwrap());
-                let payload = frame[RYNK_HEADER_SIZE..].to_vec();
-                return Frame { header, payload };
+            if let Some(frame) = Frame::next_from(&mut self.df, &mut self.rxbuf) {
+                return frame;
             }
             let rx = self.rx;
             let n = rx.read(self.df.tail(&mut self.rxbuf)).await;

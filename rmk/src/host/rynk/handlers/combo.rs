@@ -42,7 +42,7 @@ impl HandleBulk<GetComboBulk> for RynkService<'_> {
         self.ctx.with_combos(|combos| {
             let page = bulk_page(req.start_index as usize, BULK_SIZE, combos.len());
             let count = page.len();
-            msg.encode_bulk_ok(
+            msg.encode_bulk(
                 count,
                 page.map(|i| {
                     combos[i]

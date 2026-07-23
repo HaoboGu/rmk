@@ -2078,6 +2078,7 @@ name = "rmk-types"
 version = "0.2.2"
 dependencies = [
  "bitfield-struct",
+ "cobs",
  "defmt 1.1.1",
  "heapless 0.9.3",
  "postcard",
@@ -2616,7 +2617,7 @@ dependencies = [
 [[package]]
 name = "trouble-host"
 version = "0.7.0"
-source = "git+https://github.com/embassy-rs/trouble?rev=c21b1239fb86de712fc99da803def88378d81177#c21b1239fb86de712fc99da803def88378d81177"
+source = "git+https://github.com/embassy-rs/trouble?rev=18df47dcf9907eb810ecbf9c613af3694d75f520#18df47dcf9907eb810ecbf9c613af3694d75f520"
 dependencies = [
  "aes",
  "bt-hci",
@@ -2641,7 +2642,7 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.5.0"
-source = "git+https://github.com/embassy-rs/trouble?rev=c21b1239fb86de712fc99da803def88378d81177#c21b1239fb86de712fc99da803def88378d81177"
+source = "git+https://github.com/embassy-rs/trouble?rev=18df47dcf9907eb810ecbf9c613af3694d75f520#18df47dcf9907eb810ecbf9c613af3694d75f520"
 dependencies = [
  "convert_case 0.8.0",
  "darling 0.20.11",

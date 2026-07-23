@@ -1,60 +1,13 @@
-//! COBS framing for the Rynk transport.
+//! Incremental COBS de-framing for the Rynk transport.
 //!
-//! A frame is COBS-encoded and terminated by a single `0x00` delimiter, so the
-//! byte stream is self-synchronizing: the next `0x00` is always a real frame
-//! boundary. That is what lets a desynced link (OS port-probing, stale bytes,
-//! a truncated write) recover on its own instead of dying.
-//!
-//! - [`encode_frame`] serializes `[cmd, seq] ++ postcard(payload)` straight into
-//!   the caller's buffer in one fused pass — no scratch buffer.
-//! - [`Deframer`] cuts frames back out of a byte stream, decoding in place and
-//!   resyncing at the next delimiter on any garbage.
+//! [`Deframer`] cuts COBS frames back out of a received byte stream, decoding
+//! in place and resyncing at the next `0x00` delimiter on any garbage. The
+//! encode side lives in [`message`](super::message).
 
-use cobs::max_encoding_length;
-use postcard::ser_flavors::{Cobs, Flavor, Slice};
-use serde::Serialize;
-
-#[cfg(test)]
-use super::command::Cmd;
-use super::error::RynkError;
-use super::message::{RYNK_HEADER_SIZE, RynkHeader};
-
-/// Physical buffer size that holds the COBS-encoded form of a `logical_len`
-/// frame — the encoded body plus the trailing `0x00` delimiter. `RYNK_BUFFER_SIZE`
-/// and the advertised `max_payload_size` stay the *logical* budget; only the
-/// on-wire buffers grow by this overhead.
-pub const fn frame_capacity(logical_len: usize) -> usize {
-    max_encoding_length(logical_len) + 1
-}
-
-/// Physical buffer size for a worst-case firmware frame (`RYNK_BUFFER_SIZE`).
-pub const RYNK_FRAME_BUFFER_SIZE: usize = frame_capacity(crate::constants::RYNK_BUFFER_SIZE);
-
-/// COBS-frame `[cmd_lo, cmd_hi, seq] ++ postcard(value)` into `buf`, returning
-/// the framed length (the frame is `buf[..len]`, delimiter included).
-///
-/// The header bytes are pushed *through* the COBS encoder along with the
-/// payload, so a `0x00` in the header (e.g. cmd `0x0004`) is stuffed like any
-/// other byte and never aliases the delimiter.
-pub fn encode_frame<T: Serialize>(buf: &mut [u8], header: RynkHeader, value: &T) -> Result<usize, RynkError> {
-    let [cmd_lo, cmd_hi] = header.cmd.to_le_bytes();
-    let mut ser = postcard::Serializer {
-        output: Cobs::try_new(Slice::new(buf)).map_err(|_| RynkError::Internal)?,
-    };
-    ser.output
-        .try_extend(&[cmd_lo, cmd_hi, header.seq])
-        .map_err(|_| RynkError::Internal)?;
-    value.serialize(&mut ser).map_err(|_| RynkError::Internal)?;
-    let framed = ser.output.finalize().map_err(|_| RynkError::Internal)?;
-    Ok(framed.len())
-}
+use super::message::RYNK_HEADER_SIZE;
 
 /// Incremental COBS de-framer. Holds only cursors, never bytes, so the caller's
-/// buffer (a firmware stack array, the host's `Vec`, or a test array) stays put
-/// and is shared across all transports.
-///
-/// Usage: read into [`tail`](Self::tail), [`commit`](Self::commit) the count,
-/// then drain frames with [`next`](Self::next):
+/// buffer stays put and is shared across all transports.
 ///
 /// ```ignore
 /// let n = rx.read(df.tail(&mut buf)).await?;
@@ -69,8 +22,7 @@ pub struct Deframer {
     frame_start: Option<usize>,
     /// Valid bytes in the caller buffer.
     filled: usize,
-    /// Next index not yet inspected for a delimiter — the scan cursor, so each
-    /// byte is examined once (O(n), not O(n²)).
+    /// First index not yet scanned for a delimiter, so each byte is examined once.
     scan: usize,
 }
 
@@ -110,10 +62,8 @@ impl Deframer {
         self.filled
     }
 
-    /// Whether bytes are buffered that don't yet form a complete frame. A
-    /// caller that reuses the buffer for something else (e.g. encoding an
-    /// outbound topic into it) must wait until this is `false`, or it would
-    /// clobber a half-received frame.
+    /// Whether a partial frame is buffered. A caller reusing the buffer (e.g. to
+    /// encode an outbound topic) must wait until this is `false`.
     pub fn has_pending(&self) -> bool {
         self.frame_start.is_some_and(|start| start < self.filled)
     }
@@ -130,24 +80,18 @@ impl Deframer {
             else {
                 // No delimiter in the unscanned bytes; only re-examine new bytes next time.
                 self.scan = self.filled;
-                // Overflow only when nothing can free space: the buffer is full AND
-                // there is nothing consumed at the front to reclaim by compaction. If
-                // `frame_start > 0`, the caller's `tail()` compacts and the frame
-                // completes; an alloc caller grows instead. Otherwise a frame that
-                // fills the buffer right up to (but not including) its delimiter
-                // would be wrongly dropped.
+                // Overflow only when nothing can free space: with a consumed prefix
+                // the caller's `tail()` compacts and the frame may yet complete.
                 if self.frame_start == Some(0) && self.filled == buf.len() {
                     self.frame_start = None;
                 }
                 return None;
             };
-            let Some(start) = self.frame_start else {
-                self.frame_start = Some(delim + 1);
-                self.scan = delim + 1;
+            self.scan = delim + 1;
+            let Some(start) = self.frame_start.replace(delim + 1) else {
+                // Was discarding an oversized frame; its delimiter ends the drain.
                 continue;
             };
-            self.frame_start = Some(delim + 1);
-            self.scan = delim + 1;
             match cobs::decode_in_place(&mut buf[start..delim]) {
                 Ok(len) if len >= RYNK_HEADER_SIZE => {
                     if start > 0 {
@@ -171,13 +115,22 @@ impl Default for Deframer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::rynk::{Cmd, RynkHeader, RynkMessage};
 
     const CMD: Cmd = Cmd::from_raw(0x0102);
+
+    /// COBS-encode one frame into `buf`, returning the framed length.
+    fn encode(buf: &mut [u8], cmd: Cmd, seq: u8, payload: &[u8]) -> usize {
+        RynkMessage::build(buf, RynkHeader { cmd, seq }, &payload)
+            .unwrap()
+            .frame()
+            .len()
+    }
 
     /// Encode into `df`'s tail and commit, as a transport read would.
     fn feed(df: &mut Deframer, buf: &mut [u8], cmd: Cmd, seq: u8, payload: &[u8]) {
         let tail = df.tail(buf);
-        let n = encode_frame(tail, RynkHeader { cmd, seq }, &payload).unwrap();
+        let n = encode(tail, cmd, seq, payload);
         df.commit(n);
     }
 
@@ -200,30 +153,11 @@ mod tests {
     }
 
     #[test]
-    fn frame_never_contains_the_delimiter() {
-        // cmd 0x0004 has a zero byte; the encoded frame must not carry a bare 0x00
-        // except the trailing delimiter.
-        let mut buf = [0u8; 64];
-        let n = encode_frame(
-            &mut buf,
-            RynkHeader {
-                cmd: Cmd::from_raw(0x0004),
-                seq: 0,
-            },
-            &[0u8, 0, 0],
-        )
-        .unwrap();
-        assert_eq!(buf[n - 1], 0, "frame is delimiter-terminated");
-        assert!(buf[..n - 1].iter().all(|&b| b != 0), "no interior 0x00");
-    }
-
-    #[test]
     fn reassembles_byte_by_byte() {
         // Encode once, then feed the stream one byte per commit — the cursor scan
         // must reassemble without re-inspecting old bytes.
         let mut src = [0u8; 64];
-        let payload: &[u8] = &[9, 8, 7, 6];
-        let n = encode_frame(&mut src, RynkHeader { cmd: CMD, seq: 7 }, &payload).unwrap();
+        let n = encode(&mut src, CMD, 7, &[9, 8, 7, 6]);
 
         let mut buf = [0u8; 64];
         let mut df = Deframer::new();
@@ -253,6 +187,31 @@ mod tests {
     }
 
     #[test]
+    fn frames_shorter_than_a_header_are_skipped() {
+        // Every yielded frame holds at least a header — that is what lets
+        // `RynkMessage::from_decoded` wrap it infallibly.
+        let mut buf = [0u8; 64];
+        let mut df = Deframer::new();
+        let short = [
+            0x00, // empty frame (stray delimiter)
+            0x02, 0xAA, 0x00, // decodes to 1 byte
+            0x03, 0xAA, 0xBB, 0x00, // decodes to 2 bytes
+        ];
+        df.tail(&mut buf)[..short.len()].copy_from_slice(&short);
+        df.commit(short.len());
+        assert!(df.next(&mut buf).is_none(), "sub-header frames must be skipped");
+
+        // Header-only frame: [cmd_lo, cmd_hi, seq], no payload.
+        let header_only = [0x04, 0x02, 0x01, 0x42, 0x00];
+        df.tail(&mut buf)[..header_only.len()].copy_from_slice(&header_only);
+        df.commit(header_only.len());
+        let len = df.next(&mut buf).expect("header-only frame is valid");
+        assert_eq!(len, RYNK_HEADER_SIZE);
+        assert_eq!(Cmd::from_le_bytes([buf[0], buf[1]]), CMD);
+        assert_eq!(buf[2], 0x42);
+    }
+
+    #[test]
     fn resyncs_past_injected_garbage() {
         // [frame A][random non-zero bytes][0x00][frame B] — A decodes, the garbage
         // segment fails to decode and is skipped at its terminating 0x00, B decodes.
@@ -273,9 +232,8 @@ mod tests {
 
     #[test]
     fn resyncs_after_buffer_overflow() {
-        // A delimiter-less run fills the buffer (overflow → drop the fragment).
-        // The fragment's own terminating 0x00 clears the drain, then a clean
-        // frame after it decodes.
+        // A delimiter-less run fills the buffer and is dropped as overflow;
+        // its terminating 0x00 clears the drain, then a clean frame decodes.
         let mut buf = [0u8; 32];
         let mut df = Deframer::new();
         // Fill the whole buffer with non-zero bytes: no delimiter, forces overflow.
@@ -293,14 +251,10 @@ mod tests {
 
     #[test]
     fn compacts_instead_of_dropping_a_buffer_filling_frame() {
-        // A leading empty frame followed by a frame whose bytes fill the buffer
-        // right up to — but not including — its delimiter. The Deframer must
-        // return None so the caller compacts (freeing the skipped byte) and the
-        // frame completes, rather than mistaking a full buffer for overflow and
-        // dropping a valid frame.
+        // A full buffer with a consumed prefix is not overflow: `next` must
+        // return None so the caller compacts and the frame completes.
         let mut src = [0u8; 64];
-        let payload: &[u8] = &[1, 2, 3, 4, 5];
-        let n = encode_frame(&mut src, RynkHeader { cmd: CMD, seq: 9 }, &payload).unwrap();
+        let n = encode(&mut src, CMD, 9, &[1, 2, 3, 4, 5]);
 
         // Sized to hold exactly [0x00 skip] ++ [frame body without its delimiter].
         let cap = 1 + (n - 1);
