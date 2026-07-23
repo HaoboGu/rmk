@@ -19,7 +19,7 @@ use embassy_futures::select::{Either, Either3, select, select3};
 use embassy_time::{Duration, Instant, Timer};
 use heapless::Vec;
 use rmk_macro::processor;
-use rmk_types::action::Action;
+use rmk_types::action::{Action, StickyKeyEffect};
 use rmk_types::keycode::{HidKeyCode, KeyCode};
 use rmk_types::modifier::ModifierCombination;
 
@@ -328,6 +328,11 @@ fn keypress_step(entries: &mut [EntryState], action: Action, now: Instant) -> Ve
                         !cfg.extra_mouse_keys.contains(&KeyCode::Hid(hid))
                     }
                 }
+                Action::StickyKey(sticky_key) => match sticky_key.effect {
+                    StickyKeyEffect::TapKey { key, .. } if key.is_mouse_key() => false,
+                    StickyKeyEffect::TapKey { key, .. } => !cfg.extra_mouse_keys.contains(&KeyCode::Hid(key)),
+                    StickyKeyEffect::Modifier(_) | StickyKeyEffect::Layer(_) => false,
+                },
                 // A modifier-only action (e.g. MT hold) deactivates unless every
                 // contained modifier is covered by a modifier keycode listed in
                 // `extra_mouse_keys` — mirroring how plain modifier keys behave.
@@ -807,6 +812,33 @@ mod tests {
         assert!(released.is_empty());
         assert!(entries[0].self_activated);
         assert_eq!(entries[0].deadline, Some(at(1000)));
+    }
+
+    #[test]
+    fn keypress_step_classifies_tap_key_sticky_key_by_its_hid_key() {
+        use rmk_types::action::StickyKeyAction;
+
+        let tap_key = |key| {
+            Action::StickyKey(StickyKeyAction {
+                effect: StickyKeyEffect::TapKey {
+                    key,
+                    modifiers: ModifierCombination::LALT,
+                },
+                profile: 0,
+            })
+        };
+
+        let mut keyboard_entries = [holding_entry_with_deactivate(3, &[])];
+        let released = keypress_step(&mut keyboard_entries, tap_key(HidKeyCode::Tab), at(2000));
+        assert_eq!(released.as_slice(), &[3]);
+        assert!(!keyboard_entries[0].self_activated);
+        assert!(keyboard_entries[0].deadline.is_none());
+
+        let mut mouse_entries = [holding_entry_with_deactivate(3, &[])];
+        let released = keypress_step(&mut mouse_entries, tap_key(HidKeyCode::MouseBtn1), at(2000));
+        assert!(released.is_empty());
+        assert!(mouse_entries[0].self_activated);
+        assert_eq!(mouse_entries[0].deadline, Some(at(1000)));
     }
 
     #[test]

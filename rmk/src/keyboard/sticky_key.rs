@@ -34,7 +34,6 @@ struct Latch<T> {
     source: KeyboardEventPos,
     policy: StickyKeyPolicy,
     phase: LatchPhase,
-    pressed_count: u8,
     repeat_count: u16,
     deadline: Option<Instant>,
     /// External layer transitions at or before this generation are stale.
@@ -55,7 +54,6 @@ impl<T> Latch<T> {
             source,
             policy,
             phase: LatchPhase::Pressed,
-            pressed_count: 1,
             repeat_count: 1,
             deadline: deadline_from_timeout(policy.timeout),
             layer_generation: LayerTransitionGeneration::current(),
@@ -70,7 +68,6 @@ impl<T> Latch<T> {
         self.source = source;
         self.policy = policy;
         self.phase = LatchPhase::Pressed;
-        self.pressed_count = self.pressed_count.saturating_add(1).max(1);
         self.deadline = deadline_from_timeout(policy.timeout);
         self.layer_generation = LayerTransitionGeneration::current();
     }
@@ -80,20 +77,12 @@ impl<T> Latch<T> {
             return PhysicalRelease::Ignored;
         }
         match self.phase {
-            LatchPhase::Pressed | LatchPhase::Held if self.pressed_count > 1 => {
-                self.pressed_count -= 1;
-                PhysicalRelease::Ignored
-            }
             LatchPhase::Pressed => {
-                self.pressed_count = 0;
                 self.phase = LatchPhase::Latched;
                 self.deadline = deadline_from_timeout(self.policy.timeout);
                 PhysicalRelease::Latched
             }
-            LatchPhase::Held => {
-                self.pressed_count = 0;
-                PhysicalRelease::Released
-            }
+            LatchPhase::Held => PhysicalRelease::Released,
             LatchPhase::Latched => PhysicalRelease::Ignored,
         }
     }
@@ -146,10 +135,41 @@ enum TimeoutDisposition {
     Release,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct TapKeyEffect {
     key: HidKeyCode,
     modifiers: ModifierCombination,
+}
+
+/// Counted physical ownership used only by accumulated sticky modifiers.
+/// Combo outputs may release from a different constituent position, so they
+/// cannot use the source-specific ownership used by layer and tap-key effects.
+#[derive(Clone, Copy, Debug)]
+struct StickyModifierEffect {
+    modifiers: ModifierCombination,
+    pressed_count: u8,
+}
+
+impl StickyModifierEffect {
+    fn new(modifiers: ModifierCombination) -> Self {
+        Self {
+            modifiers,
+            pressed_count: 1,
+        }
+    }
+
+    fn begin_press(&mut self, modifiers: ModifierCombination) {
+        self.modifiers |= modifiers;
+        self.pressed_count = self.pressed_count.saturating_add(1).max(1);
+    }
+
+    fn on_physical_release(&mut self) -> bool {
+        if self.pressed_count == 0 {
+            return false;
+        }
+        self.pressed_count -= 1;
+        self.pressed_count == 0
+    }
 }
 
 /// Layer state owned by a Sticky Key lifecycle.
@@ -179,7 +199,7 @@ pub(crate) struct StickyKeyUpdate {
 /// phases, sources, and deadlines. A tap key is exclusive with both.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct StickyKeyState {
-    modifier: Option<Latch<ModifierCombination>>,
+    modifier: Option<Latch<StickyModifierEffect>>,
     layer: Option<Latch<StickyLayerEffect>>,
     tap_key: Option<Latch<TapKeyEffect>>,
 }
@@ -217,7 +237,7 @@ impl StickyKeyState {
         if let Some(modifier) = self.modifier
             && (pressed || modifier.phase == LatchPhase::Held)
         {
-            modifiers |= modifier.value;
+            modifiers |= modifier.value.modifiers;
         }
         if let Some(tap_key) = self.tap_key {
             modifiers |= tap_key.value.modifiers;
@@ -260,11 +280,12 @@ impl Keyboard<'_> {
 
             match &mut self.sticky_key_state.modifier {
                 Some(latch) => {
-                    latch.value |= modifiers;
+                    latch.value.begin_press(modifiers);
                     latch.begin_press(event.pos, policy);
                 }
                 None => {
-                    self.sticky_key_state.modifier = Some(Latch::new(modifiers, event.pos, policy));
+                    self.sticky_key_state.modifier =
+                        Some(Latch::new(StickyModifierEffect::new(modifiers), event.pos, policy));
                 }
             }
             if policy.activate_on_keypress {
@@ -273,7 +294,7 @@ impl Keyboard<'_> {
         } else if let Some(latch) = &mut self.sticky_key_state.modifier {
             // Combo outputs may be released by a different constituent
             // position, so modifier producers use counted ownership.
-            if latch.on_physical_release(None) == PhysicalRelease::Released {
+            if latch.value.on_physical_release() && latch.on_physical_release(None) == PhysicalRelease::Released {
                 self.release_sticky_modifier().await;
             }
         }
@@ -331,14 +352,16 @@ impl Keyboard<'_> {
             self.release_sticky_modifier().await;
             self.release_sticky_layer();
 
+            let effect = TapKeyEffect { key, modifiers };
             let same_tap_key = self
                 .sticky_key_state
                 .tap_key
-                .is_some_and(|latch| latch.source == event.pos && latch.value.key == key);
-            if self
-                .sticky_key_state
-                .tap_key
-                .is_some_and(|latch| latch.is_double_tap(event.pos, policy))
+                .is_some_and(|latch| latch.source == event.pos && latch.value == effect);
+            if same_tap_key
+                && self
+                    .sticky_key_state
+                    .tap_key
+                    .is_some_and(|latch| latch.is_double_tap(event.pos, policy))
             {
                 self.release_tap_key().await;
                 return;
@@ -354,16 +377,11 @@ impl Keyboard<'_> {
                     if policy.max_repeat > 0 && latch.repeat_count > policy.max_repeat {
                         deactivate = true;
                     } else {
-                        latch.policy = policy;
-                        latch.phase = LatchPhase::Pressed;
-                        latch.pressed_count = 1;
-                        latch.deadline = deadline_from_timeout(policy.timeout);
-                        latch.layer_generation = LayerTransitionGeneration::current();
+                        latch.begin_press(event.pos, policy);
                     }
                 }
                 None => {
-                    self.sticky_key_state.tap_key =
-                        Some(Latch::new(TapKeyEffect { key, modifiers }, event.pos, policy));
+                    self.sticky_key_state.tap_key = Some(Latch::new(effect, event.pos, policy));
                 }
             }
 
@@ -547,38 +565,46 @@ mod tests {
     }
 
     #[test]
-    fn latch_counts_overlapping_physical_producers() {
+    fn modifier_effect_counts_overlapping_physical_producers() {
         let mut latch = Latch::new(
-            ModifierCombination::LCTRL,
+            StickyModifierEffect::new(ModifierCombination::LCTRL),
             pos(0),
             policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
         );
+        latch.value.begin_press(ModifierCombination::LSHIFT);
         latch.begin_press(pos(1), policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE));
 
-        assert_eq!(latch.on_physical_release(None), PhysicalRelease::Ignored);
+        assert!(!latch.value.on_physical_release());
         assert_eq!(latch.phase, LatchPhase::Pressed);
+        assert!(latch.value.on_physical_release());
         assert_eq!(latch.on_physical_release(None), PhysicalRelease::Latched);
         assert_eq!(latch.phase, LatchPhase::Latched);
+        assert_eq!(
+            latch.value.modifiers,
+            ModifierCombination::LCTRL | ModifierCombination::LSHIFT
+        );
     }
 
     #[test]
     fn held_latch_releases_after_last_physical_producer() {
         let mut latch = Latch::new(
-            ModifierCombination::LCTRL,
+            StickyModifierEffect::new(ModifierCombination::LCTRL),
             pos(0),
             policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
         );
+        latch.value.begin_press(ModifierCombination::LSHIFT);
         latch.begin_press(pos(1), policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE));
         latch.mark_foreign_key();
 
-        assert_eq!(latch.on_physical_release(None), PhysicalRelease::Ignored);
+        assert!(!latch.value.on_physical_release());
+        assert!(latch.value.on_physical_release());
         assert_eq!(latch.on_physical_release(None), PhysicalRelease::Released);
     }
 
     #[test]
     fn timeout_is_deferred_while_physical_producer_is_down() {
         let mut latch = Latch::new(
-            ModifierCombination::LCTRL,
+            StickyModifierEffect::new(ModifierCombination::LCTRL),
             pos(0),
             policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
         );
@@ -592,7 +618,7 @@ mod tests {
     #[test]
     fn external_layer_events_only_release_their_current_lifecycle() {
         let mut latch = Latch::new(
-            ModifierCombination::LCTRL,
+            StickyModifierEffect::new(ModifierCombination::LCTRL),
             pos(0),
             policy(StickyKeyReleaseMode::LAYER_ENTER),
         );

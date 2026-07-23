@@ -100,6 +100,11 @@ const KEYMAP_LAYER_OWNERSHIP: [[[KeyAction; 3]; 1]; 2] = [
     [[a!(Transparent), a!(Transparent), k!(C)]],
 ];
 
+const KEYMAP_OVERLAPPING_STICKY_LAYERS: [[[KeyAction; 3]; 1]; 2] = [
+    [[sk_layer!(1), sk_layer!(1), k!(A)]],
+    [[a!(Transparent), a!(Transparent), k!(C)]],
+];
+
 fn create_mixed_report_keyboard_with_policy(
     activate_on_keypress: bool,
     release_mode: StickyKeyReleaseMode,
@@ -298,6 +303,38 @@ fn same_sticky_layer_repress_preserves_cleanup_ownership() {
             [0, 2, true, 0],
             [0, 2, false, 0],
             [0, 2, true, 0],
+            [0, 2, false, 0],
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+#[test]
+fn overlapping_sources_for_same_sticky_layer_release_cleanly() {
+    let behavior = Box::leak(Box::new(BehaviorConfig {
+        sticky_key: sticky_key_config_with_release_mode(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
+        ..BehaviorConfig::default()
+    }));
+    let positional = Box::leak(Box::new(PositionalConfig::<1, 3>::default()));
+    key_sequence_test! {
+        keyboard: Keyboard::new(wrap_keymap(
+            KEYMAP_OVERLAPPING_STICKY_LAYERS,
+            positional,
+            behavior,
+        )),
+        sequence: [
+            [0, 0, true,  0],
+            [0, 1, true,  0],
+            [0, 0, false, 0],
+            [0, 1, false, 0],
+            [0, 2, true,  0],
+            [0, 2, false, 0],
+            [0, 2, true,  0],
             [0, 2, false, 0],
         ],
         expected_reports: [
@@ -1286,6 +1323,11 @@ const KEYMAP_TAP_SK: [[[KeyAction; 2]; 1]; 1] = [[[sk!(Tab, ModifierCombination:
 
 const KEYMAP_PROFILED_TAP_SK: [[[KeyAction; 2]; 1]; 1] = [[[sk!(Tab, ModifierCombination::LALT, 0), k!(A)]]];
 
+const KEYMAP_SAME_SOURCE_TAP_SK_MODIFIERS: [[[KeyAction; 2]; 1]; 2] = [
+    [[sk!(Tab, ModifierCombination::LALT, 0), mo!(1)]],
+    [[sk!(Tab, ModifierCombination::LCTRL, 0), a!(Transparent)]],
+];
+
 const KEYMAP_PROFILED_PURE_MODS: [[[KeyAction; 3]; 1]; 1] = [[[
     sk_mod!(ModifierCombination::LSHIFT, 0),
     sk_mod!(ModifierCombination::LCTRL, 1),
@@ -1362,6 +1404,47 @@ fn tap_key_other_key_release_keeps_modifier_through_release_report() {
             [KC_LALT, [0, 0, 0, 0, 0, 0]],
             [KC_LALT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
             [KC_LALT, [0, 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+#[test]
+fn same_source_and_key_replaces_changed_tap_key_modifiers() {
+    let mut sticky_key = StickyKeyConfig::default();
+    sticky_key
+        .profiles
+        .push(StickyKeyProfile {
+            release_mode: Some(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
+            ..StickyKeyProfile::default()
+        })
+        .unwrap();
+    let behavior = Box::leak(Box::new(BehaviorConfig {
+        sticky_key,
+        ..BehaviorConfig::default()
+    }));
+    let positional = Box::leak(Box::new(PositionalConfig::<1, 2>::default()));
+
+    key_sequence_test! {
+        keyboard: Keyboard::new(wrap_keymap(
+            KEYMAP_SAME_SOURCE_TAP_SK_MODIFIERS,
+            positional,
+            behavior,
+        )),
+        sequence: [
+            [0, 0, true,  0],
+            [0, 0, false, 0],
+            [0, 1, true,  0],
+            [0, 0, true,  0],
+            [0, 0, false, 0],
+            [0, 1, false, 0],
+        ],
+        expected_reports: [
+            [KC_LALT, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],
+            [KC_LALT, [0, 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [KC_LCTRL, [kc_to_u8!(Tab), 0, 0, 0, 0, 0]],
+            [KC_LCTRL, [0, 0, 0, 0, 0, 0]],
             [0, [0, 0, 0, 0, 0, 0]],
         ]
     };
