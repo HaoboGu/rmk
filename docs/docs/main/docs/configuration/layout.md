@@ -98,9 +98,9 @@ In each `layer.keys`, the keys are bound to various key actions. Due to the limi
 
 The `layer.keys` string should follow several rules:
 
-1. For a simple keycode (i.e., keys in RMK's [`HidKeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.HidKeyCode.html) enum), just fill in its name.
+1. For a simple keycode (i.e., keys in RMK's [`HidKeyCode`](https://github.com/HaoboGu/rmk/blob/main/rmk-types/src/keycode/hid.rs) enum), just fill in its name as listed in the [KeyCode table](./keymap_configuration/keycodes).
 
-   For example, if you set a keycode `Backspace`, it will be turned to the corresponding HID keycode. So you have to ensure that the keycode string is valid, or RMK wouldn't compile! However, to make things easier a number of alternative key names (see alias column in [KeyCode table](./keymap_configuration/keycodes)) were added and also case-insensitive search is used to find the valid keycode.
+   For example, if you set a keycode `Backspace`, it will be turned to the corresponding HID keycode. So you have to ensure that the keycode string is valid, or RMK won't compile! However, to make things easier a number of alternative key names (see alias column in [KeyCode table](./keymap_configuration/keycodes)) were added and also case-insensitive search is used to find the valid keycode.
 
    For simple keycodes with modifiers active, you can use `WM(key, modifier)` to create a keypress with modifier action. Modifiers can be chained together like `LShift | RGui` to have multiple modifiers active.
 
@@ -121,7 +121,7 @@ The `layer.keys` string should follow several rules:
    1. Use `DF(n)` to create a switch default layer action, `n` is the layer number. Use `PDF(n)` for a persistent version that is saved to storage and restored after reboot
    2. Use `MO(n)` to create a layer activate action, `n` is the layer number
    3. Use `LM(n, modifier)` to create layer activate with modifier action. The modifier can be chained in the same way as `WM`
-   4. Use `LT(n, key, <profile_name>)` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](https://docs.rs/rmk/latest/rmk/keycode/enum.KeyCode.html), The `profile_name` is optional, which defines the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning)
+   4. Use `LT(n, key, <profile_name>)` to create a layer activate action or tap key(tap/hold). The `key` here is the RMK [`KeyCode`](./keymap_configuration/keycodes), The `profile_name` is optional, which defines the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning)
    5. Use `SK(...)` to create a sticky key action — behavior is selected by argument shape:
       - `SK(modifier, @profile)` — one-shot modifier (also spelled `OSM(modifier, @profile)`, an alias). The optional `@profile` selects a `[behavior.sticky_key.profiles]` entry.
       - `SK(MO(n), @profile)` — one-shot layer (also spelled `OSL(n, @profile)`, an alias).
@@ -141,7 +141,7 @@ The definitions of these operations are the same as QMK's; you can find them [he
 
    The tap/hold slots of `MT`, `TH` and `LT` are not limited to plain keycodes — they accept any single action, so you can nest other actions inside them. For example `MT(WM(P, RAlt), LShift, HRM)` taps `RAlt+P` and holds `LShift` with the `HRM` profile, and `TH(WM(A, LShift), MO(2))` taps `Shift+A` and holds momentary-layer 2. Composite tap-hold/morse forms (`MT`/`TH`/`LT`/`TT`/`TD`) cannot be nested inside a slot.
 
-7. For shifted key, use `SHIFTED(key)`
+7. For a shifted key, you can use `SHIFTED(key)` as an alternative to with-modifier (`WM(key, LShift)` - see above).
 
 8. For Morse/Tap Dance, use `TD(n)` or `Morse(n)`, they are same
 
