@@ -247,7 +247,6 @@ impl<'a> RynkService<'a> {
                 return;
             }
 
-            // Payload decode errors are handler errors, not session exits.
             let Ok(mut msg) = RynkMessage::try_from(&mut buf[..]) else {
                 return;
             };

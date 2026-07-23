@@ -13,8 +13,7 @@ impl Handle<GetLayout> for RynkService<'_> {
         let total_len = blob.len() as u32;
         let start = (offset as usize).min(blob.len());
         let end = (start + RYNK_BLE_CHUNK_SIZE).min(blob.len());
-        // Page fits by construction: `end - start <= RYNK_BLE_CHUNK_SIZE`.
-        let bytes = Vec::from_slice(&blob[start..end]).unwrap_or_default();
+        let bytes = Vec::from_slice(&blob[start..end]).map_err(|_| RynkError::Internal)?;
         Ok(LayoutChunk { total_len, bytes })
     }
 }

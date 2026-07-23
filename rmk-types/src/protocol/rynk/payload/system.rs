@@ -136,7 +136,6 @@ impl MaxSize for LockStatus {
 
 /// Storage reset mode for the `StorageReset` endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
-#[non_exhaustive]
 #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum StorageResetMode {
