@@ -35,7 +35,7 @@ use embedded_io_async::{Error as _, ErrorKind, Read, Write};
 use rmk_types::protocol::rynk::endpoint::Endpoint;
 use rmk_types::protocol::rynk::{
     Cmd, Deframer, DeviceCapabilities, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage,
-    TopicEvent, command, frame_capacity,
+    TopicEvent, command,
 };
 use serde::Serialize;
 use thiserror::Error;
@@ -227,7 +227,8 @@ impl Client {
         });
         // Size the buffer for the COBS-encoded form of a max-payload request, so an
         // oversized request fails to encode before touching the link.
-        let limit = frame_capacity(RYNK_HEADER_SIZE + self.capabilities.max_payload_size as usize);
+        let len = RYNK_HEADER_SIZE + self.capabilities.max_payload_size as usize;
+        let limit = len + len / 254 + 2;
         #[cfg(feature = "alloc")]
         let mut buf: FrameBytes = vec![0; limit];
         #[cfg(not(feature = "alloc"))]

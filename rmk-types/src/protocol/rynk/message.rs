@@ -40,16 +40,13 @@ impl RynkHeader {
     }
 }
 
-/// Physical buffer size for the COBS-encoded form of a `logical_len` frame,
-/// trailing delimiter included (`RYNK_BUFFER_SIZE` stays the *logical* budget).
-/// One byte over `cobs::max_encoding_length`: the streaming `Cobs` flavor emits
-/// a placeholder after each full 254-byte block that one-shot encoding elides.
-pub const fn frame_capacity(logical_len: usize) -> usize {
-    logical_len + logical_len / 254 + 2
-}
-
-/// Physical buffer size for a worst-case firmware frame (`RYNK_BUFFER_SIZE`).
-pub const RYNK_FRAME_BUFFER_SIZE: usize = frame_capacity(crate::constants::RYNK_BUFFER_SIZE);
+/// Physical buffer size for the COBS-encoded form of a worst-case firmware
+/// frame, trailing delimiter included (`RYNK_BUFFER_SIZE` stays the *logical*
+/// budget). One byte over `cobs::max_encoding_length`: the streaming `Cobs`
+/// flavor emits a placeholder after each full 254-byte block that one-shot
+/// encoding elides.
+pub const RYNK_FRAME_BUFFER_SIZE: usize =
+    crate::constants::RYNK_BUFFER_SIZE + crate::constants::RYNK_BUFFER_SIZE / 254 + 2;
 
 /// COBS-frame `RynkHeader ++ body` into `buf`, returning the total framed
 /// length. The header goes through the COBS encoder too, so a `0x00` in it
@@ -252,13 +249,15 @@ mod tests {
     }
 
     #[test]
-    fn frame_capacity_fits_worst_case_cobs() {
+    fn frame_buffer_sizing_fits_worst_case_cobs() {
         // COBS worst case is an all-nonzero frame; a buffer of exactly
-        // frame_capacity(n) must hold it, including at multiples of 254.
+        // n + n / 254 + 2 must hold it, including at multiples of 254.
+        let capacity = |n: usize| n + n / 254 + 2;
+        assert_eq!(RYNK_FRAME_BUFFER_SIZE, capacity(crate::constants::RYNK_BUFFER_SIZE));
         let nonzero = [0x41u8; 512];
         for n in [1usize, 253, 254, 255, 508, 509, 512] {
             let mut store = [0u8; 1024];
-            let buf = &mut store[..frame_capacity(n)];
+            let buf = &mut store[..capacity(n)];
             let mut ser = postcard::Serializer {
                 output: Cobs::try_new(Slice::new(buf)).unwrap(),
             };
@@ -266,13 +265,8 @@ mod tests {
             let framed = ser
                 .output
                 .finalize()
-                .unwrap_or_else(|_| panic!("frame_capacity({n}) too small for the worst-case COBS frame"));
-            assert!(
-                framed.len() <= frame_capacity(n),
-                "n={n}: {} > {}",
-                framed.len(),
-                frame_capacity(n)
-            );
+                .unwrap_or_else(|_| panic!("capacity({n}) too small for the worst-case COBS frame"));
+            assert!(framed.len() <= capacity(n), "n={n}: {} > {}", framed.len(), capacity(n));
         }
     }
 
