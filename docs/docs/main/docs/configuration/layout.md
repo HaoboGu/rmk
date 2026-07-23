@@ -137,7 +137,7 @@ The definitions of these operations are the same as QMK's; you can find them [he
 
    The tap/hold slots of `MT`, `TH` and `LT` are not limited to plain keycodes — they accept any single action, so you can nest other actions inside them. For example `MT(WM(P, RAlt), LShift, HRM)` taps `RAlt+P` and holds `LShift` with the `HRM` profile, and `TH(WM(A, LShift), MO(2))` taps `Shift+A` and holds momentary-layer 2. Composite tap-hold/morse forms (`MT`/`TH`/`LT`/`TT`/`TD`) cannot be nested inside a slot.
 
-7. For shifted key, use `SHIFTED(key)`
+7. For a shifted key, you can use `SHIFTED(key)` as an alternative to with-modifier (`WM(key, LShift)` - see above).
 
 8. For Morse/Tap Dance, use `TD(n)` or `Morse(n)`, they are same
 
