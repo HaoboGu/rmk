@@ -19,7 +19,7 @@ fork_max_num = 8
 # Maximum number of morse keys keyboard can store (max 256)
 morse_max_num = 8
 # Optional maximum number of named Sticky Key profiles (max 255).
-# Omit this to derive the capacity from [behavior.sticky_key.profiles].
+# Omit this to use at least 4 slots, growing to fit configured profiles.
 sticky_key_profile_max_num = 4
 # Maximum number of patterns a morse key can handle (default: 8, min: 4, max 65536)
 max_patterns_per_key = 8
@@ -62,7 +62,7 @@ Increasing the number of combos, forks, morses (tap dances), and macros will inc
 - `combo_max_length`: Maximum number of keys that can be pressed simultaneously in a combo, default value is 4.
 - `fork_max_num`: Maximum number of forks for conditional key actions, default value is 8. This value must be between 0 and 256.
 - `morse_max_num`: Maximum number of morses that can be stored, default value is 8. This value must be between 0 and 256.
-- `sticky_key_profile_max_num`: Optional capacity override for the named Sticky Key profile table. When omitted, TOML configurations derive the capacity from the configured profile count; Rust-only configurations reserve 4 entries. Set it to `0` to opt out or to a larger value when profiles are added at runtime. This value must be between 0 and 255.
+- `sticky_key_profile_max_num`: Optional capacity override for named Sticky Key profiles. When omitted, capacity is the greater of 4 or the configured profile count. Set it to `0` to opt out or higher when profiles are added from Rust. Valid range: 0–255.
 - `max_patterns_per_key` : Maximum number of tap/hold patterns a morse key can handle, default value is 8. This value must be between 4 and 65536. (Will be automatically set to the maximum length of `tap_actions` + `hold_actions` or `morse_actions`.)
 - `macro_space_size`: Space size in bytes for storing macro sequences, default value is 256.
 

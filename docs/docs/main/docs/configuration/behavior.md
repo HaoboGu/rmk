@@ -41,9 +41,9 @@ The `[behavior.sticky_key]` table configures the unified **Sticky Key** (`SK`) f
 
 | Shape | Syntax | Behavior |
 |-------|--------|----------|
-| Pure-mod | `SK(LGui)` (modifiers chain like `WM`, e.g. `SK(LCtrl\|LShift)`) | One-shot modifier — the modifier is held for the next key press, then released automatically. |
-| Layer | `SK(MO(n))` | One-shot layer — layer `n` is active for the next key press, then released. |
-| Tap-key | `SK(Tab, [LAlt])` (the modifier list is in `[ ]`; modifiers chain, e.g. `SK(Tab, [LCtrl\|LShift])`) | The modifier stays held across **repeated presses of the same key** (Alt+Tab-style window/tab cycling): the first press sends `modifier + key`, each subsequent press keeps the modifier held. Releases automatically when any non-SK, non-modifier key is pressed. |
+| Pure-mod | `SK(LGui)` (modifiers chain like `WM`, e.g. `SK(LCtrl\|LShift)`) | One-shot modifier — applies the modifier to the next key and, by default, releases it with that key. |
+| Layer | `SK(MO(n))` | One-shot layer — layer `n` applies to the next key and, by default, releases with that key. |
+| Tap-key | `SK(Tab, [LAlt])` (the modifier list is in `[ ]`; modifiers chain, e.g. `SK(Tab, [LCtrl\|LShift])`) | Alt+Tab-style cycling: the first press sends `modifier + key`, and repeated presses keep the modifier held. By default, another non-SK, non-modifier key press ends the sequence. |
 
 ### Config fields
 
@@ -51,7 +51,7 @@ The `[behavior.sticky_key]` table configures the unified **Sticky Key** (`SK`) f
 |-------|---------|---------|
 | `timeout` | `"1s"` | Auto-release an unused sticky key after this idle time. String suffixed `s` or `ms`. |
 | `activate_on_keypress` | `false` | **Pure-mod SKs only.** When `true`, send the modifier immediately as the SK key itself is pressed, instead of waiting and applying it to the next key. (Also known as One-Shot Sticky Modifiers / OSSM.) |
-| `max_repeat` | `0` | **Tap-key SKs only.** Caps how many repeated presses of the key keep the modifier held; `0` = unlimited. Pure-mod (`SK(LGui)`) and layer (`SK(MO(n))`) SKs ignore this — they always apply to exactly one following key. |
+| `max_repeat` | `0` | **Tap-key SKs only.** Maximum total key activations in one sequence, including the first; `0` = unlimited. For example, `1` prevents a second cycling press. Pure-mod and layer SKs ignore this. |
 | `release_mode` | unset | Optional `|`-separated release triggers: `other_key_press`, `other_key_release`, `layer_enter`, `layer_exit`, and `double_tap`. |
 
 The default table applies to every Sticky Key. Define named overrides in
@@ -129,7 +129,7 @@ For keymap usage, see `SK(...)` in the [keymap configuration](./layout#keyboard-
 
 ### Migration from OSM / OSL
 
-`OSM(mod)` and `OSL(n)` are **still supported** as aliases — they desugar to `SK(mod)` and `SK(MO(n))` respectively, so existing keymaps keep working unchanged. The `SK` forms are the canonical spelling; use whichever you prefer. The old 5-positional `SK` form and the `[behavior.one_shot]` / `[behavior.one_shot_modifiers]` TOML tables, however, are **removed** — using them in `keyboard.toml` is a build error. Rust configurations retain the legacy `BehaviorConfig::one_shot` and `BehaviorConfig::one_shot_modifiers` fields as a compatibility adapter. RMK resolves them before the keymap is built; legacy `quick_release` remains specific to pure-mod/OSM behavior rather than changing layer or tap-key defaults.
+`OSM(mod)` and `OSL(n)` are **still supported** as aliases — they desugar to `SK(mod)` and `SK(MO(n))` respectively, so existing keymaps keep working unchanged. The `SK` forms are the canonical spelling; use whichever you prefer. The old 5-positional `SK` form and the `[behavior.one_shot]` / `[behavior.one_shot_modifiers]` TOML tables, however, are **removed** — using them in `keyboard.toml` is a build error. Rust configurations retain the legacy `BehaviorConfig::one_shot` and `BehaviorConfig::one_shot_modifiers` fields as a compatibility adapter. Avoid setting legacy and canonical fields together: legacy timeout fills only the canonical default, legacy `activate_on_keypress = true` enables the canonical default, and an explicit canonical `release_mode` overrides legacy `quick_release`. Otherwise, `quick_release` remains specific to pure-mod/OSM behavior.
 
 | Old | New (canonical) | Alias still accepted |
 |-----|-----------------|----------------------|
