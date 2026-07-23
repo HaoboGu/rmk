@@ -118,7 +118,7 @@ pub(crate) fn parse_keymap(keymap: &Value) -> Result<ParsedKeymap, String> {
             matrix,
             encoder,
             option,
-            row_index: row_of_key.get(i).copied().unwrap_or(0),
+            row_index: row_of_key[i],
         });
     }
     Ok(ParsedKeymap { keys })

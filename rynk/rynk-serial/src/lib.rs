@@ -18,7 +18,7 @@ use embedded_io_adapters::tokio_1::FromTokio;
 use rynk::rmk_types::protocol::rynk::RYNK_SERIAL_MAGIC;
 use rynk::{RynkDevice, RynkHostError};
 use tokio::io::{ReadHalf, WriteHalf};
-use tokio_serial::{ClearBuffer, SerialPort as _, SerialPortBuilderExt, SerialPortInfo, SerialPortType, SerialStream};
+use tokio_serial::{SerialPortBuilderExt, SerialPortInfo, SerialPortType, SerialStream};
 
 /// Required by serial APIs; ignored by USB CDC-ACM devices.
 const CDC_BAUD_RATE: u32 = 115_200;
@@ -105,8 +105,6 @@ impl RynkDevice for SerialDevice {
         let stream = tokio_serial::new(&self.path, CDC_BAUD_RATE)
             .open_native_async()
             .map_err(|e| RynkHostError::Transport("open", e.to_string()))?;
-        // Best-effort cleanup of stale bytes from an old session.
-        let _ = stream.clear(ClearBuffer::Input);
         let (reader, writer) = tokio::io::split(stream);
         Ok((FromTokio::new(reader), FromTokio::new(writer)))
     }

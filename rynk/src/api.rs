@@ -480,7 +480,6 @@ impl Client {
         items: &[Item],
         mut store: impl AsyncFnMut(&Self, u16, Vec<Item>) -> Result<(), RynkHostError>,
     ) -> Result<(), RynkHostError> {
-        // Preserve the capability error path instead of panicking in `chunks(0)`.
         let mut start: u16 = 0;
         for chunk in items.chunks(page.max(1)) {
             store(self, start, chunk.to_vec()).await?;
