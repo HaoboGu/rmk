@@ -160,17 +160,24 @@ impl<'a> VialService<'a> {
                 let offset = BigEndian::read_u16(&report.output_data[1..3]);
                 // Current sequence size, <= 28
                 let size = report.output_data[3];
-                // End of current sequence in the macro cache
-                // The first sequence, reset the macro cache
-                if offset == 0 {
-                    self.ctx.reset_macro_buffer();
-                }
+                // `output_data` is 32 bytes, so the payload slice output_data[4..4 + size]
+                // is only valid for size <= 28. Reject oversized writes instead of
+                // panicking, mirroring the DynamicKeymapMacroGetBuffer handler above.
+                if size <= 28 {
+                    // End of current sequence in the macro cache
+                    // The first sequence, reset the macro cache
+                    if offset == 0 {
+                        self.ctx.reset_macro_buffer();
+                    }
 
-                // Update macro cache + flush full buffer to storage
-                info!("Setting macro buffer, offset: {}, size: {}", offset, size);
-                self.ctx
-                    .write_macro_buffer(offset as usize, &report.output_data[4..4 + size as usize])
-                    .await;
+                    // Update macro cache + flush full buffer to storage
+                    info!("Setting macro buffer, offset: {}, size: {}", offset, size);
+                    self.ctx
+                        .write_macro_buffer(offset as usize, &report.output_data[4..4 + size as usize])
+                        .await;
+                } else {
+                    report.input_data[0] = 0xFF;
+                }
             }
             ViaCommand::DynamicKeymapMacroReset => {
                 warn!("Macro reset -- to be implemented")
@@ -243,5 +250,62 @@ impl Runnable for VialService<'_> {
             self.process_via_packet(&mut report).await;
             try_send_host_reply(transport, report.input_data);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use embassy_futures::block_on;
+    use rmk_types::action::KeyAction;
+
+    use super::*;
+    use crate::config::{BehaviorConfig, PositionalConfig};
+    use crate::keymap::{KeyMap, KeymapData};
+
+    /// Build a minimal 1x1x1 keymap + `VialService` and run `f` against it.
+    fn with_service<R>(f: impl FnOnce(&mut VialService) -> R) -> R {
+        let mut data = KeymapData::new([[[KeyAction::No]]]);
+        let mut behavior = BehaviorConfig::default();
+        let positional = PositionalConfig::<1, 1>::default();
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+        let ctx = KeyboardContext::new(&keymap);
+        let config = RmkConfig::default();
+        let mut service = VialService::new(&ctx, &config);
+        f(&mut service)
+    }
+
+    /// A `DynamicKeymapMacroSetBuffer` (0x0F) report with `offset = 0` and the
+    /// given payload `size` byte. The caller mirrors `Runnable::run` by seeding
+    /// `input_data` with a copy of `output_data`.
+    fn macro_set_buffer_report(size: u8) -> ViaReport {
+        let mut output_data = [0u8; 32];
+        output_data[0] = 0x0F; // DynamicKeymapMacroSetBuffer
+        output_data[3] = size;
+        ViaReport {
+            input_data: output_data,
+            output_data,
+        }
+    }
+
+    // `output_data` is [u8; 32], so the handler slices `output_data[4..4 + size]`.
+    // size == 28 is the largest payload that fits (writes output_data[4..32]).
+    #[test]
+    fn macro_set_buffer_max_size_ok() {
+        with_service(|service| {
+            let mut report = macro_set_buffer_report(28);
+            block_on(service.process_via_packet(&mut report));
+        });
+    }
+
+    // size == 29 slices output_data[4..33], which is out of bounds. The sibling
+    // DynamicKeymapMacroGetBuffer handler already rejects size > 28 with 0xFF;
+    // SetBuffer must do the same instead of panicking.
+    #[test]
+    fn macro_set_buffer_oversize_rejected() {
+        with_service(|service| {
+            let mut report = macro_set_buffer_report(29);
+            block_on(service.process_via_packet(&mut report));
+            assert_eq!(report.input_data[0], 0xFF);
+        });
     }
 }

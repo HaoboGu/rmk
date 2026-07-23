@@ -13,9 +13,10 @@ fn main() {
     //
     // Build-time constants only need [rmk] + [event]. Keep event defaults support
     // without requiring [keyboard.board]/[keyboard.chip].
-    let config: KeyboardTomlConfig = if let Ok(toml_path) = std::env::var("KEYBOARD_TOML_PATH") {
+    let toml_path = std::env::var("KEYBOARD_TOML_PATH").ok();
+    let config: KeyboardTomlConfig = if let Some(toml_path) = &toml_path {
         println!("cargo:rerun-if-changed={toml_path}");
-        KeyboardTomlConfig::new_from_toml_path_with_event_defaults(&toml_path)
+        KeyboardTomlConfig::new_from_toml_path_with_event_defaults(toml_path)
     } else {
         toml::from_str("").expect("Failed to parse empty keyboard config\n")
     };
@@ -81,7 +82,7 @@ fn generate_constants(bc: &BuildConstants) -> String {
     ));
     lines.push(format!(
         "pub const AUTO_MOUSE_LAYER_MAX_NUM: usize = {};",
-        rmk_config::resolved::behavior::AUTO_MOUSE_LAYER_MAX_NUM
+        bc.auto_mouse_layer_max_num
     ));
     lines.push(format!(
         "pub const MAX_PATTERNS_PER_KEY: usize = {};",

@@ -1,13 +1,313 @@
 pub mod common;
 
-use embassy_time::Duration;
-use rmk::config::{BehaviorConfig, PositionalConfig, StickyKeyConfig, StickyKeyProfile, StickyKeyReleaseMode};
+use embassy_futures::select::{Either, select};
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::mutex::Mutex;
+use embassy_time::{Duration, Timer};
+use futures::join;
+use rmk::channel::USB_REPORT_CHANNEL;
+use rmk::config::{
+    BehaviorConfig, OneShotModifiersConfig, PositionalConfig, StickyKeyConfig, StickyKeyProfile, StickyKeyReleaseMode,
+};
+use rmk::core_traits::Runnable;
+use rmk::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEvent};
+use rmk::hid::Report;
 use rmk::keyboard::Keyboard;
-use rmk::types::action::KeyAction;
+use rmk::state::set_usb_state;
+use rmk::types::action::{Action, KeyAction};
+use rmk::types::connection::UsbState;
+use rmk::types::keycode::{ConsumerKey, KeyCode, SystemControlKey};
 use rmk::types::modifier::ModifierCombination;
 use rmk::{a, k, mo, sk, sk_layer, sk_mod};
 
 use crate::common::{KC_LALT, KC_LCTRL, KC_LGUI, KC_LSHIFT, wrap_keymap};
+
+#[derive(Clone, Copy, Debug)]
+enum ExpectedReportKind {
+    Keyboard(u8),
+    Media,
+    System,
+    Mouse,
+}
+
+async fn run_mixed_report_test(keyboard: &mut Keyboard<'_>, sequence: &[(u8, bool)], expected: &[ExpectedReportKind]) {
+    static REPORTS_DONE: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
+    *REPORTS_DONE.lock().await = false;
+    let sender = KeyboardEvent::publisher_async();
+    sender.clear();
+    USB_REPORT_CHANNEL.clear();
+    set_usb_state(UsbState::Configured);
+
+    join!(
+        async {
+            select(keyboard.run(), async {
+                while !*REPORTS_DONE.lock().await {
+                    Timer::after_millis(10).await;
+                }
+            })
+            .await;
+        },
+        async {
+            for &(col, pressed) in sequence {
+                sender.publish_async(KeyboardEvent::key(0, col, pressed)).await;
+                Timer::after_millis(1).await;
+            }
+        },
+        async {
+            for expected in expected {
+                let report = match select(Timer::after_secs(2), USB_REPORT_CHANNEL.receive()).await {
+                    Either::First(_) => panic!("mixed report wait timed out"),
+                    Either::Second(report) => report,
+                };
+                match (expected, report) {
+                    (ExpectedReportKind::Keyboard(modifier), Report::KeyboardReport(report)) => {
+                        assert_eq!(*modifier, report.modifier);
+                    }
+                    (ExpectedReportKind::Media, Report::MediaKeyboardReport(_))
+                    | (ExpectedReportKind::System, Report::SystemControlReport(_))
+                    | (ExpectedReportKind::Mouse, Report::MouseReport(_)) => {}
+                    (expected, report) => panic!("expected {expected:?}, received {report:?}"),
+                }
+            }
+            *REPORTS_DONE.lock().await = true;
+        }
+    );
+}
+
+const KEYMAP_MIXED_REPORTS: [[[KeyAction; 7]; 1]; 1] = [[[
+    sk_mod!(ModifierCombination::LSHIFT),
+    KeyAction::Single(Action::Key(KeyCode::Consumer(ConsumerKey::VolumeIncrement))),
+    KeyAction::Single(Action::Key(KeyCode::SystemControl(SystemControlKey::PowerDown))),
+    k!(AudioVolUp),
+    k!(SystemPower),
+    k!(MouseBtn1),
+    k!(A),
+]]];
+
+const KEYMAP_LEGACY_MOD_EQUIVALENCE: [[[KeyAction; 3]; 1]; 1] = [[[
+    KeyAction::Single(Action::OneShotModifier(ModifierCombination::LSHIFT)),
+    sk_mod!(ModifierCombination::LSHIFT),
+    k!(A),
+]]];
+
+const KEYMAP_LEGACY_LAYER_EQUIVALENCE: [[[KeyAction; 4]; 1]; 2] = [
+    [[KeyAction::Single(Action::OneShotLayer(1)), sk_layer!(1), k!(A), k!(B)]],
+    [[a!(Transparent), a!(Transparent), k!(C), k!(D)]],
+];
+
+const KEYMAP_LAYER_OWNERSHIP: [[[KeyAction; 3]; 1]; 2] = [
+    [[mo!(1), sk_layer!(1), k!(A)]],
+    [[a!(Transparent), a!(Transparent), k!(C)]],
+];
+
+fn create_mixed_report_keyboard_with_policy(
+    activate_on_keypress: bool,
+    release_mode: StickyKeyReleaseMode,
+) -> Keyboard<'static> {
+    let behavior = Box::leak(Box::new(BehaviorConfig {
+        sticky_key: StickyKeyConfig {
+            default_profile: StickyKeyProfile {
+                activate_on_keypress,
+                release_mode: Some(release_mode),
+                ..StickyKeyProfile::default()
+            },
+            ..StickyKeyConfig::default()
+        },
+        ..BehaviorConfig::default()
+    }));
+    let positional = Box::leak(Box::new(PositionalConfig::<1, 7>::default()));
+    Keyboard::new(wrap_keymap(KEYMAP_MIXED_REPORTS, positional, behavior))
+}
+
+fn create_mixed_report_keyboard(activate_on_keypress: bool) -> Keyboard<'static> {
+    create_mixed_report_keyboard_with_policy(activate_on_keypress, StickyKeyReleaseMode::OTHER_KEY_PRESS)
+}
+
+#[test]
+fn host_visible_sticky_modifiers_are_cleaned_after_non_keyboard_actions() {
+    common::test_block_on::test_block_on(async {
+        let mut keyboard = create_mixed_report_keyboard(true);
+        let mut sequence = Vec::new();
+        for terminating_col in 1..=5 {
+            sequence.extend([(0, true), (0, false), (terminating_col, true), (terminating_col, false)]);
+        }
+        sequence.extend([(6, true), (6, false)]);
+        run_mixed_report_test(
+            &mut keyboard,
+            &sequence,
+            &[
+                ExpectedReportKind::Keyboard(KC_LSHIFT),
+                ExpectedReportKind::Media,
+                ExpectedReportKind::Keyboard(0),
+                ExpectedReportKind::Media,
+                ExpectedReportKind::Keyboard(KC_LSHIFT),
+                ExpectedReportKind::System,
+                ExpectedReportKind::Keyboard(0),
+                ExpectedReportKind::System,
+                ExpectedReportKind::Keyboard(KC_LSHIFT),
+                ExpectedReportKind::Media,
+                ExpectedReportKind::Keyboard(0),
+                ExpectedReportKind::Media,
+                ExpectedReportKind::Keyboard(KC_LSHIFT),
+                ExpectedReportKind::System,
+                ExpectedReportKind::Keyboard(0),
+                ExpectedReportKind::System,
+                ExpectedReportKind::Keyboard(KC_LSHIFT),
+                ExpectedReportKind::Mouse,
+                ExpectedReportKind::Keyboard(0),
+                ExpectedReportKind::Mouse,
+                ExpectedReportKind::Keyboard(0),
+                ExpectedReportKind::Keyboard(0),
+            ],
+        )
+        .await;
+    });
+}
+
+#[test]
+fn non_visible_sticky_modifier_adds_no_keyboard_cleanup_for_consumer_action() {
+    common::test_block_on::test_block_on(async {
+        let mut keyboard = create_mixed_report_keyboard(false);
+        run_mixed_report_test(
+            &mut keyboard,
+            &[(0, true), (0, false), (1, true), (1, false), (6, true), (6, false)],
+            &[
+                ExpectedReportKind::Media,
+                ExpectedReportKind::Media,
+                ExpectedReportKind::Keyboard(0),
+                ExpectedReportKind::Keyboard(0),
+            ],
+        )
+        .await;
+    });
+}
+
+#[test]
+fn other_key_release_cleans_up_after_non_keyboard_release() {
+    common::test_block_on::test_block_on(async {
+        let mut keyboard = create_mixed_report_keyboard_with_policy(true, StickyKeyReleaseMode::OTHER_KEY_RELEASE);
+        run_mixed_report_test(
+            &mut keyboard,
+            &[(0, true), (0, false), (1, true), (1, false), (6, true), (6, false)],
+            &[
+                ExpectedReportKind::Keyboard(KC_LSHIFT),
+                ExpectedReportKind::Media,
+                ExpectedReportKind::Media,
+                ExpectedReportKind::Keyboard(0),
+                ExpectedReportKind::Keyboard(0),
+                ExpectedReportKind::Keyboard(0),
+            ],
+        )
+        .await;
+    });
+}
+
+#[test]
+fn legacy_one_shot_modifier_uses_the_canonical_sticky_backend() {
+    let behavior = Box::leak(Box::new(BehaviorConfig::default()));
+    let positional = Box::leak(Box::new(PositionalConfig::<1, 3>::default()));
+    key_sequence_test! {
+        keyboard: Keyboard::new(wrap_keymap(KEYMAP_LEGACY_MOD_EQUIVALENCE, positional, behavior)),
+        sequence: [
+            [0, 0, true, 0],
+            [0, 0, false, 0],
+            [0, 2, true, 0],
+            [0, 2, false, 0],
+            [0, 1, true, 0],
+            [0, 1, false, 0],
+            [0, 2, true, 0],
+            [0, 2, false, 0],
+        ],
+        expected_reports: [
+            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [KC_LSHIFT, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+#[test]
+fn legacy_one_shot_layer_uses_the_canonical_sticky_backend() {
+    let behavior = Box::leak(Box::new(BehaviorConfig::default()));
+    let positional = Box::leak(Box::new(PositionalConfig::<1, 4>::default()));
+    key_sequence_test! {
+        keyboard: Keyboard::new(wrap_keymap(KEYMAP_LEGACY_LAYER_EQUIVALENCE, positional, behavior)),
+        sequence: [
+            [0, 0, true, 0],
+            [0, 0, false, 0],
+            [0, 2, true, 0],
+            [0, 2, false, 0],
+            [0, 1, true, 0],
+            [0, 1, false, 0],
+            [0, 3, true, 0],
+            [0, 3, false, 0],
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(D), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+#[test]
+fn sticky_layer_does_not_claim_a_preexisting_layer() {
+    let behavior = Box::leak(Box::new(BehaviorConfig::default()));
+    let positional = Box::leak(Box::new(PositionalConfig::<1, 3>::default()));
+    key_sequence_test! {
+        keyboard: Keyboard::new(wrap_keymap(KEYMAP_LAYER_OWNERSHIP, positional, behavior)),
+        sequence: [
+            [0, 0, true, 0],
+            [0, 1, true, 0],
+            [0, 1, false, 0],
+            [0, 2, true, 0],
+            [0, 2, false, 0],
+            [0, 2, true, 0],
+            [0, 2, false, 0],
+            [0, 0, false, 0],
+            [0, 2, true, 0],
+            [0, 2, false, 0],
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+#[test]
+fn same_sticky_layer_repress_preserves_cleanup_ownership() {
+    let behavior = Box::leak(Box::new(BehaviorConfig {
+        sticky_key: sticky_key_config_with_release_mode(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
+        ..BehaviorConfig::default()
+    }));
+    let positional = Box::leak(Box::new(PositionalConfig::<1, 3>::default()));
+    key_sequence_test! {
+        keyboard: Keyboard::new(wrap_keymap(KEYMAP_LAYER_OWNERSHIP, positional, behavior)),
+        sequence: [
+            [0, 1, true, 0],
+            [0, 1, false, 0],
+            [0, 1, true, 0],
+            [0, 1, false, 0],
+            [0, 2, true, 0],
+            [0, 2, false, 0],
+            [0, 2, true, 0],
+            [0, 2, false, 0],
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
 
 // KEYMAP (release_on_layer_change=true is set in the helper config, not per-key)
 // Layer 0: A             B             C             MO(1)         LShift        No
@@ -90,8 +390,14 @@ fn sticky_key_config_with_release_mode(release_mode: StickyKeyReleaseMode) -> St
     }
 }
 
-// KEYMAP_MIXED: all three SK shapes on layer 0, used to exercise the mutually-exclusive
-// latch (pressing a different-shape SK while one is latched REPLACES it, never merges).
+fn layer_change_release_mode() -> StickyKeyReleaseMode {
+    StickyKeyReleaseMode::from_bits(
+        StickyKeyReleaseMode::LAYER_ENTER.into_bits() | StickyKeyReleaseMode::LAYER_EXIT.into_bits(),
+    )
+}
+
+// KEYMAP_MIXED: all three SK shapes on layer 0. Modifier and layer latches may
+// compose, while a tap-key lifecycle is exclusive with both.
 // Layer 0: SK(LGui)  SK(Tab,LAlt)  SK(MO(1))  P            No  No
 // Layer 1: Trns      Trns          Trns       Z            No  No
 //          (cols 0-2 fall through to layer 0 so the SKs stay pressable while layer 1 is
@@ -161,7 +467,10 @@ fn create_test_keyboard() -> Keyboard<'static> {
     static BEHAVIOR_CONFIG: static_cell::StaticCell<BehaviorConfig> = static_cell::StaticCell::new();
     let behavior_config = BEHAVIOR_CONFIG.init(BehaviorConfig {
         sticky_key: StickyKeyConfig {
-            release_on_layer_change: true,
+            default_profile: StickyKeyProfile {
+                release_mode: Some(layer_change_release_mode()),
+                ..StickyKeyProfile::default()
+            },
             ..StickyKeyConfig::default()
         },
         ..BehaviorConfig::default()
@@ -174,7 +483,10 @@ fn create_test_keyboard() -> Keyboard<'static> {
 fn create_test_keyboard_max_repeat() -> Keyboard<'static> {
     let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
         sticky_key: StickyKeyConfig {
-            max_repeat: 2,
+            default_profile: StickyKeyProfile {
+                max_repeat: 2,
+                ..StickyKeyProfile::default()
+            },
             ..StickyKeyConfig::default()
         },
         ..BehaviorConfig::default()
@@ -195,19 +507,16 @@ fn create_test_keyboard_with_behavior_config(config: BehaviorConfig) -> Keyboard
     Keyboard::new(wrap_keymap(KEYMAP, per_key_config, behavior_config))
 }
 
-#[test]
-fn sticky_key_config_reserves_the_bounded_profile_table() {
-    assert!(core::mem::size_of::<StickyKeyConfig>() >= core::mem::size_of::<rmk::config::StickyKeyProfile>());
-}
-
 /// A tap-key override can enable layer-change release while the global fallback is disabled.
 #[test]
 fn tap_key_layer_change_override_enables_release() {
     key_sequence_test! {
         keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
             sticky_key: StickyKeyConfig {
-                release_on_layer_change: false,
-                tap_key_release_on_layer_change: Some(true),
+                default_profile: StickyKeyProfile {
+                    release_mode: Some(layer_change_release_mode()),
+                    ..StickyKeyProfile::default()
+                },
                 ..StickyKeyConfig::default()
             },
             ..BehaviorConfig::default()
@@ -232,8 +541,7 @@ fn tap_key_layer_change_override_disables_release() {
     key_sequence_test! {
         keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
             sticky_key: StickyKeyConfig {
-                release_on_layer_change: true,
-                tap_key_release_on_layer_change: Some(false),
+                default_profile: StickyKeyProfile::default(),
                 ..StickyKeyConfig::default()
             },
             ..BehaviorConfig::default()
@@ -261,8 +569,6 @@ fn tap_key_layer_change_override_disables_release() {
 fn pure_mod_layer_change_override_disables_release() {
     key_sequence_test! {
         keyboard: create_pure_mod_layer_change_keyboard(StickyKeyConfig {
-            release_on_layer_change: true,
-            one_shot_mod_release_on_layer_change: Some(false),
             ..StickyKeyConfig::default()
         }),
         sequence: [
@@ -285,8 +591,10 @@ fn pure_mod_layer_change_override_disables_release() {
 fn pure_mod_layer_change_override_enables_release() {
     key_sequence_test! {
         keyboard: create_pure_mod_layer_change_keyboard(StickyKeyConfig {
-            release_on_layer_change: false,
-            one_shot_mod_release_on_layer_change: Some(true),
+            default_profile: StickyKeyProfile {
+                release_mode: Some(layer_change_release_mode()),
+                ..StickyKeyProfile::default()
+            },
             ..StickyKeyConfig::default()
         }),
         sequence: [
@@ -309,8 +617,6 @@ fn pure_mod_layer_change_override_enables_release() {
 fn osl_layer_change_override_disables_release() {
     key_sequence_test! {
         keyboard: create_osl_layer_change_keyboard(StickyKeyConfig {
-            release_on_layer_change: true,
-            one_shot_layer_release_on_layer_change: Some(false),
             ..StickyKeyConfig::default()
         }),
         sequence: [
@@ -333,8 +639,10 @@ fn osl_layer_change_override_disables_release() {
 fn osl_layer_change_override_enables_release() {
     key_sequence_test! {
         keyboard: create_osl_layer_change_keyboard(StickyKeyConfig {
-            release_on_layer_change: false,
-            one_shot_layer_release_on_layer_change: Some(true),
+            default_profile: StickyKeyProfile {
+                release_mode: Some(layer_change_release_mode()),
+                ..StickyKeyProfile::default()
+            },
             ..StickyKeyConfig::default()
         }),
         sequence: [
@@ -528,8 +836,11 @@ fn test_sk_timeout() {
     key_sequence_test! {
         keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
             sticky_key: StickyKeyConfig {
-                timeout: Duration::from_millis(100),
-                release_on_layer_change: true,
+                default_profile: StickyKeyProfile {
+                    timeout: Duration::from_millis(100),
+                    release_mode: Some(layer_change_release_mode()),
+                    ..StickyKeyProfile::default()
+                },
                 ..StickyKeyConfig::default()
             },
             ..BehaviorConfig::default()
@@ -569,8 +880,11 @@ fn test_sk_timeout_resets_on_press() {
     key_sequence_test! {
         keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
             sticky_key: StickyKeyConfig {
-                timeout: Duration::from_millis(100),
-                release_on_layer_change: true,
+                default_profile: StickyKeyProfile {
+                    timeout: Duration::from_millis(100),
+                    release_mode: Some(layer_change_release_mode()),
+                    ..StickyKeyProfile::default()
+                },
                 ..StickyKeyConfig::default()
             },
             ..BehaviorConfig::default()
@@ -796,7 +1110,7 @@ fn sticky_layer_double_tap_deactivates_layer() {
 }
 
 /// StickyKey Test 12 (regression): a tap-key SK pressed while a PURE-MOD SK is latched
-/// REPLACES it — the latch is mutually exclusive, so the old modifier is dropped, not
+/// REPLACES it — tap-key lifecycles are exclusive, so the old modifier is dropped, not
 /// merged. Without the replacement guard the tap-key press would OR the pure-mod's LGui
 /// onto the report, yielding LGui+LAlt+Tab instead of just LAlt+Tab.
 ///
@@ -822,8 +1136,7 @@ fn test_sk_tap_key_replaces_pure_mod() {
 /// StickyKey Test 13 (regression): a pure-mod SK pressed while a TAP-KEY SK is latched
 /// REPLACES it. The tap-key's held LAlt is released (its own report) and the next basic
 /// key gets the new pure-mod's LGui applied through it — OSM terminating-key behavior —
-/// not the stale LAlt. Without the guard the pure-mod's LGui would merge onto the tap-key
-/// latch, leaving the shape as tap-key and applying LAlt+LGui.
+/// not the stale LAlt. Without the replacement guard both effects could remain visible.
 ///
 /// Sequence: press/release SK(Tab,LAlt) (col 1), tap SK(LGui) (col 0), tap P (col 3)
 /// Expected: LAlt+Tab, LAlt held, LAlt released, LGui+P, all released.
@@ -882,7 +1195,7 @@ fn test_sk_tap_key_replaces_layer() {
 }
 
 /// A layer-shaped SK must release a physically held tap-key before replacing the
-/// shared latch; otherwise the displaced tap key remains registered indefinitely.
+/// exclusive tap-key lifecycle; otherwise the displaced tap key remains registered indefinitely.
 #[test]
 fn test_sk_layer_replaces_held_tap_key_without_sticking() {
     key_sequence_test! {
@@ -916,8 +1229,11 @@ fn test_sk_tap_key_ignores_activate_on_keypress() {
     key_sequence_test! {
         keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
             sticky_key: StickyKeyConfig {
-                activate_on_keypress: true,    // pure-mod-only knob — must be ignored here
-                release_on_layer_change: true, // match create_test_keyboard so MO release cleans up
+                default_profile: StickyKeyProfile {
+                    activate_on_keypress: true, // pure-mod-only knob — must be ignored here
+                    release_mode: Some(layer_change_release_mode()),
+                    ..StickyKeyProfile::default()
+                },
                 ..StickyKeyConfig::default()
             },
             ..BehaviorConfig::default()
@@ -953,7 +1269,10 @@ const KEYMAP_PUREMOD_SK: [[[KeyAction; 6]; 1]; 1] = [[[
 fn create_test_keyboard_puremod_sk() -> Keyboard<'static> {
     let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
         sticky_key: StickyKeyConfig {
-            timeout: Duration::from_millis(10),
+            default_profile: StickyKeyProfile {
+                timeout: Duration::from_millis(10),
+                ..StickyKeyProfile::default()
+            },
             ..StickyKeyConfig::default()
         },
         ..BehaviorConfig::default()
@@ -973,10 +1292,39 @@ const KEYMAP_PROFILED_PURE_MODS: [[[KeyAction; 3]; 1]; 1] = [[[
     k!(A),
 ]]];
 
+// Modifier and layer effects use distinct profiles and remain independently
+// active. Layer 1 changes the detector key from A to B.
+const KEYMAP_PROFILED_MOD_AND_LAYER: [[[KeyAction; 3]; 1]; 2] = [
+    [[sk_mod!(ModifierCombination::LSHIFT, 0), sk_layer!(1, 1), k!(A)]],
+    [[a!(Transparent), a!(Transparent), k!(B)]],
+];
+
+fn create_profiled_mod_and_layer_keyboard(
+    modifier_profile: StickyKeyProfile,
+    layer_profile: StickyKeyProfile,
+) -> Keyboard<'static> {
+    let mut sticky_key = StickyKeyConfig::default();
+    sticky_key.profiles.push(modifier_profile).unwrap();
+    sticky_key.profiles.push(layer_profile).unwrap();
+    let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
+        sticky_key,
+        ..BehaviorConfig::default()
+    }));
+    let per_key_config: &'static PositionalConfig<1, 3> = Box::leak(Box::new(PositionalConfig::default()));
+    Keyboard::new(wrap_keymap(
+        KEYMAP_PROFILED_MOD_AND_LAYER,
+        per_key_config,
+        behavior_config,
+    ))
+}
+
 fn create_test_keyboard_tap_sk() -> Keyboard<'static> {
     let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(BehaviorConfig {
         sticky_key: StickyKeyConfig {
-            timeout: Duration::from_millis(10),
+            default_profile: StickyKeyProfile {
+                timeout: Duration::from_millis(10),
+                ..StickyKeyProfile::default()
+            },
             ..StickyKeyConfig::default()
         },
         ..BehaviorConfig::default()
@@ -1085,6 +1433,91 @@ fn latest_accumulated_pure_mod_profile_owns_release_behavior() {
     };
 }
 
+#[test]
+fn modifier_and_layer_keep_independent_release_policies() {
+    key_sequence_test! {
+        keyboard: create_profiled_mod_and_layer_keyboard(
+            StickyKeyProfile {
+                release_mode: Some(StickyKeyReleaseMode::OTHER_KEY_PRESS),
+                ..StickyKeyProfile::default()
+            },
+            StickyKeyProfile {
+                release_mode: Some(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
+                ..StickyKeyProfile::default()
+            },
+        ),
+        sequence: [
+            [0, 0, true,  0],
+            [0, 0, false, 0],
+            [0, 1, true,  0],
+            [0, 1, false, 0],
+            [0, 2, true,  0],
+            [0, 2, false, 0],
+        ],
+        expected_reports: [
+            [KC_LSHIFT, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+#[test]
+fn modifier_timeout_does_not_expire_sticky_layer() {
+    key_sequence_test! {
+        keyboard: create_profiled_mod_and_layer_keyboard(
+            StickyKeyProfile {
+                timeout: Duration::from_millis(20),
+                ..StickyKeyProfile::default()
+            },
+            StickyKeyProfile {
+                timeout: Duration::from_millis(200),
+                ..StickyKeyProfile::default()
+            },
+        ),
+        sequence: [
+            [0, 0, true,  0],
+            [0, 0, false, 0],
+            [0, 1, true,  0],
+            [0, 1, false, 40],
+            [0, 2, true,  0],
+            [0, 2, false, 0],
+        ],
+        expected_reports: [
+            [0, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
+#[test]
+fn layer_timeout_does_not_expire_sticky_modifier() {
+    key_sequence_test! {
+        keyboard: create_profiled_mod_and_layer_keyboard(
+            StickyKeyProfile {
+                timeout: Duration::from_millis(200),
+                ..StickyKeyProfile::default()
+            },
+            StickyKeyProfile {
+                timeout: Duration::from_millis(20),
+                ..StickyKeyProfile::default()
+            },
+        ),
+        sequence: [
+            [0, 0, true,  0],
+            [0, 0, false, 0],
+            [0, 1, true,  0],
+            [0, 1, false, 40],
+            [0, 2, true,  0],
+            [0, 2, false, 0],
+        ],
+        expected_reports: [
+            [KC_LSHIFT, [kc_to_u8!(B), 0, 0, 0, 0, 0]],
+            [0, [0, 0, 0, 0, 0, 0]],
+        ]
+    };
+}
+
 // KEYMAP_TWO_TAP_SK: two tap-key SKs for verifying that a second physical key replaces the
 // first latch instead of reusing its key and modifiers.
 const KEYMAP_TWO_TAP_SK: [[[KeyAction; 2]; 1]; 1] = [[[
@@ -1136,10 +1569,9 @@ fn test_sk_timeout_while_held() {
 
 /// StickyKey Test 17b: Timeout fires while a tap-key SK is still physically held.
 ///
-/// Tap-key SKs use the `Latched` phase while their physical key is down, so phase alone cannot
-/// tell the timeout handler whether clearing the state is safe. The physical-press flag must keep
-/// the state alive until release so that release unregisters Tab, retains the latched Alt, and
-/// re-arms Alt's timeout.
+/// Tap-key SKs remain in `Pressed` while their physical producer is down. Timeout
+/// cleanup must defer until release so that release unregisters Tab, retains the
+/// latched Alt, and re-arms Alt's timeout.
 #[test]
 fn test_tap_sk_timeout_while_held() {
     key_sequence_test! {
@@ -1194,9 +1626,15 @@ fn test_second_tap_sk_replaces_first_while_held() {
 fn test_sk_tap_key_ignores_quick_release() {
     key_sequence_test! {
         keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
+            one_shot_modifiers: OneShotModifiersConfig {
+                quick_release: true,
+                ..OneShotModifiersConfig::default()
+            },
             sticky_key: StickyKeyConfig {
-                quick_release: true,           // pure-mod-only knob — must be ignored here
-                release_on_layer_change: true, // match create_test_keyboard so MO release cleans up
+                default_profile: StickyKeyProfile {
+                    release_mode: Some(layer_change_release_mode()),
+                    ..StickyKeyProfile::default()
+                },
                 ..StickyKeyConfig::default()
             },
             ..BehaviorConfig::default()

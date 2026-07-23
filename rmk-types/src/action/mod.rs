@@ -31,20 +31,31 @@ use crate::modifier::ModifierCombination;
 #[cfg(feature = "steno")]
 use crate::steno::StenoKey;
 
-/// Parameters for the StickyKey action.
+/// Effect produced by a sticky-key action.
+///
+/// Each variant carries only the data that is meaningful for that effect, so
+/// invalid combinations cannot be constructed.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
+pub enum StickyKeyEffect {
+    /// Apply modifiers to the next key (the legacy OSM behavior).
+    Modifier(ModifierCombination),
+    /// Activate a layer for the next key (the legacy OSL behavior).
+    Layer(u8),
+    /// Tap a HID key while retaining modifiers between repetitions.
+    TapKey {
+        key: HidKeyCode,
+        modifiers: ModifierCombination,
+    },
+}
+
+/// Parameters for a sticky-key action.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 pub struct StickyKeyAction {
-    /// HID key sent on each SK press. `HidKeyCode::No` selects the pure-mod (OSM) shape
-    /// when `layer` is `None`; otherwise it's the tap-key (alt-tab) shape.
-    pub key: HidKeyCode,
-    /// Modifiers held between presses (0 = none). Unused for the layer (OSL) shape.
-    pub keep: ModifierCombination,
-    /// `Some(n)` = one-shot-layer (OSL) shape activating layer `n`.
-    /// `None` + `key == KeyCode::Hid(HidKeyCode::No)` = pure-mod (OSM) shape.
-    /// `None` + `key != KeyCode::Hid(HidKeyCode::No)` = tap-key (alt-tab) shape.
-    pub layer: Option<u8>,
+    pub effect: StickyKeyEffect,
     /// Profile-table index. `u8::MAX` selects the default Sticky Key profile.
     pub profile: u8,
 }
@@ -80,6 +91,10 @@ pub enum Action {
     TriLayerUpper,
     /// Triggers the Macro at the 'index'.
     TriggerMacro(u8),
+    /// Oneshot layer, keep the layer active until the next key is triggered.
+    OneShotLayer(u8),
+    /// Oneshot modifier, keep the modifier active until the next key is triggered.
+    OneShotModifier(ModifierCombination),
     /// Oneshot key, keep the key active until the next key is triggered.
     OneShotKey(HidKeyCode),
     /// Actions for controlling lights
@@ -90,9 +105,6 @@ pub enum Action {
     Special(SpecialKey),
     /// User Keys
     User(u8),
-    /// Sticky key: a unified one-shot action whose shape (pure-mod, tap-key, or
-    /// one-shot-layer) is determined by the [`StickyKeyAction`] payload.
-    StickyKey(StickyKeyAction),
     /// Set the default layer and persist it to storage; restored on next boot.
     ///
     /// Runtime behavior matches [`Action::DefaultLayer`]; additionally persisted to flash.
@@ -102,6 +114,11 @@ pub enum Action {
     /// sent to the host as a vendor HID report.
     #[cfg(feature = "steno")]
     Steno(StenoKey),
+    /// Configurable sticky modifier, layer, or tap-key behavior.
+    ///
+    /// This variant is appended after the pre-existing action variants to
+    /// preserve their serialized discriminants.
+    StickyKey(StickyKeyAction),
 }
 
 #[cfg(test)]
@@ -111,9 +128,10 @@ mod tests {
     #[test]
     fn sticky_key_action_profile_round_trips() {
         let action = Action::StickyKey(StickyKeyAction {
-            key: HidKeyCode::Tab,
-            keep: ModifierCombination::LALT,
-            layer: None,
+            effect: StickyKeyEffect::TapKey {
+                key: HidKeyCode::Tab,
+                modifiers: ModifierCombination::LALT,
+            },
             profile: 7,
         });
         let mut bytes = [0; 32];
@@ -121,5 +139,18 @@ mod tests {
         let decoded: Action = postcard::from_bytes(encoded).unwrap();
 
         assert_eq!(decoded, action);
+    }
+
+    #[test]
+    fn existing_action_discriminants_remain_stable() {
+        fn discriminant(action: Action) -> u8 {
+            let mut bytes = [0; 32];
+            postcard::to_slice(&action, &mut bytes).unwrap()[0]
+        }
+
+        assert_eq!(discriminant(Action::No), 0);
+        assert_eq!(discriminant(Action::OneShotLayer(1)), 13);
+        assert_eq!(discriminant(Action::OneShotModifier(ModifierCombination::LSHIFT)), 14);
+        assert_eq!(discriminant(Action::PersistentDefaultLayer(1)), 20);
     }
 }

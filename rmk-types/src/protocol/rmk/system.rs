@@ -19,7 +19,7 @@ pub struct ProtocolVersion {
 
 impl ProtocolVersion {
     /// Current protocol version for this firmware release.
-    pub const CURRENT: Self = Self { major: 1, minor: 0 };
+    pub const CURRENT: Self = Self { major: 1, minor: 1 };
 }
 
 /// Device capabilities discovered during the connection handshake.
@@ -106,6 +106,11 @@ mod tests {
     fn round_trip_protocol_version() {
         round_trip(&ProtocolVersion { major: 1, minor: 0 });
         round_trip(&ProtocolVersion { major: 255, minor: 255 });
+    }
+
+    #[test]
+    fn current_protocol_version_includes_sticky_key_action() {
+        assert_eq!(ProtocolVersion::CURRENT, ProtocolVersion { major: 1, minor: 1 });
     }
 
     #[test]

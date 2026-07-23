@@ -1,3 +1,5 @@
+#[cfg(all(feature = "dfu_split", any(feature = "dfu_rp", feature = "dfu_nrf")))]
+use core::sync::atomic::Ordering;
 #[cfg(feature = "dfu_lock")]
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -7,8 +9,10 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::signal::Signal;
 use embassy_usb::control::{InResponse, OutResponse, Request};
 use embassy_usb::driver::Driver;
-use embassy_usb::types::StringIndex;
+use embassy_usb::types::{InterfaceNumber, StringIndex};
 use embassy_usb::{Builder, Handler};
+#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+use embassy_usb_dfu::{ResetImmediate, dfu::FirmwareHandler};
 use static_cell::StaticCell;
 
 #[cfg(feature = "dfu_lock")]
@@ -43,6 +47,23 @@ use embassy_embedded_hal::flash::partition::BlockingPartition;
 use self::nrf::{MutexType, PartitionType};
 #[cfg(feature = "dfu_rp")]
 use self::rp::{MutexType, PartitionType};
+
+// ---------------------------------------------------------------------------
+// dfu_split sub-module (behind feature flag)
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "dfu_split")]
+mod split;
+#[cfg(feature = "dfu_split")]
+use self::split::PassthroughDfuHandler;
+#[cfg(feature = "dfu_split")]
+pub(crate) use self::split::{
+    PASSTHROUGH_TARGET, PassthroughCommand, passthrough_done_if_empty, passthrough_pending, passthrough_take_command,
+};
+#[cfg(feature = "dfu_split")]
+pub use self::split::{
+    SplitDfuHandler, get_firmware_update_data, read_embedded_firmware_hash, set_firmware_update_data,
+};
 
 // ---------------------------------------------------------------------------
 // DfuFlashManager — shared by RP2040 and nRF
@@ -135,10 +156,12 @@ pub fn is_dfu_unlocked() -> bool {
 // RmkDfuHandler
 // ---------------------------------------------------------------------------
 
+#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+use embassy_usb::class::dfu::dfu_mode::DfuState;
 #[cfg(feature = "dfu")]
 use embassy_usb::class::dfu::{
     consts::Status,
-    dfu_mode::{self, DfuState},
+    dfu_mode::{self},
 };
 #[cfg(any(feature = "dfu", feature = "dfu_lock"))]
 use rmk_types::dfu::DfuStatus;
@@ -151,6 +174,7 @@ use crate::event::publish_event;
 #[cfg(feature = "dfu")]
 struct RmkDfuHandler<H> {
     inner: H,
+    target_id: Option<usize>,
 }
 
 #[cfg(feature = "dfu")]
@@ -164,7 +188,10 @@ impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
         }
         #[cfg(feature = "dfu_lock")]
         DFU_STARTED.store(true, Ordering::Release);
-        info!("dfu: DFU download started");
+        match self.target_id {
+            Some(id) => info!("dfu: DFU download started (passthrough peripheral {})", id),
+            None => info!("dfu: DFU download started (central)"),
+        }
         publish_event(crate::event::DfuStatusEvent::new(DfuStatus::Started));
         self.inner.start()
     }
@@ -190,22 +217,101 @@ impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
 }
 
 // ---------------------------------------------------------------------------
-// register_dfu_interface
+// RmkDfuInterface — single USB handler for all DFU alt settings
 // ---------------------------------------------------------------------------
 
+/// Max passthrough alt settings supported on a single DFU interface.
+#[cfg(feature = "dfu_split")]
+const MAX_PASSTHROUGH_ALTS: usize = 4;
+
+/// Single USB `Handler` that owns all DFU alternate settings.
+///
+/// Alt 0 is always the central's own DFU flash.  Alt 1..N are passthrough
+/// slots for split peripherals (requires `dfu_split`).
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
-use {
-    embassy_boot::{BlockingFirmwareUpdater, FirmwareUpdaterConfig},
-    embassy_usb_dfu::{ResetImmediate, dfu::FirmwareHandler},
-};
+struct RmkDfuInterface {
+    central:
+        DfuState<RmkDfuHandler<FirmwareHandler<'static, PartitionType, PartitionType, ResetImmediate, BLOCK_SIZE_DFU>>>,
+    #[cfg(feature = "dfu_split")]
+    passthrough: [Option<DfuState<RmkDfuHandler<PassthroughDfuHandler>>>; MAX_PASSTHROUGH_ALTS],
+    #[cfg(feature = "dfu_split")]
+    num_passthrough: usize,
+    current_alt: u8,
+}
+
+#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+impl Handler for RmkDfuInterface {
+    fn set_alternate_setting(&mut self, _iface: InterfaceNumber, alternate_setting: u8) {
+        self.current_alt = alternate_setting;
+    }
+
+    fn control_out(&mut self, req: Request, data: &[u8]) -> Option<OutResponse> {
+        match self.current_alt {
+            0 => self.central.control_out(req, data),
+            #[cfg(feature = "dfu_split")]
+            n => {
+                let idx = (n as usize).saturating_sub(1);
+                self.passthrough_slots(idx).and_then(|s| s.control_out(req, data))
+            }
+            #[cfg(not(feature = "dfu_split"))]
+            _ => None,
+        }
+    }
+
+    fn control_in<'a>(&'a mut self, req: Request, buf: &'a mut [u8]) -> Option<InResponse<'a>> {
+        match self.current_alt {
+            0 => self.central.control_in(req, buf),
+            #[cfg(feature = "dfu_split")]
+            n => {
+                let idx = (n as usize).saturating_sub(1);
+                let buf_ptr = buf.as_mut_ptr();
+                let resp = self.passthrough_slots(idx).and_then(|s| s.control_in(req, buf));
+                // ── Flow control: dfuDNBUSY override ──────────────────────
+                // Byte 4 of the GETSTATUS response (6 bytes) is the `state`
+                // field.  While PASSTHROUGH_TARGET is set (!= usize::MAX) we override
+                // it with 4 (= dfuDNBUSY).  dfu-util then waits 50 ms and polls again
+                // — adaptive back-pressure without a fixed timeout.
+                // Uses a volatile store because `buf` is still borrowed by
+                // `resp` at this point.
+                if resp.is_some() && PASSTHROUGH_TARGET.load(Ordering::Acquire) != usize::MAX {
+                    unsafe {
+                        core::ptr::write_volatile(buf_ptr.add(4), 4u8);
+                    }
+                }
+                resp
+            }
+            #[cfg(not(feature = "dfu_split"))]
+            _ => None,
+        }
+    }
+}
+
+#[cfg(feature = "dfu_split")]
+impl RmkDfuInterface {
+    fn passthrough_slots(&mut self, idx: usize) -> Option<&mut DfuState<RmkDfuHandler<PassthroughDfuHandler>>> {
+        self.passthrough.get_mut(idx)?.as_mut()
+    }
+}
+
+#[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+static RMK_DFU_INTERFACE: StaticCell<RmkDfuInterface> = StaticCell::new();
+
+// ---------------------------------------------------------------------------
+// register_dfu_interface — register DFU interface with central + passthrough alts
+// ---------------------------------------------------------------------------
 
 /// Register a DFU interface on the USB builder.
+///
+/// Alt 0 is always the central's own DFU flash.
+/// Alt 1..N are passthrough slots for split peripherals (requires `dfu_split`).
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 pub fn register_dfu_interface<D: Driver<'static>>(
     builder: &mut Builder<'static, D>,
     mgr: &'static DfuFlashManager,
     product_name: &'static str,
+    #[cfg(feature = "dfu_split")] num_peripherals: usize,
 ) {
+    use embassy_boot::{BlockingFirmwareUpdater, FirmwareUpdaterConfig};
     use embassy_usb::class::dfu::consts::DfuAttributes;
 
     let dfu_part = mgr.dfu_partition();
@@ -218,16 +324,36 @@ pub fn register_dfu_interface<D: Driver<'static>>(
     let aligned: &'static mut [u8] = ALIGNED.init([0; DFU_WRITE_SIZE]);
     let updater = BlockingFirmwareUpdater::new(config, aligned);
 
-    let attrs = DfuAttributes::CAN_DOWNLOAD | DfuAttributes::WILL_DETACH;
+    // Alt 0: Central flash
+    let central_attrs = DfuAttributes::CAN_DOWNLOAD | DfuAttributes::WILL_DETACH;
+    let central_handler = RmkDfuHandler {
+        inner: FirmwareHandler::new(updater, ResetImmediate),
+        target_id: None,
+    };
+    let central_state = DfuState::new(central_handler, central_attrs);
 
-    let inner = FirmwareHandler::new(updater, ResetImmediate);
-    let handler = RmkDfuHandler { inner };
-    let state = DfuState::new(handler, attrs);
-
-    type DfuStateInner =
-        RmkDfuHandler<FirmwareHandler<'static, PartitionType, PartitionType, ResetImmediate, BLOCK_SIZE_DFU>>;
-    static DFU_STATE: StaticCell<DfuState<DfuStateInner>> = StaticCell::new();
-    let state_ref = DFU_STATE.init(state);
+    // Alt 1..N: Passthrough
+    #[cfg(feature = "dfu_split")]
+    let passthrough_count = num_peripherals.min(MAX_PASSTHROUGH_ALTS);
+    #[cfg(feature = "dfu_split")]
+    let passthrough = {
+        let mut arr: [Option<DfuState<RmkDfuHandler<PassthroughDfuHandler>>>; MAX_PASSTHROUGH_ALTS] =
+            Default::default();
+        for id in 0..passthrough_count {
+            let state = DfuState::new(
+                RmkDfuHandler {
+                    inner: PassthroughDfuHandler {
+                        target_id: id,
+                        written: 0,
+                    },
+                    target_id: Some(id),
+                },
+                DfuAttributes::CAN_DOWNLOAD,
+            );
+            arr[id] = Some(state);
+        }
+        arr
+    };
 
     let string_idx = builder.string();
 
@@ -237,7 +363,7 @@ pub fn register_dfu_interface<D: Driver<'static>>(
     alt.descriptor(
         0x21,
         &[
-            attrs.bits(),
+            central_attrs.bits(),
             0xc4,
             0x09,
             (BLOCK_SIZE_DFU & 0xff) as u8,
@@ -246,8 +372,34 @@ pub fn register_dfu_interface<D: Driver<'static>>(
             0x01,
         ],
     );
+
+    #[cfg(feature = "dfu_split")]
+    for _ in 0..passthrough_count {
+        let mut alt = iface.alt_setting(0xFE, 0x01, 0x02, Some(string_idx));
+        alt.descriptor(
+            0x21,
+            &[
+                DfuAttributes::CAN_DOWNLOAD.bits(),
+                0xc4,
+                0x09,
+                (BLOCK_SIZE_DFU & 0xff) as u8,
+                ((BLOCK_SIZE_DFU >> 8) & 0xff) as u8,
+                0x10,
+                0x01,
+            ],
+        );
+    }
     drop(func);
-    builder.handler(state_ref);
+
+    let iface_ref = RMK_DFU_INTERFACE.init(RmkDfuInterface {
+        central: central_state,
+        #[cfg(feature = "dfu_split")]
+        passthrough,
+        #[cfg(feature = "dfu_split")]
+        num_passthrough: passthrough_count,
+        current_alt: 0,
+    });
+    builder.handler(iface_ref);
 
     static STRING_PROVIDER: StaticCell<DfuStringProvider> = StaticCell::new();
     let string_provider = STRING_PROVIDER.init(DfuStringProvider {
@@ -273,7 +425,13 @@ pub async fn run_peripheral_dfu<D: Driver<'static>>(
 
     let product_name = device_config.product_name;
     if let Some(mgr) = get_manager() {
-        register_dfu_interface(&mut builder, mgr, product_name);
+        register_dfu_interface(
+            &mut builder,
+            mgr,
+            product_name,
+            #[cfg(feature = "dfu_split")]
+            0,
+        );
     }
 
     let mut device = builder.build();

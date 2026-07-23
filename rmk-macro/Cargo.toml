@@ -25,6 +25,7 @@ watchdog = []
 dfu_rp = []
 ## Enable nRF DFU firmware update code generation
 dfu_nrf = []
+dfu_split = []
 
 [lib]
 proc-macro = true

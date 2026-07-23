@@ -2,6 +2,7 @@ use bitfield_struct::bitfield;
 use embassy_time::Duration;
 use heapless::Vec;
 use rmk_types::fork::Fork;
+use rmk_types::keycode::KeyCode;
 use rmk_types::morse::{Morse, MorseMode, MorseProfile};
 
 use crate::keyboard::combo::Combo;
@@ -17,6 +18,9 @@ pub struct BehaviorConfig {
     pub default_layer: u8,
     pub tri_layer: Option<[u8; 3]>,
     pub tap: TapConfig,
+    /// Legacy one-shot inputs, normalized into `sticky_key` when the keymap is built.
+    pub one_shot: OneShotConfig,
+    pub one_shot_modifiers: OneShotModifiersConfig,
     pub combo: CombosConfig,
     pub fork: ForksConfig,
     pub morse: MorsesConfig,
@@ -36,7 +40,7 @@ pub struct BehaviorConfig {
 /// entries can be configured; for each incoming [`crate::event::PointingEvent`]
 /// the matching entry (or a fallback entry with `device_id == None`) drives the
 /// layer state.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct AutoMouseLayerConfig {
     /// Pointing device id this entry applies to. When `None`, the entry acts as
     /// a fallback for devices not covered by any other entry.
@@ -47,6 +51,30 @@ pub struct AutoMouseLayerConfig {
     pub timeout: Duration,
     /// Minimum absolute X/Y axis delta to be considered as motion (must be `>= 1`)
     pub threshold: u16,
+    /// When `true`, non-mouse key presses deactivate [`Self::target_layer`] immediately (mouse HID keys and [`Self::extra_mouse_keys`] excepted).
+    /// Keys are classified by their resolved action; macro-emitted keycodes, `Again`/`Repeat`,
+    /// and `GraveEscape` cannot be classified and never deactivate the layer.
+    /// Modifier-only actions (e.g. the hold side of `MT`) deactivate unless every contained
+    /// modifier is listed in [`Self::extra_mouse_keys`].
+    pub deactivate_on_key: bool,
+    /// Extra keycodes (e.g. modifiers) that do not trigger deactivation when [`Self::deactivate_on_key`] is set.
+    pub extra_mouse_keys: &'static [KeyCode],
+    /// When `true`, key presses that do NOT deactivate [`Self::target_layer`] extend the timeout deadline.
+    pub reset_timeout_on_key: bool,
+}
+
+impl Default for AutoMouseLayerConfig {
+    fn default() -> Self {
+        Self {
+            device_id: None,
+            target_layer: 0,
+            timeout: Duration::from_millis(500),
+            threshold: 1,
+            deactivate_on_key: false,
+            extra_mouse_keys: &[],
+            reset_timeout_on_key: false,
+        }
+    }
 }
 
 impl AutoMouseLayerConfig {
@@ -61,7 +89,21 @@ impl AutoMouseLayerConfig {
             target_layer,
             timeout,
             threshold,
+            ..Self::default()
         }
+    }
+
+    /// Enable [`Self::deactivate_on_key`] with `exceptions` as additional non-deactivating keycodes.
+    pub fn with_deactivate_on_key(mut self, exceptions: &'static [KeyCode]) -> Self {
+        self.deactivate_on_key = true;
+        self.extra_mouse_keys = exceptions;
+        self
+    }
+
+    /// Enable [`Self::reset_timeout_on_key`].
+    pub fn with_reset_timeout_on_key(mut self) -> Self {
+        self.reset_timeout_on_key = true;
+        self
     }
 }
 
@@ -122,7 +164,8 @@ impl StickyKeyReleaseMode {
     pub const LAYER_EXIT: Self = Self::new().with_layer_exit(true);
     pub const DOUBLE_TAP: Self = Self::new().with_double_tap(true);
 
-    pub const fn contains(self, other: Self) -> bool {
+    /// Returns `true` when the two trigger sets share at least one bit.
+    pub const fn intersects(self, other: Self) -> bool {
         self.into_bits() & other.into_bits() != 0
     }
 }
@@ -158,15 +201,6 @@ impl Default for StickyKeyProfile {
 pub struct StickyKeyConfig {
     pub default_profile: StickyKeyProfile,
     pub profiles: Vec<StickyKeyProfile, STICKY_KEY_PROFILE_MAX_NUM>,
-    /// Legacy Rust-API compatibility knobs. TOML uses `release_mode` instead.
-    pub timeout: Duration,
-    pub activate_on_keypress: bool,
-    pub max_repeat: u16,
-    pub quick_release: bool,
-    pub release_on_layer_change: bool,
-    pub tap_key_release_on_layer_change: Option<bool>,
-    pub one_shot_mod_release_on_layer_change: Option<bool>,
-    pub one_shot_layer_release_on_layer_change: Option<bool>,
 }
 
 impl Default for StickyKeyConfig {
@@ -174,15 +208,51 @@ impl Default for StickyKeyConfig {
         Self {
             default_profile: StickyKeyProfile::default(),
             profiles: Vec::new(),
-            timeout: Duration::from_secs(1),
-            activate_on_keypress: false,
-            max_repeat: 0,
-            quick_release: false,
-            release_on_layer_change: false,
-            tap_key_release_on_layer_change: None,
-            one_shot_mod_release_on_layer_change: None,
-            one_shot_layer_release_on_layer_change: None,
         }
+    }
+}
+
+/// Legacy one-shot timeout input retained for Rust keymaps.
+#[derive(Clone, Copy, Debug)]
+pub struct OneShotConfig {
+    pub timeout: Duration,
+}
+
+impl Default for OneShotConfig {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_secs(1),
+        }
+    }
+}
+
+/// Legacy one-shot modifier input retained for Rust keymaps.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct OneShotModifiersConfig {
+    pub activate_on_keypress: bool,
+    pub quick_release: bool,
+}
+
+impl BehaviorConfig {
+    /// Convert legacy one-shot inputs to the canonical sticky-key profile.
+    ///
+    /// This runs once at the keymap boundary. Runtime policy comes from the
+    /// canonical profile; the legacy pure-mod-only quick-release bit is
+    /// captured separately by `KeyMap` because applying it to the shared
+    /// profile would also change OSL behavior.
+    pub(crate) fn normalize_sticky_key_compat(&mut self) {
+        let legacy_timeout = OneShotConfig::default().timeout;
+        if self.one_shot.timeout != legacy_timeout
+            && self.sticky_key.default_profile.timeout == StickyKeyProfile::default().timeout
+        {
+            self.sticky_key.default_profile.timeout = self.one_shot.timeout;
+        }
+        if self.one_shot_modifiers.activate_on_keypress {
+            self.sticky_key.default_profile.activate_on_keypress = true;
+        }
+        // `quick_release` is intentionally not copied into the shared default
+        // profile: the legacy option applied only to OSM/pure-mod behavior.
+        // KeyMap resolves that compatibility input once for the pure-mod shape.
     }
 }
 

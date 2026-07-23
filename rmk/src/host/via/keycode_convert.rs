@@ -1,4 +1,4 @@
-use rmk_types::action::{Action, KeyAction, KeyboardAction, StickyKeyAction};
+use rmk_types::action::{Action, KeyAction, KeyboardAction, StickyKeyAction, StickyKeyEffect};
 use rmk_types::keycode::{HidKeyCode, KeyCode, SpecialKey};
 use rmk_types::modifier::ModifierCombination;
 
@@ -82,11 +82,13 @@ pub(crate) fn to_via_keycode(key_action: KeyAction) -> u16 {
                 }
             },
             Action::User(id) => (id as u16 & 0x1F) | 0x7E00,
-            Action::StickyKey(sk) if sk.profile == u8::MAX => match (sk.key, sk.layer) {
+            Action::OneShotLayer(layer) if layer < 32 => 0x5280 | layer as u16,
+            Action::OneShotModifier(modifiers) => 0x52A0 | ((modifiers.into_packed_bits() & 0x1F) as u16),
+            Action::StickyKey(sk) if sk.profile == u8::MAX => match sk.effect {
                 // OSL, VIA range (same as old OneShotLayer)
-                (_, Some(layer)) if layer < 32 => 0x5280 | layer as u16,
+                StickyKeyEffect::Layer(layer) if layer < 32 => 0x5280 | layer as u16,
                 // OSM, VIA range (same as old OneShotModifier)
-                (HidKeyCode::No, None) => 0x52A0 | ((sk.keep.into_packed_bits() & 0x1F) as u16),
+                StickyKeyEffect::Modifier(modifiers) => 0x52A0 | ((modifiers.into_packed_bits() & 0x1F) as u16),
                 _ => {
                     warn!("StickyKey {:?} is not supported by VIA", sk);
                     0
@@ -235,9 +237,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x5280..=0x529F => {
             let layer = via_keycode as u8 & 0x1F;
             KeyAction::Single(Action::StickyKey(StickyKeyAction {
-                key: HidKeyCode::No,
-                keep: ModifierCombination::new(),
-                layer: Some(layer),
+                effect: StickyKeyEffect::Layer(layer),
                 profile: u8::MAX,
             }))
         }
@@ -245,9 +245,7 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x52A0..=0x52BF => {
             let m = ModifierCombination::from_packed_bits((via_keycode & 0x1F) as u8);
             KeyAction::Single(Action::StickyKey(StickyKeyAction {
-                key: HidKeyCode::No,
-                keep: m,
-                layer: None,
+                effect: StickyKeyEffect::Modifier(m),
                 profile: u8::MAX,
             }))
         }
@@ -878,9 +876,7 @@ mod test {
     fn test_vial_osm_round_trip() {
         // OSM(LCtrl) — VIA range 0x52A0 + packed_bits
         let osm_ctrl = KeyAction::Single(Action::StickyKey(StickyKeyAction {
-            key: HidKeyCode::No,
-            keep: ModifierCombination::LCTRL,
-            layer: None,
+            effect: StickyKeyEffect::Modifier(ModifierCombination::LCTRL),
             profile: u8::MAX,
         }));
         let via = to_via_keycode(osm_ctrl);
@@ -890,9 +886,7 @@ mod test {
 
         // OSM(LShift)
         let osm_shift = KeyAction::Single(Action::StickyKey(StickyKeyAction {
-            key: HidKeyCode::No,
-            keep: ModifierCombination::LSHIFT,
-            layer: None,
+            effect: StickyKeyEffect::Modifier(ModifierCombination::LSHIFT),
             profile: u8::MAX,
         }));
         let via = to_via_keycode(osm_shift);
@@ -902,9 +896,7 @@ mod test {
 
         // OSM(LAlt) — uses VIA range 0x52A0, round-trips through packed bits cleanly now
         let osm_alt = KeyAction::Single(Action::StickyKey(StickyKeyAction {
-            key: HidKeyCode::No,
-            keep: ModifierCombination::LALT,
-            layer: None,
+            effect: StickyKeyEffect::Modifier(ModifierCombination::LALT),
             profile: u8::MAX,
         }));
         let via = to_via_keycode(osm_alt);
@@ -917,9 +909,7 @@ mod test {
     fn test_vial_osl_round_trip() {
         // OSL(0) — VIA range 0x5280 + layer
         let osl_0 = KeyAction::Single(Action::StickyKey(StickyKeyAction {
-            key: HidKeyCode::No,
-            keep: ModifierCombination::new(),
-            layer: Some(0),
+            effect: StickyKeyEffect::Layer(0),
             profile: u8::MAX,
         }));
         let via = to_via_keycode(osl_0);
@@ -929,9 +919,7 @@ mod test {
 
         // OSL(5)
         let osl_5 = KeyAction::Single(Action::StickyKey(StickyKeyAction {
-            key: HidKeyCode::No,
-            keep: ModifierCombination::new(),
-            layer: Some(5),
+            effect: StickyKeyEffect::Layer(5),
             profile: u8::MAX,
         }));
         let via = to_via_keycode(osl_5);
@@ -943,12 +931,28 @@ mod test {
     #[test]
     fn test_vial_does_not_convert_tap_key_sticky_key_to_osm() {
         let tap_key_sticky_key = KeyAction::Single(Action::StickyKey(StickyKeyAction {
-            key: HidKeyCode::Tab,
-            keep: ModifierCombination::LALT,
-            layer: None,
+            effect: StickyKeyEffect::TapKey {
+                key: HidKeyCode::Tab,
+                modifiers: ModifierCombination::LALT,
+            },
             profile: u8::MAX,
         }));
 
         assert_eq!(to_via_keycode(tap_key_sticky_key), 0);
+    }
+
+    #[test]
+    fn test_vial_does_not_convert_profiled_sticky_keys_to_osm_or_osl() {
+        let profiled_modifier = KeyAction::Single(Action::StickyKey(StickyKeyAction {
+            effect: StickyKeyEffect::Modifier(ModifierCombination::LCTRL),
+            profile: 0,
+        }));
+        let profiled_layer = KeyAction::Single(Action::StickyKey(StickyKeyAction {
+            effect: StickyKeyEffect::Layer(1),
+            profile: 0,
+        }));
+
+        assert_eq!(to_via_keycode(profiled_modifier), 0);
+        assert_eq!(to_via_keycode(profiled_layer), 0);
     }
 }

@@ -11,7 +11,7 @@ use {
 };
 
 use crate::MACRO_SPACE_SIZE;
-use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, PositionalConfig, StickyKeyProfile, StickyKeyReleaseMode};
+use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, PositionalConfig, StickyKeyReleaseMode};
 use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_event};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::combo::Combo;
@@ -26,6 +26,14 @@ pub(crate) enum StickyKeyShape {
     PureMod,
     TapKey,
     Layer,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct StickyKeyPolicy {
+    pub timeout: Duration,
+    pub activate_on_keypress: bool,
+    pub max_repeat: u16,
+    pub release_mode: StickyKeyReleaseMode,
 }
 
 /// All allocated data needed to build a [`KeyMap`].
@@ -105,6 +113,8 @@ struct KeyMapInner<'a> {
     encoder_layer_cache: &'a mut [u8],
     /// Behavior configuration
     behavior: &'a mut BehaviorConfig,
+    /// Legacy OSM-only quick release, resolved at construction time.
+    pure_mod_quick_release: bool,
     /// Hand info: row * col (read-only)
     hand: &'a [Hand],
     /// Mouse button state
@@ -373,6 +383,7 @@ impl<'a> KeyMap<'a> {
         let layer_cache = data.layer_cache.as_mut_slice().as_flattened_mut();
         let encoder_layer_cache = data.encoder_layer_cache.as_mut_slice().as_flattened_mut();
         let hand = positional_config.hand.as_slice().as_flattened();
+        let pure_mod_quick_release = behavior.one_shot_modifiers.quick_release;
 
         KeyMap {
             inner: RefCell::new(KeyMapInner {
@@ -386,6 +397,7 @@ impl<'a> KeyMap<'a> {
                 layer_cache,
                 encoder_layer_cache,
                 behavior,
+                pure_mod_quick_release,
                 hand,
                 mouse_buttons: 0,
                 #[cfg(feature = "host_security")]
@@ -402,6 +414,8 @@ impl<'a> KeyMap<'a> {
     ) -> Self {
         fill_vec(&mut behavior.fork.forks);
         fill_vec(&mut behavior.morse.morses);
+        // Resolve source-level compatibility before runtime construction.
+        behavior.normalize_sticky_key_compat();
         Self::build(data, behavior, positional_config)
     }
 
@@ -420,6 +434,8 @@ impl<'a> KeyMap<'a> {
     ) -> Self {
         fill_vec(&mut behavior.fork.forks);
         fill_vec(&mut behavior.morse.morses);
+        // Storage is applied after legacy source defaults and therefore wins at boot.
+        behavior.normalize_sticky_key_compat();
 
         // Read from storage BEFORE flattening (storage expects typed arrays).
         if let Some(storage) = storage
@@ -590,43 +606,28 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().behavior.sticky_key.default_profile.timeout
     }
 
-    pub(crate) fn sticky_key_profile(&self, index: u8, shape: StickyKeyShape) -> StickyKeyProfile {
-        let config = &self.inner.borrow().behavior.sticky_key;
-        if let Some(profile) = config.profiles.get(index as usize) {
-            return *profile;
-        }
-        let mut profile = config.default_profile;
-        // Keep the resolved default profile canonical. The remaining fields are
-        // a compatibility shim for Rust callers using the legacy struct-update
-        // API: only non-default legacy values override the canonical profile.
-        if config.timeout != Duration::from_secs(1) {
-            profile.timeout = config.timeout;
-        }
-        if config.activate_on_keypress {
-            profile.activate_on_keypress = true;
-        }
-        if config.max_repeat != 0 {
-            profile.max_repeat = config.max_repeat;
-        }
-        if profile.release_mode.is_none() {
-            let mut mode = 0;
-            if shape == StickyKeyShape::PureMod && config.quick_release {
-                mode |= StickyKeyReleaseMode::OTHER_KEY_PRESS.into_bits();
+    pub(crate) fn sticky_key_profile(&self, index: u8, shape: StickyKeyShape) -> StickyKeyPolicy {
+        let inner = self.inner.borrow();
+        let config = &inner.behavior.sticky_key;
+        let uses_default = index as usize >= config.profiles.len();
+        let profile = config
+            .profiles
+            .get(index as usize)
+            .copied()
+            .unwrap_or(config.default_profile);
+        let release_mode = profile.release_mode.unwrap_or_else(|| match shape {
+            StickyKeyShape::TapKey => StickyKeyReleaseMode::OTHER_KEY_PRESS,
+            StickyKeyShape::PureMod if uses_default && inner.pure_mod_quick_release => {
+                StickyKeyReleaseMode::OTHER_KEY_PRESS
             }
-            let layer_release = match shape {
-                StickyKeyShape::PureMod => config.one_shot_mod_release_on_layer_change,
-                StickyKeyShape::Layer => config.one_shot_layer_release_on_layer_change,
-                StickyKeyShape::TapKey => config.tap_key_release_on_layer_change,
-            }
-            .unwrap_or(config.release_on_layer_change);
-            if layer_release {
-                mode |= StickyKeyReleaseMode::LAYER_ENTER.into_bits() | StickyKeyReleaseMode::LAYER_EXIT.into_bits();
-            }
-            if mode != 0 {
-                profile.release_mode = Some(StickyKeyReleaseMode::from_bits(mode));
-            }
+            StickyKeyShape::PureMod | StickyKeyShape::Layer => StickyKeyReleaseMode::OTHER_KEY_RELEASE,
+        });
+        StickyKeyPolicy {
+            timeout: profile.timeout,
+            activate_on_keypress: profile.activate_on_keypress,
+            max_repeat: profile.max_repeat,
+            release_mode,
         }
-        profile
     }
 
     pub(crate) fn tap_interval(&self) -> u16 {
@@ -668,11 +669,7 @@ impl<'a> KeyMap<'a> {
     }
 
     pub(crate) fn set_sticky_key_timeout(&self, timeout: Duration) {
-        let mut inner = self.inner.borrow_mut();
-        inner.behavior.sticky_key.default_profile.timeout = timeout;
-        // Keep the legacy Rust-API compatibility mirror synchronized so it
-        // cannot override a Vial runtime update during profile resolution.
-        inner.behavior.sticky_key.timeout = timeout;
+        self.inner.borrow_mut().behavior.sticky_key.default_profile.timeout = timeout;
     }
 
     pub(crate) fn set_tap_interval(&self, interval: u16) {
@@ -972,7 +969,7 @@ mod test {
     fn runtime_timeout_update_changes_the_canonical_default_profile() {
         let mut data = KeymapData::<1, 1, 1>::new([[[k!(A)]]]);
         let mut behavior = BehaviorConfig::default();
-        behavior.sticky_key.timeout = Duration::from_millis(50);
+        behavior.sticky_key.default_profile.timeout = Duration::from_millis(50);
         let positional = PositionalConfig::<1, 1>::default();
         let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
 
@@ -989,8 +986,8 @@ mod test {
     fn named_profiles_ignore_legacy_default_overrides() {
         let mut data = KeymapData::<1, 1, 1>::new([[[k!(A)]]]);
         let mut behavior = BehaviorConfig::default();
-        behavior.sticky_key.timeout = Duration::from_millis(50);
-        behavior.sticky_key.quick_release = true;
+        behavior.one_shot.timeout = Duration::from_millis(50);
+        behavior.one_shot_modifiers.quick_release = true;
         behavior
             .sticky_key
             .profiles
@@ -1007,23 +1004,58 @@ mod test {
         let profile = keymap.sticky_key_profile(0, StickyKeyShape::PureMod);
         assert_eq!(profile.timeout, Duration::from_millis(900));
         assert_eq!(profile.max_repeat, 4);
-        assert_eq!(profile.release_mode, Some(StickyKeyReleaseMode::OTHER_KEY_RELEASE));
+        assert_eq!(profile.release_mode, StickyKeyReleaseMode::OTHER_KEY_RELEASE);
     }
 
     #[test]
-    fn legacy_release_overrides_are_shape_specific() {
+    fn release_defaults_are_shape_specific() {
         let mut data = KeymapData::<1, 1, 1>::new([[[k!(A)]]]);
         let mut behavior = BehaviorConfig::default();
-        behavior.sticky_key.one_shot_mod_release_on_layer_change = Some(true);
-        behavior.sticky_key.tap_key_release_on_layer_change = Some(false);
         let positional = PositionalConfig::<1, 1>::default();
         let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
 
         let pure_mod = keymap.sticky_key_profile(u8::MAX, StickyKeyShape::PureMod);
         let tap_key = keymap.sticky_key_profile(u8::MAX, StickyKeyShape::TapKey);
-        assert!(pure_mod.release_mode.is_some_and(|mode| {
-            mode.contains(StickyKeyReleaseMode::LAYER_ENTER) && mode.contains(StickyKeyReleaseMode::LAYER_EXIT)
-        }));
-        assert_eq!(tap_key.release_mode, None);
+        assert_eq!(pure_mod.release_mode, StickyKeyReleaseMode::OTHER_KEY_RELEASE);
+        assert_eq!(tap_key.release_mode, StickyKeyReleaseMode::OTHER_KEY_PRESS);
+    }
+
+    #[test]
+    fn legacy_quick_release_only_changes_the_pure_mod_default() {
+        let mut data = KeymapData::<1, 1, 1>::new([[[k!(A)]]]);
+        let mut behavior = BehaviorConfig::default();
+        behavior.one_shot_modifiers.quick_release = true;
+        behavior.normalize_sticky_key_compat();
+        let positional = PositionalConfig::<1, 1>::default();
+        let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
+
+        assert_eq!(
+            keymap.sticky_key_profile(u8::MAX, StickyKeyShape::PureMod).release_mode,
+            StickyKeyReleaseMode::OTHER_KEY_PRESS
+        );
+        assert_eq!(
+            keymap.sticky_key_profile(u8::MAX, StickyKeyShape::Layer).release_mode,
+            StickyKeyReleaseMode::OTHER_KEY_RELEASE
+        );
+        assert_eq!(
+            keymap.sticky_key_profile(u8::MAX, StickyKeyShape::TapKey).release_mode,
+            StickyKeyReleaseMode::OTHER_KEY_PRESS
+        );
+    }
+
+    #[test]
+    fn canonical_release_mode_wins_over_legacy_quick_release() {
+        let mut data = KeymapData::<1, 1, 1>::new([[[k!(A)]]]);
+        let mut behavior = BehaviorConfig::default();
+        behavior.one_shot_modifiers.quick_release = true;
+        behavior.sticky_key.default_profile.release_mode = Some(StickyKeyReleaseMode::DOUBLE_TAP);
+        behavior.normalize_sticky_key_compat();
+        let positional = PositionalConfig::<1, 1>::default();
+        let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
+
+        assert_eq!(
+            keymap.sticky_key_profile(u8::MAX, StickyKeyShape::PureMod).release_mode,
+            StickyKeyReleaseMode::DOUBLE_TAP
+        );
     }
 }

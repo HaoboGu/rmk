@@ -9,29 +9,48 @@
 //! the event's `device_id` is selected first; otherwise the entry with
 //! `device_id == None` (if any) is used as a fallback. Events that match
 //! neither are ignored.
+//!
+//! The `deactivate_on_key` / `reset_timeout_on_key` options are
+//! driven by [`ActionEvent`]s, published when a key action resolves. Tap-hold,
+//! morse, and tap dance keys are therefore classified by their final result;
+//! see [`keypress_step`] for the actions that cannot be classified.
 
-use embassy_time::Instant;
+use embassy_futures::select::{Either, Either3, select, select3};
+use embassy_time::{Duration, Instant, Timer};
 use heapless::Vec;
 use rmk_macro::processor;
+use rmk_types::action::Action;
+use rmk_types::keycode::{HidKeyCode, KeyCode};
+use rmk_types::modifier::ModifierCombination;
 
 use crate::AUTO_MOUSE_LAYER_MAX_NUM;
-use crate::config::{AutoMouseLayerConfig, StickyKeyReleaseMode};
+use crate::config::AutoMouseLayerConfig;
 use crate::core_traits::Runnable;
-use crate::event::{Axis, AxisValType, LayerChangeEvent, PointingEvent, StickyKeyReleaseEvent, publish_event};
+use crate::event::{
+    ActionEvent, Axis, AxisValType, EventSubscriber, LayerChangeEvent, LayerTransition, LayerTransitionEvent,
+    PointingEvent, SubscribableEvent, publish_event_async,
+};
 use crate::keymap::KeyMap;
-use crate::processor::DeadlineProcessor;
+use crate::processor::Processor;
 
 /// [`Runnable`] for the auto mouse layer task.
 ///
-/// Construct with [`AutoMouseLayerRunner::new`] and pass to `run_all!`. If the
-/// keymap has no auto mouse layer configured (or every entry's layer is out of
-/// range), [`Runnable::run`] parks forever on [`core::future::pending`] so it
-/// can sit alongside the other tasks without doing anything.
+/// Always subscribes to [`PointingEvent`] and [`LayerChangeEvent`]; additionally subscribes
+/// to [`ActionEvent`] only when an entry sets `deactivate_on_key` or `reset_timeout_on_key`,
+/// so `[event.action].subs` (default `0`) only needs to be raised to `1` when opting into those options.
+/// If those options are set while `[event.action].subs` resolves to `0`, startup panics; raise
+/// it via a `keyboard.toml` pointed to by `KEYBOARD_TOML_PATH`.
+/// Construct with [`AutoMouseLayerRunner::new`] and pass to `run_all!`. If the keymap has no
+/// auto mouse layer configured (or every entry's layer is out of range), [`Runnable::run`] parks
+/// forever on [`core::future::pending`] so it can sit alongside the other tasks without doing anything.
 #[processor(subscribe = [PointingEvent, LayerChangeEvent])]
 #[::rmk::macros::runnable_generated]
 pub struct AutoMouseLayerRunner<'a, 'k> {
     keymap: &'a KeyMap<'k>,
     entries: Vec<EntryState, AUTO_MOUSE_LAYER_MAX_NUM>,
+    /// `true` if any entry has `deactivate_on_key` or `reset_timeout_on_key` set,
+    /// so action events must be inspected.
+    any_action_event_configured: bool,
 }
 
 impl<'a, 'k> AutoMouseLayerRunner<'a, 'k> {
@@ -40,7 +59,8 @@ impl<'a, 'k> AutoMouseLayerRunner<'a, 'k> {
         let num_layer = keymap.num_layer();
         let configs = keymap.auto_mouse_layer_configs();
         let mut entries: Vec<EntryState, AUTO_MOUSE_LAYER_MAX_NUM> = Vec::new();
-        for config in configs.iter().copied() {
+        let mut any_action_event_configured = false;
+        for config in configs.iter().cloned() {
             if (config.target_layer as usize) >= num_layer {
                 warn!(
                     "auto_mouse_layer: configured target_layer {} is out of range (keymap has {} layers); \
@@ -53,15 +73,28 @@ impl<'a, 'k> AutoMouseLayerRunner<'a, 'k> {
             // a misconfigured Rust-API caller bypassing AutoMouseLayerConfig::new.
             let mut config = config;
             config.threshold = config.threshold.max(1);
-            // Capacity already matches AUTO_MOUSE_LAYER_MAX_NUM upstream.
-            let _ = entries.push(EntryState {
-                config,
-                self_activated: false,
-                deadline: None,
-                overlap_warned: false,
-            });
+            any_action_event_configured |= config.deactivate_on_key || config.reset_timeout_on_key;
+            let device_id = config.device_id;
+            if entries
+                .push(EntryState {
+                    config,
+                    self_activated: false,
+                    deadline: None,
+                    overlap_warned: false,
+                })
+                .is_err()
+            {
+                warn!(
+                    "auto_mouse_layer: too many entries configured (max {}); entry for device_id {:?} is dropped",
+                    AUTO_MOUSE_LAYER_MAX_NUM, device_id
+                );
+            }
         }
-        Self { keymap, entries }
+        Self {
+            keymap,
+            entries,
+            any_action_event_configured,
+        }
     }
 
     async fn on_pointing_event(&mut self, event: PointingEvent) {
@@ -74,7 +107,7 @@ impl<'a, 'k> AutoMouseLayerRunner<'a, 'k> {
         let target_layer = self.entries[idx].config.target_layer;
         let activated_by_us = self.keymap.activate_layer_if_inactive(target_layer);
         if activated_by_us {
-            publish_event(StickyKeyReleaseEvent(StickyKeyReleaseMode::LAYER_ENTER));
+            publish_event_async(LayerTransitionEvent::new(target_layer, LayerTransition::Enter)).await;
         }
         if pointing_step(&mut self.entries, idx, Instant::now(), activated_by_us) == PointingOutcome::OverlapFirstSeen {
             warn!(
@@ -100,10 +133,24 @@ impl<'a, 'k> AutoMouseLayerRunner<'a, 'k> {
             }
         }
     }
+
+    async fn on_action_event(&mut self, event: ActionEvent) {
+        if !event.keyboard_event.pressed || !self.any_action_event_configured {
+            return;
+        }
+        if !self.entries.iter().any(|e| e.self_activated) {
+            return;
+        }
+        for layer in keypress_step(&mut self.entries, event.action, Instant::now()) {
+            if self.keymap.deactivate_layer_if_active(layer) {
+                publish_event_async(LayerTransitionEvent::new(layer, LayerTransition::Exit)).await;
+            }
+        }
+    }
 }
 
 /// Per-entry runtime state.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct EntryState {
     config: AutoMouseLayerConfig,
     /// `true` while this entry is holding the layer active. Multiple entries
@@ -124,7 +171,7 @@ enum PointingOutcome {
     Idle,
 }
 
-impl DeadlineProcessor for AutoMouseLayerRunner<'_, '_> {
+impl AutoMouseLayerRunner<'_, '_> {
     fn deadline(&self) -> Option<Instant> {
         earliest_deadline(&self.entries)
     }
@@ -132,7 +179,7 @@ impl DeadlineProcessor for AutoMouseLayerRunner<'_, '_> {
     async fn on_deadline(&mut self) {
         for layer in timeout_step(&mut self.entries, Instant::now()) {
             if self.keymap.deactivate_layer_if_active(layer) {
-                publish_event(StickyKeyReleaseEvent(StickyKeyReleaseMode::LAYER_EXIT));
+                publish_event_async(LayerTransitionEvent::new(layer, LayerTransition::Exit)).await;
             }
         }
     }
@@ -143,8 +190,43 @@ impl Runnable for AutoMouseLayerRunner<'_, '_> {
         if self.entries.is_empty() {
             core::future::pending().await
         }
-        self.deadline_loop().await
+        let mut sub = <Self as Processor>::subscriber();
+        assert_action_event_subscriber_available(self.any_action_event_configured);
+        let mut action_sub = self.any_action_event_configured.then(ActionEvent::subscriber);
+        loop {
+            let action_fut = async {
+                match action_sub.as_mut() {
+                    Some(action_sub) => action_sub.next_event().await,
+                    None => core::future::pending().await,
+                }
+            };
+            match self.deadline() {
+                Some(deadline) => match select3(Timer::at(deadline), sub.next_event(), action_fut).await {
+                    Either3::First(_) => self.on_deadline().await,
+                    Either3::Second(event) => self.process(event).await,
+                    Either3::Third(event) => self.on_action_event(event).await,
+                },
+                None => match select(sub.next_event(), action_fut).await {
+                    Either::First(event) => self.process(event).await,
+                    Either::Second(event) => self.on_action_event(event).await,
+                },
+            }
+        }
     }
+}
+
+/// Panic when ActionEvent-driven options are enabled but the event has no
+/// subscriber slot, so the misconfiguration is loud instead of calling
+/// `ActionEvent::subscriber()` with `subs = 0` (which would also panic, with a
+/// less specific message).
+#[allow(clippy::absurd_extreme_comparisons)] // ACTION_EVENT_SUB_SIZE is a build-time const
+fn assert_action_event_subscriber_available(any_action_event_configured: bool) {
+    assert!(
+        !any_action_event_configured || crate::ACTION_EVENT_SUB_SIZE >= 1,
+        "auto_mouse_layer: deactivate_on_key / reset_timeout_on_key require \
+         [event.action].subs >= 1, but it is 0. Set KEYBOARD_TOML_PATH to a \
+         keyboard.toml containing `[event.action] subs = 1`."
+    );
 }
 
 fn earliest_deadline(entries: &[EntryState]) -> Option<Instant> {
@@ -214,6 +296,80 @@ fn pointing_step(entries: &mut [EntryState], idx: usize, now: Instant, activated
     }
 }
 
+/// Handle a key press for opt-in entries: release entries whose layer should deactivate,
+/// or extend the deadline for entries opted into `reset_timeout_on_key`. Returns the
+/// layers that no sibling still holds after this step.
+///
+/// Actions that emit no single keycode/modifier set (layer switches, macros,
+/// `Again`/`Repeat`, `GraveEscape`, ...) are unclassifiable and never deactivate;
+/// the timeout path clears the layer instead.
+fn keypress_step(entries: &mut [EntryState], action: Action, now: Instant) -> Vec<u8, AUTO_MOUSE_LAYER_MAX_NUM> {
+    let mut released: Vec<u8, AUTO_MOUSE_LAYER_MAX_NUM> = Vec::new();
+    for i in 0..entries.len() {
+        if !entries[i].self_activated {
+            continue;
+        }
+        let cfg = &entries[i].config;
+        // Classify: does this key press cause deactivation for this entry?
+        // Only meaningful when `deactivate_on_key` is set.
+        let causes_deactivation = cfg.deactivate_on_key
+            && match action {
+                // The repeated keycode is unknown here; treat as unclassifiable
+                // so a repeated mouse key is not misclassified as non-mouse.
+                Action::Key(KeyCode::Hid(HidKeyCode::Again)) => false,
+                Action::Key(kc) => match kc {
+                    KeyCode::Hid(hid) if hid.is_mouse_key() => false,
+                    _ => !cfg.extra_mouse_keys.contains(&kc),
+                },
+                Action::KeyWithModifier(hid, _) | Action::OneShotKey(hid) => {
+                    if hid.is_mouse_key() {
+                        false
+                    } else {
+                        !cfg.extra_mouse_keys.contains(&KeyCode::Hid(hid))
+                    }
+                }
+                // A modifier-only action (e.g. MT hold) deactivates unless every
+                // contained modifier is covered by a modifier keycode listed in
+                // `extra_mouse_keys` — mirroring how plain modifier keys behave.
+                Action::Modifier(modifiers) => {
+                    let covered = cfg
+                        .extra_mouse_keys
+                        .iter()
+                        .fold(ModifierCombination::new(), |acc, kc| match kc {
+                            KeyCode::Hid(hid) => acc | hid.to_hid_modifiers(),
+                            _ => acc,
+                        });
+                    (modifiers & !covered).into_bits() != 0
+                }
+                // Unclassifiable (layer switches, macros, Again/Repeat, GraveEscape, ...):
+                // leave the layer intact; the timeout path handles it.
+                _ => false,
+            };
+        if causes_deactivation {
+            entries[i].self_activated = false;
+            entries[i].deadline = None;
+            entries[i].overlap_warned = false;
+            let layer = entries[i].config.target_layer;
+            if !layer_still_held(entries, layer) {
+                let _ = released.push(layer);
+            }
+        } else if cfg.reset_timeout_on_key {
+            let timeout = cfg.timeout;
+            extend_deadline(&mut entries[i], now, timeout);
+        }
+    }
+    released
+}
+
+/// Push `entry.deadline` forward to `now + timeout` if it would extend, not shorten, the current deadline.
+fn extend_deadline(entry: &mut EntryState, now: Instant, timeout: Duration) {
+    let new_deadline = now + timeout;
+    match entry.deadline {
+        Some(current) if current >= new_deadline => {}
+        _ => entry.deadline = Some(new_deadline),
+    }
+}
+
 /// Only relative X/Y axis deltas count as cursor motion. Scroll-only events
 /// (Z/H/V) do not activate the layer.
 ///
@@ -265,11 +421,34 @@ mod tests {
                 target_layer: 0,
                 timeout: embassy_time::Duration::from_millis(100),
                 threshold: 1,
+                deactivate_on_key: false,
+                extra_mouse_keys: &[],
+                reset_timeout_on_key: false,
             },
             self_activated: false,
             deadline: None,
             overlap_warned: false,
         }
+    }
+
+    #[test]
+    fn action_event_subs_is_zero_without_keyboard_toml() {
+        // rmk's own test build has no keyboard.toml, so ActionEvent gets no
+        // subscriber slot; the startup assert must catch configured opt-ins.
+        assert_eq!(crate::ACTION_EVENT_SUB_SIZE, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "[event.action].subs >= 1")]
+    fn guard_panics_when_options_configured_without_subscriber_slot() {
+        // This build has subs == 0 (see above), so a configured opt-in must panic
+        // before ActionEvent::subscriber() is called in run().
+        assert_action_event_subscriber_available(true);
+    }
+
+    #[test]
+    fn guard_allows_when_options_not_configured() {
+        assert_action_event_subscriber_available(false);
     }
 
     #[test]
@@ -582,5 +761,515 @@ mod tests {
 
         assert_eq!(released.as_slice(), &[3]);
         assert!(!entries[0].self_activated);
+    }
+
+    // ── deactivate_on_key ────────────────────────────────────────
+
+    fn holding_entry_with_deactivate(target_layer: u8, exceptions: &'static [KeyCode]) -> EntryState {
+        let mut e = entry_with_layer(Some(1), target_layer);
+        e.config.deactivate_on_key = true;
+        e.config.extra_mouse_keys = exceptions;
+        e.self_activated = true;
+        e.deadline = Some(at(1000));
+        e
+    }
+
+    #[test]
+    fn keypress_step_releases_layer_when_non_mouse_non_exception_key_pressed() {
+        // Sample across the non-mouse HID range (letter, digit, whitespace, control, punctuation)
+        // to guard against `is_mouse_key()` accidentally classifying non-mouse keys as mouse.
+        let non_mouse_keys = [
+            HidKeyCode::A,
+            HidKeyCode::Z,
+            HidKeyCode::Kc0,
+            HidKeyCode::Space,
+            HidKeyCode::Enter,
+            HidKeyCode::Escape,
+            HidKeyCode::Semicolon,
+        ];
+        for hid in non_mouse_keys {
+            let mut entries = [holding_entry_with_deactivate(3, &[])];
+
+            let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(hid)), at(2000));
+
+            assert_eq!(released.as_slice(), &[3], "key {:?} should release layer", hid);
+            assert!(!entries[0].self_activated, "key {:?} should clear self_activated", hid);
+            assert!(entries[0].deadline.is_none(), "key {:?} should clear deadline", hid);
+        }
+    }
+
+    #[test]
+    fn keypress_step_keeps_layer_active_for_mouse_key() {
+        let mut entries = [holding_entry_with_deactivate(3, &[])];
+
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::MouseBtn1)), at(2000));
+
+        assert!(released.is_empty());
+        assert!(entries[0].self_activated);
+        assert_eq!(entries[0].deadline, Some(at(1000)));
+    }
+
+    #[test]
+    fn keypress_step_keeps_layer_active_for_all_mouse_key_variants() {
+        // Guards against silent divergence if HidKeyCode's mouse range (MouseUp..=MouseAccel2) is extended.
+        let mouse_keys = [
+            HidKeyCode::MouseUp,
+            HidKeyCode::MouseDown,
+            HidKeyCode::MouseLeft,
+            HidKeyCode::MouseRight,
+            HidKeyCode::MouseBtn1,
+            HidKeyCode::MouseBtn2,
+            HidKeyCode::MouseBtn3,
+            HidKeyCode::MouseBtn4,
+            HidKeyCode::MouseBtn5,
+            HidKeyCode::MouseBtn6,
+            HidKeyCode::MouseBtn7,
+            HidKeyCode::MouseBtn8,
+            HidKeyCode::MouseWheelUp,
+            HidKeyCode::MouseWheelDown,
+            HidKeyCode::MouseWheelLeft,
+            HidKeyCode::MouseWheelRight,
+            HidKeyCode::MouseAccel0,
+            HidKeyCode::MouseAccel1,
+            HidKeyCode::MouseAccel2,
+        ];
+        for hid in mouse_keys {
+            assert!(
+                hid.is_mouse_key(),
+                "HidKeyCode::{:?} must be classified as a mouse key",
+                hid
+            );
+            let mut entries = [holding_entry_with_deactivate(3, &[])];
+
+            let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(hid)), at(2000));
+
+            assert!(
+                released.is_empty(),
+                "mouse key {:?} unexpectedly released the layer",
+                hid
+            );
+            assert!(
+                entries[0].self_activated,
+                "mouse key {:?} unexpectedly deactivated the entry",
+                hid
+            );
+        }
+    }
+
+    #[test]
+    fn keypress_step_keeps_layer_active_for_exception_key() {
+        let mut entries = [holding_entry_with_deactivate(3, &[KeyCode::Hid(HidKeyCode::LCtrl)])];
+
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::LCtrl)), at(2000));
+
+        assert!(released.is_empty());
+        assert!(entries[0].self_activated);
+        // Exception keys do NOT extend the deadline; timeout still applies.
+        assert_eq!(entries[0].deadline, Some(at(1000)));
+    }
+
+    #[test]
+    fn keypress_step_releases_layer_for_consumer_and_system_control_keys() {
+        use rmk_types::keycode::{ConsumerKey, SystemControlKey};
+        // Non-Hid KeyCode variants are not mouse keys and (unless explicitly listed in
+        // extra_mouse_keys) should trigger deactivation just like other non-mouse keys.
+        let non_hid_keys = [
+            KeyCode::Consumer(ConsumerKey::VolumeIncrement),
+            KeyCode::Consumer(ConsumerKey::PlayPause),
+            KeyCode::SystemControl(SystemControlKey::Sleep),
+        ];
+        for kc in non_hid_keys {
+            let mut entries = [holding_entry_with_deactivate(3, &[])];
+
+            let released = keypress_step(&mut entries, Action::Key(kc), at(2000));
+
+            assert_eq!(released.as_slice(), &[3], "{:?} should release layer", kc);
+            assert!(!entries[0].self_activated, "{:?} should clear self_activated", kc);
+        }
+    }
+
+    #[test]
+    fn keypress_step_keeps_layer_active_for_unresolvable_action() {
+        // Unclassifiable actions (layer switches, macros, Again/Repeat) never
+        // deactivate; the timeout path handles clearing.
+        let mut entries = [holding_entry_with_deactivate(3, &[])];
+
+        let released = keypress_step(&mut entries, Action::LayerOn(0), at(2000));
+
+        assert!(released.is_empty());
+        assert!(entries[0].self_activated);
+        assert_eq!(entries[0].deadline, Some(at(1000)));
+    }
+
+    #[test]
+    fn keypress_step_ignores_entries_that_did_not_opt_in() {
+        let mut entries = [entry_with_layer(Some(1), 3)];
+        entries[0].self_activated = true;
+        entries[0].deadline = Some(at(1000));
+        // deactivate_on_key stays false, even a non-mouse key press
+        // must NOT release the layer for this entry.
+
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+
+        assert!(released.is_empty());
+        assert!(entries[0].self_activated);
+    }
+
+    #[test]
+    fn keypress_step_keeps_shared_layer_alive_when_sibling_still_holds_it() {
+        let mut entries = [holding_entry_with_deactivate(4, &[]), entry_with_layer(Some(2), 4)];
+        // Sibling is a plain (non-opt-in) auto-mouse entry that also self-holds
+        // layer 4; releasing the opt-in entry must leave the physical layer on.
+        entries[1].self_activated = true;
+        entries[1].deadline = Some(at(2000));
+
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+
+        assert!(released.is_empty());
+        assert!(!entries[0].self_activated);
+        assert!(entries[1].self_activated);
+    }
+
+    #[test]
+    fn keypress_step_releases_both_opt_in_entries_sharing_a_layer() {
+        // Two opt-in entries hold the same physical layer. A non-mouse keypress
+        // must release both, and the layer only ends up in `released` once.
+        let mut entries = [
+            holding_entry_with_deactivate(4, &[]),
+            holding_entry_with_deactivate(4, &[]),
+        ];
+        entries[1].config.device_id = Some(2);
+
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+
+        assert_eq!(released.as_slice(), &[4]);
+        assert!(!entries[0].self_activated);
+        assert!(!entries[1].self_activated);
+    }
+
+    #[test]
+    fn keypress_step_holds_shared_layer_when_a_sibling_opt_in_entry_still_holds_it() {
+        // Two opt-in entries share layer 4 but only one gets triggered.
+        // The second is bound to a different device_id and matches a different key.
+        // We simulate this by leaving the second one active and pressing a key that
+        // is in its exceptions but not the first one's.
+        const CTRL: KeyCode = KeyCode::Hid(HidKeyCode::LCtrl);
+        let mut entries = [
+            holding_entry_with_deactivate(4, &[]),
+            holding_entry_with_deactivate(4, &[CTRL]),
+        ];
+        entries[1].config.device_id = Some(2);
+
+        let released = keypress_step(&mut entries, Action::Key(CTRL), at(2000));
+
+        // First entry deactivates (LCtrl not in its exceptions), but layer 4
+        // must not be released because the second entry (with LCtrl in exceptions) still holds it.
+        assert!(released.is_empty());
+        assert!(!entries[0].self_activated);
+        assert!(entries[1].self_activated);
+    }
+
+    #[test]
+    fn keypress_step_does_nothing_when_no_entry_is_self_activated() {
+        // Opt-in entries exist but none are currently holding the layer.
+        let mut entries = [holding_entry_with_deactivate(3, &[])];
+        entries[0].self_activated = false;
+        entries[0].deadline = None;
+
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+
+        assert!(released.is_empty());
+        assert!(!entries[0].self_activated);
+    }
+
+    #[test]
+    fn keypress_step_handles_mixed_opt_in_and_non_opt_in_across_layers() {
+        // 4-entry mix: two opt-in on layer 5, one non-opt-in on layer 5, one non-opt-in on layer 6.
+        let mut entries: [EntryState; 4] = [
+            holding_entry_with_deactivate(5, &[]),
+            holding_entry_with_deactivate(5, &[]),
+            entry_with_layer(Some(3), 5),
+            entry_with_layer(Some(4), 6),
+        ];
+        entries[1].config.device_id = Some(2);
+        entries[2].self_activated = true;
+        entries[2].deadline = Some(at(3000));
+        entries[3].self_activated = true;
+        entries[3].deadline = Some(at(4000));
+
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+
+        // Layer 5 stays because the non-opt-in entry still holds it; layer 6 is untouched.
+        assert!(released.is_empty());
+        assert!(!entries[0].self_activated);
+        assert!(!entries[1].self_activated);
+        assert!(entries[2].self_activated);
+        assert!(entries[3].self_activated);
+    }
+
+    #[test]
+    fn keypress_step_honours_full_exceptions_list() {
+        // Verify contains() walks the whole slice, not just the prefix: place the
+        // matching key at the very end of a long list.
+        const EXCEPTIONS: &[KeyCode] = &[
+            KeyCode::Hid(HidKeyCode::A),
+            KeyCode::Hid(HidKeyCode::B),
+            KeyCode::Hid(HidKeyCode::C),
+            KeyCode::Hid(HidKeyCode::D),
+            KeyCode::Hid(HidKeyCode::E),
+            KeyCode::Hid(HidKeyCode::F),
+            KeyCode::Hid(HidKeyCode::G),
+            KeyCode::Hid(HidKeyCode::LCtrl),
+        ];
+        let last = *EXCEPTIONS.last().unwrap();
+        let mut entries = [holding_entry_with_deactivate(3, EXCEPTIONS)];
+
+        let released = keypress_step(&mut entries, Action::Key(last), at(2000));
+
+        assert!(released.is_empty());
+        assert!(entries[0].self_activated);
+    }
+
+    // ── unclassifiable actions ─────────────────────────────────────────────
+
+    #[test]
+    fn keypress_step_keeps_layer_active_for_non_key_actions() {
+        // Layer switches, macros, and one-shot modifiers emit no keycode and
+        // must never deactivate; the timeout path handles clearing.
+        for action in [
+            Action::LayerOn(2),
+            Action::TriggerMacro(0),
+            Action::OneShotModifier(ModifierCombination::LCTRL),
+        ] {
+            let mut entries = [holding_entry_with_deactivate(3, &[])];
+            let released = keypress_step(&mut entries, action, at(2000));
+            assert!(released.is_empty(), "{:?} should not release layer", action);
+            assert!(
+                entries[0].self_activated,
+                "{:?} should not clear self_activated",
+                action
+            );
+        }
+    }
+
+    #[test]
+    fn keypress_step_treats_repeat_style_keys_as_unclassifiable() {
+        use rmk_types::keycode::SpecialKey;
+        // The repeated keycode is unknown here; `Again` especially must not be
+        // misclassified as a non-mouse key.
+        for action in [
+            Action::Key(KeyCode::Hid(HidKeyCode::Again)),
+            Action::Special(SpecialKey::Repeat),
+            Action::Special(SpecialKey::GraveEscape),
+        ] {
+            let mut entries = [holding_entry_with_deactivate(3, &[])];
+            let released = keypress_step(&mut entries, action, at(2000));
+            assert!(released.is_empty(), "{:?} should not release layer", action);
+            assert!(
+                entries[0].self_activated,
+                "{:?} should not clear self_activated",
+                action
+            );
+        }
+    }
+
+    // ── modifier-only actions (e.g. MT hold) ─────────────────────────────
+
+    #[test]
+    fn keypress_step_releases_layer_for_modifier_action_not_in_exceptions() {
+        let mut entries = [holding_entry_with_deactivate(3, &[])];
+
+        let released = keypress_step(&mut entries, Action::Modifier(ModifierCombination::LSHIFT), at(2000));
+
+        assert_eq!(released.as_slice(), &[3]);
+        assert!(!entries[0].self_activated);
+    }
+
+    #[test]
+    fn keypress_step_keeps_layer_active_for_modifier_action_fully_covered_by_exceptions() {
+        let mut entries = [holding_entry_with_deactivate(
+            3,
+            &[KeyCode::Hid(HidKeyCode::LCtrl), KeyCode::Hid(HidKeyCode::LShift)],
+        )];
+
+        let released = keypress_step(
+            &mut entries,
+            Action::Modifier(ModifierCombination::LCTRL | ModifierCombination::LSHIFT),
+            at(2000),
+        );
+
+        assert!(released.is_empty());
+        assert!(entries[0].self_activated);
+        // Like exception keys, covered modifiers do NOT extend the deadline.
+        assert_eq!(entries[0].deadline, Some(at(1000)));
+    }
+
+    #[test]
+    fn keypress_step_releases_layer_for_modifier_action_partially_covered_by_exceptions() {
+        // LCtrl is excepted but the action also contains LShift — deactivate.
+        let mut entries = [holding_entry_with_deactivate(3, &[KeyCode::Hid(HidKeyCode::LCtrl)])];
+
+        let released = keypress_step(
+            &mut entries,
+            Action::Modifier(ModifierCombination::LCTRL | ModifierCombination::LSHIFT),
+            at(2000),
+        );
+
+        assert_eq!(released.as_slice(), &[3]);
+        assert!(!entries[0].self_activated);
+    }
+
+    #[test]
+    fn keypress_step_ignores_side_mismatch_between_modifier_action_and_exceptions() {
+        // Left/right variants are distinct: RCtrl is not covered by LCtrl.
+        let mut entries = [holding_entry_with_deactivate(3, &[KeyCode::Hid(HidKeyCode::LCtrl)])];
+
+        let released = keypress_step(&mut entries, Action::Modifier(ModifierCombination::RCTRL), at(2000));
+
+        assert_eq!(released.as_slice(), &[3]);
+        assert!(!entries[0].self_activated);
+    }
+
+    #[test]
+    fn keypress_step_keeps_layer_active_for_empty_modifier_action() {
+        let mut entries = [holding_entry_with_deactivate(3, &[])];
+
+        let released = keypress_step(&mut entries, Action::Modifier(ModifierCombination::new()), at(2000));
+
+        assert!(released.is_empty());
+        assert!(entries[0].self_activated);
+    }
+
+    #[test]
+    fn keypress_step_extends_deadline_on_covered_modifier_action_when_both_opt_in() {
+        let mut e = holding_entry_with_deactivate(3, &[KeyCode::Hid(HidKeyCode::LCtrl)]);
+        e.config.reset_timeout_on_key = true;
+        e.config.timeout = embassy_time::Duration::from_millis(500);
+        let mut entries = [e];
+
+        let released = keypress_step(&mut entries, Action::Modifier(ModifierCombination::LCTRL), at(2000));
+
+        assert!(released.is_empty());
+        assert!(entries[0].self_activated);
+        assert_eq!(
+            entries[0].deadline,
+            Some(at(2000) + embassy_time::Duration::from_millis(500))
+        );
+    }
+
+    // ── reset_timeout_on_key ─────────────────────────────────────────────
+
+    fn holding_entry_with_extend(target_layer: u8, timeout_ms: u64) -> EntryState {
+        let mut e = entry_with_layer(Some(1), target_layer);
+        e.config.reset_timeout_on_key = true;
+        e.config.timeout = embassy_time::Duration::from_millis(timeout_ms);
+        e.self_activated = true;
+        e.deadline = Some(at(1000));
+        e
+    }
+
+    #[test]
+    fn keypress_step_extends_deadline_on_any_key_when_extend_opt_in_alone() {
+        // No `deactivate_on_key`: every key press must extend the deadline.
+        let mut entries = [holding_entry_with_extend(3, 500)];
+
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+
+        assert!(released.is_empty());
+        assert!(entries[0].self_activated);
+        assert_eq!(
+            entries[0].deadline,
+            Some(at(2000) + embassy_time::Duration::from_millis(500))
+        );
+    }
+
+    #[test]
+    fn keypress_step_extends_deadline_on_mouse_key_when_extend_opt_in() {
+        let mut entries = [holding_entry_with_extend(3, 500)];
+
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::MouseBtn1)), at(2000));
+
+        assert!(released.is_empty());
+        assert!(entries[0].self_activated);
+        assert_eq!(
+            entries[0].deadline,
+            Some(at(2000) + embassy_time::Duration::from_millis(500))
+        );
+    }
+
+    #[test]
+    fn keypress_step_extends_deadline_on_composite_action_when_extend_opt_in() {
+        // Unclassifiable actions leave the layer intact; extend still applies.
+        let mut entries = [holding_entry_with_extend(3, 500)];
+
+        let released = keypress_step(&mut entries, Action::LayerOn(0), at(2000));
+
+        assert!(released.is_empty());
+        assert!(entries[0].self_activated);
+        assert_eq!(
+            entries[0].deadline,
+            Some(at(2000) + embassy_time::Duration::from_millis(500))
+        );
+    }
+
+    #[test]
+    fn keypress_step_extends_deadline_on_exception_key_when_both_opt_in() {
+        // deactivate_on_key=true, reset_timeout_on_key=true, LCtrl in exceptions:
+        // LCtrl does NOT deactivate; deadline is extended.
+        let mut e = holding_entry_with_deactivate(3, &[KeyCode::Hid(HidKeyCode::LCtrl)]);
+        e.config.reset_timeout_on_key = true;
+        e.config.timeout = embassy_time::Duration::from_millis(500);
+        let mut entries = [e];
+
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::LCtrl)), at(2000));
+
+        assert!(released.is_empty());
+        assert!(entries[0].self_activated);
+        assert_eq!(
+            entries[0].deadline,
+            Some(at(2000) + embassy_time::Duration::from_millis(500))
+        );
+    }
+
+    #[test]
+    fn keypress_step_does_not_extend_deadline_on_deactivating_key() {
+        // Both flags on: a non-mouse, non-exception key deactivates. No extension should occur
+        // because the entry is torn down.
+        let mut e = holding_entry_with_deactivate(3, &[]);
+        e.config.reset_timeout_on_key = true;
+        e.config.timeout = embassy_time::Duration::from_millis(500);
+        let mut entries = [e];
+
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+
+        assert_eq!(released.as_slice(), &[3]);
+        assert!(!entries[0].self_activated);
+        assert!(entries[0].deadline.is_none());
+    }
+
+    #[test]
+    fn keypress_step_does_not_shorten_deadline_when_extending() {
+        // Extending must never shorten a further-out deadline that motion set.
+        let mut entries = [holding_entry_with_extend(3, 100)];
+        // A pointing event pushed the deadline much further out than key-press would.
+        entries[0].deadline = Some(at(10_000));
+
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+
+        assert!(released.is_empty());
+        assert!(entries[0].self_activated);
+        assert_eq!(entries[0].deadline, Some(at(10_000)));
+    }
+
+    #[test]
+    fn keypress_step_ignores_extend_for_entries_not_self_activated() {
+        let mut entries = [holding_entry_with_extend(3, 500)];
+        entries[0].self_activated = false;
+        entries[0].deadline = None;
+
+        let released = keypress_step(&mut entries, Action::Key(KeyCode::Hid(HidKeyCode::A)), at(2000));
+
+        assert!(released.is_empty());
+        assert!(entries[0].deadline.is_none());
     }
 }

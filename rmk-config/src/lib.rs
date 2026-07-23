@@ -197,9 +197,35 @@ impl KeyboardTomlConfig {
                 // Update the morse_max_num
                 self.rmk.morse_max_num = self.rmk.morse_max_num.max(morses.len());
             }
+
+            let auto_mouse_layers = behavior.auto_mouse_layer.as_deref().unwrap_or_default();
+            self.rmk.auto_mouse_layer_max_num.get_or_insert(auto_mouse_layers.len());
+        } else {
+            self.rmk.auto_mouse_layer_max_num.get_or_insert(0);
         }
     }
+
+    pub(crate) fn sticky_key_profile_capacity(&self) -> usize {
+        self.rmk
+            .sticky_key_profile_max_num
+            .unwrap_or_else(|| DEFAULT_STICKY_KEY_PROFILE_MAX_NUM.max(self.configured_sticky_key_profile_count()))
+    }
+
+    pub(crate) fn configured_sticky_key_profile_count(&self) -> usize {
+        self.behavior
+            .as_ref()
+            .and_then(|behavior| behavior.sticky_key.as_ref())
+            .map(|sticky_key| sticky_key.profiles.len())
+            .unwrap_or_default()
+    }
 }
+
+/// Small fallback capacity for users who configure Sticky Keys directly in Rust.
+///
+/// TOML configurations derive their required capacity from the number of named
+/// profiles, while `[rmk] sticky_key_profile_max_num` remains an explicit
+/// override (including `0` to opt out).
+const DEFAULT_STICKY_KEY_PROFILE_MAX_NUM: usize = 4;
 
 /// Keyboard constants configuration for performance and hardware limits
 #[serde_inline_default]
@@ -228,9 +254,11 @@ pub(crate) struct RmkConstantsConfig {
     #[serde(deserialize_with = "check_morse_max_num")]
     pub morse_max_num: usize,
     /// Capacity of the named Sticky Key profile table (maximum 255).
-    #[serde_inline_default(16)]
-    #[serde(deserialize_with = "check_sticky_key_profile_max_num")]
-    pub sticky_key_profile_max_num: usize,
+    ///
+    /// When omitted, this is derived from the configured profile count with a
+    /// small fallback for Rust-only configurations.
+    #[serde(default, deserialize_with = "check_sticky_key_profile_max_num")]
+    pub sticky_key_profile_max_num: Option<usize>,
     /// Maximum number of patterns a morse key can handle
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_max_patterns_per_key")]
@@ -267,6 +295,9 @@ pub(crate) struct RmkConstantsConfig {
     /// Smaller values reduce firmware RAM usage but require more round-trips.
     #[serde_inline_default(64)]
     pub protocol_macro_chunk_size: usize,
+    /// Maximum number of auto mouse layer entries; auto-derived from `[[behavior.auto_mouse_layer]]` if unset.
+    #[serde(default)]
+    pub auto_mouse_layer_max_num: Option<usize>,
 }
 
 fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
@@ -291,13 +322,16 @@ where
     Ok(value)
 }
 
-fn check_sticky_key_profile_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
+fn check_sticky_key_profile_max_num<'de, D>(deserializer: D) -> Result<Option<usize>, D::Error>
 where
     D: de::Deserializer<'de>,
 {
-    let value = Deserialize::deserialize(deserializer)?;
-    if value > 255 {
-        panic!("❌ Parse `keyboard.toml` error: sticky_key_profile_max_num must be between 0 and 255, got {value}");
+    let value = Option::<usize>::deserialize(deserializer)?;
+    if value.is_some_and(|value| value > 255) {
+        panic!(
+            "❌ Parse `keyboard.toml` error: sticky_key_profile_max_num must be between 0 and 255, got {}",
+            value.unwrap()
+        );
     }
     Ok(value)
 }
@@ -334,7 +368,7 @@ impl Default for RmkConstantsConfig {
             combo_max_length: 4,
             fork_max_num: 8,
             morse_max_num: 8,
-            sticky_key_profile_max_num: 16,
+            sticky_key_profile_max_num: None,
             max_patterns_per_key: 8,
             macro_space_size: 256,
             debounce_time: 20,
@@ -346,6 +380,7 @@ impl Default for RmkConstantsConfig {
             split_central_sleep_timeout_seconds: 0,
             protocol_max_bulk_size: 8,
             protocol_macro_chunk_size: 64,
+            auto_mouse_layer_max_num: None,
         }
     }
 }
@@ -409,7 +444,7 @@ define_event_config!(
     keyboard,
     // Keyboard state events
     layer_change,
-    sticky_key_release,
+    layer_transition,
     wpm_update,
     led_indicator,
     sleep_state,
@@ -658,6 +693,15 @@ pub(crate) struct AutoMouseLayerConfig {
     /// Minimum absolute axis delta required to be considered as motion.
     /// Defaults to `1` (any motion). Helpful to filter out sensor noise.
     pub threshold: Option<u16>,
+    /// When `true`, non-mouse key presses deactivate `target_layer` immediately (mouse HID keys and `extra_mouse_keys` excepted).
+    /// Macro-emitted keycodes, `Again`/`Repeat`, and `GraveEscape` cannot be classified and never deactivate the layer.
+    pub deactivate_on_key: Option<bool>,
+    /// Extra keycodes (e.g. modifiers) that do not trigger deactivation when `deactivate_on_key` is set.
+    /// Modifier keycodes listed here also exempt modifier-only actions containing them.
+    pub extra_mouse_keys: Option<Vec<String>>,
+    /// When `true`, key presses that do NOT deactivate `target_layer` extend the timeout deadline
+    /// (i.e. reset it to now + `timeout`) at the moment the key's action resolves.
+    pub reset_timeout_on_key: Option<bool>,
 }
 
 /// Per Key configurations profiles for morse, tap-hold, etc.
@@ -878,6 +922,14 @@ pub struct SplitBoardConfig {
     pub adc_divider_total: Option<u32>,
     /// Output Pin config for the split
     pub output: Option<Vec<OutputConfig>>,
+    /// Path to the peripheral firmware binary for automatic dfu_split update.
+    /// Relative to the project's `Cargo.toml`.  When set, the generated code
+    /// includes the binary with `include_bytes!` and registers it via
+    /// [`set_firmware_update_data`](crate::set_firmware_update_data).
+    pub firmware: Option<String>,
+    /// DFU update policy for this peripheral. "MatchHash" (default) only
+    /// flashes when the firmware differs; "force" always flashes.
+    pub update_policy: Option<String>,
 }
 
 /// Serial port config

@@ -67,8 +67,8 @@ pub use input::{
 pub use split::{CentralConnectedEvent, PeripheralConnectedEvent};
 #[cfg(all(feature = "split", feature = "_ble"))]
 pub use split::{ClearPeerEvent, PeripheralBatteryEvent};
-pub(crate) use state::StickyKeyReleaseEvent;
 pub use state::{LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent};
+pub(crate) use state::{LayerTransition, LayerTransitionEvent, LayerTransitionGeneration};
 
 /// Trait for event publishers
 pub trait EventPublisher {

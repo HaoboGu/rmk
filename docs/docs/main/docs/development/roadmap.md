@@ -64,7 +64,7 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
 - [ ] 🔴🔵 GUI keymap configurator which supports windows/macos/linux/web
 - [ ] Default bootloader
 - [x] USB DFU
-- [ ] Flashing peripherals from the central via uart
+- [x] Flashing peripherals from the central via uart
 - [ ] Flashing peripherals from the central via ble
 - [ ] OTA updates
 

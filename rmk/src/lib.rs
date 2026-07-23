@@ -63,6 +63,8 @@ pub mod boot;
 pub mod channel;
 pub mod config;
 pub mod core_traits;
+#[cfg(feature = "dfu_split")]
+pub mod crc32;
 pub mod debounce;
 #[cfg(feature = "dfu")]
 pub mod dfu;
@@ -128,6 +130,11 @@ pub async fn initialize_keymap_and_storage<
     behavior_config: &'a mut config::BehaviorConfig,
     positional_config: &'a PositionalConfig<ROW, COL>,
 ) -> (KeyMap<'a>, Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>) {
+    // Resolve source-level compatibility before an empty flash is initialized;
+    // otherwise storage would persist the unnormalized canonical defaults and
+    // immediately overwrite the legacy inputs during first boot.
+    behavior_config.normalize_sticky_key_compat();
+
     #[cfg(feature = "host")]
     {
         let mut storage = {

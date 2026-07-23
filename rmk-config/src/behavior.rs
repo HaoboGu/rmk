@@ -79,11 +79,15 @@ impl crate::KeyboardTomlConfig {
                 }
                 behavior.auto_mouse_layer = behavior.auto_mouse_layer.or(default.auto_mouse_layer);
                 if let Some(entries) = &behavior.auto_mouse_layer {
-                    if entries.len() > crate::resolved::behavior::AUTO_MOUSE_LAYER_MAX_NUM {
+                    let auto_mouse_layer_max_num = self
+                        .rmk
+                        .auto_mouse_layer_max_num
+                        .unwrap_or(crate::resolved::behavior::DEFAULT_AUTO_MOUSE_LAYER_MAX_NUM);
+                    if entries.len() > auto_mouse_layer_max_num {
                         return Err(format!(
-                            "keyboard.toml: at most {} [[behavior.auto_mouse_layer]] entries are allowed, got {}",
-                            crate::resolved::behavior::AUTO_MOUSE_LAYER_MAX_NUM,
-                            entries.len()
+                            "keyboard.toml: number of [[behavior.auto_mouse_layer]] entries ({}) exceeds auto_mouse_layer_max_num ({}) configured under [rmk] section",
+                            entries.len(),
+                            auto_mouse_layer_max_num
                         ));
                     }
                     let mut seen_device_ids: Vec<Option<u8>> = Vec::new();
@@ -114,6 +118,13 @@ impl crate::KeyboardTomlConfig {
                                     timeout_ms
                                 ));
                             }
+                        }
+                        if (entry.deactivate_on_key == Some(true) || entry.reset_timeout_on_key == Some(true))
+                            && self.event.action.subs == 0
+                        {
+                            return Err(
+                                "keyboard.toml: [[behavior.auto_mouse_layer]].deactivate_on_key / reset_timeout_on_key require [event.action] subs to be at least 1".to_string(),
+                            );
                         }
                         if seen_device_ids.contains(&entry.device_id) {
                             return Err(match entry.device_id {

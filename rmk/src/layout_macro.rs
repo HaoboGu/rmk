@@ -329,9 +329,10 @@ macro_rules! sk {
     ($key:ident, $keep:expr, $profile:expr) => {
         $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
             $crate::types::action::StickyKeyAction {
-                key: $crate::types::keycode::HidKeyCode::$key,
-                keep: $keep,
-                layer: None,
+                effect: $crate::types::action::StickyKeyEffect::TapKey {
+                    key: $crate::types::keycode::HidKeyCode::$key,
+                    modifiers: $keep,
+                },
                 profile: $profile,
             },
         ))
@@ -339,8 +340,6 @@ macro_rules! sk {
 }
 
 /// Create a StickyKey pure-modifier action (one-shot modifier shape).
-///
-/// `key` is `No` to signal the pure-mod shape.
 ///
 /// # Parameters
 /// - `$m`: `ModifierCombination` to apply for the next keypress
@@ -357,9 +356,7 @@ macro_rules! sk_mod {
     ($m:expr, $profile:expr) => {
         $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
             $crate::types::action::StickyKeyAction {
-                key: $crate::types::keycode::HidKeyCode::No,
-                keep: $m,
-                layer: None,
+                effect: $crate::types::action::StickyKeyEffect::Modifier($m),
                 profile: $profile,
             },
         ))
@@ -383,9 +380,7 @@ macro_rules! sk_layer {
     ($n:literal, $profile:expr) => {
         $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
             $crate::types::action::StickyKeyAction {
-                key: $crate::types::keycode::HidKeyCode::No,
-                keep: $crate::types::modifier::ModifierCombination::new(),
-                layer: Some($n),
+                effect: $crate::types::action::StickyKeyEffect::Layer($n),
                 profile: $profile,
             },
         ))
@@ -764,4 +759,27 @@ macro_rules! steno {
             $crate::types::steno::StenoKey::$key,
         ))
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::types::modifier::ModifierCombination;
+
+    #[test]
+    fn one_shot_aliases_equal_canonical_sticky_key_macros() {
+        assert_eq!(
+            crate::osm!(ModifierCombination::LSHIFT),
+            crate::sk_mod!(ModifierCombination::LSHIFT)
+        );
+        assert_eq!(crate::osl!(2), crate::sk_layer!(2));
+    }
+
+    #[test]
+    fn profiled_one_shot_aliases_equal_canonical_sticky_key_macros() {
+        assert_eq!(
+            crate::osm!(ModifierCombination::LCTRL, 3),
+            crate::sk_mod!(ModifierCombination::LCTRL, 3)
+        );
+        assert_eq!(crate::osl!(4, 3), crate::sk_layer!(4, 3));
+    }
 }

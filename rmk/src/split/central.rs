@@ -11,12 +11,17 @@ use {
     trouble_host::prelude::*,
 };
 
+#[cfg(feature = "dfu_split")]
+pub use crate::split::driver::UpdatePolicy;
+
 /// Run central's peripheral manager task.
 ///
 /// # Arguments
 /// * `id` - peripheral id
 /// * `addr` - (optional) peripheral's BLE static address. This argument is enabled only for nRF BLE split now
+/// * `stack` - (optional) BLE stack. This argument is enabled only for BLE split now
 /// * `receiver` - (optional) serial port. This argument is enabled only for serial split now
+/// * `policy` - (optional, `dfu_split` only) how to decide whether to update the peripheral's firmware
 #[allow(clippy::extra_unused_lifetimes)]
 pub async fn run_peripheral_manager<
     'b,
@@ -35,6 +40,7 @@ pub async fn run_peripheral_manager<
     #[cfg(feature = "_ble")] addr: &RefCell<VecView<Option<[u8; 6]>>>,
     #[cfg(feature = "_ble")] stack: &'b Stack<'s, C, DefaultPacketPool>,
     #[cfg(not(feature = "_ble"))] receiver: S,
+    #[cfg(feature = "dfu_split")] policy: crate::split::driver::UpdatePolicy,
 ) where
     's: 'b,
 {
@@ -47,6 +53,12 @@ pub async fn run_peripheral_manager<
     #[cfg(not(feature = "_ble"))]
     {
         use crate::split::serial::run_serial_peripheral_manager;
-        run_serial_peripheral_manager::<ROW, COL, ROW_OFFSET, COL_OFFSET, S>(id, receiver).await;
-    };
+        run_serial_peripheral_manager::<ROW, COL, ROW_OFFSET, COL_OFFSET, S>(
+            id,
+            receiver,
+            #[cfg(feature = "dfu_split")]
+            policy,
+        )
+        .await;
+    }
 }

@@ -59,7 +59,7 @@ display-interface-i2c = { version = "0.5", optional = true }
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { git = "https://github.com/embassy-rs/trouble", rev = "71fb54c217ab139c47f3f0dd54e5bac1b8941d31", features = [
+trouble-host = { git = "https://github.com/embassy-rs/trouble", rev = "c21b1239fb86de712fc99da803def88378d81177", features = [
     "gatt",
     "scan",
     "derive",
@@ -232,6 +232,8 @@ dfu = ["dep:embassy-usb-dfu", "dep:embassy-embedded-hal", "rmk-types/dfu"]
 dfu_rp = ["dfu", "dep:embassy-boot-rp", "dep:embassy-boot", "rp2040", "rmk-macro/dfu_rp"]
 ## Enable nRF DFU firmware update support (add a chip feature like `nrf52840` too)
 dfu_nrf = ["dfu", "dep:embassy-boot", "dep:embassy-nrf", "rmk-macro/dfu_nrf"]
+## Enable split firmware update support — forward firmware to peripherals over split link
+dfu_split = ["dfu", "rmk-macro/dfu_split"]
 
 ## Enable Plover HID stenography support: adds the steno HID descriptor,
 ## the steno USB writer endpoint, and the `Action::Steno` variant.
