@@ -15,19 +15,18 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::pipe::Pipe;
 use embedded_io_async::{ErrorType, Read, Write};
 use rmk::host::HostService as RynkService;
-use rmk_types::protocol::rynk::{
-    Cmd, Deframer, RYNK_FRAME_BUFFER_SIZE, RYNK_HID_REPORT_SIZE, RynkHeader, encode_frame,
-};
+use rmk_types::constants::RYNK_BUFFER_SIZE;
+use rmk_types::protocol::rynk::{Cmd, Deframer, RYNK_HID_REPORT_SIZE, RynkHeader, encode_frame};
 use serde::Serialize;
 
 use super::rynk_link::{Frame, RynkHostClient};
 use super::test_block_on::test_block_on;
 
 /// One direction of the link, carrying whole HID reports.
-pub type Link = Pipe<NoopRawMutex, RYNK_FRAME_BUFFER_SIZE>;
+pub type Link = Pipe<NoopRawMutex, RYNK_BUFFER_SIZE>;
 
 /// Host reassembly buffer: a full COBS frame plus one report of trailing padding.
-const HID_RXBUF: usize = RYNK_FRAME_BUFFER_SIZE + RYNK_HID_REPORT_SIZE;
+const HID_RXBUF: usize = RYNK_BUFFER_SIZE + RYNK_HID_REPORT_SIZE;
 
 /// Fragment `data` (one frame) into fixed 32-byte reports, the final one
 /// zero-padded, and write each to `link`. Mirrors the firmware HID framing.
@@ -97,7 +96,7 @@ impl Write for HidTx<'_> {
 pub struct RynkHidClient<'p> {
     rx: &'p Link,
     tx: &'p Link,
-    buf: [u8; RYNK_FRAME_BUFFER_SIZE],
+    buf: [u8; RYNK_BUFFER_SIZE],
     df: Deframer,
     rxbuf: [u8; HID_RXBUF],
 }
@@ -142,7 +141,7 @@ pub fn link_session_hid<T>(service: &RynkService<'_>, script: impl AsyncFnOnce(&
     let mut client = RynkHidClient {
         rx: &d2h,
         tx: &h2d,
-        buf: [0u8; RYNK_FRAME_BUFFER_SIZE],
+        buf: [0u8; RYNK_BUFFER_SIZE],
         df: Deframer::new(),
         rxbuf: [0u8; HID_RXBUF],
     };

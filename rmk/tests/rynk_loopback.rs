@@ -26,14 +26,14 @@ use rmk_types::battery::{BatteryStatus, ChargeState};
 use rmk_types::ble::BleStatus;
 use rmk_types::combo::Combo as ComboConfig;
 use rmk_types::connection::{ConnectionStatus, ConnectionType};
+use rmk_types::constants::RYNK_BUFFER_SIZE;
 use rmk_types::fork::Fork;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::morse::{Morse, MorseMode, MorseProfile};
 use rmk_types::protocol::rynk::{
     BehaviorConfig as WireBehaviorConfig, Cmd, DeviceCapabilities, DeviceInfo, GetEncoderRequest, GetMacroRequest,
-    KeyPosition, LockStatus, MacroData, MatrixState, ProtocolVersion, RYNK_FRAME_BUFFER_SIZE, RynkError,
-    SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetMacroRequest, SetMorseRequest,
-    StorageResetMode,
+    KeyPosition, LockStatus, MacroData, MatrixState, ProtocolVersion, RynkError, SetComboRequest, SetEncoderRequest,
+    SetForkRequest, SetKeyRequest, SetMacroRequest, SetMorseRequest, StorageResetMode,
 };
 
 use crate::common::rynk_link::{RynkHostClient, link_session, link_two_sessions};
@@ -1325,7 +1325,7 @@ fn oversized_garbage_resyncs() {
     // A delimiter-less blob larger than the buffer overflows the Deframer and is
     // dropped; the stream then resyncs to the next clean frame.
     let recovered = link_session(&service, async |client| {
-        let mut garbage = vec![0xABu8; RYNK_FRAME_BUFFER_SIZE + 50];
+        let mut garbage = vec![0xABu8; RYNK_BUFFER_SIZE + 50];
         garbage.push(0x00); // terminating delimiter clears the drain
         client.send_raw(&garbage).await;
 

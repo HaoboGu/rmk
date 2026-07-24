@@ -44,11 +44,11 @@ type CS = CriticalSectionRawMutex;
 
 /// One whole frame as owned bytes: a COBS-encoded request queued for the writer,
 /// or a decoded logical reply handed back to the requester. The no-alloc bound is
-/// the firmware's COBS-frame size, so any frame it can send or reply with fits.
+/// the firmware's frame-buffer size, so any frame it can send or reply with fits.
 #[cfg(feature = "alloc")]
 type FrameBytes = Vec<u8>;
 #[cfg(not(feature = "alloc"))]
-type FrameBytes = heapless::Vec<u8, { rmk_types::protocol::rynk::RYNK_FRAME_BUFFER_SIZE }>;
+type FrameBytes = heapless::Vec<u8, { rmk_types::constants::RYNK_BUFFER_SIZE }>;
 
 /// A topic frame. The no-alloc bound tracks the topic table exactly, so a
 /// newer-minor firmware's extended topic (trailing bytes) is dropped there.
@@ -359,12 +359,12 @@ impl<R: Read, W: Write> Driver<R, W> {
 
 /// RX reassembly buffer: bytes land in the tail, an embedded [`Deframer`] cuts
 /// whole COBS frames back out in place. Alloc builds grow on demand up to
-/// [`MAX_RX_ALLOC`]; no-alloc builds fix the firmware's full COBS-frame size.
+/// [`MAX_RX_ALLOC`]; no-alloc builds fix the firmware's frame-buffer size.
 struct RxBuf {
     #[cfg(feature = "alloc")]
     buf: Vec<u8>,
     #[cfg(not(feature = "alloc"))]
-    buf: [u8; rmk_types::protocol::rynk::RYNK_FRAME_BUFFER_SIZE],
+    buf: [u8; rmk_types::constants::RYNK_BUFFER_SIZE],
     df: Deframer,
 }
 
@@ -383,7 +383,7 @@ impl RxBuf {
             #[cfg(feature = "alloc")]
             buf: vec![0; READ_CHUNK],
             #[cfg(not(feature = "alloc"))]
-            buf: [0; rmk_types::protocol::rynk::RYNK_FRAME_BUFFER_SIZE],
+            buf: [0; rmk_types::constants::RYNK_BUFFER_SIZE],
             df: Deframer::new(),
         }
     }

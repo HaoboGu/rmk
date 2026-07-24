@@ -40,11 +40,30 @@ impl RynkHeader {
     }
 }
 
-/// Physical buffer size for the COBS-encoded form of a worst-case firmware
-/// frame, trailing delimiter included (`RYNK_BUFFER_SIZE` stays the *logical*
-/// budget).
-pub const RYNK_FRAME_BUFFER_SIZE: usize =
-    crate::constants::RYNK_BUFFER_SIZE + crate::constants::RYNK_BUFFER_SIZE / 254 + 2;
+/// Largest logical frame (header + payload) whose streaming-COBS encoding —
+/// worst case `len + len/254 + 2` for an all-nonzero frame, trailing delimiter
+/// included — fits a `physical`-byte buffer; 0 if none does.
+pub const fn max_logical_len(physical: usize) -> usize {
+    let mut len = 0;
+    while len + 1 + (len + 1) / 254 + 2 <= physical {
+        len += 1;
+    }
+    len
+}
+
+/// Largest request/response payload either peer can carry in one frame: what
+/// remains of a `RYNK_BUFFER_SIZE`-byte frame buffer after worst-case COBS
+/// overhead and the 3-byte header. Advertised to hosts as `max_payload_size`.
+pub const RYNK_MAX_PAYLOAD_SIZE: usize = {
+    let logical = max_logical_len(crate::constants::RYNK_BUFFER_SIZE);
+    // Assert before subtracting so a too-small buffer fails with this message,
+    // not a const-eval underflow.
+    assert!(
+        logical >= RYNK_HEADER_SIZE,
+        "rynk_buffer_size is too small for a COBS-framed header; increase it"
+    );
+    logical - RYNK_HEADER_SIZE
+};
 
 /// COBS-encode the frame `header ++ postcard(value)` into `buf`, returning the
 /// total framed length. The header goes through the COBS encoder too, so a
@@ -252,25 +271,41 @@ mod tests {
     }
 
     #[test]
-    fn frame_buffer_sizing_fits_worst_case_cobs() {
-        // COBS worst case is an all-nonzero frame; a buffer of exactly
-        // n + n / 254 + 2 must hold it, including at multiples of 254.
-        let capacity = |n: usize| n + n / 254 + 2;
-        assert_eq!(RYNK_FRAME_BUFFER_SIZE, capacity(crate::constants::RYNK_BUFFER_SIZE));
-        let nonzero = [0x41u8; 512];
-        for n in [1usize, 253, 254, 255, 508, 509, 512] {
+    fn max_logical_len_is_exact_for_streaming_cobs() {
+        // COBS worst case is an all-nonzero frame. For each physical size,
+        // max_logical_len bytes must stream-encode into it and one byte more
+        // must not — the inverse of the encoder's worst case is exact, including
+        // at the 254-block boundaries where streaming COBS costs one byte over
+        // one-shot encoding.
+        let nonzero = [0x41u8; 600];
+        let encodes_into = |logical: usize, physical: usize| {
             let mut store = [0u8; 1024];
-            let buf = &mut store[..capacity(n)];
             let mut ser = postcard::Serializer {
-                output: Cobs::try_new(Slice::new(buf)).unwrap(),
+                output: Cobs::try_new(Slice::new(&mut store[..physical])).unwrap(),
             };
-            ser.output.try_extend(&nonzero[..n]).unwrap();
-            let framed = ser
-                .output
-                .finalize()
-                .unwrap_or_else(|_| panic!("capacity({n}) too small for the worst-case COBS frame"));
-            assert!(framed.len() <= capacity(n), "n={n}: {} > {}", framed.len(), capacity(n));
+            ser.output.try_extend(&nonzero[..logical]).is_ok() && ser.output.finalize().is_ok()
+        };
+        for physical in [
+            2usize, 3, 4, 255, 256, 257, 258, 259, 480, 488, 509, 510, 511, 512, 513, 514,
+        ] {
+            let len = max_logical_len(physical);
+            assert!(
+                encodes_into(len, physical),
+                "max_logical_len({physical}) = {len} must fit"
+            );
+            assert!(
+                !encodes_into(len + 1, physical),
+                "{} must not fit in {physical}",
+                len + 1
+            );
         }
+        // Below one code byte + delimiter, nothing fits.
+        assert_eq!(max_logical_len(0), 0);
+        assert_eq!(max_logical_len(1), 0);
+        assert_eq!(
+            RYNK_MAX_PAYLOAD_SIZE,
+            max_logical_len(crate::constants::RYNK_BUFFER_SIZE) - RYNK_HEADER_SIZE
+        );
     }
 
     #[test]

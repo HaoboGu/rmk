@@ -20,7 +20,7 @@ use rmk::keymap::{KeyMap, KeymapData};
 use rmk_types::action::KeyAction;
 use rmk_types::combo::Combo;
 use rmk_types::constants::{MACRO_DATA_SIZE, RYNK_BUFFER_SIZE};
-use rmk_types::protocol::rynk::{MacroData, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, StorageResetMode};
+use rmk_types::protocol::rynk::{MacroData, ProtocolVersion, RYNK_MAX_PAYLOAD_SIZE, RynkError, StorageResetMode};
 use rynk::layout::{Key, Rect, Variant};
 use rynk::{Client, LayoutInfo, RynkDevice, RynkHostError, TopicEvent};
 
@@ -119,7 +119,7 @@ async fn client_against_run_session() {
         let caps = client.get_capabilities().await.unwrap();
         assert_eq!((caps.num_layers, caps.num_rows, caps.num_cols), (2, 2, 2));
         // Client consumes the firmware-advertised payload limit.
-        assert_eq!(caps.max_payload_size as usize, RYNK_BUFFER_SIZE - RYNK_HEADER_SIZE);
+        assert_eq!(caps.max_payload_size as usize, RYNK_MAX_PAYLOAD_SIZE);
 
         let info = client.get_device_info().await.unwrap();
         assert_eq!(info.manufacturer.as_str(), "RMK");

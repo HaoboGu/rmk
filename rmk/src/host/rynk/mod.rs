@@ -9,9 +9,8 @@ mod uart;
 
 use embassy_futures::select::{Either, select};
 use embedded_io_async::{Read, Write};
-use rmk_types::protocol::rynk::{
-    Cmd, Deframer, FirmwareVersion, RYNK_FRAME_BUFFER_SIZE, RynkError, RynkMessage, command,
-};
+use rmk_types::constants::RYNK_BUFFER_SIZE;
+use rmk_types::protocol::rynk::{Cmd, Deframer, FirmwareVersion, RynkError, RynkMessage, command};
 #[allow(unused_imports)] // re-exported at `crate::host` for downstream users
 pub use uart::run_rynk_uart;
 
@@ -179,7 +178,7 @@ impl<'a> RynkService<'a> {
             ),
             topics: topics::TopicSubscribers::new(),
         };
-        let mut buf = [0u8; RYNK_FRAME_BUFFER_SIZE];
+        let mut buf = [0u8; RYNK_BUFFER_SIZE];
         let mut df = Deframer::new();
         // Mute topics until the client completes the version handshake.
         let mut handshaked = false;
@@ -630,7 +629,7 @@ mod tests {
 
         // Non-zero bytes with no delimiter, longer than the frame buffer.
         let mut chunks = VecDeque::new();
-        chunks.push_back(vec![0xFFu8; RYNK_FRAME_BUFFER_SIZE + 100]);
+        chunks.push_back(vec![0xFFu8; RYNK_BUFFER_SIZE + 100]);
 
         let mut rx = ChunkRead { chunks };
         let mut tx = VecWrite { captured: Vec::new() };

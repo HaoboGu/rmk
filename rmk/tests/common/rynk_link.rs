@@ -33,8 +33,9 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::pipe::Pipe;
 use postcard::ser_flavors::{Cobs, Flavor, Slice};
 use rmk::host::HostService as RynkService;
+use rmk_types::constants::RYNK_BUFFER_SIZE;
 use rmk_types::protocol::rynk::{
-    Cmd, Deframer, DeviceCapabilities, RYNK_FRAME_BUFFER_SIZE, RYNK_HEADER_SIZE, RynkError, RynkHeader, encode_frame,
+    Cmd, Deframer, DeviceCapabilities, RYNK_HEADER_SIZE, RynkError, RynkHeader, encode_frame,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -44,7 +45,7 @@ use super::test_block_on::test_block_on;
 /// One direction of the link. Sized to a full Rynk buffer so any single legal
 /// frame fits, and the writer never deadlocks waiting on a reader that has not
 /// been polled yet.
-pub type Link = Pipe<NoopRawMutex, RYNK_FRAME_BUFFER_SIZE>;
+pub type Link = Pipe<NoopRawMutex, RYNK_BUFFER_SIZE>;
 
 /// A frame read off the wire, decoded only as far as its header. Shared with
 /// the HID-framed harness ([`super::rynk_hid_link`]).
@@ -157,9 +158,9 @@ pub trait RynkHostClient {
 pub struct RynkClient<'p> {
     rx: &'p Link,
     tx: &'p Link,
-    buf: [u8; RYNK_FRAME_BUFFER_SIZE],
+    buf: [u8; RYNK_BUFFER_SIZE],
     df: Deframer,
-    rxbuf: [u8; RYNK_FRAME_BUFFER_SIZE],
+    rxbuf: [u8; RYNK_BUFFER_SIZE],
 }
 
 impl RynkClient<'_> {
@@ -220,9 +221,9 @@ pub fn link_session<T>(service: &RynkService<'_>, script: impl AsyncFnOnce(&mut 
     let mut client = RynkClient {
         rx: &d2h,
         tx: &h2d,
-        buf: [0u8; RYNK_FRAME_BUFFER_SIZE],
+        buf: [0u8; RYNK_BUFFER_SIZE],
         df: Deframer::new(),
-        rxbuf: [0u8; RYNK_FRAME_BUFFER_SIZE],
+        rxbuf: [0u8; RYNK_BUFFER_SIZE],
     };
     test_block_on(async {
         // Drain test flash writes so storage handlers cannot block the session.
@@ -253,16 +254,16 @@ pub fn link_two_sessions<T>(
     let mut client_a = RynkClient {
         rx: &d2h_a,
         tx: &h2d_a,
-        buf: [0u8; RYNK_FRAME_BUFFER_SIZE],
+        buf: [0u8; RYNK_BUFFER_SIZE],
         df: Deframer::new(),
-        rxbuf: [0u8; RYNK_FRAME_BUFFER_SIZE],
+        rxbuf: [0u8; RYNK_BUFFER_SIZE],
     };
     let mut client_b = RynkClient {
         rx: &d2h_b,
         tx: &h2d_b,
-        buf: [0u8; RYNK_FRAME_BUFFER_SIZE],
+        buf: [0u8; RYNK_BUFFER_SIZE],
         df: Deframer::new(),
-        rxbuf: [0u8; RYNK_FRAME_BUFFER_SIZE],
+        rxbuf: [0u8; RYNK_BUFFER_SIZE],
     };
     test_block_on(async {
         // Both sessions run concurrently and never EOF; the pair is dropped once

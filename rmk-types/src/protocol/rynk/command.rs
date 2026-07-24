@@ -369,15 +369,17 @@ topics! {
 #[cfg(not(feature = "host"))]
 const FIRMWARE_MAX_PAYLOAD: usize = max_const(MAX_ENDPOINT_PAYLOAD, MAX_TOPIC_PAYLOAD);
 
-/// The configured buffer must hold every rynk frame this firmware build can send
-/// or receive, header included. Both operands are rmk-types constants — the
-/// buffer is generated from `keyboard.toml`, the fold from the command tables —
-/// so this self-check needs no cross-crate plumbing. `host` builds have unbounded
-/// bulk payloads (no `MaxSize`), so the fold and this assert are absent there.
+/// The configured buffer must hold the COBS-encoded form of every rynk frame
+/// this firmware build can send or receive, header included. Both operands are
+/// rmk-types constants — the buffer is generated from `keyboard.toml`, the fold
+/// from the command tables — so this self-check needs no cross-crate plumbing.
+/// `host` builds have unbounded bulk payloads (no `MaxSize`), so the fold and
+/// this assert are absent there.
 #[cfg(not(feature = "host"))]
 const _: () = core::assert!(
-    crate::constants::RYNK_BUFFER_SIZE >= super::message::RYNK_HEADER_SIZE + FIRMWARE_MAX_PAYLOAD,
-    "rynk_buffer_size is too small to hold the largest rynk frame (including bulk); increase it"
+    super::message::max_logical_len(crate::constants::RYNK_BUFFER_SIZE)
+        >= super::message::RYNK_HEADER_SIZE + FIRMWARE_MAX_PAYLOAD,
+    "rynk_buffer_size is too small to hold the largest rynk frame (including bulk and COBS overhead); increase it"
 );
 
 // Bulk counts live here because they need payload `POSTCARD_MAX_SIZE`.
@@ -400,15 +402,18 @@ mod bulk_capacity {
         min_const(buffer.saturating_sub(overhead) / item_size, BULK_COUNT_CEILING)
     }
 
-    /// Combos/morses per bulk frame. Sized by the larger of `Combo`/`Morse` so
-    /// both bulk endpoints fit; the one fixed byte is `start_index` on the
-    /// request / the `Result` tag on the response.
+    /// Combos/morses per bulk frame; `buffer` is the logical frame budget —
+    /// [`max_logical_len`](super::super::message::max_logical_len) of the
+    /// physical buffer size. Sized by the larger of `Combo`/`Morse` so both
+    /// bulk endpoints fit; the one fixed byte is `start_index` on the request /
+    /// the `Result` tag on the response.
     pub const fn bulk_size_for_buffer(buffer: usize) -> usize {
         let item = max_const(Combo::POSTCARD_MAX_SIZE, Morse::POSTCARD_MAX_SIZE);
         items_that_fit(buffer, item, 1)
     }
 
-    /// Keymap keys per bulk frame. Keys (`KeyAction`) are far smaller than a
+    /// Keymap keys per bulk frame, from the same logical budget as
+    /// [`bulk_size_for_buffer`]. Keys (`KeyAction`) are far smaller than a
     /// `Combo`, so a keymap run naturally outnumbers a combo/morse run in the
     /// same buffer; the three fixed bytes are `layer`/`start_row`/`start_col`.
     pub const fn bulk_keymap_size_for_buffer(buffer: usize) -> usize {
@@ -496,10 +501,10 @@ mod tests {
         assert_eq!(wrapped, bare + 1);
     }
 
-    /// The buffer-derived bulk counts stay within `[1, u8::MAX]`, grow with the
-    /// buffer, and — crucially — their worst-case encoded frame fits the buffer
+    /// The budget-derived bulk counts stay within `[1, u8::MAX]`, grow with the
+    /// budget, and — crucially — their worst-case encoded frame fits the budget
     /// they were derived from. That fit is what lets the firmware serve a full
-    /// bulk message out of its `RYNK_BUFFER_SIZE` buffer.
+    /// bulk message out of its logical frame budget.
     #[test]
     fn bulk_counts_derive_from_buffer_and_fit() {
         use super::{bulk_keymap_size_for_buffer, bulk_size_for_buffer};
