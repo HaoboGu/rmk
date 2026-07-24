@@ -27,10 +27,20 @@ mod nrf;
 #[cfg(feature = "dfu_rp")]
 mod rp;
 
+#[cfg(all(feature = "dfu_nrf", feature = "dfu_ble"))]
+pub use self::nrf::mark_updated_and_reset;
 #[cfg(feature = "dfu_nrf")]
 pub use self::nrf::{DFU_WRITE_SIZE, get_manager, init_flash, mark_booted};
+#[cfg(all(feature = "dfu_rp", feature = "dfu_ble"))]
+pub use self::rp::mark_updated_and_reset;
 #[cfg(feature = "dfu_rp")]
 pub use self::rp::{DFU_WRITE_SIZE, get_manager, init_flash, mark_booted};
+#[cfg(feature = "dfu_ble")]
+pub(crate) mod ble_dfu;
+#[cfg(all(feature = "dfu_ble", feature = "dfu_nrf"))]
+pub(crate) mod ble_nrf;
+#[cfg(all(feature = "dfu_ble", feature = "dfu_rp"))]
+pub(crate) mod ble_rp;
 
 // ---------------------------------------------------------------------------
 // Chip-specific type aliases
@@ -113,6 +123,21 @@ impl DfuFlashManager {
     pub fn storage_partition(&self) -> PartitionType {
         BlockingPartition::new(self.flash_mutex, self.storage_offset, self.storage_size)
     }
+
+    #[cfg(feature = "dfu_ble")]
+    pub(crate) fn flash_mutex(&self) -> &'static MutexType {
+        self.flash_mutex
+    }
+
+    #[cfg(feature = "dfu_ble")]
+    pub(crate) fn dfu_offset(&self) -> u32 {
+        self.dfu_offset
+    }
+
+    #[cfg(feature = "dfu_ble")]
+    pub(crate) fn dfu_size(&self) -> u32 {
+        self.dfu_size
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -141,13 +166,16 @@ impl Handler for DfuStringProvider {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "dfu_lock")]
-static DFU_LOCKED: AtomicBool = AtomicBool::new(true);
+pub(crate) static DFU_LOCKED: AtomicBool = AtomicBool::new(true);
 #[cfg(feature = "dfu_lock")]
-static DFU_STARTED: AtomicBool = AtomicBool::new(false);
+pub(crate) static DFU_STARTED: AtomicBool = AtomicBool::new(false);
 #[cfg(feature = "dfu_lock")]
-static DFU_UNLOCK_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+pub(crate) static DFU_UNLOCK_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 #[cfg(feature = "dfu_lock")]
+/// Whether the DFU lock has been released (by pressing the unlock key
+/// combination). When `false`, DFU downloads are rejected by both USB and
+/// BLE DFU handlers.
 pub fn is_dfu_unlocked() -> bool {
     !DFU_LOCKED.load(Ordering::Acquire)
 }
@@ -156,28 +184,21 @@ pub fn is_dfu_unlocked() -> bool {
 // RmkDfuHandler
 // ---------------------------------------------------------------------------
 
+use embassy_usb::class::dfu::consts::Status;
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 use embassy_usb::class::dfu::dfu_mode::DfuState;
-#[cfg(feature = "dfu")]
-use embassy_usb::class::dfu::{
-    consts::Status,
-    dfu_mode::{self},
-};
-#[cfg(any(feature = "dfu", feature = "dfu_lock"))]
+use embassy_usb::class::dfu::dfu_mode::{self};
 use rmk_types::dfu::DfuStatus;
 
 /// DFU handler wrapper that blinks an LED during transfer and checks the
 /// DFU lock (if `dfu_lock` feature is enabled).
-#[cfg(any(feature = "dfu", feature = "dfu_lock"))]
 use crate::event::publish_event;
 
-#[cfg(feature = "dfu")]
 struct RmkDfuHandler<H> {
     inner: H,
     target_id: Option<usize>,
 }
 
-#[cfg(feature = "dfu")]
 impl<H: dfu_mode::Handler> dfu_mode::Handler for RmkDfuHandler<H> {
     fn start(&mut self) -> Result<(), Status> {
         #[cfg(feature = "dfu_lock")]
@@ -456,6 +477,11 @@ pub struct DfuLock<'a> {
 
 #[cfg(feature = "dfu_lock")]
 impl<'a> DfuLock<'a> {
+    /// Create a new DFU lock.
+    ///
+    /// `unlock_keys` — list of `(row, col)` matrix positions that must all be
+    /// pressed simultaneously to unlock DFU.
+    /// `keymap` — reference to the active keymap used to read matrix state.
     pub fn new(unlock_keys: &'a [(u8, u8)], keymap: &'a crate::keymap::KeyMap<'a>) -> Self {
         Self {
             unlocked: AtomicBool::new(false),
@@ -465,6 +491,9 @@ impl<'a> DfuLock<'a> {
     }
 
     pub(crate) async fn process_unlock(&self) {
+        if DFU_STARTED.load(Ordering::Acquire) {
+            core::future::pending::<()>().await;
+        }
         DFU_UNLOCK_SIGNAL.wait().await;
 
         info!("dfu_lock: DFU activity detected, unlock window open for 10 s");
@@ -489,7 +518,7 @@ impl<'a> DfuLock<'a> {
                 publish_event(crate::event::DfuStatusEvent::new(DfuStatus::Idle));
                 return;
             }
-            embassy_time::Timer::after_millis(50).await;
+            embassy_time::Timer::after_millis(200).await;
         }
 
         info!("dfu_lock: unlocked, waiting for DFU download");
@@ -516,6 +545,34 @@ impl<'a> Runnable for DfuLock<'a> {
     async fn run(&mut self) -> ! {
         loop {
             self.process_unlock().await;
+        }
+    }
+}
+
+/// Runnable that feeds [`KeyboardEvent`]s into a keymap's matrix state.
+///
+/// On a split peripheral there is no `Keyboard` task running, so the keymap
+/// matrix state is never updated from events. This Runnable bridges that gap
+/// so that [`DfuLock`] can read the physical key state via
+/// [`KeyMap::read_matrix_key`].
+///
+/// Required on any split peripheral that uses `dfu_lock`. Not needed on
+/// single-board builds or on the split central (both run a `Keyboard` task).
+#[cfg(feature = "dfu_lock")]
+pub struct DfuLockKeyUpdater<'a> {
+    /// Reference to the active keymap — used to update its matrix state with
+    /// incoming [`KeyboardEvent`]s so that [`DfuLock`] can read key positions.
+    pub keymap: &'a crate::keymap::KeyMap<'a>,
+}
+
+#[cfg(feature = "dfu_lock")]
+impl<'a> Runnable for DfuLockKeyUpdater<'a> {
+    async fn run(&mut self) -> ! {
+        use crate::event::SubscribableEvent;
+        let mut key_sub = crate::event::KeyboardEvent::subscriber();
+        loop {
+            let event = key_sub.next_message_pure().await;
+            self.keymap.update_matrix_state(&event);
         }
     }
 }

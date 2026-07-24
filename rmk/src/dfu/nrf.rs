@@ -1,6 +1,8 @@
 use core::cell::RefCell;
 
 use embassy_boot::BlockingFirmwareState;
+#[cfg(feature = "dfu_ble")]
+use embassy_boot::{BlockingFirmwareUpdater, FirmwareUpdaterConfig};
 use embassy_embedded_hal::flash::partition::BlockingPartition;
 use embassy_nrf::Peri;
 use embassy_nrf::nvmc::Nvmc;
@@ -63,4 +65,32 @@ pub fn mark_booted() {
 /// Get a reference to the global DFU flash manager.
 pub fn get_manager() -> Option<&'static DfuFlashManager> {
     MANAGER.try_get()
+}
+
+/// Mark the DFU firmware as valid and reset the MCU.
+#[cfg(feature = "dfu_ble")]
+pub fn mark_updated_and_reset() {
+    info!("dfu: marking firmware as updated...");
+    if let Some(mgr) = get_manager() {
+        let dfu_part = mgr.dfu_partition();
+        let state_part = mgr.state_partition();
+        static ALIGNED: StaticCell<[u8; DFU_WRITE_SIZE]> = StaticCell::new();
+        let aligned: &'static mut [u8] = ALIGNED.init([0; DFU_WRITE_SIZE]);
+        let config = FirmwareUpdaterConfig {
+            dfu: dfu_part,
+            state: state_part,
+        };
+        let mut updater = BlockingFirmwareUpdater::new(config, aligned);
+        match updater.mark_updated() {
+            Ok(()) => info!("dfu: mark_updated succeeded, resetting now"),
+            Err(e) => {
+                #[cfg(feature = "defmt")]
+                let e = defmt::Debug2Format(&e);
+                error!("dfu: mark_updated failed: {:?}", e);
+            }
+        }
+    } else {
+        error!("dfu: no flash manager, cannot mark updated");
+    }
+    cortex_m::peripheral::SCB::sys_reset();
 }

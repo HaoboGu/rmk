@@ -5,7 +5,7 @@ use rmk_config::resolved::hardware::{
     BleConfig, BoardConfig, ChipModel, ChipSeries, CommunicationConfig, InputDeviceConfig,
     MatrixType, SplitBoardConfig, SplitConfig,
 };
-use syn::ItemMod;
+use syn::{ItemMod, LitStr};
 
 use super::central::expand_serial_init;
 use crate::codegen::chip::chip_init::expand_chip_init;
@@ -27,7 +27,6 @@ use crate::codegen::matrix::{
 use crate::codegen::orchestrator::get_debouncer_type;
 use crate::codegen::registered_processor::expand_registered_processor_init;
 use crate::codegen::watchdog::expand_watchdog_init;
-use rmk_config::resolved::Identity;
 
 /// Parse split peripheral mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_split_peripheral_mod(
@@ -50,11 +49,11 @@ pub(crate) fn parse_split_peripheral_mod(
 
     let dfu_enabled =
         is_feature_enabled(&rmk_features, "dfu_rp") || is_feature_enabled(&rmk_features, "dfu_nrf");
+    let product_name = &identity.product_name;
     let device_config = if dfu_enabled {
         let vid = identity.vendor_id;
         let pid = identity.product_id;
         let manufacturer = &identity.manufacturer;
-        let product_name = &identity.product_name;
         let serial_number_tokens = match &identity.serial_number {
             Some(s) => quote! { #s },
             None => quote! { ::rmk::config::RMK_BUILD_INFO },
@@ -72,7 +71,8 @@ pub(crate) fn parse_split_peripheral_mod(
         quote! {}
     };
 
-    let main_function = expand_split_peripheral(id, &identity, &hardware, item_mod, &rmk_features);
+    let main_function =
+        expand_split_peripheral(id, product_name, &hardware, item_mod, &rmk_features);
 
     let bind_interrupts =
         expand_bind_interrupt_for_split_peripheral(&hardware.chip, &hardware, id, &rmk_features);
@@ -306,7 +306,7 @@ fn expand_bind_interrupt_for_split_peripheral(
 
 fn expand_split_peripheral(
     id: usize,
-    _identity: &Identity,
+    product_name: &str,
     hardware: &Hardware,
     item_mod: ItemMod,
     rmk_features: &Option<Vec<String>>,
@@ -437,11 +437,17 @@ fn expand_split_peripheral(
     let (device_initialization, devices, processors) =
         expand_peripheral_input_device_config(id, hardware);
 
+    let dfu_lock_enabled = is_feature_enabled(rmk_features, "dfu_lock");
     let needs_keymap = peripheral_config
         .input_device
         .as_ref()
         .map(|input| input.joystick.as_ref().is_some_and(|v| !v.is_empty()))
-        .unwrap_or(false);
+        .unwrap_or(false)
+        || (dfu_lock_enabled
+            && hardware
+                .dfu
+                .as_ref()
+                .is_some_and(|d| !d.unlock_keys.is_empty()));
 
     // Generate minimal keymap when processors may read from it.
     let keymap_init = if needs_keymap {
@@ -479,6 +485,26 @@ fn expand_split_peripheral(
         quote! {}
     };
 
+    // DfuLock init for split peripheral
+    let dfu_lock_init = if dfu_lock_enabled {
+        if let Some(ref dfu) = hardware.dfu {
+            if !dfu.unlock_keys.is_empty() {
+                registered_processors.push(quote! { dfu_lock.run() });
+                registered_processors.push(quote! { dfu_lock_key_updater.run() });
+                quote! {
+                    let mut dfu_lock = ::rmk::dfu::DfuLock::new(&DFU_UNLOCK_KEYS, &keymap);
+                    let mut dfu_lock_key_updater = ::rmk::dfu::DfuLockKeyUpdater { keymap: &keymap };
+                }
+            } else {
+                quote! {}
+            }
+        } else {
+            quote! {}
+        }
+    } else {
+        quote! {}
+    };
+
     let (watchdog_init, watchdog_task) = expand_watchdog_init(hardware);
 
     let runnable_import = if !registered_processors.is_empty() || watchdog_task.is_some() {
@@ -487,8 +513,19 @@ fn expand_split_peripheral(
         quote! {}
     };
 
+    // Truncated name for BLE scan response (max 29 bytes AD data)
+    let suffix = format!(" per{}", id);
+    let max_name_len: usize = 29;
+    let peripheral_name: String = if product_name.len() + suffix.len() > max_name_len {
+        let max_product_len = max_name_len - suffix.len();
+        format!("{}{}", &product_name[..max_product_len], suffix)
+    } else {
+        format!("{}{}", product_name, suffix)
+    };
+
     let run_rmk_peripheral = expand_split_peripheral_entry(
         id,
+        &peripheral_name,
         chip,
         split_config,
         peripheral_config,
@@ -497,6 +534,7 @@ fn expand_split_peripheral(
         registered_processors,
         watchdog_task,
         dfu_task_future,
+        rmk_features,
     );
 
     quote! {
@@ -506,6 +544,7 @@ fn expand_split_peripheral(
         #registered_processor_initializers
         #matrix_config
         #keymap_init
+        #dfu_lock_init
         #output_config
         #device_initialization
         #display_init
@@ -517,6 +556,7 @@ fn expand_split_peripheral(
 #[allow(clippy::too_many_arguments)]
 fn expand_split_peripheral_entry(
     id: usize,
+    peripheral_name: &str,
     chip: &ChipModel,
     split_config: &SplitConfig,
     peripheral_config: &SplitBoardConfig,
@@ -525,6 +565,7 @@ fn expand_split_peripheral_entry(
     registered_processors: Vec<TokenStream2>,
     watchdog_task: Option<TokenStream2>,
     dfu_task_future: Option<TokenStream2>,
+    rmk_features: &Option<Vec<String>>,
 ) -> TokenStream2 {
     // Add matrix to devices, and run all devices
     let mut devs = devices.clone();
@@ -550,11 +591,23 @@ fn expand_split_peripheral_entry(
     };
 
     if split_config.connection == "ble" {
-        let peripheral_run = quote! {
-            ::rmk::split::peripheral::run_rmk_split_peripheral(
-                #id,
-                &stack,
-            )
+        let dfu_ble_enabled = is_feature_enabled(rmk_features, "dfu_ble");
+        let peripheral_run = if dfu_ble_enabled {
+            let name_lit = LitStr::new(peripheral_name, proc_macro2::Span::call_site());
+            quote! {
+                ::rmk::split::peripheral::run_rmk_split_peripheral(
+                    #id,
+                    &stack,
+                    #name_lit,
+                )
+            }
+        } else {
+            quote! {
+                ::rmk::split::peripheral::run_rmk_split_peripheral(
+                    #id,
+                    &stack,
+                )
+            }
         };
         // Build task list: device, processor (if any), peripheral, registered_processors, dfu
         let mut tasks = vec![device_task];

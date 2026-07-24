@@ -1,5 +1,8 @@
 #[cfg(feature = "_ble")]
-use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
+use bt_hci::{
+    cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy},
+    controller::{ControllerCmdAsync, ControllerCmdSync},
+};
 use embassy_futures::select::{Either, select};
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
@@ -36,11 +39,12 @@ use crate::state::update_status;
 pub async fn run_rmk_split_peripheral<
     'b,
     's,
-    #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy>,
+    #[cfg(feature = "_ble")] C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     #[cfg(not(feature = "_ble"))] S: Write + Read,
 >(
     #[cfg(feature = "_ble")] id: usize,
     #[cfg(feature = "_ble")] stack: &'b Stack<'s, C, DefaultPacketPool>,
+    #[cfg(feature = "dfu_ble")] name: &'static str,
     #[cfg(not(feature = "_ble"))] serial: S,
 ) where
     's: 'b,
@@ -54,7 +58,13 @@ pub async fn run_rmk_split_peripheral<
     }
 
     #[cfg(feature = "_ble")]
-    crate::split::ble::peripheral::initialize_nrf_ble_split_peripheral_and_run(id, stack).await;
+    crate::split::ble::peripheral::initialize_nrf_ble_split_peripheral_and_run(
+        id,
+        stack,
+        #[cfg(feature = "dfu_ble")]
+        name,
+    )
+    .await;
 }
 
 /// The split peripheral instance.

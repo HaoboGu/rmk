@@ -1,4 +1,6 @@
 use core::sync::atomic::AtomicBool;
+#[cfg(feature = "dfu_ble")]
+use core::sync::atomic::Ordering;
 
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
@@ -31,16 +33,25 @@ use crate::state::set_ble_state;
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;
+#[cfg(feature = "dfu_ble")]
+pub(crate) mod dfu_service;
 pub(crate) mod led;
-#[cfg(feature = "_nrf_ble")]
+#[cfg(any(feature = "_nrf_ble", feature = "dfu_nrf"))]
 pub(crate) mod nrf;
 pub mod passkey;
 pub(crate) mod profile;
+#[cfg(any(feature = "rp2040", feature = "dfu_rp"))]
+pub(crate) mod rp;
 
 /// Global state of sleep management
 /// - `true`: Indicates central is sleeping
 /// - `false`: Indicates central is awake
 pub(crate) static SLEEPING_STATE: AtomicBool = AtomicBool::new(false);
+
+/// Set to true after switching to low-latency mode for DFU.
+/// Prevents `set_conn_params` from overwriting with latency=30.
+#[cfg(feature = "dfu_ble")]
+static DFU_LATENCY_UPDATED: AtomicBool = AtomicBool::new(false);
 
 /// Max number of connections
 pub(crate) const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + 1;
@@ -88,6 +99,30 @@ where
         let serial_number = rmk_config.device_config.serial_number;
 
         let profile_manager = ProfileManager::new(stack);
+
+        #[cfg(not(feature = "passkey_entry"))]
+        stack.set_io_capabilities(IoCapabilities::NoInputNoOutput);
+
+        // Pre-erase DFU partition so Create(Data) is instant
+        #[cfg(all(feature = "dfu_ble", feature = "dfu_nrf"))]
+        {
+            use embedded_storage_async::nor_flash::NorFlash;
+
+            use crate::dfu::ble_nrf::AsyncDfuPartition;
+            if let Some(mgr) = crate::dfu::get_manager() {
+                let mut flash = AsyncDfuPartition::new(mgr.flash_mutex(), mgr.dfu_offset(), mgr.dfu_size());
+                let _ = flash.erase(0, mgr.dfu_size()).await;
+                debug!("ble dfu: partition pre-erased");
+            }
+        }
+        #[cfg(all(feature = "dfu_ble", feature = "dfu_rp"))]
+        {
+            // RP2040 flash erase is very slow (~500ms per 4KB sector).
+            // Pre-erasing the entire DFU partition (up to ~1MB) would block
+            // the executor for 2+ minutes.  Instead we skip the pre-erase
+            // here; the dfu-target crate handles erasing on demand when it
+            // receives the Create command during a DFU session.
+        }
 
         info!("Starting advertising and GATT service");
         let server = Server::new_with_config(GapConfig::Peripheral(PeripheralConfig {
@@ -261,7 +296,13 @@ pub(crate) async fn ble_task<C: Controller + ControllerCmdAsync<LeSetPhy>, P: Pa
 ///
 /// This function will handle the GATT events and process them.
 /// This is how we interact with read and write requests.
-async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, DefaultPacketPool>) -> Result<(), Error> {
+async fn gatt_events_task<C: Controller + ControllerCmdSync<LeReadLocalSupportedFeatures>>(
+    server: &Server<'_>,
+    conn: &GattConnection<'_, '_, DefaultPacketPool>,
+    stack: &Stack<'_, C, DefaultPacketPool>,
+) -> Result<(), Error> {
+    #[cfg(not(feature = "dfu_ble"))]
+    let _ = &stack;
     let level = server.battery_service.level;
     let output_keyboard = server.hid_service.output_keyboard;
     let hid_control_point = server.hid_service.hid_control_point;
@@ -279,6 +320,14 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     #[cfg(feature = "passkey_entry")]
     let mut passkey_state = PasskeyInputState::new();
 
+    #[cfg(feature = "dfu_ble")]
+    let (dfu_cp, dfu_pkt) = (server.dfu_service.dfu_control_point, server.dfu_service.dfu_packet);
+    #[cfg(feature = "dfu_ble")]
+    let btnless = server.buttonless_dfu_service.buttonless_dfu;
+    #[cfg(all(feature = "dfu_ble", feature = "dfu_nrf"))]
+    let mut dfu_handler = crate::dfu::get_manager().map(nrf::make_dfu_handler);
+    #[cfg(all(feature = "dfu_ble", feature = "dfu_rp"))]
+    let mut dfu_handler = crate::dfu::get_manager().map(rp::make_dfu_handler);
     loop {
         #[cfg(feature = "passkey_entry")]
         let Some(event) = next_gatt_event(conn, &mut passkey_state).await else {
@@ -291,6 +340,15 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
             GattConnectionEvent::Disconnected { reason } => {
                 #[cfg(feature = "passkey_entry")]
                 passkey_state.clear();
+                #[cfg(feature = "dfu_ble")]
+                DFU_LATENCY_UPDATED.store(false, Ordering::Release);
+                #[cfg(all(feature = "dfu_ble", any(feature = "dfu_nrf", feature = "dfu_rp")))]
+                if let Some(ref handler) = dfu_handler {
+                    if handler.is_complete() {
+                        info!("ble dfu: finalizing on disconnect");
+                        crate::dfu::mark_updated_and_reset();
+                    }
+                }
                 info!("[gatt] disconnected: {:?}", reason);
                 break;
             }
@@ -332,7 +390,6 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         } else {
                             debug!("Read GATT Event to Unknown: {:?}", event.handle());
                         }
-
                         if conn.raw().security_level()?.encrypted() {
                             None
                         } else {
@@ -347,7 +404,10 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
 
                         // trouble-host 0.7 exposes written bytes via a closure; copy them out
                         // once so the dispatch below (which awaits) can use them freely.
+                        #[cfg(not(feature = "dfu_ble"))]
                         let mut data_buf = [0u8; 32];
+                        #[cfg(feature = "dfu_ble")]
+                        let mut data_buf = [0u8; 247];
                         let data_len = event.with_data(|_, data| {
                             let n = data.len().min(data_buf.len());
                             data_buf[..n].copy_from_slice(&data[..n]);
@@ -355,59 +415,131 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         });
                         let data = &data_buf[..data_len.min(data_buf.len())];
 
-                        if event.handle() == output_keyboard.handle {
-                            if data_len == 1 {
-                                let led_indicator = LedIndicator::from_bits(data[0]);
-                                debug!("Got keyboard state: {:?}", led_indicator);
-                                LED_SIGNAL.signal(led_indicator);
-                            } else {
-                                warn!("Wrong keyboard state data: {:?}", data);
+                        #[cfg(not(all(feature = "dfu_ble", any(feature = "dfu_nrf", feature = "dfu_rp"))))]
+                        let dfu_handled = false;
+                        #[cfg(all(feature = "dfu_ble", any(feature = "dfu_nrf", feature = "dfu_rp")))]
+                        let dfu_handled = if event.handle() == dfu_cp.handle {
+                            debug!("ble dfu: control point write, len={}", data.len());
+                            if let Some(ref mut handler) = dfu_handler {
+                                if let Some(resp) = handler.handle_control_point(data).await {
+                                    let mut resp_buf = [0u8; 64];
+                                    let resp_data = resp.response_data();
+                                    if resp_data.len() >= 3 {
+                                        debug!(
+                                            "ble dfu: cp resp op={} ({}), result={}",
+                                            resp_data[1],
+                                            crate::dfu::ble_dfu::dfu_op_name(resp_data[1]),
+                                            resp_data[2]
+                                        );
+                                    }
+                                    resp_buf[..resp_data.len()].copy_from_slice(resp_data);
+                                    let _ = dfu_cp.notify(conn, &resp_buf, true).await;
+                                }
                             }
-                        } else if event.handle() == input_keyboard.cccd_handle.expect("No CCCD for input keyboard")
-                            || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
-                            || event.handle() == media.cccd_handle.expect("No CCCD for media report")
-                            || event.handle() == system_control.cccd_handle.expect("No CCCD for system report")
-                            || event.handle() == level.cccd_handle.expect("No CCCD for battery level")
-                        {
-                            cccd_updated = true;
-                        } else if event.handle() == hid_control_point.handle || host_control_point_match {
-                            info!("Write GATT Event to Control Point: {:?}", event.handle());
-                            #[cfg(feature = "split")]
-                            {
-                                // Forward an HID Control Point write to the split central's sleep signal.
-                                // HID Class spec opcodes for the HID Control Point characteristic:
-                                //   - 0: HID_CTRL_SUSPEND
-                                //   - 1: HID_CTRL_EXIT_SUSPEND
-                                if data_len == 1 {
-                                    match data[0] {
-                                        0 => CENTRAL_SLEEP.signal(true),
-                                        1 => CENTRAL_SLEEP.signal(false),
-                                        _ => {}
+                            true
+                        } else if event.handle() == dfu_pkt.handle {
+                            info!("ble dfu: packet write, len={}", data.len());
+                            if let Some(ref mut handler) = dfu_handler {
+                                if let Some(resp) = handler.handle_packet(data).await {
+                                    let resp_data = resp.response_data();
+                                    if resp_data.len() > 3 {
+                                        let mut resp_buf = [0u8; 64];
+                                        resp_buf[..resp_data.len()].copy_from_slice(resp_data);
+                                        let _ = dfu_cp.notify(conn, &resp_buf, true).await;
                                     }
                                 }
                             }
+                            true
+                        } else if event.handle() == btnless.handle {
+                            info!("ble dfu: buttonless DFU, entering DFU mode");
+                            let resp = [0x20u8, 0x01u8];
+                            let _ = btnless.indicate(conn, &resp, true).await;
+                            true
                         } else {
-                            #[cfg(feature = "host")]
-                            if event.handle() == output_host.handle {
-                                debug!("Got host packet: {:?}", data);
-                                if data_len == 32 {
-                                    crate::channel::enqueue_host_request(ConnectionType::Ble, data_buf).await;
-                                } else {
-                                    warn!("Wrong host packet data: {:?}", data);
-                                }
-                            } else if event.handle() == input_host.cccd_handle.expect("No CCCD for input host") {
-                                cccd_updated = true;
-                            } else {
-                                debug!("Write GATT Event to Unknown: {:?}", event.handle());
-                            }
-                            #[cfg(not(feature = "host"))]
-                            debug!("Write GATT Event to Unknown: {:?}", event.handle());
+                            false
+                        };
+                        #[cfg(all(feature = "dfu_ble", any(feature = "dfu_nrf", feature = "dfu_rp")))]
+                        if dfu_handled && !DFU_LATENCY_UPDATED.load(Ordering::Acquire) {
+                            DFU_LATENCY_UPDATED.store(true, Ordering::Release);
+                            info!("ble dfu: switching to low-latency mode");
+                            update_conn_params(
+                                stack,
+                                conn.raw(),
+                                &RequestedConnParams {
+                                    min_connection_interval: Duration::from_micros(7500),
+                                    max_connection_interval: Duration::from_micros(7500),
+                                    max_latency: 0,
+                                    min_event_length: Duration::from_secs(0),
+                                    max_event_length: Duration::from_secs(0),
+                                    supervision_timeout: Duration::from_secs(20),
+                                },
+                            )
+                            .await;
                         }
-
-                        if conn.raw().security_level()?.encrypted() {
+                        #[cfg(feature = "dfu_ble")]
+                        let dfu_cccd = event.handle() == dfu_cp.cccd_handle.expect("")
+                            || event.handle() == btnless.cccd_handle.expect("");
+                        #[cfg(not(feature = "dfu_ble"))]
+                        let dfu_cccd = false;
+                        if dfu_handled {
                             None
                         } else {
-                            Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
+                            if event.handle() == output_keyboard.handle {
+                                if data_len == 1 {
+                                    let led_indicator = LedIndicator::from_bits(data[0]);
+                                    debug!("Got keyboard state: {:?}", led_indicator);
+                                    LED_SIGNAL.signal(led_indicator);
+                                } else {
+                                    warn!("Wrong keyboard state data: {:?}", data);
+                                }
+                            } else if event.handle() == input_keyboard.cccd_handle.expect("No CCCD for input keyboard")
+                                || event.handle() == mouse.cccd_handle.expect("No CCCD for mouse report")
+                                || event.handle() == media.cccd_handle.expect("No CCCD for media report")
+                                || event.handle() == system_control.cccd_handle.expect("No CCCD for system report")
+                                || event.handle() == level.cccd_handle.expect("No CCCD for battery level")
+                                || dfu_cccd
+                            {
+                                cccd_updated = true;
+                            } else if event.handle() == hid_control_point.handle || host_control_point_match {
+                                info!("Write GATT Event to Control Point: {:?}", event.handle());
+                                #[cfg(feature = "split")]
+                                {
+                                    // Forward an HID Control Point write to the split central's sleep signal.
+                                    // HID Class spec opcodes for the HID Control Point characteristic:
+                                    //   - 0: HID_CTRL_SUSPEND
+                                    //   - 1: HID_CTRL_EXIT_SUSPEND
+                                    if data_len == 1 {
+                                        match data[0] {
+                                            0 => CENTRAL_SLEEP.signal(true),
+                                            1 => CENTRAL_SLEEP.signal(false),
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                            } else {
+                                #[cfg(feature = "host")]
+                                if event.handle() == output_host.handle {
+                                    debug!("Got host packet: {:?}", data);
+                                    if data_len == 32 {
+                                        let mut host_buf = [0u8; 32];
+                                        host_buf.copy_from_slice(&data_buf[..32]);
+                                        crate::channel::enqueue_host_request(ConnectionType::Ble, host_buf).await;
+                                    } else {
+                                        warn!("Wrong host packet data: {:?}", data);
+                                    }
+                                } else if event.handle() == input_host.cccd_handle.expect("No CCCD for input host") {
+                                    cccd_updated = true;
+                                } else {
+                                    debug!("Write GATT Event to Unknown: {:?}", event.handle());
+                                }
+                                #[cfg(not(feature = "host"))]
+                                debug!("Write GATT Event to Unknown: {:?}", event.handle());
+                            }
+                            if conn.raw().security_level()?.encrypted() {
+                                None
+                            } else {
+                                Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
+                            }
                         }
                     }
                     GattEvent::Other(_) => None,
@@ -595,13 +727,21 @@ pub(crate) async fn set_conn_params<
 
     // For macOS/iOS(aka Apple devices), both interval should be set to 15ms
     // Reference: https://developer.apple.com/accessories/Accessory-Design-Guidelines.pdf
+    #[cfg(feature = "dfu_ble")]
+    let (interval, latency) = if DFU_LATENCY_UPDATED.load(Ordering::Acquire) {
+        (Duration::from_micros(7500), 0)
+    } else {
+        (Duration::from_millis(15), 30)
+    };
+    #[cfg(not(feature = "dfu_ble"))]
+    let (interval, latency) = (Duration::from_millis(15), 30u16);
     update_conn_params(
         stack,
         conn.raw(),
         &RequestedConnParams {
-            min_connection_interval: Duration::from_millis(15),
-            max_connection_interval: Duration::from_millis(15),
-            max_latency: 30,
+            min_connection_interval: interval,
+            max_connection_interval: interval,
+            max_latency: latency,
             min_event_length: Duration::from_secs(0),
             max_event_length: Duration::from_secs(0),
             supervision_timeout: Duration::from_secs(10),
@@ -618,7 +758,7 @@ pub(crate) async fn set_conn_params<
         &RequestedConnParams {
             min_connection_interval: Duration::from_micros(7500),
             max_connection_interval: Duration::from_micros(7500),
-            max_latency: 30,
+            max_latency: 0,
             min_event_length: Duration::from_secs(0),
             max_event_length: Duration::from_secs(0),
             supervision_timeout: Duration::from_secs(10),
@@ -674,7 +814,7 @@ async fn run_ble_keyboard<
 
     let communication_task = async {
         if let Either3::First(e) = select3(
-            gatt_events_task(server, conn),
+            gatt_events_task(server, conn, stack),
             set_conn_params(stack, conn),
             ble_battery_server.run(),
         )
