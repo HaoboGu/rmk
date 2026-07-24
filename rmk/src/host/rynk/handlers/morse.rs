@@ -33,8 +33,7 @@ impl HandleBulk<GetMorseBulk> for RynkService<'_> {
     async fn handle_bulk(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
         let req = msg.decode_request::<GetMorseBulkRequest>()?;
         let page = bulk_page(req.start_index as usize, BULK_SIZE, self.ctx.morses_len());
-        let count = page.len();
-        msg.encode_bulk(count, page.map(|idx| self.ctx.get_morse(idx as u8).unwrap_or_default()))
+        msg.encode_bulk(page.map(|idx| self.ctx.get_morse(idx as u8).unwrap_or_default()))
     }
 }
 

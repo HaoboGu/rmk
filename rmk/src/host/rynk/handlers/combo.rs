@@ -41,16 +41,12 @@ impl HandleBulk<GetComboBulk> for RynkService<'_> {
         // out-of-range `start_index` yields an empty page.
         self.ctx.with_combos(|combos| {
             let page = bulk_page(req.start_index as usize, BULK_SIZE, combos.len());
-            let count = page.len();
-            msg.encode_bulk(
-                count,
-                page.map(|i| {
-                    combos[i]
-                        .as_ref()
-                        .map(|c| c.config.clone())
-                        .unwrap_or_else(ComboConfig::empty)
-                }),
-            )
+            msg.encode_bulk(page.map(|i| {
+                combos[i]
+                    .as_ref()
+                    .map(|c| c.config.clone())
+                    .unwrap_or_else(ComboConfig::empty)
+            }))
         })
     }
 }

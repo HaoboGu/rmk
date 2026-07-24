@@ -34,7 +34,7 @@ use embassy_sync::pipe::Pipe;
 use postcard::ser_flavors::{Cobs, Flavor, Slice};
 use rmk::host::HostService as RynkService;
 use rmk_types::protocol::rynk::{
-    Cmd, Deframer, DeviceCapabilities, RYNK_FRAME_BUFFER_SIZE, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage,
+    Cmd, Deframer, DeviceCapabilities, RYNK_FRAME_BUFFER_SIZE, RYNK_HEADER_SIZE, RynkError, RynkHeader, encode_frame,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -186,10 +186,10 @@ impl RynkClient<'_> {
 
 impl RynkHostClient for RynkClient<'_> {
     async fn send<T: Serialize>(&mut self, cmd: Cmd, seq: u8, payload: &T) {
-        let msg = RynkMessage::build(&mut self.buf, RynkHeader { cmd, seq }, payload).expect("build request frame");
+        let n = encode_frame(&mut self.buf, RynkHeader { cmd, seq }, payload).expect("build request frame");
         // `Pipe::write_all` is inherent and infallible (the in-memory link
         // never errors); it just blocks until the device drains enough room.
-        self.tx.write_all(msg.frame()).await;
+        self.tx.write_all(&self.buf[..n]).await;
     }
 
     /// Read exactly one frame off the wire, deframing the COBS byte stream.

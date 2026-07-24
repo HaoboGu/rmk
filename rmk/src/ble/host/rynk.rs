@@ -196,7 +196,7 @@ impl<P: PacketPool> Write for RynkBleTx<'_, '_, '_, P> {
 
 #[cfg(test)]
 mod tests {
-    use rmk_types::protocol::rynk::{Cmd, Deframer, RYNK_HEADER_SIZE, RynkHeader, RynkMessage};
+    use rmk_types::protocol::rynk::{Cmd, Deframer, RYNK_HEADER_SIZE, RynkHeader, encode_frame};
 
     use super::*;
 
@@ -235,7 +235,7 @@ mod tests {
 
     /// Build a COBS frame carrying `payload` into `buf`; returns its length.
     fn cobs_frame(buf: &mut [u8], seq: u8, payload: &[u8]) -> usize {
-        RynkMessage::build(
+        encode_frame(
             buf,
             RynkHeader {
                 cmd: Cmd::GetMacro,
@@ -244,8 +244,6 @@ mod tests {
             &payload,
         )
         .unwrap()
-        .frame()
-        .len()
     }
 
     /// Read one frame back out of `RYNK_BLE_RX_PIPE` via a Deframer (the session's

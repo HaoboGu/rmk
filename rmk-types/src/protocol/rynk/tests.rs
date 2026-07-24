@@ -192,10 +192,8 @@ fn encode<T: serde::Serialize>(val: &T) -> alloc::vec::Vec<u8> {
 
 fn encode_frame<T: serde::Serialize>(cmd: Cmd, seq: u8, val: &T) -> alloc::vec::Vec<u8> {
     let mut buf = [0u8; 256];
-    RynkMessage::build(&mut buf, RynkHeader { cmd, seq }, val)
-        .expect("frame")
-        .frame()
-        .to_vec()
+    let n = super::message::encode_frame(&mut buf, RynkHeader { cmd, seq }, val).expect("frame");
+    buf[..n].to_vec()
 }
 
 /// Composite wire exemplars shared by both the type and frame snapshots, so

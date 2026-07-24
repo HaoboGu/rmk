@@ -178,7 +178,7 @@ mod tests {
 
     use rynk::io::{Read as _, Write as _};
     use rynk::rmk_types::protocol::rynk::{
-        Cmd, Deframer, DeviceCapabilities, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage,
+        Cmd, Deframer, DeviceCapabilities, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, encode_frame,
     };
     use serde::Serialize;
     use tokio::io::AsyncReadExt as _;
@@ -221,8 +221,9 @@ mod tests {
     fn frame<T: Serialize>(cmd: Cmd, seq: u8, value: &T) -> Vec<u8> {
         // Scratch large enough for any test frame.
         let mut buf = vec![0u8; 4096];
-        let msg = RynkMessage::build(&mut buf, RynkHeader { cmd, seq }, value).unwrap();
-        msg.frame().to_vec()
+        let n = encode_frame(&mut buf, RynkHeader { cmd, seq }, value).unwrap();
+        buf.truncate(n);
+        buf
     }
 
     /// Read one COBS frame off the peer end and return its cmd + seq; the

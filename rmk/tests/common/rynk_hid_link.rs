@@ -15,7 +15,9 @@ use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::pipe::Pipe;
 use embedded_io_async::{ErrorType, Read, Write};
 use rmk::host::HostService as RynkService;
-use rmk_types::protocol::rynk::{Cmd, Deframer, RYNK_FRAME_BUFFER_SIZE, RYNK_HID_REPORT_SIZE, RynkHeader, RynkMessage};
+use rmk_types::protocol::rynk::{
+    Cmd, Deframer, RYNK_FRAME_BUFFER_SIZE, RYNK_HID_REPORT_SIZE, RynkHeader, encode_frame,
+};
 use serde::Serialize;
 
 use super::rynk_link::{Frame, RynkHostClient};
@@ -103,8 +105,8 @@ pub struct RynkHidClient<'p> {
 impl RynkHostClient for RynkHidClient<'_> {
     /// Encode a request frame and write it as fixed 32-byte report fragments.
     async fn send<T: Serialize>(&mut self, cmd: Cmd, seq: u8, payload: &T) {
-        let msg = RynkMessage::build(&mut self.buf, RynkHeader { cmd, seq }, payload).expect("build request frame");
-        write_framed(self.tx, msg.frame()).await;
+        let n = encode_frame(&mut self.buf, RynkHeader { cmd, seq }, payload).expect("build request frame");
+        write_framed(self.tx, &self.buf[..n]).await;
     }
 
     /// Read whole reports until the Deframer yields one rynk frame; the reports'

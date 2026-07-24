@@ -222,8 +222,8 @@ impl<'a> RynkService<'a> {
                         }
                         // The buffer is empty here, so encoding the topic is safe.
                         match event.encode(&mut buf) {
-                            Ok(msg) => {
-                                if tx.write_all(msg.frame()).await.is_err() {
+                            Ok(n) => {
+                                if tx.write_all(&buf[..n]).await.is_err() {
                                     return;
                                 }
                             }
@@ -247,7 +247,9 @@ mod tests {
     use embassy_futures::join::join;
     use embedded_io_async::{ErrorKind, ErrorType, Read, Write};
     use rmk_types::action::KeyAction;
-    use rmk_types::protocol::rynk::{LockStatus, MatrixState, ProtocolVersion, RYNK_HEADER_SIZE, RynkHeader};
+    use rmk_types::protocol::rynk::{
+        LockStatus, MatrixState, ProtocolVersion, RYNK_HEADER_SIZE, RynkHeader, encode_frame,
+    };
 
     use super::*;
     use crate::config::{BehaviorConfig, LockConfig, PositionalConfig, RmkConfig};
@@ -304,7 +306,7 @@ mod tests {
     /// A COBS request frame with an empty payload, as a host sends it.
     fn req(cmd_raw: u16, seq: u8) -> Vec<u8> {
         let mut buf = [0u8; 32];
-        RynkMessage::build(
+        let n = encode_frame(
             &mut buf,
             RynkHeader {
                 cmd: Cmd::from_raw(cmd_raw),
@@ -312,9 +314,8 @@ mod tests {
             },
             &(),
         )
-        .unwrap()
-        .frame()
-        .to_vec()
+        .unwrap();
+        buf[..n].to_vec()
     }
 
     /// Decode a captured response stream into `(cmd, seq, decoded payload)` per

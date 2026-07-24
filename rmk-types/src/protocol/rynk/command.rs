@@ -11,7 +11,7 @@
 use postcard::experimental::max_size::MaxSize;
 
 use super::endpoint::{Endpoint, Topic};
-use super::message::RynkMessage;
+use super::message::{RynkHeader, encode_frame};
 use super::{
     BehaviorConfig, DeviceCapabilities, DeviceInfo, GetComboBulkRequest, GetComboBulkResponse, GetEncoderRequest,
     GetKeymapBulkRequest, GetKeymapBulkResponse, GetMacroRequest, GetMorseBulkRequest, GetMorseBulkResponse,
@@ -259,11 +259,12 @@ macro_rules! topics {
                 }
             }
 
-            /// Encode this event into `buf` as a topic frame.
-            /// Returns the message view; the caller sends `msg.frame()`.
-            pub fn encode<'a>(&self, buf: &'a mut [u8]) -> Result<RynkMessage<'a>, RynkError> {
+            /// Encode this event into `buf` as a topic frame (SEQ = 0).
+            /// Returns the framed length; the caller sends `&buf[..len]`.
+            pub fn encode(&self, buf: &mut [u8]) -> Result<usize, RynkError> {
                 match self {
-                    $( $(#[$meta])* TopicEvent::$name(v) => RynkMessage::build_topic::<$name>(buf, v), )*
+                    $( $(#[$meta])* TopicEvent::$name(v) =>
+                        encode_frame(buf, RynkHeader { cmd: Cmd::$name, seq: 0 }, v), )*
                 }
             }
         }
@@ -464,14 +465,7 @@ mod tests {
         // the same variant — the producer and consumer halves share one table.
         let mut buf = [0u8; 64];
         let ev = TopicEvent::LayerChange(7);
-        let (cmd, seq, framed_len) = {
-            let msg = ev.encode(&mut buf).unwrap();
-            let header = msg.header();
-            (header.cmd, header.seq, msg.frame().len())
-        };
-        assert_eq!(cmd, Cmd::LayerChange);
-        assert_eq!(cmd, ev.cmd());
-        assert_eq!(seq, 0, "topics push with SEQ 0");
+        let framed_len = ev.encode(&mut buf).unwrap();
 
         // Decode the COBS frame back to the logical [cmd, seq, payload].
         let mut df = Deframer::new();
@@ -479,6 +473,8 @@ mod tests {
         let n = df.next(&mut buf).expect("one whole topic frame");
         let header = RynkHeader::parse(buf[..RYNK_HEADER_SIZE].try_into().unwrap());
         assert_eq!(header.cmd, Cmd::LayerChange);
+        assert_eq!(header.cmd, ev.cmd());
+        assert_eq!(header.seq, 0, "topics push with SEQ 0");
         let decoded = TopicEvent::decode(header.cmd, &buf[RYNK_HEADER_SIZE..n]);
         assert!(matches!(decoded, Some(TopicEvent::LayerChange(7))));
     }

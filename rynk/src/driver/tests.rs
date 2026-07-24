@@ -141,8 +141,9 @@ async fn drive<F: Future>(driver: &mut Driver<MockRead, MockWrite>, client: &Cli
 /// sized so the buffer-growth test can build frames larger than `READ_CHUNK`.
 fn frame<T: Serialize>(cmd: Cmd, seq: u8, value: &T) -> Vec<u8> {
     let mut buf = vec![0u8; 32 * 1024];
-    let msg = RynkMessage::build(&mut buf, RynkHeader { cmd, seq }, value).unwrap();
-    msg.frame().to_vec()
+    let n = encode_frame(&mut buf, RynkHeader { cmd, seq }, value).unwrap();
+    buf.truncate(n);
+    buf
 }
 
 /// An `Ok` response frame, enveloped as the firmware sends it.

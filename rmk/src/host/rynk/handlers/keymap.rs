@@ -109,8 +109,7 @@ impl HandleBulk<GetKeymapBulk> for RynkService<'_> {
         let start = self.keymap_flat_start(req.layer, req.start_row, req.start_col)?;
         let (rows, cols, num_layers) = self.ctx.keymap_dimensions();
         let page = bulk_page(start, BULK_KEYMAP_SIZE, num_layers * rows * cols);
-        let count = page.len();
-        msg.encode_bulk(count, page.map(|offset| self.ctx.get_action_flat(offset)))
+        msg.encode_bulk(page.map(|offset| self.ctx.get_action_flat(offset)))
     }
 }
 

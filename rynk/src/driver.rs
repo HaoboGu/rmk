@@ -7,8 +7,8 @@
 //! A frame is a 3-byte header (`CMD u16 LE | SEQ u8`) plus a postcard payload,
 //! COBS-encoded and `0x00`-terminated on the wire so the stream self-resyncs.
 //! Frames cross between [`Client`] and [`Driver`] as plain owned bytes over
-//! three channels; [`RynkMessage`] builds and parses them at each end, and a
-//! [`Deframer`] cuts them back out of the received byte stream:
+//! three channels; [`encode_frame`] builds them, [`RynkMessage`] parses them
+//! back, and a [`Deframer`] cuts them out of the received byte stream:
 //!
 //! ```text
 //! request()    encode → message ─→ Driver: write_all
@@ -35,7 +35,7 @@ use embedded_io_async::{Error as _, ErrorKind, Read, Write};
 use rmk_types::protocol::rynk::endpoint::Endpoint;
 use rmk_types::protocol::rynk::{
     Cmd, Deframer, DeviceCapabilities, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage,
-    TopicEvent, command,
+    TopicEvent, command, encode_frame,
 };
 use serde::Serialize;
 use thiserror::Error;
@@ -238,10 +238,7 @@ impl Client {
             b.resize(n, 0).map_err(|_| RynkHostError::Encode(cmd))?;
             b
         };
-        let frame_len = RynkMessage::build(&mut buf, RynkHeader { cmd, seq }, req)
-            .map_err(|_| RynkHostError::Encode(cmd))?
-            .frame()
-            .len();
+        let frame_len = encode_frame(&mut buf, RynkHeader { cmd, seq }, req).map_err(|_| RynkHostError::Encode(cmd))?;
         buf.truncate(frame_len);
         self.message.send(buf).await;
         Ok(seq)

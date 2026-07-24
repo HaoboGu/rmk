@@ -32,7 +32,7 @@
 //!   ends can't disagree about a message's types.
 //! - [`endpoint`] — the [`Endpoint`](endpoint::Endpoint) / [`Topic`](endpoint::Topic)
 //!   traits those table entries implement.
-//! - [`message`] — the header, the [`RynkMessage`] buffer view, and the envelope.
+//! - [`message`] — the header, [`encode_frame`], and the [`RynkMessage`] reply view.
 //! - `deframer` / `error` / `payload` (private) — the COBS [`Deframer`],
 //!   [`RynkError`], and the per-domain payload types, re-exported flat at
 //!   `protocol::rynk::*`.
@@ -64,7 +64,7 @@ pub use self::command::MAX_TOPIC_PAYLOAD;
 pub use self::command::{Cmd, TopicEvent, bulk_keymap_size_for_buffer, bulk_size_for_buffer};
 pub use self::deframer::Deframer;
 pub use self::error::RynkError;
-pub use self::message::{RYNK_FRAME_BUFFER_SIZE, RYNK_HEADER_SIZE, RynkHeader, RynkMessage};
+pub use self::message::{RYNK_FRAME_BUFFER_SIZE, RYNK_HEADER_SIZE, RynkHeader, RynkMessage, encode_frame};
 pub use self::payload::*;
 
 /// Largest single GATT write/notification on the Rynk BLE characteristics.

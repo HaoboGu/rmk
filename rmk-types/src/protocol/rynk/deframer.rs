@@ -17,36 +17,29 @@ use super::message::RYNK_HEADER_SIZE;
 /// }
 /// ```
 pub struct Deframer {
-    /// Start of the in-progress frame, or `None` while discarding an oversized
-    /// frame until its delimiter arrives.
-    frame_start: Option<usize>,
+    /// Dead bytes at the buffer front: yielded frames, skipped garbage, drained overflow.
+    consumed: usize,
     /// Valid bytes in the caller buffer.
     filled: usize,
-    /// First index not yet scanned for a delimiter, so each byte is examined once.
-    scan: usize,
+    /// Draining an oversized frame: drop everything up to its closing delimiter.
+    discarding: bool,
 }
 
 impl Deframer {
     pub const fn new() -> Self {
         Self {
-            frame_start: Some(0),
+            consumed: 0,
             filled: 0,
-            scan: 0,
+            discarding: false,
         }
     }
 
     /// Compact consumed bytes to the front and return the free tail to read into.
     pub fn tail<'b>(&mut self, buf: &'b mut [u8]) -> &'b mut [u8] {
-        // During normal framing everything before `frame_start` is consumed. In
-        // discard mode everything already scanned is known not to be a delimiter.
-        let consumed = self.frame_start.unwrap_or(self.scan);
-        if consumed > 0 {
-            buf.copy_within(consumed..self.filled, 0);
-            self.filled -= consumed;
-            self.scan -= consumed;
-            if self.frame_start.is_some() {
-                self.frame_start = Some(0);
-            }
+        if self.consumed > 0 {
+            buf.copy_within(self.consumed..self.filled, 0);
+            self.filled -= self.consumed;
+            self.consumed = 0;
         }
         &mut buf[self.filled..]
     }
@@ -65,7 +58,7 @@ impl Deframer {
     /// Whether a partial frame is buffered. A caller reusing the buffer (e.g. to
     /// encode an outbound topic) must wait until this is `false`.
     pub fn has_pending(&self) -> bool {
-        self.frame_start.is_some_and(|start| start < self.filled)
+        !self.discarding && self.consumed < self.filled
     }
 
     /// Decode the next logical frame to `buf[..len]` and return `len`, or return
@@ -73,25 +66,23 @@ impl Deframer {
     /// skipped to the next `0x00` delimiter.
     pub fn next(&mut self, buf: &mut [u8]) -> Option<usize> {
         loop {
-            let Some(delim) = buf[self.scan..self.filled]
-                .iter()
-                .position(|&b| b == 0)
-                .map(|i| self.scan + i)
-            else {
-                // No delimiter in the unscanned bytes; only re-examine new bytes next time.
-                self.scan = self.filled;
-                // Overflow only when nothing can free space: with a consumed prefix
-                // the caller's `tail()` compacts and the frame may yet complete.
-                if self.frame_start == Some(0) && self.filled == buf.len() {
-                    self.frame_start = None;
+            let Some(i) = buf[self.consumed..self.filled].iter().position(|&b| b == 0) else {
+                // A frame filling the whole buffer can never complete: drop it and
+                // drain to its delimiter. While draining, bytes are dead on arrival.
+                // With a consumed prefix the caller's `tail()` compacts instead.
+                if self.discarding || (self.consumed == 0 && self.filled == buf.len()) {
+                    self.discarding = true;
+                    self.consumed = self.filled;
                 }
                 return None;
             };
-            self.scan = delim + 1;
-            let Some(start) = self.frame_start.replace(delim + 1) else {
-                // Was discarding an oversized frame; its delimiter ends the drain.
+            let (start, delim) = (self.consumed, self.consumed + i);
+            self.consumed = delim + 1;
+            if self.discarding {
+                // The drained frame's delimiter: back in sync.
+                self.discarding = false;
                 continue;
-            };
+            }
             match cobs::decode_in_place(&mut buf[start..delim]) {
                 Ok(len) if len >= RYNK_HEADER_SIZE => {
                     if start > 0 {
@@ -114,17 +105,16 @@ impl Default for Deframer {
 
 #[cfg(test)]
 mod tests {
+    extern crate alloc;
+
     use super::*;
-    use crate::protocol::rynk::{Cmd, RynkHeader, RynkMessage};
+    use crate::protocol::rynk::{Cmd, RynkHeader, encode_frame};
 
     const CMD: Cmd = Cmd::from_raw(0x0102);
 
     /// COBS-encode one frame into `buf`, returning the framed length.
     fn encode(buf: &mut [u8], cmd: Cmd, seq: u8, payload: &[u8]) -> usize {
-        RynkMessage::build(buf, RynkHeader { cmd, seq }, &payload)
-            .unwrap()
-            .frame()
-            .len()
+        encode_frame(buf, RynkHeader { cmd, seq }, &payload).unwrap()
     }
 
     /// Encode into `df`'s tail and commit, as a transport read would.
@@ -154,8 +144,8 @@ mod tests {
 
     #[test]
     fn reassembles_byte_by_byte() {
-        // Encode once, then feed the stream one byte per commit — the cursor scan
-        // must reassemble without re-inspecting old bytes.
+        // Encode once, then feed the stream one byte per commit — the frame must
+        // reassemble across arbitrarily small reads.
         let mut src = [0u8; 64];
         let n = encode(&mut src, CMD, 7, &[9, 8, 7, 6]);
 
@@ -250,6 +240,58 @@ mod tests {
     }
 
     #[test]
+    fn has_pending_tracks_partial_frames_not_garbage() {
+        let mut buf = [0u8; 32];
+        let mut df = Deframer::new();
+        assert!(!df.has_pending(), "empty buffer: nothing pending");
+
+        // Feed a frame minus its delimiter: pending until it completes.
+        let mut src = [0u8; 32];
+        let n = encode(&mut src, CMD, 1, &[1, 2, 3]);
+        df.tail(&mut buf)[..n - 1].copy_from_slice(&src[..n - 1]);
+        df.commit(n - 1);
+        assert!(df.next(&mut buf).is_none());
+        assert!(df.has_pending(), "half-received frame is pending");
+
+        df.tail(&mut buf)[0] = 0x00;
+        df.commit(1);
+        let len = df.next(&mut buf).expect("frame completes");
+        assert_frame(&buf[..len], CMD, 1, &[1, 2, 3]);
+        assert!(df.next(&mut buf).is_none());
+        assert!(!df.has_pending(), "consumed frame is not pending");
+
+        // A drained oversized frame is not pending: the buffer is reusable.
+        df.tail(&mut buf).iter_mut().for_each(|b| *b = 0xFF);
+        df.commit(32);
+        assert!(df.next(&mut buf).is_none());
+        assert!(!df.has_pending(), "overflow drain is not pending");
+    }
+
+    #[test]
+    fn discard_drain_preserves_bytes_committed_after_the_scan() {
+        let mut buf = [0u8; 32];
+        let mut df = Deframer::new();
+        df.tail(&mut buf).iter_mut().for_each(|b| *b = 0xFF);
+        df.commit(32);
+        assert!(df.next(&mut buf).is_none(), "overflow: enter discard mode");
+
+        // The doomed frame's delimiter and a real frame arrive in one read;
+        // tail() must reclaim all drained garbage first.
+        let mut src = [0u8; 32];
+        let n = encode(&mut src, CMD, 3, &[7]);
+        {
+            let tail = df.tail(&mut buf);
+            assert_eq!(tail.len(), 32, "drained garbage is reclaimed by tail()");
+            tail[0] = 0x00;
+            tail[1..=n].copy_from_slice(&src[..n]);
+        }
+        df.commit(1 + n);
+        let len = df.next(&mut buf).expect("frame after the drain delimiter");
+        assert_frame(&buf[..len], CMD, 3, &[7]);
+        assert!(df.next(&mut buf).is_none());
+    }
+
+    #[test]
     fn compacts_instead_of_dropping_a_buffer_filling_frame() {
         // A full buffer with a consumed prefix is not overflow: `next` must
         // return None so the caller compacts and the frame completes.
@@ -278,5 +320,95 @@ mod tests {
         }
         let len = df.next(&mut store[..cap]).expect("frame completes after compaction");
         assert_frame(&store[..len], CMD, 9, &[1, 2, 3, 4, 5]);
+    }
+
+    /// Deterministic xorshift64* — dependency-free randomness for the fuzz tests.
+    struct Rng(u64);
+
+    impl Rng {
+        fn next_u64(&mut self) -> u64 {
+            self.0 ^= self.0 >> 12;
+            self.0 ^= self.0 << 25;
+            self.0 ^= self.0 >> 27;
+            self.0.wrapping_mul(0x2545_F491_4F6C_DD1D)
+        }
+
+        fn below(&mut self, n: usize) -> usize {
+            (self.next_u64() % n as u64) as usize
+        }
+    }
+
+    #[test]
+    fn fuzz_recovers_every_wellformed_frame() {
+        use alloc::vec;
+        use alloc::vec::Vec;
+
+        for seed in 1..=64u64 {
+            for &cap in &[16usize, 24, 48, 96] {
+                let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
+                // Stream = frames that fit the buffer (all must come back out) mixed
+                // with junk the deframer must skip: stray delimiters, undecodable
+                // garbage, and delimiter-less runs longer than the buffer.
+                let mut stream: Vec<u8> = Vec::new();
+                let mut expected: Vec<Vec<u8>> = Vec::new();
+                for seq in 0..30u8 {
+                    match rng.below(4) {
+                        0 => stream.push(0x00),
+                        1 => {
+                            // A 0xFF code byte claims 254 data bytes; a shorter segment can't decode.
+                            let glen = 1 + rng.below(cap - 2);
+                            stream.push(0xFF);
+                            for _ in 0..glen {
+                                stream.push(1 + rng.below(255) as u8);
+                            }
+                            stream.push(0x00);
+                        }
+                        2 => {
+                            // Longer than the buffer with no delimiter: dropped via the overflow drain.
+                            for _ in 0..cap + 1 + rng.below(cap) {
+                                stream.push(0xFF);
+                            }
+                            stream.push(0x00);
+                        }
+                        _ => {
+                            let mut payload = [0u8; 96];
+                            let plen = rng.below(cap);
+                            payload[..plen].iter_mut().for_each(|b| *b = rng.next_u64() as u8);
+                            let mut tmp = [0u8; 256];
+                            let n = encode(&mut tmp, CMD, seq, &payload[..plen]);
+                            if n <= cap {
+                                stream.extend_from_slice(&tmp[..n]);
+                                // The expected logical frame is the decode of the framed bytes.
+                                let mut logical = tmp[..n - 1].to_vec();
+                                let llen = cobs::decode_in_place(&mut logical).unwrap();
+                                logical.truncate(llen);
+                                expected.push(logical);
+                            } else {
+                                stream.push(0x00);
+                            }
+                        }
+                    }
+                }
+
+                // Standard transport loop: read a chunk into the tail, cut out
+                // every completed frame.
+                let mut buf = vec![0u8; cap];
+                let mut df = Deframer::new();
+                let mut got: Vec<Vec<u8>> = Vec::new();
+                let mut pos = 0;
+                while pos < stream.len() {
+                    let tail = df.tail(&mut buf);
+                    assert!(!tail.is_empty(), "reader must never be offered an empty tail");
+                    let n = tail.len().min(1 + rng.below(7)).min(stream.len() - pos);
+                    tail[..n].copy_from_slice(&stream[pos..pos + n]);
+                    pos += n;
+                    df.commit(n);
+                    while let Some(len) = df.next(&mut buf) {
+                        got.push(buf[..len].to_vec());
+                    }
+                }
+                assert_eq!(got, expected, "seed {seed} cap {cap}");
+            }
+        }
     }
 }
