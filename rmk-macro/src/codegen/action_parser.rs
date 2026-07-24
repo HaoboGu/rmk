@@ -208,6 +208,14 @@ fn parse_action(key: &str) -> TokenStream2 {
 
     if lower == "no" {
         return quote! { ::rmk::types::action::Action::No };
+    } else if lower.starts_with("mod(") {
+        let modifiers = parse_modifiers(strip_call(key));
+        if modifiers.is_empty() {
+            panic!(
+                "\n\u{274c} keyboard.toml: modifier in MOD(modifier) is not valid! Please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
+            );
+        }
+        return quote! { ::rmk::types::action::Action::Modifier(#modifiers) };
     } else if lower.starts_with("wm(") {
         let keys = split_top_level(strip_call(key));
         if keys.len() != 2 {
@@ -513,6 +521,7 @@ mod tests {
                 .contains("KeyAction::Single(::rmk::types::action::Action::LayerOn(1u8))")
         );
         assert!(squash(&expand("WM(C,LCtrl)")).contains("Action::KeyWithModifier"));
+        assert!(squash(&expand("MOD(LCtrl | LAlt | LGui)")).contains("Action::Modifier"));
         assert!(squash(&expand("OSM(LShift)")).contains("Action::OneShotModifier"));
     }
 

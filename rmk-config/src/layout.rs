@@ -580,6 +580,17 @@ mod tests {
     }
 
     #[test]
+    fn test_held_modifier_action_parsing() {
+        let aliases = HashMap::new();
+        let layer_names = HashMap::new();
+
+        let keymap = "MOD(LCtrl | LAlt | LGui) mod(RShift)";
+        let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
+
+        assert_eq!(result.unwrap(), vec!["MOD(LCtrl | LAlt | LGui)", "mod(RShift)"]);
+    }
+
+    #[test]
     fn test_morse_action_grammar() {
         // Test that TD actions are parsed correctly by the grammar
         let test_cases = vec![
@@ -670,9 +681,9 @@ mod tests {
         let aliases = HashMap::new();
         let layer_names = HashMap::new();
 
-        // A single-action form (here WM) can appear in the tap/hold slots of
+        // Single-action forms can appear in the tap/hold slots of
         // MT/TH/LT and is forwarded verbatim for the proc-macro to expand.
-        let keymap = "MT(WM(P, RAlt), LShift, HRM) TH(WM(A, LShift), MO(2)) LT(1, WM(Q, LGui))";
+        let keymap = "MT(WM(P, RAlt), LShift, HRM) TH(WM(A, LShift), MO(2)) LT(1, MOD(LCtrl | LGui))";
         let result = KeyboardTomlConfig::keymap_parser(keymap, &aliases, &layer_names);
 
         assert!(result.is_ok(), "{:?}", result);
@@ -681,7 +692,7 @@ mod tests {
             vec![
                 "MT(WM(P, RAlt), LShift, HRM)",
                 "TH(WM(A, LShift), MO(2))",
-                "LT(1, WM(Q, LGui))",
+                "LT(1, MOD(LCtrl | LGui))",
             ]
         );
     }
