@@ -96,13 +96,15 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
             };
             let ble_addr = get_ble_addr(hardware, peripheral_id);
             // Calculate the size of sdc memory pool.
-            // By default it's 6KB, each peripheral increases 2304 bytes
+            // Unibody: 4696. Split central: 6080 + (N-1) * 2288 per peripheral.
             let sdc_mem_size = if peripheral_id.is_none() {
-                // For central
-                4096 + peri_num * 2304
+                if peri_num > 0 {
+                    6080 + (peri_num.saturating_sub(1)) * 2288
+                } else {
+                    4696
+                }
             } else {
-                // For peripheral
-                6144
+                4696
             };
             let ble_init = match &communication {
                 CommunicationConfig::Ble(_) | CommunicationConfig::Both(_, _) => quote! {
