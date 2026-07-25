@@ -1,5 +1,6 @@
 from pathlib import Path
 import subprocess
+import sys
 
 PORT = 9000
 ROOT = Path(__file__).resolve().parents[3]
@@ -10,13 +11,13 @@ subprocess.run(["cargo", "build"], cwd=HERE, check=True)
 
 q = subprocess.Popen(
     ["qemu-system-riscv32", "-M", "virt", "-cpu", "rv32",
-     "-semihosting", "-nographic", "-bios", "none",
+     "-semihosting", "-display", "none", "-monitor", "none", "-bios", "none",
      "-kernel", str(ELF), "-serial", f"tcp::{PORT},server,nowait"],
     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 print(f"QEMU started, serial on tcp::{PORT}", flush=True)
 
 try:
-    subprocess.run(
+    result = subprocess.run(
         [
             "cargo",
             "run",
@@ -26,9 +27,9 @@ try:
             "qemu_behavior",
             "--",
             f"127.0.0.1:{PORT}",
+            *sys.argv[1:],
         ],
         cwd=ROOT,
-        check=True,
     )
 finally:
     q.terminate()
@@ -37,3 +38,5 @@ finally:
     except subprocess.TimeoutExpired:
         q.kill()
         q.wait()
+
+raise SystemExit(result.returncode)
