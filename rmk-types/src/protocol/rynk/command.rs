@@ -377,7 +377,7 @@ const FIRMWARE_MAX_PAYLOAD: usize = max_const(MAX_ENDPOINT_PAYLOAD, MAX_TOPIC_PA
 /// this assert are absent there.
 #[cfg(not(feature = "host"))]
 const _: () = core::assert!(
-    super::message::max_logical_len(crate::constants::RYNK_BUFFER_SIZE)
+    super::message::max_size_for_payload(crate::constants::RYNK_BUFFER_SIZE)
         >= super::message::RYNK_HEADER_SIZE + FIRMWARE_MAX_PAYLOAD,
     "rynk_buffer_size is too small to hold the largest rynk frame (including bulk and COBS overhead); increase it"
 );
@@ -403,7 +403,7 @@ mod bulk_capacity {
     }
 
     /// Combos/morses per bulk frame; `buffer` is the logical frame budget —
-    /// [`max_logical_len`](super::super::message::max_logical_len) of the
+    /// [`max_size_for_payload`](super::super::message::max_size_for_payload) of the
     /// physical buffer size. Sized by the larger of `Combo`/`Morse` so both
     /// bulk endpoints fit; the one fixed byte is `start_index` on the request /
     /// the `Result` tag on the response.

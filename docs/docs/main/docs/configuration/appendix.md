@@ -300,7 +300,7 @@ ble_profiles_num = 3
 split_central_sleep_timeout_seconds = 0
 # Maximum macro data bytes in one Rynk macro request or response
 protocol_macro_chunk_size = 64
-# Exact RAM of each Rynk RX/TX frame buffer in bytes (one COBS-encoded frame)
+# Rynk RX/TX buffer size in bytes. 488 bytes = 2*BLE maximum packet size 
 # rynk_buffer_size = 488
 
 # Split configuration

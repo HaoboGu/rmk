@@ -305,10 +305,8 @@ pub(crate) struct RmkConstantsConfig {
     /// Maximum number of auto mouse layer entries; auto-derived from `[[behavior.auto_mouse_layer]]` if unset.
     #[serde(default)]
     pub auto_mouse_layer_max_num: Option<usize>,
-    /// Exact RAM of each Rynk RX/TX frame buffer (bytes), holding one
-    /// COBS-encoded frame; payload capacity and bulk counts derive from it.
-    /// Default 488 fills exactly two BLE notifications (2 × 244-byte GATT
-    /// chunks) — the largest frame that never costs a third.
+    /// Exact RAM of each Rynk RX/TX frame buffer (bytes), payload capacity and bulk counts derive from it.
+    /// Default 488 fills exactly two BLE notifications.
     #[serde_inline_default(488)]
     pub rynk_buffer_size: usize,
 }

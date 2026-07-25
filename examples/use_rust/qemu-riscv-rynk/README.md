@@ -16,5 +16,4 @@ python run.py --concurrent-repro
 
 The probe first verifies the two commands sequentially, then issues them
 concurrently through the public host API. It exits non-zero if either request
-does not complete and reports the request and response frame headers observed
-at the QEMU TCP-serial boundary.
+does not complete within one second.

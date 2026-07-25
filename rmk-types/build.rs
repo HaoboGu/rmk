@@ -137,13 +137,13 @@ fn generate_constants(bc: &BuildConstants) -> String {
     if env::var("CARGO_FEATURE_RYNK").is_ok() {
         lines.push(
             "pub const BULK_SIZE: usize = crate::protocol::rynk::bulk_size_for_buffer(\
-             crate::protocol::rynk::max_logical_len(RYNK_BUFFER_SIZE));"
+             crate::protocol::rynk::max_size_for_payload(RYNK_BUFFER_SIZE));"
                 .to_string(),
         );
         lines.push("const _: () = assert!(BULK_SIZE >= 1, \"rynk_buffer_size is too small to hold one combo/morse in a bulk message; increase it\");".to_string());
         lines.push(
             "pub const BULK_KEYMAP_SIZE: usize = crate::protocol::rynk::bulk_keymap_size_for_buffer(\
-             crate::protocol::rynk::max_logical_len(RYNK_BUFFER_SIZE));"
+             crate::protocol::rynk::max_size_for_payload(RYNK_BUFFER_SIZE));"
                 .to_string(),
         );
         lines.push("const _: () = assert!(BULK_KEYMAP_SIZE >= 1, \"rynk_buffer_size is too small to hold one key in a bulk keymap message; increase it\");".to_string());

@@ -65,7 +65,7 @@ pub use self::command::{Cmd, TopicEvent, bulk_keymap_size_for_buffer, bulk_size_
 pub use self::deframer::Deframer;
 pub use self::error::RynkError;
 pub use self::message::{
-    RYNK_HEADER_SIZE, RYNK_MAX_PAYLOAD_SIZE, RynkHeader, RynkMessage, encode_frame, max_logical_len,
+    RYNK_HEADER_SIZE, RYNK_MAX_PAYLOAD_SIZE, RynkHeader, RynkMessage, encode_frame, max_size_for_payload,
 };
 pub use self::payload::*;
 

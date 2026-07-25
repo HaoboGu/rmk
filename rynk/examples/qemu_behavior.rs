@@ -6,12 +6,10 @@
 //! paths, and firmware-side rejection behavior.
 
 use std::fmt::Debug;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use embassy_futures::select::{Either, select};
 use embedded_io_adapters::tokio_1::FromTokio;
-use embedded_io_async::{ErrorType, Read, Write};
 use rynk::rmk_types::action::{Action, EncoderAction, KeyAction};
 use rynk::rmk_types::ble::{BleState, BleStatus};
 use rynk::rmk_types::combo::Combo;
@@ -21,9 +19,7 @@ use rynk::rmk_types::keycode::{HidKeyCode, KeyCode};
 use rynk::rmk_types::led_indicator::LedIndicator;
 use rynk::rmk_types::modifier::ModifierCombination;
 use rynk::rmk_types::morse::{Morse, MorseProfile};
-use rynk::rmk_types::protocol::rynk::{
-    Cmd, Deframer, MacroData, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, StorageResetMode,
-};
+use rynk::rmk_types::protocol::rynk::{MacroData, ProtocolVersion, RynkError, StorageResetMode};
 use rynk::{Client, LayoutInfo, RynkDevice, RynkHostError};
 use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
@@ -33,108 +29,19 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 const DEFAULT_ADDR: &str = "127.0.0.1:9000";
 
 /// The QEMU TCP serial as a device, connecting through [`RynkDevice::connect`].
-struct TcpDevice {
-    stream: TcpStream,
-    trace: Arc<Mutex<WireTrace>>,
-}
-
-struct TracedRead {
-    inner: FromTokio<OwnedReadHalf>,
-    trace: Arc<Mutex<WireTrace>>,
-}
-
-struct TracedWrite {
-    inner: FromTokio<OwnedWriteHalf>,
-    trace: Arc<Mutex<WireTrace>>,
-}
-
-#[derive(Default)]
-struct WireTrace {
-    host_to_device: FrameTap,
-    device_to_host: FrameTap,
-}
-
-struct FrameTap {
-    buf: [u8; 4096],
-    deframer: Deframer,
-    headers: Vec<RynkHeader>,
-}
-
-impl Default for FrameTap {
-    fn default() -> Self {
-        Self {
-            buf: [0; 4096],
-            deframer: Deframer::new(),
-            headers: Vec::new(),
-        }
-    }
-}
-
-impl FrameTap {
-    fn record(&mut self, mut bytes: &[u8]) {
-        while !bytes.is_empty() {
-            let tail = self.deframer.tail(&mut self.buf);
-            let n = tail.len().min(bytes.len());
-            tail[..n].copy_from_slice(&bytes[..n]);
-            self.deframer.commit(n);
-            bytes = &bytes[n..];
-
-            while let Some(len) = self.deframer.next(&mut self.buf) {
-                let header = RynkHeader::parse(self.buf[..len].first_chunk::<RYNK_HEADER_SIZE>().unwrap());
-                self.headers.push(header);
-            }
-        }
-    }
-}
-
-impl ErrorType for TracedRead {
-    type Error = std::io::Error;
-}
-
-impl Read for TracedRead {
-    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        let n = self.inner.read(buf).await?;
-        self.trace.lock().unwrap().device_to_host.record(&buf[..n]);
-        Ok(n)
-    }
-}
-
-impl ErrorType for TracedWrite {
-    type Error = std::io::Error;
-}
-
-impl Write for TracedWrite {
-    async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        let n = self.inner.write(buf).await?;
-        self.trace.lock().unwrap().host_to_device.record(&buf[..n]);
-        Ok(n)
-    }
-
-    async fn flush(&mut self) -> Result<(), Self::Error> {
-        self.inner.flush().await
-    }
-}
+struct TcpDevice(TcpStream);
 
 impl RynkDevice for TcpDevice {
-    type Read = TracedRead;
-    type Write = TracedWrite;
+    type Read = FromTokio<OwnedReadHalf>;
+    type Write = FromTokio<OwnedWriteHalf>;
 
     fn label(&self) -> String {
         "qemu".into()
     }
 
     async fn open(self) -> Result<(Self::Read, Self::Write), RynkHostError> {
-        let (reader, writer) = self.stream.into_split();
-        Ok((
-            TracedRead {
-                inner: FromTokio::new(reader),
-                trace: self.trace.clone(),
-            },
-            TracedWrite {
-                inner: FromTokio::new(writer),
-                trace: self.trace,
-            },
-        ))
+        let (reader, writer) = self.0.into_split();
+        Ok((FromTokio::new(reader), FromTokio::new(writer)))
     }
 }
 
@@ -181,42 +88,19 @@ fn expect_unsupported<T: Debug>(label: &str, res: Result<T, RynkHostError>) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let addr = args
-        .iter()
-        .find(|arg| !arg.starts_with("--"))
-        .cloned()
-        .unwrap_or_else(|| DEFAULT_ADDR.into());
-    let concurrent_repro = args.iter().any(|arg| arg == "--concurrent-repro");
-    let stream = tokio::time::timeout(CONNECT_TIMEOUT, async {
-        loop {
-            match TcpStream::connect(&addr).await {
-                Ok(stream) => break Ok(stream),
-                Err(e) if e.kind() == std::io::ErrorKind::ConnectionRefused => {
-                    tokio::time::sleep(Duration::from_millis(10)).await;
-                }
-                Err(e) => break Err(e),
-            }
-        }
-    })
-    .await
-    .map_err(|_| format!("connect timed out to QEMU TCP serial at {addr}"))??;
+    let concurrent_repro = std::env::args().any(|arg| arg == "--concurrent-repro");
+    let addr = std::env::args().nth(1).unwrap_or_else(|| DEFAULT_ADDR.into());
+    let stream = tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&addr))
+        .await
+        .map_err(|_| format!("connect timed out to QEMU TCP serial at {addr}"))??;
     stream.set_nodelay(true)?;
-    let trace = Arc::new(Mutex::new(WireTrace::default()));
-    let (client, mut driver) = tokio::time::timeout(
-        CONNECT_TIMEOUT,
-        TcpDevice {
-            stream,
-            trace: trace.clone(),
-        }
-        .connect(),
-    )
-    .await
-    .map_err(|_| format!("Rynk handshake timed out over QEMU TCP serial at {addr}"))??;
+    let (client, mut driver) = tokio::time::timeout(CONNECT_TIMEOUT, TcpDevice(stream).connect())
+        .await
+        .map_err(|_| format!("Rynk handshake timed out over QEMU TCP serial at {addr}"))??;
 
     let verification = async {
         if concurrent_repro {
-            concurrent_request_repro(&client, &trace).await
+            concurrent_request_repro(&client).await
         } else {
             script(&client).await
         }
@@ -227,10 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-async fn concurrent_request_repro(
-    client: &Client,
-    trace: &Arc<Mutex<WireTrace>>,
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn concurrent_request_repro(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
     let wpm = tokio::time::timeout(REQUEST_TIMEOUT, client.get_wpm())
         .await
         .map_err(|_| "sequential get_wpm timed out over QEMU UART")??;
@@ -240,27 +121,11 @@ async fn concurrent_request_repro(
     assert_eq!(wpm, 0);
     assert!(!sleeping);
 
-    {
-        let mut trace = trace.lock().unwrap();
-        trace.host_to_device.headers.clear();
-        trace.device_to_host.headers.clear();
-    }
-
     let result = tokio::time::timeout(REQUEST_TIMEOUT, async {
         let (wpm, sleeping) = tokio::join!(client.get_wpm(), client.get_sleep_state());
         Ok::<_, RynkHostError>((wpm?, sleeping?))
     })
     .await;
-    tokio::time::sleep(Duration::from_millis(50)).await;
-
-    let (sent, received) = {
-        let trace = trace.lock().unwrap();
-        (
-            trace.host_to_device.headers.clone(),
-            trace.device_to_host.headers.clone(),
-        )
-    };
-    eprintln!("concurrent QEMU UART frames: host->device={sent:?}, device->host={received:?}");
 
     match result {
         Ok(Ok((wpm, sleeping))) => {
@@ -270,28 +135,10 @@ async fn concurrent_request_repro(
             Ok(())
         }
         Ok(Err(e)) => Err(format!("concurrent request returned an error: {e}").into()),
-        Err(_) => {
-            let sent_both = sent.iter().any(|header| header.cmd == Cmd::GetWpm)
-                && sent.iter().any(|header| header.cmd == Cmd::GetSleepState);
-            if !sent_both {
-                return Err(format!("probe timed out before both requests reached the transport: {sent:?}").into());
-            }
-            let reply_count = received.iter().filter(|header| !header.cmd.is_topic()).count();
-            match reply_count {
-                1 => Err(format!(
-                    "reproduced: both requests crossed the QEMU UART transport, but only one response returned within {REQUEST_TIMEOUT:?}"
-                )
-                .into()),
-                2 => Err(format!(
-                    "both QEMU replies reached the host, but one public API call still timed out; response routing is the failure: {received:?}"
-                )
-                .into()),
-                _ => Err(format!(
-                    "unexpected QEMU response count after the concurrent timeout: {received:?}"
-                )
-                .into()),
-            }
-        }
+        Err(_) => Err(format!(
+            "reproduced: concurrent get_wpm + get_sleep_state did not both complete within {REQUEST_TIMEOUT:?}"
+        )
+        .into()),
     }
 }
 

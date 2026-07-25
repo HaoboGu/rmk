@@ -43,7 +43,7 @@ impl RynkHeader {
 /// Largest logical frame (header + payload) whose streaming-COBS encoding —
 /// worst case `len + len/254 + 2` for an all-nonzero frame, trailing delimiter
 /// included — fits a `physical`-byte buffer; 0 if none does.
-pub const fn max_logical_len(physical: usize) -> usize {
+pub const fn max_size_for_payload(physical: usize) -> usize {
     let mut len = 0;
     while len + 1 + (len + 1) / 254 + 2 <= physical {
         len += 1;
@@ -55,7 +55,7 @@ pub const fn max_logical_len(physical: usize) -> usize {
 /// remains of a `RYNK_BUFFER_SIZE`-byte frame buffer after worst-case COBS
 /// overhead and the 3-byte header. Advertised to hosts as `max_payload_size`.
 pub const RYNK_MAX_PAYLOAD_SIZE: usize = {
-    let logical = max_logical_len(crate::constants::RYNK_BUFFER_SIZE);
+    let logical = max_size_for_payload(crate::constants::RYNK_BUFFER_SIZE);
     // Assert before subtracting so a too-small buffer fails with this message,
     // not a const-eval underflow.
     assert!(
@@ -271,9 +271,9 @@ mod tests {
     }
 
     #[test]
-    fn max_logical_len_is_exact_for_streaming_cobs() {
+    fn max_size_for_payload_is_exact_for_streaming_cobs() {
         // COBS worst case is an all-nonzero frame. For each physical size,
-        // max_logical_len bytes must stream-encode into it and one byte more
+        // max_size_for_payload bytes must stream-encode into it and one byte more
         // must not — the inverse of the encoder's worst case is exact, including
         // at the 254-block boundaries where streaming COBS costs one byte over
         // one-shot encoding.
@@ -288,10 +288,10 @@ mod tests {
         for physical in [
             2usize, 3, 4, 255, 256, 257, 258, 259, 480, 488, 509, 510, 511, 512, 513, 514,
         ] {
-            let len = max_logical_len(physical);
+            let len = max_size_for_payload(physical);
             assert!(
                 encodes_into(len, physical),
-                "max_logical_len({physical}) = {len} must fit"
+                "max_size_for_payload({physical}) = {len} must fit"
             );
             assert!(
                 !encodes_into(len + 1, physical),
@@ -300,11 +300,11 @@ mod tests {
             );
         }
         // Below one code byte + delimiter, nothing fits.
-        assert_eq!(max_logical_len(0), 0);
-        assert_eq!(max_logical_len(1), 0);
+        assert_eq!(max_size_for_payload(0), 0);
+        assert_eq!(max_size_for_payload(1), 0);
         assert_eq!(
             RYNK_MAX_PAYLOAD_SIZE,
-            max_logical_len(crate::constants::RYNK_BUFFER_SIZE) - RYNK_HEADER_SIZE
+            max_size_for_payload(crate::constants::RYNK_BUFFER_SIZE) - RYNK_HEADER_SIZE
         );
     }
 
