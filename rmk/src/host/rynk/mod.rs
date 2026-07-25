@@ -9,8 +9,11 @@ mod uart;
 
 use embassy_futures::select::{Either, select};
 use embedded_io_async::{Read, Write};
+use postcard::experimental::max_size::MaxSize;
 use rmk_types::constants::RYNK_BUFFER_SIZE;
-use rmk_types::protocol::rynk::{Cmd, Deframer, FirmwareVersion, RynkError, RynkMessage, command};
+use rmk_types::protocol::rynk::{
+    Cmd, Deframer, FirmwareVersion, RYNK_HEADER_SIZE, RynkError, RynkMessage, command, encode_frame,
+};
 #[allow(unused_imports)] // re-exported at `crate::host` for downstream users
 pub use uart::run_rynk_uart;
 
@@ -22,6 +25,14 @@ use crate::keymap::KeyMap;
 
 /// Unlock attempts live long enough for BLE WebHID round trips.
 const RYNK_UNLOCK_WINDOW: embassy_time::Duration = embassy_time::Duration::from_millis(500);
+
+/// Encoded size of the largest error envelope (`header ++ Err(RynkError)`,
+/// COBS-framed). Error replies are built on the stack so they bypass the reply
+/// window: every request is answered even when a parked tail leaves almost none.
+const ERROR_FRAME_LEN: usize = {
+    let logical = RYNK_HEADER_SIZE + <Result<(), RynkError> as MaxSize>::POSTCARD_MAX_SIZE;
+    logical + logical / 254 + 2
+};
 
 const RMK_VERSION: FirmwareVersion = {
     const fn component(s: &str) -> u8 {
@@ -90,17 +101,16 @@ impl<'a> RynkService<'a> {
         }
     }
 
-    /// Process one inbound message in place and replace its payload with a
-    /// response envelope. `cmd` and `seq` remain unchanged.
-    async fn dispatch(&self, session: &RynkSession<'_>, msg: &mut RynkMessage<'_>) {
+    /// Serve one inbound message: on success the reply frame replaces the
+    /// payload in place; on error the caller answers with the error envelope.
+    async fn dispatch(&self, session: &RynkSession<'_>, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
         let cmd = msg.header().cmd;
 
         if self.requires_unlock(cmd) && !session.locker.is_unlocked() {
-            msg.encode_error(RynkError::Locked);
-            return;
+            return Err(RynkError::Locked);
         }
 
-        if let Err(error) = match cmd {
+        match cmd {
             Cmd::GetVersion => Serve::<command::GetVersion, _>::serve(self, msg).await,
             Cmd::GetCapabilities => Serve::<command::GetCapabilities, _>::serve(self, msg).await,
             Cmd::Reboot => Serve::<command::Reboot, _>::serve(self, msg).await,
@@ -160,8 +170,6 @@ impl<'a> RynkService<'a> {
             Cmd::GetLayout => Serve::<command::GetLayout, _>::serve(self, msg).await,
 
             _ => Err(RynkError::UnknownCmd),
-        } {
-            msg.encode_error(error);
         }
     }
 
@@ -184,23 +192,42 @@ impl<'a> RynkService<'a> {
         let mut handshaked = false;
 
         loop {
-            // The client is one-in-flight: serve one frame, then drop anything trailing
-            // it (BLE-HID padding, a batcher) so the reply gets the whole buffer.
-            if let Some(frame_len) = df.next(&mut buf) {
-                let mut msg = RynkMessage::from_decoded(&mut buf, frame_len);
+            // Serve every complete frame already buffered. While a frame is
+            // served, the pipelined tail behind it is parked out of the reply's
+            // way instead of dropped, so back-to-back requests all get answers.
+            while let Some(frame_len) = df.next(&mut buf) {
+                let parked = df.park_pending(&mut buf);
+                let window = buf.len() - parked;
+                let mut msg = RynkMessage::from_decoded(&mut buf[..window], frame_len);
                 let cmd = msg.header().cmd;
                 if cmd.is_topic() {
                     // Hosts never send topic-range cmds; drop without a reply.
                     warn!("Rynk: dropping topic-range request {:?}", cmd);
                 } else {
-                    self.dispatch(&session, &mut msg).await;
+                    let served = self.dispatch(&session, &mut msg).await;
                     // The version handshake completes on GetCapabilities.
                     handshaked |= cmd == Cmd::GetCapabilities;
-                    if tx.write_all(msg.frame()).await.is_err() {
+                    let written = match served {
+                        Ok(()) => tx.write_all(msg.frame()).await,
+                        Err(error) => {
+                            // A parked tail shrinks the reply window, so an encode
+                            // failure there is backpressure, not a firmware fault.
+                            let error = if parked > 0 && error == RynkError::Internal {
+                                RynkError::Busy
+                            } else {
+                                error
+                            };
+                            let mut err_frame = [0u8; ERROR_FRAME_LEN];
+                            let len =
+                                encode_frame(&mut err_frame, msg.header(), &Err::<(), RynkError>(error)).unwrap_or(0);
+                            tx.write_all(&err_frame[..len]).await
+                        }
+                    };
+                    if written.is_err() {
                         return;
                     }
                 }
-                df = Deframer::new();
+                df.unpark_pending(&mut buf, parked);
             }
 
             // A half-received frame must be finished by reading only (a topic emit
@@ -304,14 +331,19 @@ mod tests {
 
     /// A COBS request frame with an empty payload, as a host sends it.
     fn req(cmd_raw: u16, seq: u8) -> Vec<u8> {
-        let mut buf = [0u8; 32];
+        req_with(cmd_raw, seq, &())
+    }
+
+    /// A COBS request frame carrying `payload`, as a host sends it.
+    fn req_with<T: serde::Serialize>(cmd_raw: u16, seq: u8, payload: &T) -> Vec<u8> {
+        let mut buf = [0u8; 64];
         let n = encode_frame(
             &mut buf,
             RynkHeader {
                 cmd: Cmd::from_raw(cmd_raw),
                 seq,
             },
-            &(),
+            payload,
         )
         .unwrap();
         buf[..n].to_vec()
@@ -523,10 +555,10 @@ mod tests {
         assert!(state.pressed_bitmap[4..].iter().all(|&b| b == 0));
     }
 
-    /// A read carrying more than one frame serves the first and discards the
-    /// rest: the session stays alive instead of clobbering a reply.
+    /// A read carrying more than one frame serves them all, in order: the
+    /// pipelined tail is parked out of each reply's way, never dropped.
     #[test]
-    fn run_session_serves_first_frame_of_a_coalesced_read() {
+    fn run_session_serves_every_frame_of_a_coalesced_read() {
         let mut behavior = BehaviorConfig::default();
         let positional: PositionalConfig<1, 1> = PositionalConfig::default();
         let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
@@ -534,7 +566,6 @@ mod tests {
         let config = RmkConfig::default();
         let service = RynkService::new(&keymap, &config);
 
-        // Two frames in one read; the first is served, the coalesced tail dropped.
         let mut combined = req(Cmd::GetVersion.raw(), 0);
         combined.extend_from_slice(&req(Cmd::GetVersion.raw(), 1));
 
@@ -547,11 +578,115 @@ mod tests {
         block_on(service.run_session(&mut rx, &mut tx));
 
         let resp = decode_frames(&tx.captured);
-        assert_eq!(resp.len(), 1, "first frame served; the coalesced tail is dropped");
-        assert_eq!(resp[0].1, 0, "the reply is for the first frame");
+        assert_eq!(resp.len(), 2, "both coalesced frames are served");
+        for (i, frame) in resp.iter().enumerate() {
+            assert_eq!(frame.1, i as u8, "replies follow arrival order");
+            assert_eq!(
+                postcard::from_bytes::<Result<ProtocolVersion, RynkError>>(&frame.2).unwrap(),
+                Ok(ProtocolVersion::CURRENT),
+            );
+        }
+    }
+
+    /// A frame split across reads survives the reply served before it completes.
+    #[test]
+    fn run_session_completes_a_partial_frame_after_serving() {
+        let mut behavior = BehaviorConfig::default();
+        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
+        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+        let config = RmkConfig::default();
+        let service = RynkService::new(&keymap, &config);
+
+        let second = req(Cmd::GetVersion.raw(), 1);
+        let split = second.len() / 2;
+        let mut chunk1 = req(Cmd::GetVersion.raw(), 0);
+        chunk1.extend_from_slice(&second[..split]);
+
+        let mut chunks = VecDeque::new();
+        chunks.push_back(chunk1);
+        chunks.push_back(second[split..].to_vec());
+
+        let mut rx = ChunkRead { chunks };
+        let mut tx = VecWrite { captured: Vec::new() };
+
+        block_on(service.run_session(&mut rx, &mut tx));
+
+        let resp = decode_frames(&tx.captured);
+        assert_eq!(resp.len(), 2, "the split frame completes and is served");
+        assert_eq!(resp[0].1, 0);
+        assert_eq!(resp[1].1, 1);
+    }
+
+    /// A bulk page shrinks to the reply window left beside a parked tail
+    /// instead of failing, and stays non-empty.
+    #[test]
+    fn run_session_shrinks_a_bulk_page_beside_a_parked_tail() {
+        let mut behavior = BehaviorConfig::default();
+        let positional: PositionalConfig<8, 8> = PositionalConfig::default();
+        let mut data: KeymapData<8, 8, 1, 0> = KeymapData::new([[[KeyAction::No; 8]; 8]]);
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+        let config = RmkConfig::default();
+        let service = RynkService::new(&keymap, &config);
+
+        // A bulk read followed by 450 delimiter-less bytes (a huge partial
+        // frame) in one read: the parked tail squeezes the reply window.
+        let mut chunk = req_with(Cmd::GetKeymapBulk.raw(), 0, &[0u8, 0, 0]);
+        let tail = vec![0xEEu8; 450];
+        let window = RYNK_BUFFER_SIZE - tail.len();
+        chunk.extend_from_slice(&tail);
+        let mut chunks = VecDeque::new();
+        chunks.push_back(chunk);
+
+        let mut rx = ChunkRead { chunks };
+        let mut tx = VecWrite { captured: Vec::new() };
+
+        block_on(service.run_session(&mut rx, &mut tx));
+
+        let expected = rmk_types::protocol::rynk::bulk_keymap_size_for_buffer(
+            rmk_types::protocol::rynk::max_size_for_payload(window),
+        );
+        assert!(
+            0 < expected && expected < rmk_types::constants::BULK_KEYMAP_SIZE,
+            "premise: the squeezed window holds a smaller, non-empty page"
+        );
+        let resp = decode_frames(&tx.captured);
+        assert_eq!(resp.len(), 1);
+        let page = postcard::from_bytes::<Result<heapless::Vec<KeyAction, 64>, RynkError>>(&resp[0].2)
+            .unwrap()
+            .unwrap();
+        assert_eq!(page.len(), expected, "page sized to the actual window");
+    }
+
+    /// When the parked tail leaves no room for even the reply, the request is
+    /// still answered — with `Busy`, built outside the squeezed window.
+    #[test]
+    fn run_session_answers_busy_when_the_reply_cannot_fit() {
+        let mut behavior = BehaviorConfig::default();
+        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
+        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+        let config = RmkConfig::default();
+        let service = RynkService::new(&keymap, &config);
+
+        // Fill the whole buffer: a 5-byte GetVersion plus delimiter-less bytes.
+        // The parked tail leaves a window too small even for the version reply.
+        let mut chunk = req(Cmd::GetVersion.raw(), 9);
+        chunk.extend_from_slice(&vec![0xEEu8; RYNK_BUFFER_SIZE - chunk.len()]);
+        let mut chunks = VecDeque::new();
+        chunks.push_back(chunk);
+
+        let mut rx = ChunkRead { chunks };
+        let mut tx = VecWrite { captured: Vec::new() };
+
+        block_on(service.run_session(&mut rx, &mut tx));
+
+        let resp = decode_frames(&tx.captured);
+        assert_eq!(resp.len(), 1, "the request is answered despite the squeeze");
+        assert_eq!(resp[0].1, 9, "seq echo");
         assert_eq!(
             postcard::from_bytes::<Result<ProtocolVersion, RynkError>>(&resp[0].2).unwrap(),
-            Ok(ProtocolVersion::CURRENT),
+            Err(RynkError::Busy),
         );
     }
 

@@ -1,13 +1,13 @@
 //! Keymap and encoder handlers (encoder is part of keymap's `0x01xx` Cmd group).
 
 use rmk_types::action::{EncoderAction, KeyAction};
-use rmk_types::constants::BULK_KEYMAP_SIZE;
 use rmk_types::protocol::rynk::command::{
     GetDefaultLayer, GetEncoderAction, GetKeyAction, GetKeymapBulk, SetDefaultLayer, SetEncoderAction, SetKeyAction,
     SetKeymapBulk,
 };
 use rmk_types::protocol::rynk::{
     GetEncoderRequest, GetKeymapBulkRequest, KeyPosition, RynkError, RynkMessage, SetEncoderRequest, SetKeyRequest,
+    bulk_keymap_size_for_buffer, max_size_for_payload,
 };
 
 use super::super::RynkService;
@@ -108,7 +108,10 @@ impl HandleBulk<GetKeymapBulk> for RynkService<'_> {
         // crossing row and layer boundaries freely, and stops at the keymap's end.
         let start = self.keymap_flat_start(req.layer, req.start_row, req.start_col)?;
         let (rows, cols, num_layers) = self.ctx.keymap_dimensions();
-        let page = bulk_page(start, BULK_KEYMAP_SIZE, num_layers * rows * cols);
+        // Page size tracks the actual reply window, which shrinks when a
+        // pipelined tail is parked behind it.
+        let cap = bulk_keymap_size_for_buffer(max_size_for_payload(msg.capacity()));
+        let page = bulk_page(start, cap, num_layers * rows * cols)?;
         msg.encode_bulk(page.map(|offset| self.ctx.get_action_flat(offset)))
     }
 }

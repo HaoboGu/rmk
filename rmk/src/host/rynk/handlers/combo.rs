@@ -1,9 +1,10 @@
 //! Combo handlers.
 
 use rmk_types::combo::Combo as ComboConfig;
-use rmk_types::constants::BULK_SIZE;
 use rmk_types::protocol::rynk::command::{GetCombo, GetComboBulk, SetCombo, SetComboBulk};
-use rmk_types::protocol::rynk::{GetComboBulkRequest, RynkError, RynkMessage, SetComboRequest};
+use rmk_types::protocol::rynk::{
+    GetComboBulkRequest, RynkError, RynkMessage, SetComboRequest, bulk_size_for_buffer, max_size_for_payload,
+};
 
 use super::super::RynkService;
 use super::bulk::{bulk_page, bulk_write_start, take_element, take_seq_len, validate_bulk_elements};
@@ -37,10 +38,12 @@ impl Handle<SetCombo> for RynkService<'_> {
 impl HandleBulk<GetComboBulk> for RynkService<'_> {
     async fn handle_bulk(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
         let req = msg.decode_request::<GetComboBulkRequest>()?;
+        // Page size tracks the actual reply window (shrunk by a parked tail).
+        let cap = bulk_size_for_buffer(max_size_for_payload(msg.capacity()));
         // Empty slots read back as the empty config, same as the single Get; an
         // out-of-range `start_index` yields an empty page.
         self.ctx.with_combos(|combos| {
-            let page = bulk_page(req.start_index as usize, BULK_SIZE, combos.len());
+            let page = bulk_page(req.start_index as usize, cap, combos.len())?;
             msg.encode_bulk(page.map(|i| {
                 combos[i]
                     .as_ref()

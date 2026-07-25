@@ -43,7 +43,8 @@ mod bulk {
     /// The run starts at key `(layer, start_row, start_col)` and reads forward
     /// through the flat, row-major, layer-major keymap — crossing row and layer
     /// boundaries freely. The firmware returns as many consecutive keys as fit
-    /// (`max_bulk_keys`), or fewer at the end of the keymap.
+    /// (at most `max_bulk_keys`; fewer beside concurrent requests), or fewer at
+    /// the end of the keymap.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
     #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
     #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]

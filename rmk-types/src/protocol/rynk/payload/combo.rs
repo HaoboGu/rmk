@@ -29,8 +29,9 @@ mod bulk {
     type BulkCombos = alloc::vec::Vec<Combo>;
 
     /// Request payload for `GetComboBulk`: read a page of combos starting at slot
-    /// `start_index`. The firmware returns as many as fit (`max_bulk_configs`),
-    /// fewer at the end, or an empty page once `start_index` reaches the slot count.
+    /// `start_index`. The firmware returns as many as fit (at most
+    /// `max_bulk_configs`; fewer beside concurrent requests), fewer at the end,
+    /// or an empty page once `start_index` reaches the slot count.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
     #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
     #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]

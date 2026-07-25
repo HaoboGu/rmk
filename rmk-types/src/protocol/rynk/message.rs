@@ -125,6 +125,12 @@ impl<'a> RynkMessage<'a> {
         self.header
     }
 
+    /// Physical bytes available to the reply — the whole wrapped buffer, which
+    /// shrinks when a pipelined tail is parked behind it.
+    pub fn capacity(&self) -> usize {
+        self.buf.len()
+    }
+
     /// The COBS-encoded reply frame, ready to transmit. Valid after `encode_*`.
     pub fn frame(&self) -> &[u8] {
         &self.buf[..self.len]
@@ -144,11 +150,6 @@ impl<'a> RynkMessage<'a> {
     pub fn encode_response<T: Serialize>(&mut self, value: &T) -> Result<(), RynkError> {
         self.len = encode_frame(self.buf, self.header, &Ok::<&T, RynkError>(value))?;
         Ok(())
-    }
-
-    /// Encode `Err(err)` as the response frame.
-    pub fn encode_error(&mut self, err: RynkError) {
-        self.len = encode_frame(self.buf, self.header, &Err::<(), RynkError>(err)).unwrap_or(0);
     }
 
     /// Encode `Ok(items)` as a bulk response frame, streaming the page through

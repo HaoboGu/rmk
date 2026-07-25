@@ -61,6 +61,26 @@ impl Deframer {
         !self.discarding && self.consumed < self.filled
     }
 
+    /// Move the undecoded remainder to the end of `buf`, freeing the front so a
+    /// reply can be encoded in place without clobbering a pipelined tail.
+    /// Returns the parked length; pair with [`unpark_pending`](Self::unpark_pending)
+    /// once the reply is written. The overflow-drain state survives the pair.
+    pub fn park_pending(&mut self, buf: &mut [u8]) -> usize {
+        let len = self.filled - self.consumed;
+        buf.copy_within(self.consumed..self.filled, buf.len() - len);
+        self.consumed = 0;
+        self.filled = 0;
+        len
+    }
+
+    /// Restore bytes parked by [`park_pending`](Self::park_pending) to the
+    /// front of `buf` and resume deframing them.
+    pub fn unpark_pending(&mut self, buf: &mut [u8], parked: usize) {
+        buf.copy_within(buf.len() - parked.., 0);
+        self.consumed = 0;
+        self.filled = parked;
+    }
+
     /// Decode the next logical frame to `buf[..len]` and return `len`, or return
     /// `None` when more bytes are needed. A garbled or oversized frame is
     /// skipped to the next `0x00` delimiter.
@@ -199,6 +219,77 @@ mod tests {
         assert_eq!(len, RYNK_HEADER_SIZE);
         assert_eq!(Cmd::from_le_bytes([buf[0], buf[1]]), CMD);
         assert_eq!(buf[2], 0x42);
+    }
+
+    #[test]
+    fn park_and_unpark_preserve_a_pipelined_frame() {
+        let mut buf = [0u8; 128];
+        let mut df = Deframer::new();
+        feed(&mut df, &mut buf, CMD, 1, &[1]);
+        feed(&mut df, &mut buf, CMD, 2, &[2, 2]);
+
+        let len = df.next(&mut buf).expect("first frame");
+        assert_frame(&buf[..len], CMD, 1, &[1]);
+
+        // Serve the frame: park the tail, scribble a reply over the freed window.
+        let parked = df.park_pending(&mut buf);
+        assert!(parked > 0);
+        let window = buf.len() - parked;
+        buf[..window].iter_mut().for_each(|b| *b = 0xEE);
+        df.unpark_pending(&mut buf, parked);
+
+        let len = df.next(&mut buf).expect("second frame survives the reply");
+        assert_frame(&buf[..len], CMD, 2, &[2, 2]);
+        assert!(df.next(&mut buf).is_none());
+    }
+
+    #[test]
+    fn park_preserves_a_partial_frame() {
+        let mut src = [0u8; 64];
+        let n = encode(&mut src, CMD, 9, &[7, 7, 7]);
+
+        let mut buf = [0u8; 64];
+        let mut df = Deframer::new();
+        feed(&mut df, &mut buf, CMD, 8, &[5]);
+        // Half of the next frame arrives in the same read.
+        let split = n / 2;
+        df.tail(&mut buf)[..split].copy_from_slice(&src[..split]);
+        df.commit(split);
+
+        let len = df.next(&mut buf).expect("complete frame");
+        assert_frame(&buf[..len], CMD, 8, &[5]);
+        let parked = df.park_pending(&mut buf);
+        assert!(parked > 0);
+        let window = buf.len() - parked;
+        buf[..window].iter_mut().for_each(|b| *b = 0xEE);
+        df.unpark_pending(&mut buf, parked);
+
+        // The remaining bytes complete the split frame.
+        df.tail(&mut buf)[..n - split].copy_from_slice(&src[split..n]);
+        df.commit(n - split);
+        let len = df.next(&mut buf).expect("split frame completes after the park");
+        assert_frame(&buf[..len], CMD, 9, &[7, 7, 7]);
+    }
+
+    #[test]
+    fn park_preserves_the_overflow_drain() {
+        let mut buf = [0u8; 32];
+        let mut df = Deframer::new();
+        df.tail(&mut buf).iter_mut().for_each(|b| *b = 0xFF);
+        df.commit(32);
+        assert!(df.next(&mut buf).is_none(), "overflow: draining");
+
+        // A park/unpark round trip must not forget the drain.
+        let parked = df.park_pending(&mut buf);
+        assert_eq!(parked, 0, "drained bytes are dead, nothing to park");
+        df.unpark_pending(&mut buf, parked);
+
+        // More doomed bytes, the drain delimiter, then a clean frame.
+        df.tail(&mut buf)[..2].copy_from_slice(&[0xFF, 0x00]);
+        df.commit(2);
+        feed(&mut df, &mut buf, CMD, 3, &[9]);
+        let len = df.next(&mut buf).expect("frame after the drain clears");
+        assert_frame(&buf[..len], CMD, 3, &[9]);
     }
 
     #[test]

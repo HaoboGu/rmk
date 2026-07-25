@@ -3,9 +3,14 @@ use serde::de::DeserializeOwned;
 
 /// Clamp a bulk read to one page: at most `cap` items from flat index `start`,
 /// never past `total`. An out-of-range `start` yields an empty range — the empty
-/// final page that tells the host it has read everything.
-pub(super) fn bulk_page(start: usize, cap: usize, total: usize) -> core::ops::Range<usize> {
-    start..(start + cap).min(total)
+/// final page that tells the host it has read everything. A `cap` squeezed to
+/// zero by a parked tail is `Busy` instead: an empty page there would silently
+/// truncate the host's read.
+pub(super) fn bulk_page(start: usize, cap: usize, total: usize) -> Result<core::ops::Range<usize>, RynkError> {
+    if cap == 0 && start < total {
+        return Err(RynkError::Busy);
+    }
+    Ok(start..(start + cap).min(total))
 }
 
 /// Validate an all-or-nothing bulk write of `len` items at flat index `start`

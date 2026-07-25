@@ -29,8 +29,9 @@ mod bulk {
     type BulkMorses = alloc::vec::Vec<Morse>;
 
     /// Request payload for `GetMorseBulk`: read a page of morses starting at slot
-    /// `start_index`. The firmware returns as many as fit (`max_bulk_configs`),
-    /// fewer at the end, or an empty page once `start_index` reaches the slot count.
+    /// `start_index`. The firmware returns as many as fit (at most
+    /// `max_bulk_configs`; fewer beside concurrent requests), fewer at the end,
+    /// or an empty page once `start_index` reaches the slot count.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
     #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
     #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]

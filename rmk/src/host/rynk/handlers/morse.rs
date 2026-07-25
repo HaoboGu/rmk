@@ -1,9 +1,10 @@
 //! Morse handlers.
 
-use rmk_types::constants::BULK_SIZE;
 use rmk_types::morse::Morse;
 use rmk_types::protocol::rynk::command::{GetMorse, GetMorseBulk, SetMorse, SetMorseBulk};
-use rmk_types::protocol::rynk::{GetMorseBulkRequest, RynkError, RynkMessage, SetMorseRequest};
+use rmk_types::protocol::rynk::{
+    GetMorseBulkRequest, RynkError, RynkMessage, SetMorseRequest, bulk_size_for_buffer, max_size_for_payload,
+};
 
 use super::super::RynkService;
 use super::bulk::{bulk_page, bulk_write_start, take_element, take_seq_len, validate_bulk_elements};
@@ -32,7 +33,9 @@ impl Handle<SetMorse> for RynkService<'_> {
 impl HandleBulk<GetMorseBulk> for RynkService<'_> {
     async fn handle_bulk(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
         let req = msg.decode_request::<GetMorseBulkRequest>()?;
-        let page = bulk_page(req.start_index as usize, BULK_SIZE, self.ctx.morses_len());
+        // Page size tracks the actual reply window (shrunk by a parked tail).
+        let cap = bulk_size_for_buffer(max_size_for_payload(msg.capacity()));
+        let page = bulk_page(req.start_index as usize, cap, self.ctx.morses_len())?;
         msg.encode_bulk(page.map(|idx| self.ctx.get_morse(idx as u8).unwrap_or_default()))
     }
 }
