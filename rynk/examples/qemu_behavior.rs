@@ -398,7 +398,7 @@ async fn script(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
 
     // Fire-and-forget commands: no-ops on this riscv fixture (the reset path is
     // cortex-m/esp only), so the session survives and the orphaned reply is
-    // absorbed by seq matching on the next request.
+    // dropped by the client's SEQ routing while the next request proceeds.
     client.reboot().await?;
     assert_eq!(client.get_version().await?, ProtocolVersion::CURRENT);
     client.bootloader_jump().await?;

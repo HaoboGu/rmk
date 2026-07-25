@@ -331,6 +331,8 @@ async fn stale_seq_reply_dropped() {
 
 #[tokio::test(start_paused = true)]
 async fn stale_reply_of_cancelled_request_is_dropped() {
+    // Request 1 is cancelled mid-wait: its slot frees, its late reply matches
+    // no slot and is dropped, and request 2 round-trips unobstructed.
     let (client, mut driver) = raw_session(vec![
         Step::AwaitWrites(2),
         Step::Chunk(reply(Cmd::GetWpm, 1, 99u16)),
@@ -340,6 +342,39 @@ async fn stale_reply_of_cancelled_request_is_dropped() {
     let got = drive(&mut driver, &client, async {
         let cancelled = timeout(Duration::from_millis(10), client.get_wpm()).await;
         assert!(cancelled.is_err(), "request 1 should time out");
+        client.get_wpm().await
+    })
+    .await
+    .unwrap();
+    assert_eq!(got, 42);
+}
+
+#[tokio::test]
+async fn concurrent_requests_route_out_of_order_replies() {
+    // Both requests hit the wire before any reply (the reader parks until two
+    // writes complete), and the replies return out of order: SEQ routing must
+    // still deliver each to its caller.
+    let mut replies = reply(Cmd::GetSleepState, 2, true);
+    replies.extend_from_slice(&reply(Cmd::GetWpm, 1, 42u16));
+    let (client, mut driver) = raw_session(vec![Step::AwaitWrites(2), Step::Chunk(replies), Step::Hang]);
+    let (wpm, sleeping) = drive(&mut driver, &client, join(client.get_wpm(), client.get_sleep_state())).await;
+    assert_eq!(wpm.unwrap(), 42);
+    assert!(sleeping.unwrap());
+}
+
+#[tokio::test]
+async fn fire_and_forget_orphan_reply_is_dropped() {
+    // On targets where the reset is a no-op the firmware answers `Reboot`;
+    // that echo matches no slot and is dropped while the next request runs.
+    let (client, mut driver) = raw_session(vec![
+        Step::AwaitWrites(1),
+        Step::Chunk(reply(Cmd::Reboot, 1, ())),
+        Step::AwaitWrites(2),
+        Step::Chunk(reply(Cmd::GetWpm, 2, 42u16)),
+        Step::Hang,
+    ]);
+    let got = drive(&mut driver, &client, async {
+        client.reboot().await.unwrap();
         client.get_wpm().await
     })
     .await

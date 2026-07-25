@@ -14,7 +14,7 @@
 //! request()    encode → message ─→ Driver: write_all
 //! Driver: read → reassemble → route by the CMD topic bit:
 //!          topic frame → topics ─→ next_topic(): decode
-//!          reply frame → resp   ─→ request(): SEQ match + decode
+//!          reply frame → SEQ-matched slot ─→ request(): decode
 //! ```
 //!
 //! ## Session lifecycle
@@ -133,15 +133,53 @@ impl From<RynkHostError> for wasm_bindgen::JsValue {
     }
 }
 
+/// Open exchanges the client tracks at once; a request beyond this parks on
+/// the free-list until a slot drains. No-alloc builds hold a full frame buffer
+/// per slot, so they keep the single-slot behavior instead of paying for four.
+#[cfg(feature = "alloc")]
+const MAX_IN_FLIGHT: usize = 4;
+#[cfg(not(feature = "alloc"))]
+const MAX_IN_FLIGHT: usize = 1;
+
+/// One in-flight exchange: the SEQ it waits for (0 = free; issued SEQs cycle
+/// `1..=255`) and the signal its reply is routed into.
+struct Slot {
+    seq: AtomicU8,
+    resp: Signal<CS, FrameBytes>,
+}
+
+/// Frees a slot on drop, so a cancelled request releases its slot and the late
+/// reply is dropped as unmatched instead of poisoning the next exchange.
+struct SlotGuard<'a> {
+    client: &'a Client,
+    idx: usize,
+}
+
+impl Drop for SlotGuard<'_> {
+    fn drop(&mut self) {
+        let slot = &self.client.slots[self.idx];
+        slot.seq.store(0, Ordering::Release);
+        slot.resp.reset();
+        // Capacity equals the slot count, so the free-list always has room.
+        let _ = self.client.free.try_send(self.idx);
+    }
+}
+
 /// The Rynk protocol surface: typed requests plus the topic stream, both
-/// `&self` so a request branch and a topic branch run full-duplex over one
-/// shared client. Moving the wire bytes is [`Driver::run`]'s job.
+/// `&self` so request branches and a topic branch run full-duplex over one
+/// shared client. Up to [`MAX_IN_FLIGHT`] requests run concurrently — replies
+/// are routed back by SEQ, so completion order is independent of send order.
+/// Moving the wire bytes is [`Driver::run`]'s job.
 pub struct Client {
     /// Client → Driver: request frames awaiting the writer.
     message: Channel<CS, FrameBytes, 1>,
-    /// Driver → requester: reply frames. A latest-wins slot — one request
-    /// in flight means anything older is a stale reply.
-    resp: Signal<CS, FrameBytes>,
+    /// In-flight exchanges; the driver routes each reply here by SEQ. A reply
+    /// no slot waits for (a cancelled request's, a fire-and-forget echo) is
+    /// dropped.
+    slots: [Slot; MAX_IN_FLIGHT],
+    /// Free slot indices — receiving one is acquisition, so callers beyond
+    /// [`MAX_IN_FLIGHT`] park here instead of flooding the device.
+    free: Channel<CS, usize, MAX_IN_FLIGHT>,
     /// Driver → topic consumer. Drop-oldest on overflow; topics are
     /// best-effort by contract (a missed push is recovered via `get_*`).
     topics: Channel<CS, TopicBytes, TOPIC_QUEUE_CAPACITY>,
@@ -154,9 +192,17 @@ pub struct Client {
 
 impl Client {
     pub(crate) fn new() -> Self {
+        let free = Channel::new();
+        for idx in 0..MAX_IN_FLIGHT {
+            let _ = free.try_send(idx);
+        }
         Self {
             message: Channel::new(),
-            resp: Signal::new(),
+            slots: core::array::from_fn(|_| Slot {
+                seq: AtomicU8::new(0),
+                resp: Signal::new(),
+            }),
+            free,
             topics: Channel::new(),
             next_seq: AtomicU8::new(1),
             capabilities: DeviceCapabilities::default(),
@@ -181,50 +227,65 @@ impl Client {
     }
 
     /// One typed request/response round trip from the shared command table.
+    ///
+    /// Up to [`MAX_IN_FLIGHT`] callers run concurrently; each reply is routed
+    /// back by SEQ, so completion order is independent of send order.
     pub(crate) async fn request<E: Endpoint>(&self, req: &E::Request) -> Result<E::Response, RynkHostError> {
         let cmd = E::CMD;
-        let seq = self.send_request(cmd, req).await?;
-        loop {
+        let idx = self.free.receive().await;
+        let guard = SlotGuard { client: self, idx };
+        let slot = &self.slots[idx];
+        let seq = self.alloc_seq();
+        // Claim the SEQ before the frame can hit the wire, so the reply always
+        // finds its slot; `reset` drops anything a prior tenant left behind.
+        slot.resp.reset();
+        slot.seq.store(seq, Ordering::Release);
+        self.send_frame(cmd, seq, req).await?;
+        let result = loop {
             // This wait has no disconnect signal; session supervision must cancel it when the driver exits.
-            let mut bytes = self.resp.wait().await;
+            let mut bytes = slot.resp.wait().await;
             let Ok(msg) = RynkMessage::try_from(&mut bytes[..]) else {
                 continue;
             };
             let header = msg.header();
-            if header.seq != seq {
-                // Skip a stale reply from a cancelled request.
-                continue;
-            }
             if header.cmd != cmd {
-                return Err(RynkHostError::CmdMismatch {
+                break Err(RynkHostError::CmdMismatch {
                     sent: cmd,
                     got: header.cmd,
                 });
             }
             // Reject postcard prefixes so host/firmware type drift is not silently accepted.
-            let (env, rest) = postcard::take_from_bytes::<Result<E::Response, RynkError>>(msg.payload())
-                .map_err(|source| RynkHostError::Deserialize { cmd, source })?;
-            if !rest.is_empty() {
-                return Err(RynkHostError::TrailingBytes { cmd });
-            }
-            return env.map_err(RynkHostError::Rejected);
-        }
+            break match postcard::take_from_bytes::<Result<E::Response, RynkError>>(msg.payload()) {
+                Err(source) => Err(RynkHostError::Deserialize { cmd, source }),
+                Ok((_, rest)) if !rest.is_empty() => Err(RynkHostError::TrailingBytes { cmd }),
+                Ok((env, _)) => env.map_err(RynkHostError::Rejected),
+            };
+        };
+        drop(guard);
+        result
     }
 
     /// Send one request frame without waiting for a reply — for commands whose
     /// effect prevents one (reboot, bootloader jump). `Ok` means the frame is
-    /// queued for the writer; keep the driver running until it drains.
+    /// queued for the writer; keep the driver running until it drains. If the
+    /// reset turns out to be a no-op, the firmware's reply matches no slot and
+    /// is dropped.
     pub(crate) async fn send_no_reply<E: Endpoint>(&self, req: &E::Request) -> Result<(), RynkHostError> {
-        self.send_request(E::CMD, req).await.map(|_| ())
+        self.send_frame(E::CMD, self.alloc_seq(), req).await
     }
 
-    /// Encode one request into an owned frame and queue it for the writer,
-    /// returning its SEQ (cycling `1..=255`).
-    async fn send_request<Req: Serialize>(&self, cmd: Cmd, req: &Req) -> Result<u8, RynkHostError> {
+    /// Next request SEQ, cycling `1..=255` — 0 marks a free slot, so it is
+    /// never issued.
+    fn alloc_seq(&self) -> u8 {
         // `fetch_update` cannot fail because the closure always returns `Some`.
         let (Ok(seq) | Err(seq)) = self.next_seq.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |s| {
             Some(if s == u8::MAX { 1 } else { s + 1 })
         });
+        seq
+    }
+
+    /// Encode one request into an owned frame and queue it for the writer.
+    async fn send_frame<Req: Serialize>(&self, cmd: Cmd, seq: u8, req: &Req) -> Result<(), RynkHostError> {
         // Size the buffer for the COBS-encoded form of a max-payload request, so an
         // oversized request fails to encode before touching the link.
         let len = RYNK_HEADER_SIZE + self.capabilities.max_payload_size as usize;
@@ -241,7 +302,7 @@ impl Client {
         let frame_len = encode_frame(&mut buf, RynkHeader { cmd, seq }, req).map_err(|_| RynkHostError::Encode(cmd))?;
         buf.truncate(frame_len);
         self.message.send(buf).await;
-        Ok(seq)
+        Ok(())
     }
 
     /// Negotiate the version, then fetch device capabilities.
@@ -309,8 +370,8 @@ impl<R: Read, W: Write> Driver<R, W> {
                 // Cut out every whole COBS frame this read completed; the Deframer
                 // decodes in place and resyncs past any garbage on its own.
                 while let Some(frame) = rx.next_frame() {
-                    let cmd = RynkHeader::parse(frame[..RYNK_HEADER_SIZE].try_into().unwrap()).cmd;
-                    if cmd.is_topic() {
+                    let header = RynkHeader::parse(frame[..RYNK_HEADER_SIZE].try_into().unwrap());
+                    if header.cmd.is_topic() {
                         #[cfg(feature = "alloc")]
                         let bytes = TopicBytes::from(frame);
                         #[cfg(not(feature = "alloc"))]
@@ -330,8 +391,21 @@ impl<R: Read, W: Write> Driver<R, W> {
                         // A decoded frame is never larger than the RX buffer, so this fits.
                         #[cfg(not(feature = "alloc"))]
                         let bytes = FrameBytes::try_from(frame).unwrap();
-                        // A pending reply is stale after request cancellation; keep the latest.
-                        client.resp.signal(bytes);
+                        // Route to the slot claiming this SEQ. No taker means a
+                        // cancelled request's late reply or a fire-and-forget
+                        // echo: drop it.
+                        let waiter = (header.seq != 0)
+                            .then(|| {
+                                client
+                                    .slots
+                                    .iter()
+                                    .find(|s| s.seq.load(Ordering::Acquire) == header.seq)
+                            })
+                            .flatten();
+                        match waiter {
+                            Some(slot) => slot.resp.signal(bytes),
+                            None => log::debug!("rynk: unmatched reply {:?} seq {}, dropped", header.cmd, header.seq),
+                        }
                     }
                 }
             }
