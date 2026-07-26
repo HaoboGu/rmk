@@ -160,6 +160,7 @@ my_paste = "WM(V, LCtrl)"
 ::: warning
 
 Please note that alias names may not contain white spaces and they are case sensitive.
+Alias names may contain non-English Unicode characters, such as `ö` or `中`.
 
 :::
 
