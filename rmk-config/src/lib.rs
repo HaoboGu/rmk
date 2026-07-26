@@ -682,6 +682,8 @@ pub(crate) struct MorseProfile {
 
     /// The time elapsed from the last release of a key is longer than this, it will break the morse pattern (in milliseconds)
     pub gap_timeout: Option<DurationMillis>,
+
+    pub quick_tap_timeout: Option<DurationMillis>,
 }
 
 /// Configurations for tri layer
@@ -792,6 +794,8 @@ pub(crate) struct MorsesConfig {
 
     /// The time elapsed from the last release of a key is longer than this, it will break the morse pattern (in milliseconds)
     pub gap_timeout: Option<DurationMillis>,
+
+    pub quick_tap_timeout: Option<DurationMillis>,
 
     /// these can be used to overrides the defaults given above
     pub profiles: Option<HashMap<String, MorseProfile>>,
