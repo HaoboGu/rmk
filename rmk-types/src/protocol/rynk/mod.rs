@@ -22,8 +22,13 @@
 //!   (server→host push).
 //! - **SEQ** — the sequence number of current request. Topics send SEQ = 0.
 //!
-//! Responses wrap the payload in postcard `Result<T, RynkError>` (`T = ()` for
-//! `Set*`); requests are the bare postcard struct, unwrapped.
+//! ## Sizing
+//!
+//! One parameter drives every derived size: `rynk_buffer_size` in `keyboard.toml`
+//! (`constants::RYNK_BUFFER_SIZE`). It's the physical RAM of each frame buffer;
+//! COBS framing overhead is deducted internally.
+//! - [`RYNK_MAX_PAYLOAD_SIZE`]: the largest payload one frame can carry.
+//! - [`MAX_BULK_ITEMS`]/[`MAX_BULK_KEYS`]: how many bulk-page items fit.
 //!
 //! ## Module layout
 //!
@@ -61,11 +66,11 @@ pub(crate) mod tests;
 
 #[cfg(not(feature = "host"))]
 pub use self::command::MAX_TOPIC_PAYLOAD;
-pub use self::command::{Cmd, TopicEvent, bulk_keymap_size_for_buffer, bulk_size_for_buffer};
+pub use self::command::{Cmd, TopicEvent};
 pub use self::deframer::Deframer;
 pub use self::error::RynkError;
 pub use self::message::{
-    RYNK_HEADER_SIZE, RYNK_MAX_PAYLOAD_SIZE, RynkHeader, RynkMessage, encode_frame, max_size_for_payload,
+    RYNK_HEADER_SIZE, RYNK_MAX_PAYLOAD_SIZE, RynkHeader, RynkMessage, encode_frame, max_wire_size,
 };
 pub use self::payload::*;
 

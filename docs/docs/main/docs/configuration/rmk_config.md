@@ -42,7 +42,7 @@ split_central_sleep_timeout_seconds = 0
 protocol_macro_chunk_size = 64
 # Maximum number of auto mouse layer entries (auto-derived from [[behavior.auto_mouse_layer]] if unset)
 auto_mouse_layer_max_num = 2
-# Rynk RX/TX buffer size in bytes. 488 bytes = 2*BLE maximum packet size 
+# Rynk RX/TX buffer size in bytes. 488 bytes = 2*BLE maximum packet size
 # rynk_buffer_size = 488
 ```
 

@@ -227,18 +227,18 @@ mod tests {
     }
 
     /// Read one COBS frame off the peer end and return its cmd + seq; the
-    /// Deframer skips empty frames, so the host's leading `0x00` sync is transparent.
-    async fn read_request(peer: &mut SerialStream) -> (Cmd, u8) {
-        let mut df = Deframer::new();
-        let mut buf = [0u8; 4096];
+    /// Deframer skips empty frames, so the host's leading `0x00` sync is
+    /// transparent. `df`/`buf` persist across calls: the pipelined handshake
+    /// sends both requests back-to-back, so one read may buffer the next frame.
+    async fn read_request(peer: &mut SerialStream, df: &mut Deframer, buf: &mut [u8]) -> (Cmd, u8) {
         loop {
-            let n = peer.read(df.tail(&mut buf)).await.unwrap();
-            assert!(n > 0, "peer closed before a full request");
-            df.commit(n);
-            if df.next(&mut buf).is_some() {
+            if df.next(buf).is_some() {
                 let header = RynkHeader::parse(buf[..RYNK_HEADER_SIZE].try_into().unwrap());
                 return (header.cmd, header.seq);
             }
+            let n = peer.read(df.tail(buf)).await.unwrap();
+            assert!(n > 0, "peer closed before a full request");
+            df.commit(n);
         }
     }
 
@@ -246,14 +246,17 @@ mod tests {
     /// handshake with `version`, then keep the line open until dropped.
     fn scripted_firmware(mut peer: SerialStream, version: ProtocolVersion) -> tokio::task::JoinHandle<SerialStream> {
         tokio::spawn(async move {
-            let (cmd, seq) = read_request(&mut peer).await;
+            let mut df = Deframer::new();
+            let mut buf = [0u8; 4096];
+            let (cmd, seq) = read_request(&mut peer, &mut df, &mut buf).await;
             assert_eq!(cmd, Cmd::GetVersion);
             tokio::io::AsyncWriteExt::write_all(&mut peer, &frame(cmd, seq, &Ok::<_, RynkError>(version)))
                 .await
                 .unwrap();
-            // A mismatched major never gets the capabilities request.
+            // A mismatched major is rejected by the host, but the request pair
+            // was already pipelined — answer it like real firmware would.
             if version.major == ProtocolVersion::CURRENT.major {
-                let (cmd, seq) = read_request(&mut peer).await;
+                let (cmd, seq) = read_request(&mut peer, &mut df, &mut buf).await;
                 assert_eq!(cmd, Cmd::GetCapabilities);
                 tokio::io::AsyncWriteExt::write_all(
                     &mut peer,

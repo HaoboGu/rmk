@@ -9,7 +9,6 @@
 
 pub mod common;
 
-use embassy_futures::yield_now;
 use heapless::Vec as HVec;
 use rmk::config::{BehaviorConfig, PositionalConfig, RmkConfig};
 #[cfg(feature = "_ble")]
@@ -132,8 +131,8 @@ fn get_capabilities() {
         assert_eq!(caps.ble_enabled, cfg!(feature = "_ble"));
         assert_eq!(caps.is_split, cfg!(feature = "split"));
         assert!(caps.bulk_transfer_supported);
-        assert_eq!(caps.max_bulk_keys as usize, rmk_types::constants::BULK_KEYMAP_SIZE);
-        assert_eq!(caps.max_bulk_configs as usize, rmk_types::constants::BULK_SIZE);
+        assert_eq!(caps.max_bulk_keys as usize, rmk_types::protocol::rynk::MAX_BULK_KEYS);
+        assert_eq!(caps.max_bulk_items as usize, rmk_types::protocol::rynk::MAX_BULK_ITEMS);
     });
 }
 
@@ -415,12 +414,11 @@ fn get_set_encoder_round_trip() {
 
 #[test]
 fn keymap_bulk_round_trip_wraps_row_boundary() {
-    use rmk_types::constants::BULK_KEYMAP_SIZE;
-    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
+    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, MAX_BULK_KEYS, SetKeymapBulkRequest};
     let service = service_3x4();
     link_session(&service, async |client| {
         // Row-major run wraps from (0,3) to (1,0).
-        let mut actions: HVec<KeyAction, BULK_KEYMAP_SIZE> = HVec::new();
+        let mut actions: HVec<KeyAction, MAX_BULK_KEYS> = HVec::new();
         for i in 0..4 {
             actions.push(bulk_action(i)).unwrap();
         }
@@ -465,12 +463,11 @@ fn keymap_bulk_round_trip_wraps_row_boundary() {
 
 #[test]
 fn keymap_bulk_round_trip_wraps_layer_boundary() {
-    use rmk_types::constants::BULK_KEYMAP_SIZE;
-    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
+    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, MAX_BULK_KEYS, SetKeymapBulkRequest};
     // A 2-key run from flat index 3 crosses the layer boundary.
     let service = service_2_layers();
     link_session(&service, async |client| {
-        let mut actions: HVec<KeyAction, BULK_KEYMAP_SIZE> = HVec::new();
+        let mut actions: HVec<KeyAction, MAX_BULK_KEYS> = HVec::new();
         actions.push(bulk_action(0)).unwrap();
         actions.push(bulk_action(1)).unwrap();
         // Flat index 3 is layer 0's last key.
@@ -528,13 +525,12 @@ fn keymap_bulk_round_trip_wraps_layer_boundary() {
 
 #[test]
 fn keymap_bulk_max_capacity_round_trip() {
-    use rmk_types::constants::BULK_KEYMAP_SIZE;
-    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
+    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, MAX_BULK_KEYS, SetKeymapBulkRequest};
     // The 48-key keymap holds a full multi-layer bulk run.
     let service = service_4x8x8();
     link_session(&service, async |client| {
-        let mut actions: HVec<KeyAction, BULK_KEYMAP_SIZE> = HVec::new();
-        for i in 0..BULK_KEYMAP_SIZE {
+        let mut actions: HVec<KeyAction, MAX_BULK_KEYS> = HVec::new();
+        for i in 0..MAX_BULK_KEYS {
             actions.push(bulk_action(i)).unwrap();
         }
         let set = SetKeymapBulkRequest {
@@ -562,10 +558,42 @@ fn keymap_bulk_max_capacity_round_trip() {
     });
 }
 
+/// The host packs Set pages by encoded bytes, so one frame can carry more
+/// items than the advertised worst-case count; the firmware's streaming write
+/// path must take the whole page. The raw tuple (the wire shape of
+/// `SetKeymapBulkRequest`) sidesteps the count-bounded test-side Vec.
+#[test]
+fn keymap_bulk_write_accepts_more_keys_than_the_advertised_count() {
+    use rmk_types::protocol::rynk::MAX_BULK_KEYS;
+    let service = service_4x8x8();
+    link_session(&service, async |client| {
+        let n = MAX_BULK_KEYS + 3;
+        assert!(n <= 256, "premise: the page must fit the 8x8x4 keymap");
+        let mut actions: HVec<KeyAction, 256> = HVec::new();
+        for i in 0..n {
+            actions.push(bulk_action(i)).unwrap();
+        }
+        assert_eq!(
+            client
+                .request::<_, ()>(Cmd::SetKeymapBulk, 0x62, &(0u8, 0u8, 0u8, actions))
+                .await,
+            Ok(())
+        );
+
+        // The last written key sits beyond the advertised count (4 cols, 8 rows).
+        let last = KeyPosition {
+            layer: ((n - 1) / 32) as u8,
+            row: (((n - 1) / 4) % 8) as u8,
+            col: ((n - 1) % 4) as u8,
+        };
+        let read = client.request::<_, KeyAction>(Cmd::GetKeyAction, 0x63, &last).await;
+        assert_eq!(read, Ok(bulk_action(n - 1)));
+    });
+}
+
 #[test]
 fn keymap_bulk_clamps_and_rejects() {
-    use rmk_types::constants::BULK_KEYMAP_SIZE;
-    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
+    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, MAX_BULK_KEYS, SetKeymapBulkRequest};
     let service = service_3x4();
     link_session(&service, async |client| {
         // Valid tail starts clamp to a short page.
@@ -610,7 +638,7 @@ fn keymap_bulk_clamps_and_rejects() {
         );
 
         // Over-tail SET rejects without touching the in-range prefix.
-        let mut actions: HVec<KeyAction, BULK_KEYMAP_SIZE> = HVec::new();
+        let mut actions: HVec<KeyAction, MAX_BULK_KEYS> = HVec::new();
         for i in 0..3 {
             actions.push(bulk_action(i)).unwrap();
         }
@@ -636,10 +664,9 @@ fn keymap_bulk_clamps_and_rejects() {
 
 #[test]
 fn keymap_bulk_get_caps_page_at_budget() {
-    use rmk_types::constants::BULK_KEYMAP_SIZE;
-    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse};
+    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, MAX_BULK_KEYS};
     // GET from 0 is capped by message budget, not keymap span.
-    assert!(BULK_KEYMAP_SIZE < 256, "fixture must hold more than one full run");
+    assert!(MAX_BULK_KEYS < 256, "fixture must hold more than one full run");
     let service = service_4x8x8();
     link_session(&service, async |client| {
         let got = client
@@ -656,7 +683,7 @@ fn keymap_bulk_get_caps_page_at_budget() {
             .expect("Ok envelope");
         assert_eq!(
             got.actions.len(),
-            BULK_KEYMAP_SIZE,
+            MAX_BULK_KEYS,
             "page capped at the per-message budget even though 48 keys remain"
         );
     });
@@ -776,8 +803,7 @@ fn combo_rejects_out_of_range() {
 
 #[test]
 fn combo_bulk_round_trip_with_empty_slots() {
-    use rmk_types::constants::BULK_SIZE;
-    use rmk_types::protocol::rynk::{GetComboBulkRequest, GetComboBulkResponse, SetComboBulkRequest};
+    use rmk_types::protocol::rynk::{GetComboBulkRequest, GetComboBulkResponse, MAX_BULK_ITEMS, SetComboBulkRequest};
     let service = service();
     link_session(&service, async |client| {
         // Slots 3 and 4 are distinct writes.
@@ -788,7 +814,7 @@ fn combo_bulk_round_trip_with_empty_slots() {
                 None,
             )
         };
-        let mut configs: HVec<ComboConfig, BULK_SIZE> = HVec::new();
+        let mut configs: HVec<ComboConfig, MAX_BULK_ITEMS> = HVec::new();
         configs.push(combo(HidKeyCode::B)).unwrap();
         configs.push(combo(HidKeyCode::C)).unwrap();
         let set = SetComboBulkRequest {
@@ -815,8 +841,7 @@ fn combo_bulk_round_trip_with_empty_slots() {
 
 #[test]
 fn combo_bulk_clamps_and_rejects() {
-    use rmk_types::constants::BULK_SIZE;
-    use rmk_types::protocol::rynk::{GetComboBulkRequest, GetComboBulkResponse, SetComboBulkRequest};
+    use rmk_types::protocol::rynk::{GetComboBulkRequest, GetComboBulkResponse, MAX_BULK_ITEMS, SetComboBulkRequest};
     let service = service();
     link_session(&service, async |client| {
         // Empty SET runs are host bugs.
@@ -847,7 +872,7 @@ fn combo_bulk_clamps_and_rejects() {
             KeyAction::Single(Action::Key(KeyCode::Hid(HidKeyCode::B))),
             None,
         );
-        let mut configs: HVec<ComboConfig, BULK_SIZE> = HVec::new();
+        let mut configs: HVec<ComboConfig, MAX_BULK_ITEMS> = HVec::new();
         configs.push(combo.clone()).unwrap();
         configs.push(combo).unwrap();
         let set = SetComboBulkRequest {
@@ -913,8 +938,7 @@ fn morse_rejects_out_of_range() {
 
 #[test]
 fn morse_bulk_round_trip() {
-    use rmk_types::constants::BULK_SIZE;
-    use rmk_types::protocol::rynk::{GetMorseBulkRequest, GetMorseBulkResponse, SetMorseBulkRequest};
+    use rmk_types::protocol::rynk::{GetMorseBulkRequest, GetMorseBulkResponse, MAX_BULK_ITEMS, SetMorseBulkRequest};
     let service = service();
     // Mutate a read page because Morse has no trivial constructor.
     link_session(&service, async |client| {
@@ -923,7 +947,7 @@ fn morse_bulk_round_trip() {
             .await
             .expect("slots 1.. exist (morses filled to capacity)");
         assert!(page.configs.len() >= 2);
-        let mut configs: HVec<Morse, BULK_SIZE> = HVec::new();
+        let mut configs: HVec<Morse, MAX_BULK_ITEMS> = HVec::new();
         configs.push(page.configs[0].clone()).unwrap();
         configs.push(page.configs[1].clone()).unwrap();
         configs[0].profile = MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(111), Some(11));
@@ -953,8 +977,7 @@ fn morse_bulk_round_trip() {
 
 #[test]
 fn morse_bulk_clamps_and_rejects() {
-    use rmk_types::constants::BULK_SIZE;
-    use rmk_types::protocol::rynk::{GetMorseBulkRequest, GetMorseBulkResponse, SetMorseBulkRequest};
+    use rmk_types::protocol::rynk::{GetMorseBulkRequest, GetMorseBulkResponse, MAX_BULK_ITEMS, SetMorseBulkRequest};
     let service = service();
     link_session(&service, async |client| {
         // Empty SET runs are host bugs.
@@ -986,7 +1009,7 @@ fn morse_bulk_clamps_and_rejects() {
             .expect("slot 7");
         let mut modified = before.clone();
         modified.profile = MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold), Some(321), Some(123));
-        let mut configs: HVec<Morse, BULK_SIZE> = HVec::new();
+        let mut configs: HVec<Morse, MAX_BULK_ITEMS> = HVec::new();
         configs.push(modified.clone()).unwrap();
         configs.push(modified).unwrap();
         let set = SetMorseBulkRequest {
@@ -1219,10 +1242,8 @@ fn get_led_indicator_returns_snapshot() {
 fn drops_topic_cmd_from_host() {
     let service = service();
     link_session(&service, async |client| {
-        client.handshake().await;
         // Topic CMD requests must not create phantom topic replies.
         client.send(Cmd::LayerChange, 0x13, &0u8).await;
-        yield_now().await;
         // Next request proves there is no stray reply.
         let version = client.request::<(), ProtocolVersion>(Cmd::GetVersion, 0x14, &()).await;
         assert_eq!(version, Ok(ProtocolVersion::CURRENT), "session in sync after drop");
@@ -1235,11 +1256,9 @@ fn drops_battery_topic_cmd_from_host() {
     // Cover the one `_ble`-gated topic explicitly.
     let service = service();
     link_session(&service, async |client| {
-        client.handshake().await;
         client
             .send(Cmd::BatteryStatusChange, 0x19, &BatteryStatus::Unavailable)
             .await;
-        yield_now().await;
         let version = client.request::<(), ProtocolVersion>(Cmd::GetVersion, 0x1A, &()).await;
         assert_eq!(version, Ok(ProtocolVersion::CURRENT), "session in sync after drop");
     });
@@ -1250,7 +1269,6 @@ fn unknown_cmd_over_the_wire_gets_unknown_cmd_reply() {
     let service = service();
     // Unknown request tags reply UnknownCmd; unknown topic tags are dropped.
     link_session(&service, async |client| {
-        client.handshake().await;
         client.send(Cmd::from_raw(0x00FF), 0x21, &()).await;
         let reply = client.recv_response(0x21).await;
         assert_eq!(
@@ -1261,7 +1279,6 @@ fn unknown_cmd_over_the_wire_gets_unknown_cmd_reply() {
         assert_eq!(reply.envelope::<()>(), Err(RynkError::UnknownCmd));
 
         client.send(Cmd::from_raw(0xFFFF), 0x22, &()).await;
-        yield_now().await;
 
         // Session stays in sync afterwards.
         let version = client.request::<(), ProtocolVersion>(Cmd::GetVersion, 0x23, &()).await;

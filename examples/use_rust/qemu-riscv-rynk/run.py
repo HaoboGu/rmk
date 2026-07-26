@@ -1,6 +1,5 @@
 from pathlib import Path
 import subprocess
-import sys
 
 PORT = 9000
 ROOT = Path(__file__).resolve().parents[3]
@@ -27,7 +26,6 @@ try:
             "qemu_behavior",
             "--",
             f"127.0.0.1:{PORT}",
-            *sys.argv[1:],
         ],
         cwd=ROOT,
         check=True,

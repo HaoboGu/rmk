@@ -7,11 +7,11 @@ use rmk_types::protocol::rynk::command::{
 };
 use rmk_types::protocol::rynk::{
     GetEncoderRequest, GetKeymapBulkRequest, KeyPosition, RynkError, RynkMessage, SetEncoderRequest, SetKeyRequest,
-    bulk_keymap_size_for_buffer, max_size_for_payload,
+    bulk_key_capacity,
 };
 
 use super::super::RynkService;
-use super::bulk::{bulk_page, bulk_write_start, take_element, take_seq_len, validate_bulk_elements};
+use super::bulk::{bulk_page, take_bulk, take_element};
 use super::{Handle, HandleBulk};
 
 impl Handle<GetKeyAction> for RynkService<'_> {
@@ -108,9 +108,7 @@ impl HandleBulk<GetKeymapBulk> for RynkService<'_> {
         // crossing row and layer boundaries freely, and stops at the keymap's end.
         let start = self.keymap_flat_start(req.layer, req.start_row, req.start_col)?;
         let (rows, cols, num_layers) = self.ctx.keymap_dimensions();
-        // Page size tracks the actual reply window, which shrinks when a
-        // pipelined tail is parked behind it.
-        let cap = bulk_keymap_size_for_buffer(max_size_for_payload(msg.capacity()));
+        let cap = bulk_key_capacity(msg.capacity());
         let page = bulk_page(start, cap, num_layers * rows * cols)?;
         msg.encode_bulk(page.map(|offset| self.ctx.get_action_flat(offset)))
     }
@@ -118,19 +116,12 @@ impl HandleBulk<GetKeymapBulk> for RynkService<'_> {
 
 impl HandleBulk<SetKeymapBulk> for RynkService<'_> {
     async fn handle_bulk(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
-        let ([layer, start_row, start_col], rest) =
-            postcard::take_from_bytes::<[u8; 3]>(msg.payload()).map_err(|_| RynkError::Malformed)?;
-        let (count, elements) = take_seq_len(rest)?;
-
+        let mut cursor = msg.payload();
+        let [layer, start_row, start_col] = take_element::<[u8; 3]>(&mut cursor)?;
         let start = self.keymap_flat_start(layer, start_row, start_col)?;
         let (rows, cols, num_layers) = self.ctx.keymap_dimensions();
-        let start = bulk_write_start(start, count, num_layers * rows * cols)?;
-        validate_bulk_elements::<KeyAction>(elements, count)?;
-
         // Bulk order advances columns, then rows, then layers.
-        let mut cursor = elements;
-        for offset in start..start + count {
-            let action = take_element::<KeyAction>(&mut cursor)?;
+        for (offset, action) in take_bulk::<KeyAction>(&mut cursor, start, num_layers * rows * cols)? {
             let layer = (offset / (rows * cols)) as u8;
             let row = (offset / cols % rows) as u8;
             let col = (offset % cols) as u8;

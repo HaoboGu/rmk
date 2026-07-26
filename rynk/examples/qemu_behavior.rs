@@ -88,7 +88,6 @@ fn expect_unsupported<T: Debug>(label: &str, res: Result<T, RynkHostError>) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let concurrent_repro = std::env::args().any(|arg| arg == "--concurrent-repro");
     let addr = std::env::args().nth(1).unwrap_or_else(|| DEFAULT_ADDR.into());
     let stream = tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(&addr))
         .await
@@ -98,47 +97,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .map_err(|_| format!("Rynk handshake timed out over QEMU TCP serial at {addr}"))??;
 
-    let verification = async {
-        if concurrent_repro {
-            concurrent_request_repro(&client).await
-        } else {
-            script(&client).await
-        }
-    };
-    match select(driver.run(&client), verification).await {
+    match select(driver.run(&client), script(&client)).await {
         Either::First(err) => Err(format!("link died during the script: {err}").into()),
         Either::Second(res) => res,
-    }
-}
-
-async fn concurrent_request_repro(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
-    let wpm = tokio::time::timeout(REQUEST_TIMEOUT, client.get_wpm())
-        .await
-        .map_err(|_| "sequential get_wpm timed out over QEMU UART")??;
-    let sleeping = tokio::time::timeout(REQUEST_TIMEOUT, client.get_sleep_state())
-        .await
-        .map_err(|_| "sequential get_sleep_state timed out over QEMU UART")??;
-    assert_eq!(wpm, 0);
-    assert!(!sleeping);
-
-    let result = tokio::time::timeout(REQUEST_TIMEOUT, async {
-        let (wpm, sleeping) = tokio::join!(client.get_wpm(), client.get_sleep_state());
-        Ok::<_, RynkHostError>((wpm?, sleeping?))
-    })
-    .await;
-
-    match result {
-        Ok(Ok((wpm, sleeping))) => {
-            assert_eq!(wpm, 0);
-            assert!(!sleeping);
-            println!("QEMU concurrent-request regression probe passed.");
-            Ok(())
-        }
-        Ok(Err(e)) => Err(format!("concurrent request returned an error: {e}").into()),
-        Err(_) => Err(format!(
-            "reproduced: concurrent get_wpm + get_sleep_state did not both complete within {REQUEST_TIMEOUT:?}"
-        )
-        .into()),
     }
 }
 
@@ -159,9 +120,20 @@ async fn script(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
     assert!(!caps.is_split);
     assert!(caps.bulk_transfer_supported);
     assert!(caps.max_bulk_keys > 0);
-    assert!(caps.max_bulk_configs > 0);
+    assert!(caps.max_bulk_items > 0);
 
     assert_eq!(client.get_capabilities().await?, caps);
+
+    // Concurrent requests must both complete: replies route by SEQ, not send
+    // order. Bounded so a routing regression fails instead of hanging.
+    let (wpm, sleeping) = tokio::time::timeout(REQUEST_TIMEOUT, async {
+        let (wpm, sleeping) = tokio::join!(client.get_wpm(), client.get_sleep_state());
+        Ok::<_, RynkHostError>((wpm?, sleeping?))
+    })
+    .await
+    .map_err(|_| "concurrent get_wpm + get_sleep_state timed out over QEMU UART")??;
+    assert_eq!(wpm, 0);
+    assert!(!sleeping);
 
     assert_eq!(client.get_default_layer().await?, 0);
     client.set_default_layer(1).await?;

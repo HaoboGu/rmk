@@ -2,12 +2,10 @@
 
 use rmk_types::morse::Morse;
 use rmk_types::protocol::rynk::command::{GetMorse, GetMorseBulk, SetMorse, SetMorseBulk};
-use rmk_types::protocol::rynk::{
-    GetMorseBulkRequest, RynkError, RynkMessage, SetMorseRequest, bulk_size_for_buffer, max_size_for_payload,
-};
+use rmk_types::protocol::rynk::{GetMorseBulkRequest, RynkError, RynkMessage, SetMorseRequest, bulk_item_capacity};
 
 use super::super::RynkService;
-use super::bulk::{bulk_page, bulk_write_start, take_element, take_seq_len, validate_bulk_elements};
+use super::bulk::{bulk_page, take_bulk, take_element};
 use super::{Handle, HandleBulk};
 
 impl Handle<GetMorse> for RynkService<'_> {
@@ -33,8 +31,7 @@ impl Handle<SetMorse> for RynkService<'_> {
 impl HandleBulk<GetMorseBulk> for RynkService<'_> {
     async fn handle_bulk(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
         let req = msg.decode_request::<GetMorseBulkRequest>()?;
-        // Page size tracks the actual reply window (shrunk by a parked tail).
-        let cap = bulk_size_for_buffer(max_size_for_payload(msg.capacity()));
+        let cap = bulk_item_capacity(msg.capacity());
         let page = bulk_page(req.start_index as usize, cap, self.ctx.morses_len())?;
         msg.encode_bulk(page.map(|idx| self.ctx.get_morse(idx as u8).unwrap_or_default()))
     }
@@ -42,15 +39,9 @@ impl HandleBulk<GetMorseBulk> for RynkService<'_> {
 
 impl HandleBulk<SetMorseBulk> for RynkService<'_> {
     async fn handle_bulk(&self, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
-        let (start_index, rest) = postcard::take_from_bytes::<u8>(msg.payload()).map_err(|_| RynkError::Malformed)?;
-        let (count, elements) = take_seq_len(rest)?;
-
-        let start = bulk_write_start(start_index as usize, count, self.ctx.morses_len())?;
-        validate_bulk_elements::<Morse>(elements, count)?;
-
-        let mut cursor = elements;
-        for idx in start..start + count {
-            let config = take_element::<Morse>(&mut cursor)?;
+        let mut cursor = msg.payload();
+        let start_index = take_element::<u8>(&mut cursor)? as usize;
+        for (idx, config) in take_bulk::<Morse>(&mut cursor, start_index, self.ctx.morses_len())? {
             self.ctx.update_morse(idx as u8, |m| *m = config).await;
         }
         msg.encode_response(&())

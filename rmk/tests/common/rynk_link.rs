@@ -35,7 +35,7 @@ use postcard::ser_flavors::{Cobs, Flavor, Slice};
 use rmk::host::HostService as RynkService;
 use rmk_types::constants::RYNK_BUFFER_SIZE;
 use rmk_types::protocol::rynk::{
-    Cmd, Deframer, DeviceCapabilities, RYNK_HEADER_SIZE, RynkError, RynkHeader, encode_frame,
+    Cmd, Deframer, DeviceCapabilities, RYNK_HEADER_SIZE, RynkError, RynkHeader, encode_frame, max_wire_size,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -172,8 +172,7 @@ impl RynkClient<'_> {
     /// COBS-frame and send a hand-built logical frame (`[cmd, seq] ++ payload`),
     /// for adversarial payloads the typed `send` can't express.
     pub async fn send_logical(&mut self, cmd: Cmd, seq: u8, payload: &[u8]) {
-        let len = RYNK_HEADER_SIZE + payload.len();
-        let mut framed = vec![0u8; len + len / 254 + 2];
+        let mut framed = vec![0u8; max_wire_size(RYNK_HEADER_SIZE + payload.len())];
         let n = {
             let mut cobs = Cobs::try_new(Slice::new(&mut framed)).unwrap();
             cobs.try_extend(&RynkHeader { cmd, seq }.to_bytes()).unwrap();

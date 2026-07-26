@@ -3,7 +3,13 @@
 
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
+#[cfg(feature = "alloc")]
+use core::sync::atomic::{AtomicUsize, Ordering};
 
+#[cfg(feature = "alloc")]
+use embassy_futures::join::join_array;
+#[cfg(feature = "alloc")]
+use postcard::experimental::serialized_size;
 use rmk_types::action::{EncoderAction, KeyAction};
 use rmk_types::battery::BatteryStatus;
 use rmk_types::ble::BleStatus;
@@ -19,10 +25,21 @@ use rmk_types::protocol::rynk::{
     SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetKeymapBulkRequest, SetMacroRequest,
     SetMorseBulkRequest, SetMorseRequest, StorageResetMode, command,
 };
+#[cfg(feature = "alloc")]
+use rmk_types::protocol::rynk::{RYNK_HEADER_SIZE, RynkError};
+#[cfg(feature = "alloc")]
+use serde::Serialize;
 
+#[cfg(feature = "alloc")]
+use crate::driver::MAX_IN_FLIGHT;
 use crate::driver::{Client, RynkHostError};
 #[cfg(feature = "alloc")]
 use crate::layout::LayoutInfo;
+
+/// Wire bytes one parked pipelined request occupies in the firmware frame
+/// buffer (a COBS-encoded bulk GET is ≤ 9 B; rounded up for headroom).
+#[cfg(feature = "alloc")]
+const PARKED_REQUEST_BYTES: usize = 12;
 
 impl Client {
     /// Reject a bulk command locally when capabilities lack bulk transfer.
@@ -217,7 +234,7 @@ impl Client {
     }
 
     /// Read one page of combos starting at slot `start_index`: up to
-    /// `max_bulk_configs`, fewer at the end, empty once `start_index` reaches the
+    /// `max_bulk_items`, fewer at the end, empty once `start_index` reaches the
     /// slot count. Bulk firmware only
     /// ([`DeviceCapabilities::bulk_transfer_supported`]); rejected locally otherwise.
     pub async fn get_combo_bulk(&self, start_index: u8) -> Result<GetComboBulkResponse, RynkHostError> {
@@ -257,7 +274,7 @@ impl Client {
     }
 
     /// Read one page of morses starting at slot `start_index`: up to
-    /// `max_bulk_configs`, fewer at the end, empty once `start_index` reaches the
+    /// `max_bulk_items`, fewer at the end, empty once `start_index` reaches the
     /// slot count. Bulk firmware only
     /// ([`DeviceCapabilities::bulk_transfer_supported`]); rejected locally otherwise.
     pub async fn get_morse_bulk(&self, start_index: u8) -> Result<GetMorseBulkResponse, RynkHostError> {
@@ -378,42 +395,44 @@ impl Client {
 
 #[cfg(feature = "alloc")]
 impl Client {
-    /// Read the whole keymap (every layer, row-major) by paging `GetKeymapBulk`.
+    /// Read the whole keymap (every layer, row-major) by paging `GetKeymapBulk`
+    /// through the slot pool.
     pub async fn read_all_keymap(&self) -> Result<Vec<KeyAction>, RynkHostError> {
         let caps = self.capabilities;
         let (rows, cols) = (caps.num_rows as u16, caps.num_cols as u16);
         let total = caps.num_layers as usize * rows as usize * cols as usize;
-        self.read_all(total, async |c, start| {
+        self.read_all(total, caps.max_bulk_keys, async |c, start| {
             let (layer, row, col) = keymap_pos(start, rows, cols);
             c.get_keymap_bulk(layer, row, col).await.map(|r| r.actions)
         })
         .await
     }
 
-    /// Read every combo slot by paging `GetComboBulk`.
+    /// Read every combo slot by paging `GetComboBulk` through the slot pool.
     pub async fn read_all_combos(&self) -> Result<Vec<Combo>, RynkHostError> {
         let total = self.capabilities.max_combos as usize;
-        self.read_all(total, async |c, start| {
+        self.read_all(total, self.capabilities.max_bulk_items, async |c, start| {
             c.get_combo_bulk(start as u8).await.map(|r| r.configs)
         })
         .await
     }
 
-    /// Read every morse slot by paging `GetMorseBulk`.
+    /// Read every morse slot by paging `GetMorseBulk` through the slot pool.
     pub async fn read_all_morses(&self) -> Result<Vec<Morse>, RynkHostError> {
         let total = self.capabilities.max_morse as usize;
-        self.read_all(total, async |c, start| {
+        self.read_all(total, self.capabilities.max_bulk_items, async |c, start| {
             c.get_morse_bulk(start as u8).await.map(|r| r.configs)
         })
         .await
     }
 
-    /// Write the whole keymap by paging `SetKeymapBulk` in `max_bulk_keys` chunks.
+    /// Write the whole keymap by paging `SetKeymapBulk`, each page packed to
+    /// the device's payload budget.
     pub async fn write_all_keymap(&self, actions: &[KeyAction]) -> Result<(), RynkHostError> {
         let caps = self.capabilities;
         let (rows, cols) = (caps.num_rows as u16, caps.num_cols as u16);
-        let page = caps.max_bulk_keys as usize;
-        self.write_all(page, actions, async |c, start, actions| {
+        // 3 leading bytes: layer, start_row, start_col.
+        self.write_all(Cmd::SetKeymapBulk, 3, actions, async |c, start, actions| {
             let (layer, row, col) = keymap_pos(start, rows, cols);
             c.set_keymap_bulk(SetKeymapBulkRequest {
                 layer,
@@ -426,10 +445,11 @@ impl Client {
         .await
     }
 
-    /// Write every combo by paging `SetComboBulk` in `max_bulk_configs` chunks.
+    /// Write every combo by paging `SetComboBulk`, each page packed to the
+    /// device's payload budget.
     pub async fn write_all_combos(&self, configs: &[Combo]) -> Result<(), RynkHostError> {
-        let page = self.capabilities.max_bulk_configs as usize;
-        self.write_all(page, configs, async |c, start, configs| {
+        // 1 leading byte: start_index.
+        self.write_all(Cmd::SetComboBulk, 1, configs, async |c, start, configs| {
             c.set_combo_bulk(SetComboBulkRequest {
                 start_index: start as u8,
                 configs,
@@ -439,10 +459,11 @@ impl Client {
         .await
     }
 
-    /// Write every morse by paging `SetMorseBulk` in `max_bulk_configs` chunks.
+    /// Write every morse by paging `SetMorseBulk`, each page packed to the
+    /// device's payload budget.
     pub async fn write_all_morses(&self, configs: &[Morse]) -> Result<(), RynkHostError> {
-        let page = self.capabilities.max_bulk_configs as usize;
-        self.write_all(page, configs, async |c, start, configs| {
+        // 1 leading byte: start_index.
+        self.write_all(Cmd::SetMorseBulk, 1, configs, async |c, start, configs| {
             c.set_morse_bulk(SetMorseBulkRequest {
                 start_index: start as u8,
                 configs,
@@ -452,41 +473,126 @@ impl Client {
         .await
     }
 
-    /// Page a whole resource in: fetch from cursor 0 until `total` items are read
-    /// or an empty page marks the firmware's clamped end.
+    /// Page a whole resource in: speculative fetches on [`MAX_IN_FLIGHT`]
+    /// lanes, reassembled by offset. `advertised` is the device's advertised max
+    /// item count, like `max_bulk_items`/`max_bulk_keys`
     async fn read_all<Item>(
         &self,
         total: usize,
-        mut fetch: impl AsyncFnMut(&Self, u16) -> Result<Vec<Item>, RynkHostError>,
+        advertised: u8,
+        fetch: impl AsyncFn(&Self, u16) -> Result<Vec<Item>, RynkHostError>,
     ) -> Result<Vec<Item>, RynkHostError> {
-        let mut out = Vec::new();
-        let mut start: u16 = 0;
-        while (start as usize) < total {
-            let page = fetch(self, start).await?;
-            if page.is_empty() {
+        // Space fetches at the firmware's worst-case page (every other lane's
+        // request parked in its reply frame), scaled from `advertised` since
+        // its exact item sizes aren't knowable here.
+        const OVERHEAD: usize = 8; // fixed frame bytes, upper bound; overestimating only lowers spacing
+        let full = (RYNK_HEADER_SIZE + self.capabilities.max_payload_size as usize).saturating_sub(OVERHEAD);
+        let squeezed = full.saturating_sub(MAX_IN_FLIGHT * PARKED_REQUEST_BYTES);
+        let spacing = (advertised as usize * squeezed / full.max(1)).max(1);
+        let next = AtomicUsize::new(0);
+        let lanes = join_array(core::array::from_fn::<_, MAX_IN_FLIGHT, _>(|_| async {
+            let mut pages = Vec::new();
+            loop {
+                let start = next.fetch_add(1, Ordering::Relaxed).saturating_mul(spacing);
+                if start >= total {
+                    break Ok::<_, RynkHostError>(pages);
+                }
+                // A concurrent writer's parked frames can squeeze the reply
+                // window shut; the firmware answers `Busy` until they drain.
+                let mut retries = 0;
+                let page = loop {
+                    match fetch(self, start as u16).await {
+                        Err(RynkHostError::Rejected(RynkError::Busy)) if retries < 16 => retries += 1,
+                        page => break page?,
+                    }
+                };
+                pages.push((start, page));
+            }
+        }))
+        .await;
+        let mut pages: Vec<(usize, Vec<Item>)> = Vec::new();
+        for lane in lanes {
+            pages.extend(lane?);
+        }
+        pages.sort_unstable_by_key(|(start, _)| *start);
+        let mut out = Vec::with_capacity(total);
+        for (start, page) in pages {
+            if start > out.len() {
                 break; // firmware paged out before reaching `total`
             }
-            start += page.len() as u16;
-            out.extend(page);
+            let skip = out.len() - start;
+            out.extend(page.into_iter().skip(skip));
         }
         Ok(out)
     }
 
-    /// Page a whole resource out: send `items` in `page`-sized chunks, each a
-    /// bounded `Set*Bulk` at its flat cursor.
-    async fn write_all<Item: Clone>(
+    /// Page a whole resource out through the slot pool: pages are disjoint,
+    /// so up to [`MAX_IN_FLIGHT`] ride the transport while the firmware works.
+    /// `fixed` is the request's leading bytes before the item seq.
+    async fn write_all<Item: Serialize + Clone>(
         &self,
-        page: usize,
+        cmd: Cmd,
+        fixed: usize,
         items: &[Item],
-        mut store: impl AsyncFnMut(&Self, u16, Vec<Item>) -> Result<(), RynkHostError>,
+        store: impl AsyncFn(&Self, u16, Vec<Item>) -> Result<(), RynkHostError>,
     ) -> Result<(), RynkHostError> {
-        let mut start: u16 = 0;
-        for chunk in items.chunks(page.max(1)) {
-            store(self, start, chunk.to_vec()).await?;
-            start += chunk.len() as u16;
-        }
-        Ok(())
+        let pages = pack_pages(cmd, fixed, self.capabilities.max_payload_size as usize, items)?;
+        let next = AtomicUsize::new(0);
+        let lanes = join_array(core::array::from_fn::<_, MAX_IN_FLIGHT, _>(|_| async {
+            loop {
+                let Some(page) = pages.get(next.fetch_add(1, Ordering::Relaxed)) else {
+                    break Ok(());
+                };
+                if let Err(e) = store(self, page.start as u16, items[page.clone()].to_vec()).await {
+                    next.store(pages.len(), Ordering::Relaxed); // park the other lanes
+                    break Err(e);
+                }
+            }
+        }))
+        .await;
+        lanes.into_iter().collect()
     }
+}
+
+/// Split `items` into write pages by real encoded size: each page's request
+/// payload — `fixed` leading bytes, the count varint, then the items — fits
+/// `budget`, the device's advertised `max_payload_size`. Packing measured
+/// sizes carries several times more items per frame than the advertised
+/// count, which must assume worst-case items. An item that alone exceeds the
+/// budget can never be sent and is an [`RynkHostError::Encode`].
+#[cfg(feature = "alloc")]
+fn pack_pages<Item: Serialize>(
+    cmd: Cmd,
+    fixed: usize,
+    budget: usize,
+    items: &[Item],
+) -> Result<Vec<core::ops::Range<usize>>, RynkHostError> {
+    let varint = |n: usize| {
+        if n < 128 {
+            1
+        } else if n < 16384 {
+            2
+        } else {
+            3
+        }
+    };
+    let mut pages = Vec::new();
+    let (mut start, mut used) = (0, 0);
+    for (i, item) in items.iter().enumerate() {
+        let size = serialized_size(item).map_err(|_| RynkHostError::Encode(cmd))?;
+        if fixed + varint(i - start + 1) + used + size > budget {
+            if i == start || fixed + varint(1) + size > budget {
+                return Err(RynkHostError::Encode(cmd));
+            }
+            pages.push(start..i);
+            (start, used) = (i, 0);
+        }
+        used += size;
+    }
+    if start < items.len() {
+        pages.push(start..items.len());
+    }
+    Ok(pages)
 }
 
 /// Map a flat, row-major, layer-major key cursor to its `(layer, row, col)`
@@ -498,4 +604,61 @@ fn keymap_pos(cursor: u16, rows: u16, cols: u16) -> (u8, u8, u8) {
     let row = (cursor / cols) % rows;
     let col = cursor % cols;
     (layer as u8, row as u8, col as u8)
+}
+
+#[cfg(all(test, feature = "alloc"))]
+mod tests {
+    use super::*;
+
+    /// Pack, then re-check every page: contiguous cover of `items`, none empty,
+    /// and each page's recomputed payload within `budget`. Returns the count.
+    fn assert_packed<Item: Serialize>(fixed: usize, budget: usize, items: &[Item]) -> usize {
+        let pages = pack_pages(Cmd::SetComboBulk, fixed, budget, items).unwrap();
+        let mut expected_start = 0;
+        for page in &pages {
+            assert_eq!(page.start, expected_start);
+            assert!(!page.is_empty());
+            let bytes: usize = items[page.clone()].iter().map(|i| serialized_size(i).unwrap()).sum();
+            let varint = if page.len() < 128 { 1 } else { 2 };
+            assert!(fixed + varint + bytes <= budget, "page {page:?} over budget");
+            expected_start = page.end;
+        }
+        assert_eq!(expected_start, items.len());
+        pages.len()
+    }
+
+    #[test]
+    fn packs_by_real_encoded_size() {
+        // 101-byte items (len varint + 100) into a 482-byte budget: 4 per page,
+        // so 10 items take 3 pages — a count cap of 2 would take 5.
+        let items = vec![vec![0x11u8; 100]; 10];
+        assert_eq!(assert_packed(1, 482, &items), 3);
+    }
+
+    #[test]
+    fn count_varint_growth_is_budgeted() {
+        // 1-byte items so the count varint's 1→2 byte step at 128 matters.
+        let items = vec![0u8; 300];
+        assert_packed(1, 132, &items);
+    }
+
+    #[test]
+    fn one_oversized_item_is_an_encode_error() {
+        let items = [vec![0u8; 500]];
+        assert!(matches!(
+            pack_pages(Cmd::SetComboBulk, 1, 482, &items),
+            Err(RynkHostError::Encode(_))
+        ));
+        // Also when it is not the first item of its page.
+        let items = [vec![0u8; 100], vec![0u8; 500]];
+        assert!(matches!(
+            pack_pages(Cmd::SetComboBulk, 1, 482, &items),
+            Err(RynkHostError::Encode(_))
+        ));
+    }
+
+    #[test]
+    fn empty_items_pack_to_no_pages() {
+        assert_eq!(pack_pages::<u8>(Cmd::SetComboBulk, 1, 482, &[]).unwrap(), vec![]);
+    }
 }

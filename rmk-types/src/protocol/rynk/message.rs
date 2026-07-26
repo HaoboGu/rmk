@@ -1,11 +1,17 @@
 //! Rynk wire-format message.
 //!
-//! One frame is the 3-byte header plus a postcard-encoded payload,
-//! COBS-encoded and `0x00`-terminated on the wire (layout in the
-//! [module docs](super)). [`encode_frame`] builds a frame straight into the
-//! caller's buffer; a [`Deframer`](super::Deframer) cuts frames back out of
-//! the received stream, and [`RynkMessage`] wraps one received frame to
-//! answer it in place.
+//! ## Wire format
+//!
+//! ```text
+//! ┌──────────────┬────────────┐
+//! │  CMD u16 LE  │   SEQ u8   │  ← 3-byte header
+//! ├──────────────┴────────────┤
+//! │ postcard-encoded payload  │
+//! └───────────────────────────┘
+//! ```
+//!
+//! One frame is the 3-byte header plus a postcard-encoded payload.
+//! The frame is COBS-encoded on the wire.
 
 use postcard::ser_flavors::{Cobs, Flavor, Slice};
 use serde::Serialize;
@@ -33,36 +39,38 @@ impl RynkHeader {
         }
     }
 
-    /// Convert the header to bytes
     pub const fn to_bytes(&self) -> [u8; RYNK_HEADER_SIZE] {
         let cmd_bytes = self.cmd.to_le_bytes();
         [cmd_bytes[0], cmd_bytes[1], self.seq]
     }
 }
 
-/// Largest logical frame (header + payload) whose streaming-COBS encoding —
-/// worst case `len + len/254 + 2` for an all-nonzero frame, trailing delimiter
-/// included — fits a `physical`-byte buffer; 0 if none does.
-pub const fn max_size_for_payload(physical: usize) -> usize {
+/// Calculate worst-case wire size of a frame: streaming-COBS code bytes
+/// plus the `0x00` delimiter. Inverse of `max_frame_size`.
+pub const fn max_wire_size(frame_size: usize) -> usize {
+    frame_size + frame_size / 254 + 2
+}
+
+/// Calculate largest logical frame size that can be COBS-encoded into a
+/// physical buffer of the given size, delimiter included.
+pub(crate) const fn max_frame_size(max_encoded_size: usize) -> usize {
     let mut len = 0;
-    while len + 1 + (len + 1) / 254 + 2 <= physical {
+    while max_wire_size(len + 1) <= max_encoded_size {
         len += 1;
     }
     len
 }
 
-/// Largest request/response payload either peer can carry in one frame: what
-/// remains of a `RYNK_BUFFER_SIZE`-byte frame buffer after worst-case COBS
-/// overhead and the 3-byte header. Advertised to hosts as `max_payload_size`.
+/// Largest request/response payload either peer can carry in one frame.
 pub const RYNK_MAX_PAYLOAD_SIZE: usize = {
-    let logical = max_size_for_payload(crate::constants::RYNK_BUFFER_SIZE);
+    let frame_size = max_frame_size(crate::constants::RYNK_BUFFER_SIZE);
     // Assert before subtracting so a too-small buffer fails with this message,
     // not a const-eval underflow.
     assert!(
-        logical >= RYNK_HEADER_SIZE,
+        frame_size >= RYNK_HEADER_SIZE,
         "rynk_buffer_size is too small for a COBS-framed header; increase it"
     );
-    logical - RYNK_HEADER_SIZE
+    frame_size - RYNK_HEADER_SIZE
 };
 
 /// COBS-encode the frame `header ++ postcard(value)` into `buf`, returning the
@@ -272,9 +280,9 @@ mod tests {
     }
 
     #[test]
-    fn max_size_for_payload_is_exact_for_streaming_cobs() {
+    fn max_frame_size_is_exact_for_streaming_cobs() {
         // COBS worst case is an all-nonzero frame. For each physical size,
-        // max_size_for_payload bytes must stream-encode into it and one byte more
+        // max_frame_size bytes must stream-encode into it and one byte more
         // must not — the inverse of the encoder's worst case is exact, including
         // at the 254-block boundaries where streaming COBS costs one byte over
         // one-shot encoding.
@@ -289,10 +297,10 @@ mod tests {
         for physical in [
             2usize, 3, 4, 255, 256, 257, 258, 259, 480, 488, 509, 510, 511, 512, 513, 514,
         ] {
-            let len = max_size_for_payload(physical);
+            let len = max_frame_size(physical);
             assert!(
                 encodes_into(len, physical),
-                "max_size_for_payload({physical}) = {len} must fit"
+                "max_frame_size({physical}) = {len} must fit"
             );
             assert!(
                 !encodes_into(len + 1, physical),
@@ -301,11 +309,11 @@ mod tests {
             );
         }
         // Below one code byte + delimiter, nothing fits.
-        assert_eq!(max_size_for_payload(0), 0);
-        assert_eq!(max_size_for_payload(1), 0);
+        assert_eq!(max_frame_size(0), 0);
+        assert_eq!(max_frame_size(1), 0);
         assert_eq!(
             RYNK_MAX_PAYLOAD_SIZE,
-            max_size_for_payload(crate::constants::RYNK_BUFFER_SIZE) - RYNK_HEADER_SIZE
+            max_frame_size(crate::constants::RYNK_BUFFER_SIZE) - RYNK_HEADER_SIZE
         );
     }
 

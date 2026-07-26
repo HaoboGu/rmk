@@ -32,7 +32,7 @@ use crate::mouse_button::MouseButtons;
 ///
 /// Sized at twice the type's declared `POSTCARD_MAX_SIZE` plus a small
 /// fixed slack so that:
-/// - under feature configurations with a large `BULK_SIZE`, max-capacity
+/// - under feature configurations with a large `MAX_BULK_ITEMS`, max-capacity
 ///   bulk payloads still fit comfortably;
 /// - an under-counted manual `MaxSize` impl produces a clear assertion
 ///   failure in `assert_max_size_bound` instead of a `SerializeBufferFull`
@@ -239,7 +239,7 @@ fn exemplars() -> Exemplars {
         num_ble_profiles: 12,
         max_payload_size: 13,
         max_bulk_keys: 14,
-        max_bulk_configs: 15,
+        max_bulk_items: 15,
         macro_chunk_size: 16,
         bulk_transfer_supported: true,
     };

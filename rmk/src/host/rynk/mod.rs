@@ -12,7 +12,7 @@ use embedded_io_async::{Read, Write};
 use postcard::experimental::max_size::MaxSize;
 use rmk_types::constants::RYNK_BUFFER_SIZE;
 use rmk_types::protocol::rynk::{
-    Cmd, Deframer, FirmwareVersion, RYNK_HEADER_SIZE, RynkError, RynkMessage, command, encode_frame,
+    Cmd, Deframer, FirmwareVersion, RYNK_HEADER_SIZE, RynkError, RynkMessage, command, encode_frame, max_wire_size,
 };
 #[allow(unused_imports)] // re-exported at `crate::host` for downstream users
 pub use uart::run_rynk_uart;
@@ -25,14 +25,6 @@ use crate::keymap::KeyMap;
 
 /// Unlock attempts live long enough for BLE WebHID round trips.
 const RYNK_UNLOCK_WINDOW: embassy_time::Duration = embassy_time::Duration::from_millis(500);
-
-/// Encoded size of the largest error envelope (`header ++ Err(RynkError)`,
-/// COBS-framed). Error replies are built on the stack so they bypass the reply
-/// window: every request is answered even when a parked tail leaves almost none.
-const ERROR_FRAME_LEN: usize = {
-    let logical = RYNK_HEADER_SIZE + <Result<(), RynkError> as MaxSize>::POSTCARD_MAX_SIZE;
-    logical + logical / 254 + 2
-};
 
 const RMK_VERSION: FirmwareVersion = {
     const fn component(s: &str) -> u8 {
@@ -192,13 +184,14 @@ impl<'a> RynkService<'a> {
         let mut handshaked = false;
 
         loop {
-            // Serve every complete frame already buffered. While a frame is
-            // served, the pipelined tail behind it is parked out of the reply's
-            // way instead of dropped, so back-to-back requests all get answers.
-            while let Some(frame_len) = df.next(&mut buf) {
+            // Serve all frames already in the buffer.
+            // Because the input/output shares a same buffer, while a frame is
+            // being served, the pipelined tail behind it is parked at the end
+            // of the buffer, so back-to-back requests all get answers.
+            while let Some(req_len) = df.next(&mut buf) {
                 let parked = df.park_pending(&mut buf);
-                let window = buf.len() - parked;
-                let mut msg = RynkMessage::from_decoded(&mut buf[..window], frame_len);
+                let reply_capacity = buf.len() - parked;
+                let mut msg = RynkMessage::from_decoded(&mut buf[..reply_capacity], req_len);
                 let cmd = msg.header().cmd;
                 if cmd.is_topic() {
                     // Hosts never send topic-range cmds; drop without a reply.
@@ -217,7 +210,9 @@ impl<'a> RynkService<'a> {
                             } else {
                                 error
                             };
-                            let mut err_frame = [0u8; ERROR_FRAME_LEN];
+                            let mut err_frame = [0u8; max_wire_size(
+                                RYNK_HEADER_SIZE + <Result<(), RynkError> as MaxSize>::POSTCARD_MAX_SIZE,
+                            )];
                             let len =
                                 encode_frame(&mut err_frame, msg.header(), &Err::<(), RynkError>(error)).unwrap_or(0);
                             tx.write_all(&err_frame[..len]).await
@@ -230,8 +225,8 @@ impl<'a> RynkService<'a> {
                 df.unpark_pending(&mut buf, parked);
             }
 
-            // A half-received frame must be finished by reading only (a topic emit
-            // would clobber it); with an empty buffer, race a read against the next topic.
+            // A half-received frame must be finished first.
+            // If the buffer is empty, race a read against the next topic.
             if df.has_pending() {
                 match rx.read(df.tail(&mut buf)).await {
                     Ok(0) | Err(_) => return,
@@ -633,7 +628,7 @@ mod tests {
         // frame) in one read: the parked tail squeezes the reply window.
         let mut chunk = req_with(Cmd::GetKeymapBulk.raw(), 0, &[0u8, 0, 0]);
         let tail = vec![0xEEu8; 450];
-        let window = RYNK_BUFFER_SIZE - tail.len();
+        let reply_capacity = RYNK_BUFFER_SIZE - tail.len();
         chunk.extend_from_slice(&tail);
         let mut chunks = VecDeque::new();
         chunks.push_back(chunk);
@@ -643,11 +638,9 @@ mod tests {
 
         block_on(service.run_session(&mut rx, &mut tx));
 
-        let expected = rmk_types::protocol::rynk::bulk_keymap_size_for_buffer(
-            rmk_types::protocol::rynk::max_size_for_payload(window),
-        );
+        let expected = rmk_types::protocol::rynk::bulk_key_capacity(reply_capacity);
         assert!(
-            0 < expected && expected < rmk_types::constants::BULK_KEYMAP_SIZE,
+            0 < expected && expected < rmk_types::protocol::rynk::MAX_BULK_KEYS,
             "premise: the squeezed window holds a smaller, non-empty page"
         );
         let resp = decode_frames(&tx.captured);

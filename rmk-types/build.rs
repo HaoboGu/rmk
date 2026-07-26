@@ -132,24 +132,8 @@ fn generate_constants(bc: &BuildConstants) -> String {
         }
     }
 
-    // Bulk counts derive from the buffer's logical frame budget (what's left of
-    // the physical buffer after COBS overhead) and must hold at least one element.
-    if env::var("CARGO_FEATURE_RYNK").is_ok() {
-        lines.push(
-            "pub const BULK_SIZE: usize = crate::protocol::rynk::bulk_size_for_buffer(\
-             crate::protocol::rynk::max_size_for_payload(RYNK_BUFFER_SIZE));"
-                .to_string(),
-        );
-        lines.push("const _: () = assert!(BULK_SIZE >= 1, \"rynk_buffer_size is too small to hold one combo/morse in a bulk message; increase it\");".to_string());
-        lines.push(
-            "pub const BULK_KEYMAP_SIZE: usize = crate::protocol::rynk::bulk_keymap_size_for_buffer(\
-             crate::protocol::rynk::max_size_for_payload(RYNK_BUFFER_SIZE));"
-                .to_string(),
-        );
-        lines.push("const _: () = assert!(BULK_KEYMAP_SIZE >= 1, \"rynk_buffer_size is too small to hold one key in a bulk keymap message; increase it\");".to_string());
-    }
-
-    // The exact RAM of each rynk frame buffer, holding one COBS-encoded frame.
+    // The exact RAM of each rynk frame buffer; the payload budget and bulk
+    // capacities derive from it in `protocol::rynk`.
     if env::var("CARGO_FEATURE_RYNK").is_ok() {
         lines.push(format!("pub const RYNK_BUFFER_SIZE: usize = {};", bc.rynk_buffer_size));
     }

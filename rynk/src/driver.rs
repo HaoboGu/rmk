@@ -35,7 +35,7 @@ use embedded_io_async::{Error as _, ErrorKind, Read, Write};
 use rmk_types::protocol::rynk::endpoint::Endpoint;
 use rmk_types::protocol::rynk::{
     Cmd, Deframer, DeviceCapabilities, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage,
-    TopicEvent, command, encode_frame,
+    TopicEvent, command, encode_frame, max_wire_size,
 };
 use serde::Serialize;
 use thiserror::Error;
@@ -137,9 +137,9 @@ impl From<RynkHostError> for wasm_bindgen::JsValue {
 /// the free-list until a slot drains. No-alloc builds hold a full frame buffer
 /// per slot, so they keep the single-slot behavior instead of paying for four.
 #[cfg(feature = "alloc")]
-const MAX_IN_FLIGHT: usize = 4;
+pub(crate) const MAX_IN_FLIGHT: usize = 4;
 #[cfg(not(feature = "alloc"))]
-const MAX_IN_FLIGHT: usize = 1;
+pub(crate) const MAX_IN_FLIGHT: usize = 1;
 
 /// One in-flight exchange: the SEQ it waits for (0 = free; issued SEQs cycle
 /// `1..=255`) and the signal its reply is routed into.
@@ -185,6 +185,10 @@ pub struct Client {
     topics: Channel<CS, TopicBytes, TOPIC_QUEUE_CAPACITY>,
     /// Request SEQ, cycling through `1..=255`.
     next_seq: AtomicU8,
+    /// Signaled once when the driver exits, never reset: each woken waiter
+    /// re-signals, so every current and future request resolves to
+    /// `Disconnected` instead of parking on a dead session.
+    dead: Signal<CS, ()>,
     /// Capability snapshot from the handshake; written by
     /// [`RynkDevice::connect`](crate::RynkDevice::connect) before sharing.
     pub(crate) capabilities: DeviceCapabilities,
@@ -205,6 +209,7 @@ impl Client {
             free,
             topics: Channel::new(),
             next_seq: AtomicU8::new(1),
+            dead: Signal::new(),
             capabilities: DeviceCapabilities::default(),
         }
     }
@@ -228,12 +233,14 @@ impl Client {
 
     /// One typed request/response round trip from the shared command table.
     ///
-    /// Up to [`MAX_IN_FLIGHT`] callers run concurrently; each reply is routed
-    /// back by SEQ, so completion order is independent of send order.
+    /// Runtime-free, so no deadline: a silent peer keeps this pending, and
+    /// callers that need a bound wrap it in their runtime's timeout. Dropping
+    /// the call is safe: [`SlotGuard`] frees the slot and the late reply is
+    /// dropped as unmatched.
     pub(crate) async fn request<E: Endpoint>(&self, req: &E::Request) -> Result<E::Response, RynkHostError> {
         let cmd = E::CMD;
         let idx = self.free.receive().await;
-        let guard = SlotGuard { client: self, idx };
+        let _guard = SlotGuard { client: self, idx };
         let slot = &self.slots[idx];
         let seq = self.alloc_seq();
         // Claim the SEQ before the frame can hit the wire, so the reply always
@@ -241,28 +248,31 @@ impl Client {
         slot.resp.reset();
         slot.seq.store(seq, Ordering::Release);
         self.send_frame(cmd, seq, req).await?;
-        let result = loop {
-            // This wait has no disconnect signal; session supervision must cancel it when the driver exits.
-            let mut bytes = slot.resp.wait().await;
+        loop {
+            let mut bytes = match select(slot.resp.wait(), self.dead.wait()).await {
+                Either::First(bytes) => bytes,
+                Either::Second(()) => {
+                    self.dead.signal(()); // sticky: pass the wakeup on to other waiters
+                    return Err(RynkHostError::Disconnected);
+                }
+            };
             let Ok(msg) = RynkMessage::try_from(&mut bytes[..]) else {
                 continue;
             };
             let header = msg.header();
             if header.cmd != cmd {
-                break Err(RynkHostError::CmdMismatch {
+                return Err(RynkHostError::CmdMismatch {
                     sent: cmd,
                     got: header.cmd,
                 });
             }
             // Reject postcard prefixes so host/firmware type drift is not silently accepted.
-            break match postcard::take_from_bytes::<Result<E::Response, RynkError>>(msg.payload()) {
+            return match postcard::take_from_bytes::<Result<E::Response, RynkError>>(msg.payload()) {
                 Err(source) => Err(RynkHostError::Deserialize { cmd, source }),
                 Ok((_, rest)) if !rest.is_empty() => Err(RynkHostError::TrailingBytes { cmd }),
                 Ok((env, _)) => env.map_err(RynkHostError::Rejected),
             };
-        };
-        drop(guard);
-        result
+        }
     }
 
     /// Send one request frame without waiting for a reply — for commands whose
@@ -288,8 +298,7 @@ impl Client {
     async fn send_frame<Req: Serialize>(&self, cmd: Cmd, seq: u8, req: &Req) -> Result<(), RynkHostError> {
         // Size the buffer for the COBS-encoded form of a max-payload request, so an
         // oversized request fails to encode before touching the link.
-        let len = RYNK_HEADER_SIZE + self.capabilities.max_payload_size as usize;
-        let limit = len + len / 254 + 2;
+        let limit = max_wire_size(RYNK_HEADER_SIZE + self.capabilities.max_payload_size as usize);
         #[cfg(feature = "alloc")]
         let mut buf: FrameBytes = vec![0; limit];
         #[cfg(not(feature = "alloc"))]
@@ -301,15 +310,29 @@ impl Client {
         };
         let frame_len = encode_frame(&mut buf, RynkHeader { cmd, seq }, req).map_err(|_| RynkHostError::Encode(cmd))?;
         buf.truncate(frame_len);
-        self.message.send(buf).await;
-        Ok(())
+        // Racing `dead` keeps a send from parking forever on a full queue
+        // after the driver has already exited.
+        match select(self.message.send(buf), self.dead.wait()).await {
+            Either::First(()) => Ok(()),
+            Either::Second(()) => {
+                self.dead.signal(()); // sticky: pass the wakeup on to other waiters
+                Err(RynkHostError::Disconnected)
+            }
+        }
     }
 
     /// Negotiate the version, then fetch device capabilities.
     ///
     /// Rejects only major-version mismatches; same-major minors connect.
     pub(crate) async fn handshake(&self) -> Result<DeviceCapabilities, RynkHostError> {
-        let version = self.request::<command::GetVersion>(&()).await?;
+        // Both requests ride one round trip; the version gate still runs
+        // before the capabilities are released.
+        let (version, capabilities) = embassy_futures::join::join(
+            self.request::<command::GetVersion>(&()),
+            self.request::<command::GetCapabilities>(&()),
+        )
+        .await;
+        let version = version?;
         let supported = ProtocolVersion::CURRENT;
         if version.major != supported.major {
             return Err(RynkHostError::VersionMismatch {
@@ -329,7 +352,7 @@ impl Client {
                 supported.minor
             );
         }
-        self.request::<command::GetCapabilities>(&()).await
+        capabilities
     }
 }
 
@@ -393,15 +416,16 @@ impl<R: Read, W: Write> Driver<R, W> {
                         let bytes = FrameBytes::try_from(frame).unwrap();
                         // Route to the slot claiming this SEQ. No taker means a
                         // cancelled request's late reply or a fire-and-forget
-                        // echo: drop it.
-                        let waiter = (header.seq != 0)
-                            .then(|| {
-                                client
-                                    .slots
-                                    .iter()
-                                    .find(|s| s.seq.load(Ordering::Acquire) == header.seq)
-                            })
-                            .flatten();
+                        // echo: drop it. A seq-0 frame would match a free slot,
+                        // so it is dropped outright.
+                        let waiter = if header.seq == 0 {
+                            None
+                        } else {
+                            client
+                                .slots
+                                .iter()
+                                .find(|s| s.seq.load(Ordering::Acquire) == header.seq)
+                        };
                         match waiter {
                             Some(slot) => slot.resp.signal(bytes),
                             None => log::debug!("rynk: unmatched reply {:?} seq {}, dropped", header.cmd, header.seq),
@@ -425,9 +449,13 @@ impl<R: Read, W: Write> Driver<R, W> {
             }
         };
 
-        match select(tx_loop, rx_loop).await {
+        let err = match select(tx_loop, rx_loop).await {
             Either::First(e) | Either::Second(e) => e,
-        }
+        };
+        // A cancelled `run` skips this (cancel is not death); an exited one
+        // wakes every parked request with `Disconnected`.
+        client.dead.signal(());
+        err
     }
 }
 
