@@ -20,8 +20,8 @@ pub(crate) mod display;
 pub(crate) mod host;
 pub(crate) mod keycode_alias;
 pub(crate) mod keymap;
-pub(crate) mod layout;
-pub use layout::{STOCK_WIDTHS, layout_blob_from_toml};
+pub mod layout;
+pub use layout::{STOCK_WIDTHS, layout_blob_from_toml, layout_info_from_toml};
 pub(crate) mod light;
 pub(crate) mod storage;
 

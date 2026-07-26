@@ -14,9 +14,8 @@
 //! back into a minimal `vial.json`.
 //!
 //! Decode ([`decode_layout`]): any `[layout]` TOML into [`layout::LayoutInfo`]
-//! via the real wire path — `rmk-config` builds the same compressed blob the
-//! firmware serves over `GetLayout`, which is inflated and postcard-decoded
-//! with the host types. What you get is exactly what a Rynk host sees.
+//! with the same builder and types behind the firmware's `GetLayout` blob, so
+//! what you get is exactly what a Rynk host sees.
 
 mod kle;
 mod to_kle;
@@ -114,17 +113,13 @@ pub(crate) fn decode_layout_document(text: &str) -> Result<DecodedLayout, String
     let rows = u8::try_from(rows).map_err(|_| format!("[layout].rows must fit in 0..=255, got {rows}"))?;
     let cols = u8::try_from(cols).map_err(|_| format!("[layout].cols must fit in 0..=255, got {cols}"))?;
     let inner = toml::to_string(layout).map_err(|e| format!("re-serialize [layout]: {e}"))?;
-    let blob = rmk_config::layout_blob_from_toml(&inner)?;
-    if blob.is_empty() {
-        return Err("the [layout] section has no `map` — nothing to render".to_string());
-    }
-    let info = layout::LayoutInfo::from_compressed_blob(&blob).map_err(|e| format!("decode layout blob: {e}"))?;
+    let info =
+        rmk_config::layout_info_from_toml(&inner)?.ok_or("the [layout] section has no `map` — nothing to render")?;
     Ok(DecodedLayout { info, rows, cols })
 }
 
-/// `[layout]` TOML text → decoded [`layout::LayoutInfo`], via the real blob
-/// round-trip. Accepts a full keyboard.toml or a bare `rows`/`cols`/`map`
-/// snippet.
+/// `[layout]` TOML text → decoded [`layout::LayoutInfo`]. Accepts a full
+/// keyboard.toml or a bare `rows`/`cols`/`map` snippet.
 pub fn decode_layout(text: &str) -> Result<layout::LayoutInfo, String> {
     Ok(decode_layout_document(text)?.info)
 }

@@ -1,10 +1,9 @@
 //! Build-time physical key layout.
 //!
 //! Walk `[layout].map`, apply variants, and build the compressed `GetLayout`
-//! blob. Firmware streams the blob; hosts inflate and decode it.
-//!
-//! The serialized mirror types must match `rynk::layout::*`; cross-crate
-//! round-trip tests guard that hand-maintained contract.
+//! blob. Firmware streams the blob opaquely; hosts inflate and decode it with
+//! these same types (`rynk::layout` re-exports them), so producer and decoder
+//! can't drift.
 
 use std::collections::{HashMap, HashSet};
 
@@ -18,42 +17,100 @@ use crate::LayoutTomlConfig;
 #[grammar = "keymap.pest"]
 pub(crate) struct ConfigParser;
 
+/// A key's outline rectangle in key-units.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-struct Rect {
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct Rect {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct Key {
-    row: u8,
-    col: u8,
-    rect: Rect,
-    r: f32,
-    rect2: Option<Rect>,
+/// The authoring rotation region (KLE's `(r, rx, ry)` cluster triple) a key or
+/// encoder was placed by, in the same flat frame as `rect` centers. Equal
+/// values = one rigid cluster; `Key::r - deg` is the residual own-center angle.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct Region {
+    pub deg: f32,
+    pub px: f32,
+    pub py: f32,
 }
 
-// Encoders are always 1u; center is enough.
+/// One key's placement: matrix position, outline `rect` (center + size),
+/// rotation, and an optional second rectangle for L-shaped keys (ISO/big-ass
+/// Enter). `r` rotates the whole key, `rect2` included.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct Encoder {
-    id: u8,
-    x: f32,
-    y: f32,
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct Key {
+    pub row: u8,
+    pub col: u8,
+    pub rect: Rect,
+    pub r: f32,
+    pub rect2: Option<Rect>,
+    /// The rotation region that placed this key — editor metadata only;
+    /// `rect`/`r` already carry the final geometry. `None` = flat frame.
+    pub pivot: Option<Region>,
 }
 
+/// One encoder's placement within a variant: a fixed 1u knob, so just its
+/// center — never resized or L-shaped. `pivot` records the region that swung
+/// the center; the knob itself carries no angle.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct Variant {
-    name: String,
-    keys: Vec<Key>,
-    encoders: Vec<Encoder>,
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct Encoder {
+    pub id: u8,
+    pub x: f32,
+    pub y: f32,
+    pub pivot: Option<Region>,
 }
 
+/// One render variant (e.g. ANSI / ISO): its own keys and encoders. A hidden key
+/// reflows the tokens after it — encoders included — so each variant carries its
+/// own encoder positions.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-struct LayoutInfo {
-    default_variant: u8,
-    variants: Vec<Variant>,
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct Variant {
+    pub name: String,
+    pub keys: Vec<Key>,
+    pub encoders: Vec<Encoder>,
+}
+
+/// The decoded physical layout: one entry per render variant.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct LayoutInfo {
+    pub default_variant: u8,
+    pub variants: Vec<Variant>,
+}
+
+impl LayoutInfo {
+    /// An empty layout, emitted when firmware was built without a `[layout].map`.
+    pub fn empty() -> Self {
+        Self {
+            default_variant: 0,
+            variants: Vec::new(),
+        }
+    }
+
+    /// Decode the compressed `GetLayout` payload this crate's blob builder
+    /// produced: raw DEFLATE around a postcard-encoded [`LayoutInfo`]. An empty
+    /// blob is a valid "empty" layout.
+    pub fn from_compressed_blob(blob: &[u8]) -> Result<Self, String> {
+        if blob.is_empty() {
+            return Ok(Self::empty());
+        }
+
+        let inflated = miniz_oxide::inflate::decompress_to_vec(blob).map_err(|e| format!("inflate failed: {e}"))?;
+        postcard::from_bytes(&inflated).map_err(|e| format!("decode failed: {e}"))
+    }
 }
 
 /// A resolved shape: every default applied. `rect2` is the L-key's second
@@ -354,11 +411,11 @@ fn walk(
     let mut keys = Vec::new();
     let mut encoders = Vec::new();
     // Active rotation region; cursor coordinates stay flat.
-    let mut rot: Option<(f32, f32, f32)> = None;
-    let swing = |x: f32, y: f32, rot: &Option<(f32, f32, f32)>| -> (f32, f32) {
+    let mut rot: Option<Region> = None;
+    let swing = |x: f32, y: f32, rot: &Option<Region>| -> (f32, f32) {
         match rot {
             None => (x, y),
-            Some((deg, px, py)) => {
+            Some(Region { deg, px, py }) => {
                 let (sin, cos) = deg.to_radians().sin_cos();
                 let (dx, dy) = (x - px, y - py);
                 (px + dx * cos - dy * sin, py + dx * sin + dy * cos)
@@ -407,8 +464,9 @@ fn walk(
                         w: s.w,
                         h: s.h,
                     },
-                    r: s.r + rot.map_or(0.0, |(deg, ..)| deg),
+                    r: s.r + rot.map_or(0.0, |r| r.deg),
                     rect2,
+                    pivot: rot,
                 });
                 w.cursor_x += s.w;
                 w.row_has_content = true;
@@ -417,13 +475,22 @@ fn walk(
                 w.advance_if_pending();
                 // Encoders are fixed 1u knobs.
                 let (x, y) = swing(w.cursor_x + 0.5, w.baseline_y + 0.5, &rot);
-                encoders.push(Encoder { id: *id, x, y });
+                encoders.push(Encoder {
+                    id: *id,
+                    x,
+                    y,
+                    pivot: rot,
+                });
                 w.cursor_x += 1.0;
                 w.row_has_content = true;
             }
             MapToken::Rot { deg, px, py } => {
                 // Rotation markers consume no row by themselves.
-                rot = (*deg != 0.0).then_some((*deg, *px, *py));
+                rot = (*deg != 0.0).then_some(Region {
+                    deg: *deg,
+                    px: *px,
+                    py: *py,
+                });
             }
         }
     }
@@ -571,10 +638,15 @@ fn build_layout_info(
     }))
 }
 
-/// Build the compressed layout blob from a `[layout]`-section TOML string.
-///
-/// Exposed for cross-crate end-to-end tests (the host crate decodes the result),
-/// so the producer here and the host-decode types can't drift unnoticed.
+/// Build the decoded layout from a `[layout]`-section TOML string (`None` when
+/// there's no `map`). What a host decodes from the blob is exactly this value.
+pub fn layout_info_from_toml(layout_toml: &str) -> Result<Option<LayoutInfo>, String> {
+    let layout: LayoutTomlConfig = toml::from_str(layout_toml).map_err(|e| e.to_string())?;
+    build_layout_info(&layout, None)
+}
+
+/// Build the compressed layout blob from a `[layout]`-section TOML string —
+/// the exact bytes firmware would serve over `GetLayout`.
 pub fn layout_blob_from_toml(layout_toml: &str) -> Result<Vec<u8>, String> {
     let layout: LayoutTomlConfig = toml::from_str(layout_toml).map_err(|e| e.to_string())?;
     build_layout_blob(&layout, None)
@@ -816,6 +888,7 @@ hidden = ["(0,0)", "(1,0)", "(2,0)", "(0,11)", "(1,11)", "(2,11)"]
         let info = info_of("rows = 1\ncols = 3\nmap = \"(0,0) [1.5] [r=90@(2.5,0)] (0,1) (0,2)\"");
         let v = &info.variants[0];
         assert!(approx(key(v, 0, 0).rect.x, 0.5) && approx(key(v, 0, 0).r, 0.0));
+        assert_eq!(key(v, 0, 0).pivot, None);
         let k1 = key(v, 0, 1);
         assert!(
             approx(k1.rect.x, 2.0) && approx(k1.rect.y, 0.5) && approx(k1.r, 90.0),
@@ -832,6 +905,14 @@ hidden = ["(0,0)", "(1,0)", "(2,0)", "(0,11)", "(1,11)", "(2,11)"]
             k2.rect.y,
             k2.r
         );
+        // Both keys carry the identical authoring region.
+        let region = Region {
+            deg: 90.0,
+            px: 2.5,
+            py: 0.0,
+        };
+        assert_eq!(k1.pivot, Some(region));
+        assert_eq!(k2.pivot, Some(region));
     }
 
     #[test]
@@ -841,6 +922,13 @@ hidden = ["(0,0)", "(1,0)", "(2,0)", "(0,11)", "(1,11)", "(2,11)"]
             info_of("rows = 2\ncols = 2\nmap = \"\"\"\n[3.5] [r=25@(3.5,0)] (0,0) (0,1)\n[3.5] (1,0) (1,1)\n\"\"\"");
         let v = &info.variants[0];
         assert!(v.keys.iter().all(|k| approx(k.r, 25.0)), "all keys carry the angle");
+        // One region token = one bit-identical pivot value on every key.
+        let region = Region {
+            deg: 25.0,
+            px: 3.5,
+            py: 0.0,
+        };
+        assert!(v.keys.iter().all(|k| k.pivot == Some(region)), "shared cluster");
         let d = |a: &Key, b: &Key| ((a.rect.x - b.rect.x).powi(2) + (a.rect.y - b.rect.y).powi(2)).sqrt();
         assert!(approx(d(key(v, 0, 0), key(v, 0, 1)), 1.0));
         assert!(approx(d(key(v, 0, 0), key(v, 1, 0)), 1.0));
@@ -863,10 +951,15 @@ hidden = ["(0,0)", "(1,0)", "(2,0)", "(0,11)", "(1,11)", "(2,11)"]
         let v = &info.variants[0];
         let k2 = key(v, 0, 2);
         assert!(approx(k2.rect.x, 2.5) && approx(k2.rect.y, 0.5) && approx(k2.r, 0.0));
+        assert_eq!(k2.pivot, None);
         // The reset also holds across lines.
         let info = info_of("rows = 2\ncols = 1\nmap = \"\"\"\n[r=30@(0,0)] (0,0)\n[r=0] (1,0)\n\"\"\"");
         let v = &info.variants[0];
         assert!(approx(key(v, 1, 0).rect.x, 0.5) && approx(key(v, 1, 0).rect.y, 1.5));
+        // A pivot on `[r=0...]` is legal noise: a zero-degree region is the flat
+        // frame and must not mint a cluster identity.
+        let info = info_of("rows = 1\ncols = 2\nmap = \"[r=45@(1,0)] (0,0) [r=0@(1,2)] (0,1)\"");
+        assert_eq!(key(&info.variants[0], 0, 1).pivot, None);
     }
 
     #[test]
@@ -874,9 +967,16 @@ hidden = ["(0,0)", "(1,0)", "(2,0)", "(0,11)", "(1,11)", "(2,11)"]
         let toml = "rows = 1\ncols = 1\nmap = \"[r=15@(0,0)] (0,0,@tilt) (e,0)\"\n[shapes]\ntilt = { r = 10.0 }";
         let info = info_of(toml);
         let v = &info.variants[0];
-        // Region and shape angles add.
+        // Region and shape angles add; the pivot keeps only the region's share,
+        // so the residual shape angle stays recoverable as `r - pivot.deg`.
+        let region = Region {
+            deg: 15.0,
+            px: 0.0,
+            py: 0.0,
+        };
         assert!(approx(key(v, 0, 0).r, 25.0), "r = {}", key(v, 0, 0).r);
-        // Encoder centers swing with the active region.
+        assert_eq!(key(v, 0, 0).pivot, Some(region));
+        // Encoder centers swing with the active region and carry it.
         let (sin, cos) = 15f32.to_radians().sin_cos();
         let e = &v.encoders[0];
         assert!(
@@ -885,6 +985,7 @@ hidden = ["(0,0)", "(1,0)", "(2,0)", "(0,11)", "(1,11)", "(2,11)"]
             e.x,
             e.y
         );
+        assert_eq!(e.pivot, Some(region));
     }
 
     #[test]
@@ -892,6 +993,32 @@ hidden = ["(0,0)", "(1,0)", "(2,0)", "(0,11)", "(1,11)", "(2,11)"]
         let cfg: LayoutTomlConfig = toml::from_str("rows = 1\ncols = 1\nmap = \"[r=15] (0,0)\"").unwrap();
         let err = build_layout_info(&cfg, None).unwrap_err();
         assert!(err.contains("pivot"), "{err}");
+    }
+
+    #[test]
+    fn pivot_metadata_mirrors_the_active_region() {
+        // flat → region A → region B → [r=0] → flat, key by key.
+        let info = info_of("rows = 1\ncols = 4\nmap = \"(0,0) [r=10@(1,0)] (0,1) [r=20@(2,0)] (0,2) [r=0] (0,3)\"");
+        let v = &info.variants[0];
+        let pivot = |c| key(v, 0, c).pivot;
+        assert_eq!(pivot(0), None);
+        assert_eq!(
+            pivot(1),
+            Some(Region {
+                deg: 10.0,
+                px: 1.0,
+                py: 0.0
+            })
+        );
+        assert_eq!(
+            pivot(2),
+            Some(Region {
+                deg: 20.0,
+                px: 2.0,
+                py: 0.0
+            })
+        );
+        assert_eq!(pivot(3), None);
     }
 
     #[test]
@@ -910,6 +1037,9 @@ hidden = ["(0,0)", "(1,0)", "(2,0)", "(0,11)", "(1,11)", "(2,11)"]
             b.x,
             b.y
         );
+        // Reflow moves centers, never the region identity.
+        assert_eq!(key(full, 0, 1).pivot, key(mini, 0, 1).pivot);
+        assert!(key(mini, 0, 1).pivot.is_some());
     }
 
     #[test]
@@ -979,6 +1109,8 @@ thumbR = { r = -15.0 }
             t.rect.y
         );
         assert!(approx(t.r, 15.0));
+        // A shape's own `r` is not a region: no cluster identity.
+        assert_eq!(t.pivot, None);
         // 36 grid keys plus 6 thumbs.
         assert_eq!(v.keys.len(), 42);
     }
@@ -1021,15 +1153,29 @@ shapes = { "(3,0)" = "@lsft_iso" }
     }
 
     #[test]
+    fn empty_blob_decodes_to_empty_layout() {
+        assert_eq!(LayoutInfo::from_compressed_blob(&[]).unwrap(), LayoutInfo::empty());
+    }
+
+    #[test]
     fn blob_round_trips_through_compression() {
-        let info = info_of("rows = 1\ncols = 2\nmap = \"(0,0,@iso_enter) (0,1)\"");
-        let bytes = postcard::to_allocvec(&info).unwrap();
-        let compressed = miniz_oxide::deflate::compress_to_vec(&bytes, 6);
-        let back = miniz_oxide::inflate::decompress_to_vec(&compressed).unwrap();
-        let decoded: LayoutInfo = postcard::from_bytes(&back).unwrap();
+        // Cover both pivot arms and rect2 across the encode/decode pair.
+        let toml = "rows = 1\ncols = 2\nmap = \"(0,0,@iso_enter) [r=30@(1.5,0)] (0,1) (e,0)\"";
+        let info = info_of(toml);
+        let cfg: LayoutTomlConfig = toml::from_str(toml).unwrap();
+        let blob = build_layout_blob(&cfg, None).unwrap();
+        let decoded = LayoutInfo::from_compressed_blob(&blob).unwrap();
         assert_eq!(decoded, info);
-        // ISO Enter carries a second rectangle.
-        assert!(decoded.variants[0].keys[0].rect2.is_some());
+        // ISO Enter carries a second rectangle and no region.
+        let v = &decoded.variants[0];
+        assert!(v.keys[0].rect2.is_some() && v.keys[0].pivot.is_none());
+        let region = Region {
+            deg: 30.0,
+            px: 1.5,
+            py: 0.0,
+        };
+        assert_eq!(v.keys[1].pivot, Some(region));
+        assert_eq!(v.encoders[0].pivot, Some(region));
     }
 
     /// ANSI/ISO/split-bs 60%: one keymap, three render variants over the superset map.

@@ -82,6 +82,7 @@ async fn client_against_run_session() {
         },
         r: 0.0,
         rect2: None,
+        pivot: None,
     };
     let layout_info = LayoutInfo {
         default_variant: 1,

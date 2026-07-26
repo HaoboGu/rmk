@@ -1085,6 +1085,42 @@ mod tests {
     }
 
     #[test]
+    fn cluster_pivot_survives_decode_and_reexport() {
+        // KLE cluster → map region → decoded pivot metadata → re-exported KLE
+        // cluster with the same pivot; the flat key stays out.
+        let km = json!([["0,0"], [{"r": 20, "rx": 2, "ry": 1}, "1,0", "1,1"]]);
+        let parsed0 = parse_keymap(&km).unwrap();
+        let info = decode_info(&parsed0, 2, 2);
+        let dv = &info.variants[info.default_variant as usize];
+        let pivot = |r, c| dv.keys.iter().find(|k| (k.row, k.col) == (r, c)).unwrap().pivot;
+        assert_eq!(pivot(0, 0), None);
+        let reg = pivot(1, 0).expect("rotated key carries its region");
+        assert_eq!(Some(reg), pivot(1, 1), "one shared cluster");
+        assert!(
+            (reg.deg - 20.0).abs() < 1e-3 && (reg.px - 2.0).abs() < 1e-3 && (reg.py - 1.0).abs() < 1e-3,
+            "region ({}, {}, {})",
+            reg.deg,
+            reg.px,
+            reg.py
+        );
+
+        // Re-export: geometry faithful, and the pair shares one (r, rx, ry).
+        let regenerated = crate::to_kle::variant_to_kle(dv);
+        let parsed1 = parse_keymap(&regenerated).unwrap();
+        assert_faithful(&decode_default(&parsed1, 2, 2), &expected_default(&parsed0), "reexport");
+        let cluster = |rc| {
+            parsed1
+                .keys
+                .iter()
+                .find(|k| k.matrix == Some(rc))
+                .map(|k| (k.rotation, k.rx, k.ry))
+                .unwrap()
+        };
+        assert_eq!(cluster((1, 0)), cluster((1, 1)), "shared cluster in the export");
+        assert!((cluster((1, 0)).0 - 20.0).abs() < 1e-4);
+    }
+
+    #[test]
     fn roundtrip_ansi60_fixture_default_variant() {
         let path = format!("{}/tests/fixtures/ansi60_splitbs.json", env!("CARGO_MANIFEST_DIR"));
         let root: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
@@ -1296,6 +1332,28 @@ mod tests {
             assert!(
                 close(b.0 - a.0, ox) && close(b.1 - a.1, oy) && close(a.2, b.2) && close(a.3, b.3),
                 "{ctx} encoder {id}: {a:?} -> {b:?}"
+            );
+        }
+        // Cluster fidelity: rotated keys sharing a KLE (r, rx, ry) cluster must
+        // still share one after the round-trip, pivots moved by the frame offset.
+        let clusters = |p: &ParsedKeymap| -> BTreeMap<(u8, u8), (f64, f64, f64)> {
+            p.keys
+                .iter()
+                .filter(|k| k.encoder.is_none())
+                .filter_map(|k| k.matrix.zip(rot_of(k)))
+                .collect()
+        };
+        let (c0, c1) = (clusters(parsed0), clusters(&parsed1));
+        assert_eq!(
+            c0.keys().collect::<Vec<_>>(),
+            c1.keys().collect::<Vec<_>>(),
+            "{ctx}: rotated key set"
+        );
+        for (rc, (r0, px0, py0)) in &c0 {
+            let (r1, px1, py1) = c1[rc];
+            assert!(
+                close(r1, *r0) && close(px1 - px0, ox) && close(py1 - py0, oy),
+                "{ctx} {rc:?}: cluster ({r0},{px0},{py0}) -> ({r1},{px1},{py1})"
             );
         }
     }

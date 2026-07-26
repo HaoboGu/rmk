@@ -55,7 +55,7 @@ steps = [
   # The blob is rmk-config's compressed layout format, not rynk's; if its
   # encoding changes, regenerate with
   #   cargo expand --test integration | grep -A1 '.layout_blob('
-  { rynk = { cmd = "GetLayout", payload = 0, reply = { total_len = 42, bytes = [109, 200, 177, 13, 0, 32, 8, 5, 209, 143, 141, 99, 57, 139, 137, 90, 89, 66, 207, 104, 140, 70, 8, 148, 92, 242, 154, 3, 205, 115, 223, 150, 207, 3, 209, 74, 90, 34, 2, 172, 217, 14] } } },
+  { rynk = { cmd = "GetLayout", payload = 0, reply = { total_len = 42, bytes = [109, 200, 171, 13, 0, 32, 12, 69, 209, 87, 12, 99, 49, 11, 9, 160, 144, 224, 59, 90, 71, 107, 250, 145, 189, 201, 49, 23, 212, 215, 62, 243, 223, 215, 96, 141, 192, 201, 35, 64, 170, 175] } } },
   # Past the end clamps to an empty page rather than erroring, which is how a
   # host knows it has read the whole blob.
   { rynk = { cmd = "GetLayout", payload = 42, reply = { total_len = 42, bytes = [] } } },
