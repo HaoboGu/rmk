@@ -146,7 +146,14 @@ impl KeyMapInner<'_> {
             );
             return;
         }
+        let before = self.get_activated_layer();
         self.behavior.default_layer = layer_num;
+        let after = self.get_activated_layer();
+        // With no layer key held, the activated layer follows the default; a
+        // held layer masks the change and observers see nothing.
+        if before != after {
+            publish_event(LayerChangeEvent::new(after));
+        }
     }
 
     fn get_action_at(&self, pos: KeyboardEventPos, layer_num: usize) -> KeyAction {

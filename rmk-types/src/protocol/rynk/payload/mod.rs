@@ -1,5 +1,6 @@
-//! Rynk payload types.
+//! Rynk payload types and the bulk capacities that size them.
 
+mod bulk_capacity;
 mod combo;
 mod encoder;
 mod fork;
@@ -10,6 +11,7 @@ mod morse;
 mod status;
 mod system;
 
+pub use self::bulk_capacity::*;
 pub use self::combo::*;
 pub use self::encoder::*;
 pub use self::fork::*;

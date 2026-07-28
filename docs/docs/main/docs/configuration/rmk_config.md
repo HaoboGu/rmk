@@ -42,8 +42,8 @@ split_central_sleep_timeout_seconds = 0
 protocol_macro_chunk_size = 64
 # Maximum number of auto mouse layer entries (auto-derived from [[behavior.auto_mouse_layer]] if unset)
 auto_mouse_layer_max_num = 2
-# Rynk RX/TX buffer size in bytes.
-# rynk_buffer_size = 512
+# Rynk RX/TX buffer size in bytes. 488 bytes = 2*BLE maximum packet size
+# rynk_buffer_size = 488
 ```
 
 ## Parameter Details
@@ -86,7 +86,7 @@ In RMK there are several channels used for communication between tasks. The leng
 These tune the [Rynk](../features/rynk) protocol and rarely need changing.
 
 - `protocol_macro_chunk_size`: How many macro bytes a single macro transfer can carry, default value is 64. Smaller chunks use less firmware RAM but need more back-and-forth with the host.
-- `rynk_buffer_size`: Optional size, in bytes, of Rynk's send/receive buffer.
+- `rynk_buffer_size`: Size of Rynk's send/receive frame buffers in bytes. Payload capacity and bulk batch sizes derive from it. Default value is 488, which fills exactly two BLE notifications.
 
 ### Split Keyboard Configuration
 

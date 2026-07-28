@@ -11,6 +11,7 @@ use alloc::string::String;
 
 use embassy_futures::select::{Either, select};
 use embedded_io_async::{Read, Write};
+use rmk_types::protocol::rynk::{DeviceCapabilities, ProtocolVersion, command};
 
 use crate::driver::{Client, Driver, RynkHostError};
 
@@ -46,11 +47,44 @@ pub trait RynkDevice: Sized {
         let (reader, writer) = self.open().await?;
         let mut client = Client::new();
         let mut driver = Driver::new(reader, writer);
-        let capabilities = match select(driver.run(&client), client.handshake()).await {
+        let capabilities = match select(driver.run(&client), handshake(&client)).await {
             Either::First(err) => return Err(err),
             Either::Second(caps) => caps?,
         };
         client.capabilities = capabilities;
         Ok((client, driver))
     }
+}
+
+/// Negotiate the version, then fetch device capabilities.
+///
+/// Rejects only major-version mismatches; same-major minors connect.
+async fn handshake(client: &Client) -> Result<DeviceCapabilities, RynkHostError> {
+    // Both requests ride one round trip; the version gate still runs
+    // before the capabilities are released.
+    let (version, capabilities) = embassy_futures::join::join(
+        client.request::<command::GetVersion>(&()),
+        client.request::<command::GetCapabilities>(&()),
+    )
+    .await;
+    let version = version?;
+    let supported = ProtocolVersion::CURRENT;
+    if version.major != supported.major {
+        return Err(RynkHostError::VersionMismatch {
+            firmware_major: version.major,
+            firmware_minor: version.minor,
+            host_major: supported.major,
+            host_max_minor: supported.minor,
+        });
+    }
+    if version.minor > supported.minor {
+        log::info!(
+            "rynk: firmware protocol v{}.{} is newer than this client's v{}.{}; new commands/topics may be unavailable",
+            version.major,
+            version.minor,
+            supported.major,
+            supported.minor
+        );
+    }
+    capabilities
 }

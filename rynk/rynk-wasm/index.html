@@ -102,20 +102,28 @@
       }
 
       // Wire constants needed before version-specific wasm is loaded.
-      const RYNK_HEADER = 5;            // cmd:u16 LE, seq:u8, len:u16 LE
+      const RYNK_HEADER = 3;            // cmd:u16 LE, seq:u8
       const RYNK_TOPIC_BIT = 0x8000;    // CMD high bit set: server-to-host topic push
-      const CMD_GET_VERSION = 0x0001;
       const RYNK_HID_REPORT_SIZE = 32;  // firmware RynkHidService report
+
+      // GetVersion probe (cmd 0x0001, seq 1, no payload), COBS-framed behind a stale-byte
+      // 0x00 sync; GetVersion is frozen across protocol versions, so a literal serves.
+      const PROBE_GET_VERSION = Uint8Array.from([0x00, 0x02, 0x01, 0x02, 0x01, 0x00]);
 
       const concat = (a, b) => { const c = new Uint8Array(a.length + b.length); c.set(a); c.set(b, a.length); return c; };
 
-      function frame(cmd, seq, body) {
-        const out = new Uint8Array(RYNK_HEADER + body.length);
-        out[0] = cmd & 0xff; out[1] = (cmd >> 8) & 0xff;
-        out[2] = seq;
-        out[3] = body.length & 0xff; out[4] = (body.length >> 8) & 0xff;
-        out.set(body, RYNK_HEADER);
-        return out;
+      function cobsDecode(data) {
+        const out = [];
+        let offset = 0;
+        while (offset < data.length) {
+          const code = data[offset++];
+          if (code === 0) throw new Error("invalid COBS code");
+          const end = offset + code - 1;
+          if (end > data.length) throw new Error("truncated COBS block");
+          while (offset < end) out.push(data[offset++]);
+          if (code !== 0xff && offset < data.length) out.push(0);
+        }
+        return Uint8Array.from(out);
       }
 
       // Share framing and the pre-wasm version probe across Serial and HID.
@@ -133,25 +141,35 @@
         async function ready() {
           while (rx.length === 0 && !closed) await new Promise((res) => { wake = res; });
         }
-        async function fill(n) {
-          while (rx.length < n) {
-            if (closed) throw new Error("link closed");
-            await ready();
-          }
-        }
         async function readFrame() {
-          await fill(RYNK_HEADER);
-          const len = rx[3] | (rx[4] << 8);
-          await fill(RYNK_HEADER + len);
-          const f = rx.slice(0, RYNK_HEADER + len);
-          rx = rx.slice(RYNK_HEADER + len);
-          return { cmd: f[0] | (f[1] << 8), seq: f[2], payload: f.slice(RYNK_HEADER) };
+          for (;;) {
+            let delimiter = rx.indexOf(0);
+            while (delimiter < 0) {
+              if (closed) throw new Error("link closed");
+              await new Promise((res) => { wake = res; });
+              delimiter = rx.indexOf(0);
+            }
+            const encoded = rx.slice(0, delimiter);
+            rx = rx.slice(delimiter + 1);
+            if (encoded.length === 0) continue;
+            try {
+              const decoded = cobsDecode(encoded);
+              if (decoded.length < RYNK_HEADER) continue;
+              return {
+                cmd: decoded[0] | (decoded[1] << 8),
+                seq: decoded[2],
+                payload: decoded.slice(RYNK_HEADER),
+              };
+            } catch {
+              // Skip malformed frames and resume at the next delimiter.
+            }
+          }
         }
 
         return {
           label,
           async probeVersion() {
-            await send(frame(CMD_GET_VERSION, 1, new Uint8Array(0)));
+            await send(PROBE_GET_VERSION);
             // Ignore topic pushes that arrive before the reply.
             let f;
             do { f = await readFrame(); } while (f.cmd & RYNK_TOPIC_BIT);
@@ -215,7 +233,6 @@
       // Serial and HID carry the same Rynk byte stream; only report padding differs.
       function hidLink(device) {
         const N = RYNK_HID_REPORT_SIZE;     // 32
-        let remaining = 0;   // bytes left in the in-flight rynk frame; 0 at a boundary
         let onReport = null;
         let endLink = null;
         return framedLink({
@@ -223,13 +240,10 @@
             || `HID ${device.vendorId.toString(16).padStart(4, "0")}:${device.productId.toString(16).padStart(4, "0")}`,
           start(push, end) {
             endLink = end;
-            // Trim final-report padding using the frame LEN field.
             onReport = (event) => {
               const d = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength);
-              if (remaining === 0) remaining = RYNK_HEADER + (d[3] | (d[4] << 8));
-              const take = Math.min(remaining, d.length);
-              remaining -= take;
-              push(d.slice(0, take));
+              // COBS delimiters make report padding harmless empty frames.
+              push(d);
             };
             device.addEventListener("inputreport", onReport);
           },

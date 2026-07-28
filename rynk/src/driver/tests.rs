@@ -6,8 +6,8 @@ use rmk_types::action::KeyAction;
 use rmk_types::battery::BatteryStatus;
 use rmk_types::connection::{ConnectionStatus, ConnectionType};
 use rmk_types::protocol::rynk::{
-    GetComboBulkResponse, GetKeymapBulkResponse, GetMorseBulkResponse, PeripheralStatus, SetComboBulkRequest,
-    SetKeymapBulkRequest, SetMorseBulkRequest,
+    GetComboBulkResponse, GetKeymapBulkResponse, GetMorseBulkResponse, PeripheralStatus, ProtocolVersion,
+    SetComboBulkRequest, SetKeymapBulkRequest, SetMorseBulkRequest,
 };
 use tokio::time::timeout;
 
@@ -108,7 +108,11 @@ impl Write for MockWrite {
         if self.fail_send {
             return Err(ErrorKind::Other);
         }
-        self.writes.send_modify(|c| *c += 1);
+        // Skip the driver's leading lone-0x00 sync write; every other write
+        // carries exactly one frame.
+        if !matches!(buf, [0]) {
+            self.writes.send_modify(|c| *c += 1);
+        }
         Ok(buf.len())
     }
 
@@ -134,11 +138,13 @@ async fn drive<F: Future>(driver: &mut Driver<MockRead, MockWrite>, client: &Cli
     }
 }
 
-/// A bare frame: header + postcard(value). Used for raw headers and topics.
+/// A bare frame: header + postcard(value). Used for raw headers and topics;
+/// sized so tests can build multi-kilobyte bulk replies.
 fn frame<T: Serialize>(cmd: Cmd, seq: u8, value: &T) -> Vec<u8> {
-    let mut buf = vec![0u8; 4096];
-    let msg = RynkMessage::build(&mut buf, cmd, seq, value).unwrap();
-    msg.frame().to_vec()
+    let mut buf = vec![0u8; 32 * 1024];
+    let n = encode_frame(&mut buf, RynkHeader { cmd, seq }, value).unwrap();
+    buf.truncate(n);
+    buf
 }
 
 /// An `Ok` response frame, enveloped as the firmware sends it.
@@ -207,16 +213,55 @@ async fn rejected_response_flattens() {
 
 #[tokio::test]
 async fn trailing_bytes_rejected() {
-    let mut chunk = reply(Cmd::GetWpm, 1, 42u16);
-    chunk[3] += 2; // LEN low byte
-    chunk.extend_from_slice(&[0xAA, 0xBB]);
+    // A reply whose payload is a valid `Ok(42)` followed by stray bytes: the host
+    // must reject it rather than silently accept the prefix.
+    let chunk = frame(Cmd::GetWpm, 1, &(Ok::<u16, RynkError>(42u16), [0xAAu8, 0xBB]));
     let (client, mut driver) = raw_session(vec![Step::AwaitWrites(1), Step::Chunk(chunk), Step::Hang]);
     let r = drive(&mut driver, &client, client.get_wpm()).await;
     assert!(matches!(r, Err(RynkHostError::TrailingBytes { cmd: Cmd::GetWpm })));
 }
 
 #[tokio::test]
-async fn unknown_topic_skipped_by_next_topic() {
+async fn driver_resyncs_after_garbage() {
+    // Undecodable bytes terminated by a delimiter arrive before the real reply;
+    // the Deframer skips them and the reply still round-trips.
+    let (client, mut driver) = raw_session(vec![
+        Step::AwaitWrites(1),
+        Step::Chunk(vec![0xDE, 0xAD, 0xBE, 0xEF, 0x00]),
+        Step::Chunk(reply(Cmd::GetWpm, 1, 42u16)),
+        Step::Hang,
+    ]);
+    let got = drive(&mut driver, &client, client.get_wpm()).await.unwrap();
+    assert_eq!(got, 42);
+}
+
+#[tokio::test]
+async fn multi_kilobyte_reply_round_trips() {
+    // A reply spanning many transport reads must reassemble within the fixed
+    // RX buffer instead of being dropped as overflow.
+    let mut supported = caps();
+    supported.bulk_transfer_supported = true;
+    supported.max_bulk_keys = 255;
+    let big = GetKeymapBulkResponse {
+        actions: (0..4000u32).map(|i| KeyAction::Morse((i % 256) as u8)).collect(),
+    };
+    let (client, mut driver) = connect_session(
+        handshake_steps(supported),
+        vec![
+            Step::AwaitWrites(3),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, big.clone())),
+            Step::Hang,
+        ],
+    )
+    .await;
+    let got = drive(&mut driver, &client, client.get_keymap_bulk(0, 0, 0))
+        .await
+        .unwrap();
+    assert_eq!(got, big);
+}
+
+#[tokio::test]
+async fn unknown_topic_skipped() {
     let mut chunk = frame(Cmd::from_raw(0x80ff), 0, &[1u8, 2, 3]);
     chunk.extend_from_slice(&topic(Cmd::LayerChange, 3u8));
     let (client, mut driver) = raw_session(vec![Step::Chunk(chunk), Step::Hang]);
@@ -283,6 +328,8 @@ async fn stale_seq_reply_dropped() {
 
 #[tokio::test(start_paused = true)]
 async fn stale_reply_of_cancelled_request_is_dropped() {
+    // Request 1 is cancelled mid-wait: its slot frees, its late reply matches
+    // no slot and is dropped, and request 2 round-trips unobstructed.
     let (client, mut driver) = raw_session(vec![
         Step::AwaitWrites(2),
         Step::Chunk(reply(Cmd::GetWpm, 1, 99u16)),
@@ -292,6 +339,39 @@ async fn stale_reply_of_cancelled_request_is_dropped() {
     let got = drive(&mut driver, &client, async {
         let cancelled = timeout(Duration::from_millis(10), client.get_wpm()).await;
         assert!(cancelled.is_err(), "request 1 should time out");
+        client.get_wpm().await
+    })
+    .await
+    .unwrap();
+    assert_eq!(got, 42);
+}
+
+#[tokio::test]
+async fn concurrent_requests_route_out_of_order_replies() {
+    // Both requests hit the wire before any reply (the reader parks until two
+    // writes complete), and the replies return out of order: SEQ routing must
+    // still deliver each to its caller.
+    let mut replies = reply(Cmd::GetSleepState, 2, true);
+    replies.extend_from_slice(&reply(Cmd::GetWpm, 1, 42u16));
+    let (client, mut driver) = raw_session(vec![Step::AwaitWrites(2), Step::Chunk(replies), Step::Hang]);
+    let (wpm, sleeping) = drive(&mut driver, &client, join(client.get_wpm(), client.get_sleep_state())).await;
+    assert_eq!(wpm.unwrap(), 42);
+    assert!(sleeping.unwrap());
+}
+
+#[tokio::test]
+async fn fire_and_forget_orphan_reply_is_dropped() {
+    // On targets where the reset is a no-op the firmware answers `Reboot`;
+    // that echo matches no slot and is dropped while the next request runs.
+    let (client, mut driver) = raw_session(vec![
+        Step::AwaitWrites(1),
+        Step::Chunk(reply(Cmd::Reboot, 1, ())),
+        Step::AwaitWrites(2),
+        Step::Chunk(reply(Cmd::GetWpm, 2, 42u16)),
+        Step::Hang,
+    ]);
+    let got = drive(&mut driver, &client, async {
+        client.reboot().await.unwrap();
         client.get_wpm().await
     })
     .await
@@ -500,24 +580,26 @@ async fn read_all_keymap_concatenates_pages() {
     };
     let expected: Vec<KeyAction> = (0u8..10).map(KeyAction::Morse).collect();
 
+    // Conservative spacing (4 scaled by the squeezed budget = 3) fetches
+    // offsets 0/3/6/9 concurrently; full pages overlap and the overlaps are
+    // trimmed during reassembly.
     let (client, mut driver) = connect_session(
         handshake_steps(supported),
         vec![
-            Step::AwaitWrites(3),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, page(0, 4))),
-            Step::AwaitWrites(4),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, page(4, 4))),
-            Step::AwaitWrites(5),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 5, page(8, 2))),
             Step::AwaitWrites(6),
-            Step::Chunk(reply(Cmd::GetWpm, 6, 42u16)),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, page(0, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, page(3, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 5, page(6, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 6, page(9, 1))),
+            Step::AwaitWrites(7),
+            Step::Chunk(reply(Cmd::GetWpm, 7, 42u16)),
             Step::Hang,
         ],
     )
     .await;
     drive(&mut driver, &client, async {
         assert_eq!(client.read_all_keymap().await.unwrap(), expected);
-        // The distinct trailing command detects an unexpected fourth fetch.
+        // The distinct trailing command detects an unexpected fifth fetch.
         assert_eq!(client.get_wpm().await.unwrap(), 42);
     })
     .await;
@@ -536,32 +618,39 @@ async fn read_all_stops_on_clamped_empty_page() {
         actions: (0u8..4).map(KeyAction::Morse).collect(),
     };
     let empty = GetKeymapBulkResponse { actions: vec![] };
+    // Speculative offsets 0/3/6/9 are all fetched before the empty page is
+    // seen; the clamp shows up as result truncation, not as skipped fetches.
     let (client, mut driver) = connect_session(
         handshake_steps(supported),
         vec![
-            Step::AwaitWrites(3),
+            Step::AwaitWrites(6),
             Step::Chunk(reply(Cmd::GetKeymapBulk, 3, full)),
-            Step::AwaitWrites(4),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, empty)),
-            Step::AwaitWrites(5),
-            Step::Chunk(reply(Cmd::GetWpm, 5, 7u16)),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, empty.clone())),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 5, empty.clone())),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 6, empty)),
+            Step::AwaitWrites(7),
+            Step::Chunk(reply(Cmd::GetWpm, 7, 7u16)),
             Step::Hang,
         ],
     )
     .await;
     drive(&mut driver, &client, async {
         assert_eq!(client.read_all_keymap().await.unwrap().len(), 4);
-        // The distinct trailing command detects a fetch after the empty page.
+        // The distinct trailing command pins the fetch count to the
+        // speculative offsets alone.
         assert_eq!(client.get_wpm().await.unwrap(), 7);
     })
     .await;
 }
 
 #[tokio::test]
-async fn write_all_keymap_chunks_by_page_size() {
+async fn write_all_keymap_packs_pages_to_the_payload_budget() {
     let mut supported = caps();
     supported.bulk_transfer_supported = true;
-    supported.max_bulk_keys = 2;
+    // Pages pack by encoded size, not by `max_bulk_keys`: 3 fixed bytes +
+    // 1 count varint + 2 bytes per `KeyAction::Morse` — an 8-byte budget
+    // holds exactly 2 keys, so 5 keys page as 2+2+1.
+    supported.max_payload_size = 8;
 
     let (client, mut driver) = connect_session(
         handshake_steps(supported),
@@ -592,9 +681,12 @@ async fn connect_rejects_newer_major() {
         major: ProtocolVersion::CURRENT.major + 1,
         minor: 0,
     };
+    // The firmware answers both handshake requests (they ride one round
+    // trip); the version gate must still reject before caps are released.
     let err = MockDevice(vec![
-        Step::AwaitWrites(1),
+        Step::AwaitWrites(2),
         Step::Chunk(reply(Cmd::GetVersion, 1, newer)),
+        Step::Chunk(reply(Cmd::GetCapabilities, 2, caps())),
         Step::Hang,
     ])
     .connect()

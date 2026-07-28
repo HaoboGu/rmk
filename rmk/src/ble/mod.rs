@@ -716,7 +716,11 @@ async fn run_ble_keyboard<
     #[cfg(feature = "host")]
     let host_task = async {
         if let Some(service) = host_service {
-            HostGattHandler::run(server, conn, service).await;
+            // Restart after a session-fatal TX error so Rynk survives the rest
+            // of the connection.
+            loop {
+                HostGattHandler::run(server, conn, service).await;
+            }
         } else {
             core::future::pending::<()>().await;
         }

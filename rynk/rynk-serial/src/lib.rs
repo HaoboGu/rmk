@@ -178,7 +178,7 @@ mod tests {
 
     use rynk::io::{Read as _, Write as _};
     use rynk::rmk_types::protocol::rynk::{
-        Cmd, DeviceCapabilities, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage,
+        Cmd, Deframer, DeviceCapabilities, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, encode_frame,
     };
     use serde::Serialize;
     use tokio::io::AsyncReadExt as _;
@@ -221,34 +221,42 @@ mod tests {
     fn frame<T: Serialize>(cmd: Cmd, seq: u8, value: &T) -> Vec<u8> {
         // Scratch large enough for any test frame.
         let mut buf = vec![0u8; 4096];
-        let msg = RynkMessage::build(&mut buf, cmd, seq, value).unwrap();
-        msg.frame().to_vec()
+        let n = encode_frame(&mut buf, RynkHeader { cmd, seq }, value).unwrap();
+        buf.truncate(n);
+        buf
     }
 
-    /// Read one request frame off the peer end; returns its cmd + seq.
-    async fn read_request(peer: &mut SerialStream) -> (Cmd, u8) {
-        let mut bytes = [0u8; RYNK_HEADER_SIZE];
-        peer.read_exact(&mut bytes).await.unwrap();
-        let header = RynkHeader::parse(&bytes);
-        let mut payload = vec![0u8; header.payload_len as usize];
-        if !payload.is_empty() {
-            peer.read_exact(&mut payload).await.unwrap();
+    /// Read one COBS frame off the peer end and return its cmd + seq; the
+    /// Deframer skips empty frames, so the host's leading `0x00` sync is
+    /// transparent. `df`/`buf` persist across calls: the pipelined handshake
+    /// sends both requests back-to-back, so one read may buffer the next frame.
+    async fn read_request(peer: &mut SerialStream, df: &mut Deframer, buf: &mut [u8]) -> (Cmd, u8) {
+        loop {
+            if df.next(buf).is_some() {
+                let header = RynkHeader::parse(buf[..RYNK_HEADER_SIZE].try_into().unwrap());
+                return (header.cmd, header.seq);
+            }
+            let n = peer.read(df.tail(buf)).await.unwrap();
+            assert!(n > 0, "peer closed before a full request");
+            df.commit(n);
         }
-        (header.cmd, header.seq)
     }
 
     /// Script a Rynk firmware on `peer`: answer the GetVersion/GetCapabilities
     /// handshake with `version`, then keep the line open until dropped.
     fn scripted_firmware(mut peer: SerialStream, version: ProtocolVersion) -> tokio::task::JoinHandle<SerialStream> {
         tokio::spawn(async move {
-            let (cmd, seq) = read_request(&mut peer).await;
+            let mut df = Deframer::new();
+            let mut buf = [0u8; 4096];
+            let (cmd, seq) = read_request(&mut peer, &mut df, &mut buf).await;
             assert_eq!(cmd, Cmd::GetVersion);
             tokio::io::AsyncWriteExt::write_all(&mut peer, &frame(cmd, seq, &Ok::<_, RynkError>(version)))
                 .await
                 .unwrap();
-            // A mismatched major never gets the capabilities request.
+            // A mismatched major is rejected by the host, but the request pair
+            // was already pipelined — answer it like real firmware would.
             if version.major == ProtocolVersion::CURRENT.major {
-                let (cmd, seq) = read_request(&mut peer).await;
+                let (cmd, seq) = read_request(&mut peer, &mut df, &mut buf).await;
                 assert_eq!(cmd, Cmd::GetCapabilities);
                 tokio::io::AsyncWriteExt::write_all(
                     &mut peer,
