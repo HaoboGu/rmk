@@ -52,7 +52,7 @@ pub struct SimTest {
     pub config: KeyboardTomlConfig,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct KeyOverride {
     pub layer: u8,
@@ -113,7 +113,6 @@ pub fn parse_scenario_str(doc: &str, base: Option<&str>) -> Result<Scenario, Str
 
     doc_table.remove("keyboard"); // already consumed via `scenario_base_path`
     let file_requires = take_requires(&mut doc_table, "scenario")?;
-    let file_keys = take_keys(&mut doc_table, "scenario")?;
     let tests_value = doc_table
         .remove("test")
         .ok_or_else(|| "scenario TOML: no [[test]] defined".to_string())?;
@@ -153,7 +152,7 @@ pub fn parse_scenario_str(doc: &str, base: Option<&str>) -> Result<Scenario, Str
     let mut names = HashSet::new();
     let mut tests = Vec::with_capacity(raw_tests.len());
     for (index, raw) in raw_tests.into_iter().enumerate() {
-        let test = parse_test(raw, index, &keyboard, &file_requires, &file_keys)?;
+        let test = parse_test(raw, index, &keyboard, &file_requires)?;
         if !names.insert(test.name.clone()) {
             return Err(format!("scenario TOML: duplicate test name '{}'", test.name));
         }
@@ -193,22 +192,7 @@ fn take_requires(table: &mut Table, ctx: &str) -> Result<Vec<String>, String> {
     Ok(list)
 }
 
-fn take_keys(table: &mut Table, ctx: &str) -> Result<Vec<KeyOverride>, String> {
-    match table.remove("keys") {
-        None => Ok(Vec::new()),
-        Some(v) => v
-            .try_into()
-            .map_err(|e| format!("{ctx}: `keys` must be an array of {{ layer, row, col, action }}: {e}")),
-    }
-}
-
-fn parse_test(
-    value: Value,
-    index: usize,
-    keyboard: &Table,
-    file_requires: &[String],
-    file_keys: &[KeyOverride],
-) -> Result<SimTest, String> {
+fn parse_test(value: Value, index: usize, keyboard: &Table, file_requires: &[String]) -> Result<SimTest, String> {
     let Value::Table(mut table) = value else {
         return Err(format!("[[test]] #{index} must be a table"));
     };
@@ -240,9 +224,12 @@ fn parse_test(
         requires.push("storage".to_string());
     }
 
-    // File-level overrides first, so a test's own overrides win on conflict.
-    let mut keys = file_keys.to_vec();
-    keys.extend(take_keys(&mut table, &ctx)?);
+    let keys: Vec<KeyOverride> = match table.remove("keys") {
+        None => Vec::new(),
+        Some(v) => v
+            .try_into()
+            .map_err(|e| format!("{ctx}: `keys` must be an array of {{ layer, row, col, action }}: {e}"))?,
+    };
 
     let steps_value = table
         .remove("steps")
@@ -434,7 +421,10 @@ steps = [{ press = [0, 0] }, { release = [0, 0] }, { expect = "empty" }]
     fn unknown_step_op_is_rejected() {
         let doc = MINIMAL.replace("{ press = [0, 0] }", "{ pres = [0, 0] }");
         let err = parse_scenario_str(&doc, None).err().expect("expected error");
-        assert!(err.contains("steps[0]") && err.contains("pres"), "unexpected error: {err}");
+        assert!(
+            err.contains("steps[0]") && err.contains("pres"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
@@ -447,7 +437,9 @@ steps = [{ press = [0, 0] }, { release = [0, 0] }, { expect = "empty" }]
     #[test]
     fn duplicate_test_names_are_rejected() {
         let extra = "\n[[test]]\nname = \"t\"\nsteps = [{ delay = 1 }]\n";
-        let err = parse_scenario_str(&format!("{MINIMAL}{extra}"), None).err().expect("expected error");
+        let err = parse_scenario_str(&format!("{MINIMAL}{extra}"), None)
+            .err()
+            .expect("expected error");
         assert!(err.contains("duplicate"), "unexpected error: {err}");
     }
 

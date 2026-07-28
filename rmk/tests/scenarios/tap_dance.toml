@@ -1,6 +1,6 @@
 # Tap-dance style morse keys, ported from keyboard_morse_tap_dance_test.rs.
 #
-# The file-level fixture is the tap-dance one: row 0 holds TD(0), TD(1), TD(2)
+# The keymap carries the tap-dance fixture: row 0 holds TD(0), TD(1), TD(2)
 # and a plain A, with Kp1..Kp4 behind them on layer 1, driven by the
 # HoldOnOtherPress default profile. Tests built on another fixture replace the
 # cells they reach through a per-test `keys` block and their morse table
@@ -12,16 +12,23 @@
 
 keyboard = "boards/test_keymap.toml"
 
-keys = [
-  { layer = 0, row = 0, col = 0, action = "TD(0)" },
-  { layer = 0, row = 0, col = 1, action = "TD(1)" },
-  { layer = 0, row = 0, col = 2, action = "TD(2)" },
-  { layer = 0, row = 0, col = 3, action = "A" },
-  { layer = 1, row = 0, col = 0, action = "Kp1" },
-  { layer = 1, row = 0, col = 1, action = "Kp2" },
-  { layer = 1, row = 0, col = 2, action = "Kp3" },
-  { layer = 1, row = 0, col = 3, action = "Kp4" },
-]
+[[keymap.layer]]
+keys = """
+TD(0)   TD(1)          TD(2)        A   Kc4  Kc5           Kc6  Kc7  Kc8    Kc9    Kc0        Minus        Equal         Backspace
+Tab     Q              W            E   R    T             Y    U    I      O      P          LeftBracket  RightBracket  Backslash
+Escape  TH(A, LShift)  TH(S, LGui)  D   F    G             H    J    K      L      Semicolon  Quote        No            Enter
+LShift  TH(Z, LAlt)    X            C   V    B             N    M    Comma  Dot    Slash      No           No            RShift
+LCtrl   LGui           LAlt         No  No   LT(1, Space)  No   No   No     MO(1)  RAlt       No           RGui          RCtrl
+"""
+
+[[keymap.layer]]
+keys = """
+Kp1       Kp2  Kp3         Kp4            F4  F5  F6  F7  F8  F9  F10   F11  F12   Delete
+No        _    E           W              No  No  No  No  No  No  No    No   No    No
+CapsLock  No   No          No             No  No  No  No  No  No  No    No   No    No
+No        No   SHIFTED(X)  WM(X, LShift)  No  No  No  No  No  No  No    No   No    Up
+No        No   No          No             No  No  No  No  No  No  Left  No   Down  Right
+"""
 
 [layout]
 map = """
@@ -657,7 +664,7 @@ keys = [
   { layer = 0, row = 0, col = 1, action = "A" },
   { layer = 1, row = 0, col = 0, action = "Kp1" },
   { layer = 1, row = 0, col = 1, action = "Kp2" },
-  # This fixture defines a single morse, so drop the file-level TD(2) cell.
+  # This fixture defines a single morse, so drop the keymap's TD(2) cell.
   { layer = 0, row = 0, col = 2, action = "Kc2" },
 ]
 steps = [

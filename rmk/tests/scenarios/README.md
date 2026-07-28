@@ -19,12 +19,8 @@ rebuild of the test binary; adding a new file needs one `run_tests!` line in
 keyboard = "boards/test_keymap.toml"  # optional base board; sections below deep-merge over it
 requires = ["storage"]                # cargo features every test in this file needs
 
-keys = [                              # optional cell overrides applied to every test
-  { layer = 0, row = 0, col = 1, action = "MT(B, LShift)" },
-]
-
 [layout]                              # real keyboard.toml sections
-[keymap]
+[keymap]                              # [[keymap.layer]] blocks replace the base's layers wholesale
 [behavior]
 [aliases]
 
@@ -32,7 +28,7 @@ keys = [                              # optional cell overrides applied to every
 name = "hold"                         # unique, valid Rust identifier
 requires = ["vial"]                   # per-test features, unioned with the file's
 storage = true                        # attach an in-memory flash (default false)
-keys = [ ... ]                        # per-test cell overrides, applied last
+keys = [ ... ]                        # per-test cell overrides
 steps = [ ... ]
 
 [test.behavior.morse]                 # per-test behavior delta, deep-merged

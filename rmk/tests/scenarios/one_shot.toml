@@ -1,7 +1,7 @@
 # One-shot modifiers (OSM) and one-shot layers (OSL), ported from
 # keyboard_one_shot_test.rs.
 #
-# Row 0 of the shared board is patched to the one-shot fixture:
+# The keymap is the shared test board with row 0 as the one-shot fixture:
 #   Layer 0: OSM(LShift)          OSL(1)  A  TH(B, C)  OSM(LCtrl)  WM(B, LGui)
 #   Layer 1: OSM(LShift | LCtrl)  No      C  D         E           F
 #
@@ -10,20 +10,23 @@
 
 keyboard = "boards/test_keymap.toml"
 
-keys = [
-  { layer = 0, row = 0, col = 0, action = "OSM(LShift)" },
-  { layer = 0, row = 0, col = 1, action = "OSL(1)" },
-  { layer = 0, row = 0, col = 2, action = "A" },
-  { layer = 0, row = 0, col = 3, action = "TH(B, C)" },
-  { layer = 0, row = 0, col = 4, action = "OSM(LCtrl)" },
-  { layer = 0, row = 0, col = 5, action = "WM(B, LGui)" },
-  { layer = 1, row = 0, col = 0, action = "OSM(LShift | LCtrl)" },
-  { layer = 1, row = 0, col = 1, action = "No" },
-  { layer = 1, row = 0, col = 2, action = "C" },
-  { layer = 1, row = 0, col = 3, action = "D" },
-  { layer = 1, row = 0, col = 4, action = "E" },
-  { layer = 1, row = 0, col = 5, action = "F" },
-]
+[[keymap.layer]]
+keys = """
+OSM(LShift)  OSL(1)         A            TH(B, C)  OSM(LCtrl)  WM(B, LGui)   Kc6  Kc7  Kc8    Kc9    Kc0        Minus        Equal         Backspace
+Tab          Q              W            E         R           T             Y    U    I      O      P          LeftBracket  RightBracket  Backslash
+Escape       TH(A, LShift)  TH(S, LGui)  D         F           G             H    J    K      L      Semicolon  Quote        No            Enter
+LShift       TH(Z, LAlt)    X            C         V           B             N    M    Comma  Dot    Slash      No           No            RShift
+LCtrl        LGui           LAlt         No        No          LT(1, Space)  No   No   No     MO(1)  RAlt       No           RGui          RCtrl
+"""
+
+[[keymap.layer]]
+keys = """
+OSM(LShift | LCtrl)  No  C           D              E   F   F6  F7  F8  F9  F10   F11  F12   Delete
+No                   _   E           W              No  No  No  No  No  No  No    No   No    No
+CapsLock             No  No          No             No  No  No  No  No  No  No    No   No    No
+No                   No  SHIFTED(X)  WM(X, LShift)  No  No  No  No  No  No  No    No   No    Up
+No                   No  No          No             No  No  No  No  No  No  Left  No   Down  Right
+"""
 
 # Tap OSM(LShift), then tap A: the modifier lands on A only.
 [[test]]

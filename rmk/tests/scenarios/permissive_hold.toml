@@ -1,22 +1,27 @@
 # Tap-hold in PermissiveHold mode, ported from keyboard_morse_permissive_hold_test.rs.
 #
-# Row 0 of the shared board is patched to the morse fixture: A, MT(B, LShift),
+# The keymap is the shared test board with row 0 as the morse fixture: A, MT(B, LShift),
 # MT(C, LGui), LT(1, D), TD(0), with Kp1..Kp5 behind them on layer 1.
 
 keyboard = "boards/test_keymap.toml"
 
-keys = [
-  { layer = 0, row = 0, col = 0, action = "A" },
-  { layer = 0, row = 0, col = 1, action = "MT(B, LShift)" },
-  { layer = 0, row = 0, col = 2, action = "MT(C, LGui)" },
-  { layer = 0, row = 0, col = 3, action = "LT(1, D)" },
-  { layer = 0, row = 0, col = 4, action = "TD(0)" },
-  { layer = 1, row = 0, col = 0, action = "Kp1" },
-  { layer = 1, row = 0, col = 1, action = "Kp2" },
-  { layer = 1, row = 0, col = 2, action = "Kp3" },
-  { layer = 1, row = 0, col = 3, action = "Kp4" },
-  { layer = 1, row = 0, col = 4, action = "Kp5" },
-]
+[[keymap.layer]]
+keys = """
+A       MT(B, LShift)  MT(C, LGui)  LT(1, D)  TD(0)  Kc5           Kc6  Kc7  Kc8    Kc9    Kc0        Minus        Equal         Backspace
+Tab     Q              W            E         R      T             Y    U    I      O      P          LeftBracket  RightBracket  Backslash
+Escape  TH(A, LShift)  TH(S, LGui)  D         F      G             H    J    K      L      Semicolon  Quote        No            Enter
+LShift  TH(Z, LAlt)    X            C         V      B             N    M    Comma  Dot    Slash      No           No            RShift
+LCtrl   LGui           LAlt         No        No     LT(1, Space)  No   No   No     MO(1)  RAlt       No           RGui          RCtrl
+"""
+
+[[keymap.layer]]
+keys = """
+Kp1       Kp2  Kp3         Kp4            Kp5  F5  F6  F7  F8  F9  F10   F11  F12   Delete
+No        _    E           W              No   No  No  No  No  No  No    No   No    No
+CapsLock  No   No          No             No   No  No  No  No  No  No    No   No    No
+No        No   SHIFTED(X)  WM(X, LShift)  No   No  No  No  No  No  No    No   No    Up
+No        No   No          No             No   No  No  No  No  No  Left  No   Down  Right
+"""
 
 [behavior.morse]
 unilateral_tap = false

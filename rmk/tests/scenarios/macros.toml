@@ -12,10 +12,23 @@
 
 keyboard = "boards/test_keymap.toml"
 
-keys = [
-  { layer = 0, row = 0, col = 0, action = "MACRO(0)" },
-  { layer = 0, row = 0, col = 1, action = "MACRO(1)" },
-]
+[[keymap.layer]]
+keys = """
+MACRO(0)  MACRO(1)       Kc2          Kc3  Kc4  Kc5           Kc6  Kc7  Kc8    Kc9    Kc0        Minus        Equal         Backspace
+Tab       Q              W            E    R    T             Y    U    I      O      P          LeftBracket  RightBracket  Backslash
+Escape    TH(A, LShift)  TH(S, LGui)  D    F    G             H    J    K      L      Semicolon  Quote        No            Enter
+LShift    TH(Z, LAlt)    X            C    V    B             N    M    Comma  Dot    Slash      No           No            RShift
+LCtrl     LGui           LAlt         No   No   LT(1, Space)  No   No   No     MO(1)  RAlt       No           RGui          RCtrl
+"""
+
+[[keymap.layer]]
+keys = """
+Grave     F1  F2          F3             F4  F5  F6  F7  F8  F9  F10   F11  F12   Delete
+No        _   E           W              No  No  No  No  No  No  No    No   No    No
+CapsLock  No  No          No             No  No  No  No  No  No  No    No   No    No
+No        No  SHIFTED(X)  WM(X, LShift)  No  No  No  No  No  No  No    No   No    Up
+No        No  No          No             No  No  No  No  No  No  Left  No   Down  Right
+"""
 
 [[test]]
 name = "macro_key_a_press_release"
