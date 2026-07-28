@@ -41,4 +41,31 @@ impl crate::KeyboardTomlConfig {
             num_encoder,
         })
     }
+
+    /// Resolve the keymap without a board definition ([matrix]/[split]).
+    ///
+    /// Used by simulator scenarios, which have no physical matrix. The encoder
+    /// count comes from the board config, so encoder maps are rejected here.
+    pub fn keymap_headless(&self) -> Result<Keymap, String> {
+        let (keymap_config, key_info) = self.get_keymap_config()?;
+
+        for (i, encoders) in keymap_config.encoder_map.iter().enumerate() {
+            if !encoders.is_empty() {
+                return Err(format!(
+                    "keyboard.toml: [[keymap.layer]] #{i} defines encoders, which need a board config \
+                     and aren't supported in simulator scenarios"
+                ));
+            }
+        }
+
+        Ok(Keymap {
+            rows: keymap_config.rows,
+            cols: keymap_config.cols,
+            layers: keymap_config.layers,
+            keymap: keymap_config.keymap,
+            encoder_map: keymap_config.encoder_map,
+            key_info,
+            num_encoder: 0,
+        })
+    }
 }
