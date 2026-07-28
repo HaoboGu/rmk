@@ -1228,6 +1228,7 @@ name = "rmk-types"
 version = "0.2.2"
 dependencies = [
  "bitfield-struct",
+ "cobs",
  "heapless 0.9.3",
  "postcard",
  "rmk-config",

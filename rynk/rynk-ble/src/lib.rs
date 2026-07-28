@@ -63,7 +63,7 @@ impl Read for BleReader {
     }
 }
 
-/// Write half of the attached Rynk GATT link: acknowledged GATT writes, capped
+/// Write half of the attached Rynk GATT link: write-without-response, capped
 /// to the characteristic's capacity.
 pub struct BleWriter {
     output: Characteristic,
@@ -76,13 +76,14 @@ impl rynk::io::ErrorType for BleWriter {
 
 impl Write for BleWriter {
     /// One GATT write per call, capped to the characteristic; `write_all` loops the
-    /// rest. Acknowledged — a dropped chunk would desync the firmware's reassembler.
+    /// rest. Write-without-response: the LE link layer still delivers reliably, and
+    /// skipping the ATT ack saves a full connection-interval round trip per chunk.
     async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         if buf.is_empty() {
             return Ok(0);
         }
         let n = buf.len().min(self.write_chunk);
-        self.output.write(&buf[..n]).await.map_err(|e| {
+        self.output.write_without_response(&buf[..n]).await.map_err(|e| {
             // Preserve the GATT error detail before the driver reduces it to `ErrorKind`.
             log::warn!("rynk-ble: gatt write: {e}");
             std::io::Error::other("gatt write")

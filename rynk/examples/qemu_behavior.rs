@@ -20,11 +20,12 @@ use rynk::rmk_types::led_indicator::LedIndicator;
 use rynk::rmk_types::modifier::ModifierCombination;
 use rynk::rmk_types::morse::{Morse, MorseProfile};
 use rynk::rmk_types::protocol::rynk::{MacroData, ProtocolVersion, RynkError, StorageResetMode};
-use rynk::{Client, LayoutInfo, RynkDevice, RynkHostError};
+use rynk::{Client, LayoutInfo, RynkDevice, RynkHostError, TopicEvent};
 use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(1);
 const DEFAULT_ADDR: &str = "127.0.0.1:9000";
 
 /// The QEMU TCP serial as a device, connecting through [`RynkDevice::connect`].
@@ -119,9 +120,20 @@ async fn script(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
     assert!(!caps.is_split);
     assert!(caps.bulk_transfer_supported);
     assert!(caps.max_bulk_keys > 0);
-    assert!(caps.max_bulk_configs > 0);
+    assert!(caps.max_bulk_items > 0);
 
     assert_eq!(client.get_capabilities().await?, caps);
+
+    // Concurrent requests must both complete: replies route by SEQ, not send
+    // order. Bounded so a routing regression fails instead of hanging.
+    let (wpm, sleeping) = tokio::time::timeout(REQUEST_TIMEOUT, async {
+        let (wpm, sleeping) = tokio::join!(client.get_wpm(), client.get_sleep_state());
+        Ok::<_, RynkHostError>((wpm?, sleeping?))
+    })
+    .await
+    .map_err(|_| "concurrent get_wpm + get_sleep_state timed out over QEMU UART")??;
+    assert_eq!(wpm, 0);
+    assert!(!sleeping);
 
     assert_eq!(client.get_default_layer().await?, 0);
     client.set_default_layer(1).await?;
@@ -133,6 +145,19 @@ async fn script(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
     );
     client.set_default_layer(0).await?;
     assert_eq!(client.get_default_layer().await?, 0);
+
+    // Host-driven default-layer changes surface on the topic stream (the
+    // activated layer follows the default); the rejected set publishes nothing
+    // in between.
+    for expected in [1u8, 0] {
+        let ev = tokio::time::timeout(REQUEST_TIMEOUT, client.next_topic())
+            .await
+            .map_err(|_| format!("no LayerChange({expected}) topic within timeout"))?;
+        assert!(
+            matches!(ev, TopicEvent::LayerChange(l) if l == expected),
+            "expected LayerChange({expected}), got {ev:?}"
+        );
+    }
 
     let expected_layers = [
         [
@@ -358,7 +383,7 @@ async fn script(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
 
     // Fire-and-forget commands: no-ops on this riscv fixture (the reset path is
     // cortex-m/esp only), so the session survives and the orphaned reply is
-    // absorbed by seq matching on the next request.
+    // dropped by the client's SEQ routing while the next request proceeds.
     client.reboot().await?;
     assert_eq!(client.get_version().await?, ProtocolVersion::CURRENT);
     client.bootloader_jump().await?;

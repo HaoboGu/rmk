@@ -5,8 +5,8 @@ use rmk_types::protocol::rynk::command::{
     BootloaderJump, GetCapabilities, GetDeviceInfo, GetLockStatus, GetVersion, Lock, Reboot, StorageReset, UnlockPoll,
 };
 use rmk_types::protocol::rynk::{
-    DEVICE_INFO_STRING_SIZE, DeviceCapabilities, DeviceInfo, LockStatus, ProtocolVersion, RYNK_HEADER_SIZE, RynkError,
-    StorageResetMode,
+    DEVICE_INFO_STRING_SIZE, DeviceCapabilities, DeviceInfo, LockStatus, MAX_BULK_ITEMS, MAX_BULK_KEYS,
+    ProtocolVersion, RYNK_MAX_PAYLOAD_SIZE, RynkError, StorageResetMode,
 };
 
 use super::super::{RMK_VERSION, RynkService, RynkSession};
@@ -47,10 +47,10 @@ impl Handle<GetCapabilities> for RynkService<'_> {
             num_ble_profiles: constants::NUM_BLE_PROFILE as u8,
 
             // Protocol limits
-            max_payload_size: (constants::RYNK_BUFFER_SIZE - RYNK_HEADER_SIZE) as u16,
+            max_payload_size: RYNK_MAX_PAYLOAD_SIZE as u16,
             macro_chunk_size: constants::MACRO_DATA_SIZE as u16,
-            max_bulk_keys: constants::BULK_KEYMAP_SIZE as u8,
-            max_bulk_configs: constants::BULK_SIZE as u8,
+            max_bulk_keys: MAX_BULK_KEYS as u8,
+            max_bulk_items: MAX_BULK_ITEMS as u8,
             bulk_transfer_supported: true,
         })
     }

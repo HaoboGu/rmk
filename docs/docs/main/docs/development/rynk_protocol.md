@@ -6,15 +6,17 @@
 
 Current protocol version: **0.1**.
 
-Every transport (USB CDC, BLE GATT, BLE HID) carries the same frame — a 5-byte header plus a [postcard](https://docs.rs/postcard)-encoded payload:
+Every transport (USB CDC, BLE GATT, BLE HID) carries the same frame — a 3-byte header plus a [postcard](https://docs.rs/postcard)-encoded payload:
 
 ```text
-┌──────────────┬───────────┬────────────────────┐
-│ CMD u16 LE   │ SEQ u8    │ LEN u16 LE         │  ← 5-byte header
-├──────────────┴───────────┴────────────────────┤
-│              postcard-encoded payload         │  ← LEN bytes
-└───────────────────────────────────────────────┘
+┌──────────────┬───────────┐
+│  CMD u16 LE  │  SEQ u8   │  ← 3-byte header
+├──────────────┴───────────┤
+│ postcard-encoded payload │
+└──────────────────────────┘
 ```
+
+On the wire the whole frame is COBS-encoded and terminated by a single `0x00` delimiter, so the byte stream is self-synchronizing.
 
 - **Requests** use CMD `0x0000..=0x7FFF`. The response echoes CMD and SEQ and wraps its payload in postcard `Result<T, RynkError>` (`T = ()` for `Set*`).
 - **Topics** use CMD `0x8000..=0xFFFF` (server → host push, SEQ `0`, bare payload).

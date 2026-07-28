@@ -32,7 +32,7 @@ use crate::mouse_button::MouseButtons;
 ///
 /// Sized at twice the type's declared `POSTCARD_MAX_SIZE` plus a small
 /// fixed slack so that:
-/// - under feature configurations with a large `BULK_SIZE`, max-capacity
+/// - under feature configurations with a large `MAX_BULK_ITEMS`, max-capacity
 ///   bulk payloads still fit comfortably;
 /// - an under-counted manual `MaxSize` impl produces a clear assertion
 ///   failure in `assert_max_size_bound` instead of a `SerializeBufferFull`
@@ -192,10 +192,8 @@ fn encode<T: serde::Serialize>(val: &T) -> alloc::vec::Vec<u8> {
 
 fn encode_frame<T: serde::Serialize>(cmd: Cmd, seq: u8, val: &T) -> alloc::vec::Vec<u8> {
     let mut buf = [0u8; 256];
-    RynkMessage::build(&mut buf, cmd, seq, val)
-        .expect("frame")
-        .frame()
-        .to_vec()
+    let n = super::message::encode_frame(&mut buf, RynkHeader { cmd, seq }, val).expect("frame");
+    buf[..n].to_vec()
 }
 
 /// Composite wire exemplars shared by both the type and frame snapshots, so
@@ -241,7 +239,7 @@ fn exemplars() -> Exemplars {
         num_ble_profiles: 12,
         max_payload_size: 13,
         max_bulk_keys: 14,
-        max_bulk_configs: 15,
+        max_bulk_items: 15,
         macro_chunk_size: 16,
         bulk_transfer_supported: true,
     };
@@ -569,12 +567,11 @@ fn wire_values_locked() {
     snapshot::assert_snapshot("snapshots/wire_values.snap", actual);
 }
 
-/// Lock down full Rynk frames — the 5-byte header (CMD u16 LE + SEQ u8 +
-/// LEN u16 LE) plus postcard payload — one per feature-independent protocol
-/// message: every request, its `Ok` reply, a representative `Err` reply, and
-/// every topic push. A diff here means the header layout, a `Cmd` number,
-/// the `Result<T, RynkError>` reply envelope, or a message's frame changed;
-/// if intentional, regenerate and bump `ProtocolVersion::CURRENT`.
+/// Lock down full Rynk frames — the 3-byte header plus postcard payload,
+/// COBS-encoded with a trailing `0x00` delimiter — one per feature-independent
+/// protocol message: every request, its `Ok` reply, a representative `Err`
+/// reply, and every topic push. A diff means the wire format changed; if
+/// intentional, regenerate and bump `ProtocolVersion::CURRENT`.
 ///
 /// Requests and replies use SEQ 1 (a reply echoes its request's SEQ); topics
 /// always use SEQ 0. The `GetVersion` probe and reply are frozen across all
@@ -932,10 +929,10 @@ fn wire_frames_locked() {
     let actual = snapshot::format_value_snapshot(
         "snapshots/wire_frames.snap",
         "Wire-format FRAME snapshot",
-        "# Each entry is a full Rynk frame — 5-byte header (CMD u16 LE + SEQ u8 + LEN\n\
-         # u16 LE) + postcard payload — one per protocol message; the label names the\n\
-         # decoded payload (`()` = empty). A diff means the header, a CMD number, or a\n\
-         # message frame changed. If intentional, bump ProtocolVersion::CURRENT and regenerate:",
+        "# Each entry is a full Rynk frame — a 3-byte header (CMD u16 LE + SEQ u8) + postcard\n\
+         # payload, COBS-encoded with a trailing 0x00 delimiter — one per protocol message; the\n\
+         # label names the decoded payload (`()` = empty). A diff means the header, a CMD number,\n\
+         # or a message frame changed. If intentional, bump ProtocolVersion::CURRENT and regenerate:",
         "wire_frames",
         &view,
     );
@@ -1071,14 +1068,15 @@ mod protocol_reference {
             "{header}\n\n\
              # Rynk Protocol Reference\n\n\
              Current protocol version: **{major}.{minor}**.\n\n\
-             Every transport (USB CDC, BLE GATT, BLE HID) carries the same frame — a 5-byte header plus a [postcard](https://docs.rs/postcard)-encoded payload:\n\n\
+             Every transport (USB CDC, BLE GATT, BLE HID) carries the same frame — a 3-byte header plus a [postcard](https://docs.rs/postcard)-encoded payload:\n\n\
              ```text\n\
-             ┌──────────────┬───────────┬────────────────────┐\n\
-             │ CMD u16 LE   │ SEQ u8    │ LEN u16 LE         │  ← 5-byte header\n\
-             ├──────────────┴───────────┴────────────────────┤\n\
-             │              postcard-encoded payload         │  ← LEN bytes\n\
-             └───────────────────────────────────────────────┘\n\
+             ┌──────────────┬───────────┐\n\
+             │  CMD u16 LE  │  SEQ u8   │  ← 3-byte header\n\
+             ├──────────────┴───────────┤\n\
+             │ postcard-encoded payload │\n\
+             └──────────────────────────┘\n\
              ```\n\n\
+             On the wire the whole frame is COBS-encoded and terminated by a single `0x00` delimiter, so the byte stream is self-synchronizing.\n\n\
              - **Requests** use CMD `0x0000..=0x7FFF`. The response echoes CMD and SEQ and wraps its payload in postcard `Result<T, RynkError>` (`T = ()` for `Set*`).\n\
              - **Topics** use CMD `0x8000..=0xFFFF` (server → host push, SEQ `0`, bare payload).\n\n\
              Which commands a firmware answers depends on the RMK Cargo features it was built with: a row with no **Feature** is present once `rynk` is on, and the rest need their feature (`_ble`, `split`, …) compiled in. A command the firmware wasn't built with answers `UnknownCmd`.\n\n\

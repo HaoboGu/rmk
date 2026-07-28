@@ -31,10 +31,12 @@ use embassy_futures::join::join;
 use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::pipe::Pipe;
-use embedded_io_async::Read;
+use postcard::ser_flavors::{Cobs, Flavor, Slice};
 use rmk::host::HostService as RynkService;
 use rmk_types::constants::RYNK_BUFFER_SIZE;
-use rmk_types::protocol::rynk::{Cmd, DeviceCapabilities, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage};
+use rmk_types::protocol::rynk::{
+    Cmd, Deframer, DeviceCapabilities, RYNK_HEADER_SIZE, RynkError, RynkHeader, encode_frame, max_wire_size,
+};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -69,6 +71,14 @@ impl Frame {
         let (value, rest) = postcard::take_from_bytes::<T>(&self.payload).expect("topic payload must decode");
         assert!(rest.is_empty(), "topic payload has {} trailing byte(s)", rest.len());
         value
+    }
+
+    pub fn next_from(df: &mut Deframer, rxbuf: &mut [u8]) -> Option<Self> {
+        let frame_len = df.next(rxbuf)?;
+        let frame = &rxbuf[..frame_len];
+        let header = RynkHeader::parse(frame[..RYNK_HEADER_SIZE].try_into().unwrap());
+        let payload = frame[RYNK_HEADER_SIZE..].to_vec();
+        Some(Frame { header, payload })
     }
 }
 
@@ -149,34 +159,49 @@ pub struct RynkClient<'p> {
     rx: &'p Link,
     tx: &'p Link,
     buf: [u8; RYNK_BUFFER_SIZE],
+    df: Deframer,
+    rxbuf: [u8; RYNK_BUFFER_SIZE],
 }
 
 impl RynkClient<'_> {
-    /// Send hand-built bytes verbatim — for malformed / adversarial framing.
+    /// Send hand-built bytes verbatim — for garbage / adversarial framing.
     pub async fn send_raw(&mut self, bytes: &[u8]) {
         self.tx.write_all(bytes).await;
+    }
+
+    /// COBS-frame and send a hand-built logical frame (`[cmd, seq] ++ payload`),
+    /// for adversarial payloads the typed `send` can't express.
+    pub async fn send_logical(&mut self, cmd: Cmd, seq: u8, payload: &[u8]) {
+        let mut framed = vec![0u8; max_wire_size(RYNK_HEADER_SIZE + payload.len())];
+        let n = {
+            let mut cobs = Cobs::try_new(Slice::new(&mut framed)).unwrap();
+            cobs.try_extend(&RynkHeader { cmd, seq }.to_bytes()).unwrap();
+            cobs.try_extend(payload).unwrap();
+            cobs.finalize().unwrap().len()
+        };
+        framed.truncate(n);
+        self.tx.write_all(&framed).await;
     }
 }
 
 impl RynkHostClient for RynkClient<'_> {
     async fn send<T: Serialize>(&mut self, cmd: Cmd, seq: u8, payload: &T) {
-        let msg = RynkMessage::build(&mut self.buf, cmd, seq, payload).expect("build request frame");
+        let n = encode_frame(&mut self.buf, RynkHeader { cmd, seq }, payload).expect("build request frame");
         // `Pipe::write_all` is inherent and infallible (the in-memory link
         // never errors); it just blocks until the device drains enough room.
-        self.tx.write_all(msg.frame()).await;
+        self.tx.write_all(&self.buf[..n]).await;
     }
 
-    /// Read exactly one frame off the wire: fixed header, then declared payload.
+    /// Read exactly one frame off the wire, deframing the COBS byte stream.
     async fn recv_frame(&mut self) -> Frame {
-        let mut rx = self.rx;
-        let mut bytes = [0u8; RYNK_HEADER_SIZE];
-        rx.read_exact(&mut bytes).await.expect("read header");
-        let header = RynkHeader::parse(&bytes);
-        let mut payload = vec![0u8; header.payload_len as usize];
-        if !payload.is_empty() {
-            rx.read_exact(&mut payload).await.expect("read payload");
+        loop {
+            if let Some(frame) = Frame::next_from(&mut self.df, &mut self.rxbuf) {
+                return frame;
+            }
+            let rx = self.rx;
+            let n = rx.read(self.df.tail(&mut self.rxbuf)).await;
+            self.df.commit(n);
         }
-        Frame { header, payload }
     }
 }
 
@@ -196,6 +221,8 @@ pub fn link_session<T>(service: &RynkService<'_>, script: impl AsyncFnOnce(&mut 
         rx: &d2h,
         tx: &h2d,
         buf: [0u8; RYNK_BUFFER_SIZE],
+        df: Deframer::new(),
+        rxbuf: [0u8; RYNK_BUFFER_SIZE],
     };
     test_block_on(async {
         // Drain test flash writes so storage handlers cannot block the session.
@@ -227,11 +254,15 @@ pub fn link_two_sessions<T>(
         rx: &d2h_a,
         tx: &h2d_a,
         buf: [0u8; RYNK_BUFFER_SIZE],
+        df: Deframer::new(),
+        rxbuf: [0u8; RYNK_BUFFER_SIZE],
     };
     let mut client_b = RynkClient {
         rx: &d2h_b,
         tx: &h2d_b,
         buf: [0u8; RYNK_BUFFER_SIZE],
+        df: Deframer::new(),
+        rxbuf: [0u8; RYNK_BUFFER_SIZE],
     };
     test_block_on(async {
         // Both sessions run concurrently and never EOF; the pair is dropped once

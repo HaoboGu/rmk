@@ -23,9 +23,8 @@ export CARGO_TERM_PROGRESS_WHEN=never
 export CARGO_NET_GIT_FETCH_WITH_CLI=true
 export TERM="${TERM:-dumb}"
 
-# Shared target dir for scripts that run cargo. Callers that need it should
-# `mkdir -p "$target_root"` before use; we don't create it here so scripts
-# that don't run cargo (e.g. discover.sh) don't leave an empty directory.
+# Shared parent for CI target directories. Cargo creates each target directory
+# itself so it also writes the CACHEDIR.TAG required by `cargo clean`.
 target_root="$repo_root/target/ci"
 
 log_section() {

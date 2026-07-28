@@ -1,171 +1,187 @@
 //! Rynk wire-format message.
 //!
-//! A [`RynkMessage`] contains a 5-byte header and a
-//! postcard-encoded payload:
+//! ## Wire format
 //!
 //! ```text
-//! ┌──────────────┬───────┬──────────────┐
-//! │  CMD u16 LE  │SEQ u8 │  LEN u16 LE  │  ← 5-byte header
-//! ├──────────────┴───────┴──────────────┤
-//! │          payload bytes ...          │
-//! └─────────────────────────────────────┘
+//! ┌──────────────┬────────────┐
+//! │  CMD u16 LE  │   SEQ u8   │  ← 3-byte header
+//! ├──────────────┴────────────┤
+//! │ postcard-encoded payload  │
+//! └───────────────────────────┘
 //! ```
 //!
+//! One frame is the 3-byte header plus a postcard-encoded payload.
+//! The frame is COBS-encoded on the wire.
 
+use postcard::ser_flavors::{Cobs, Flavor, Slice};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use super::RynkError;
 use super::command::Cmd;
-use super::endpoint::Topic;
 
 /// Size in bytes of the fixed Rynk header.
-pub const RYNK_HEADER_SIZE: usize = 5;
+pub const RYNK_HEADER_SIZE: usize = 3;
 
 /// The fixed header of a [`RynkMessage`].
 #[derive(Debug, Clone, Copy)]
 pub struct RynkHeader {
     pub cmd: Cmd,
     pub seq: u8,
-    pub payload_len: u16,
 }
 
 impl RynkHeader {
-    /// Decode the 5 header bytes.
+    /// Decode the 3 header bytes.
     pub const fn parse(bytes: &[u8; RYNK_HEADER_SIZE]) -> Self {
         Self {
             cmd: Cmd::from_le_bytes([bytes[0], bytes[1]]),
             seq: bytes[2],
-            payload_len: u16::from_le_bytes([bytes[3], bytes[4]]),
         }
     }
 
-    /// Total frame length in bytes — header + declared payload.
-    pub fn frame_len(&self) -> usize {
-        RYNK_HEADER_SIZE + self.payload_len as usize
-    }
-
-    /// Frame length declared by a raw buffer's leading header bytes;
-    /// `None` when `bytes` is shorter than a header.
-    pub fn peek_frame_len(bytes: &[u8]) -> Option<usize> {
-        bytes.first_chunk().map(|head| Self::parse(head).frame_len())
+    pub const fn to_bytes(&self) -> [u8; RYNK_HEADER_SIZE] {
+        let cmd_bytes = self.cmd.to_le_bytes();
+        [cmd_bytes[0], cmd_bytes[1], self.seq]
     }
 }
 
-/// A RynkMessage is a mutable view over the byte buffer holding one frame:
-/// the fixed header followed by the payload (plus response scratch on receive).
+/// Calculate worst-case wire size of a frame: streaming-COBS code bytes
+/// plus the `0x00` delimiter. Inverse of `max_frame_size`.
+pub const fn max_wire_size(frame_size: usize) -> usize {
+    frame_size + frame_size / 254 + 2
+}
+
+/// Calculate largest logical frame size that can be COBS-encoded into a
+/// physical buffer of the given size, delimiter included.
+pub(crate) const fn max_frame_size(max_encoded_size: usize) -> usize {
+    let mut len = 0;
+    while max_wire_size(len + 1) <= max_encoded_size {
+        len += 1;
+    }
+    len
+}
+
+/// Largest request/response payload either peer can carry in one frame.
+pub const RYNK_MAX_PAYLOAD_SIZE: usize = {
+    let frame_size = max_frame_size(crate::constants::RYNK_BUFFER_SIZE);
+    // Assert before subtracting so a too-small buffer fails with this message,
+    // not a const-eval underflow.
+    assert!(
+        frame_size >= RYNK_HEADER_SIZE,
+        "rynk_buffer_size is too small for a COBS-framed header; increase it"
+    );
+    frame_size - RYNK_HEADER_SIZE
+};
+
+/// COBS-encode the frame `header ++ postcard(value)` into `buf`, returning the
+/// total framed length. The header goes through the COBS encoder too, so a
+/// `0x00` in it never aliases the delimiter.
+pub fn encode_frame<T: Serialize>(buf: &mut [u8], header: RynkHeader, value: &T) -> Result<usize, RynkError> {
+    let mut ser = postcard::Serializer {
+        output: Cobs::try_new(Slice::new(buf)).map_err(|_| RynkError::Internal)?,
+    };
+    ser.output
+        .try_extend(&header.to_bytes())
+        .map_err(|_| RynkError::Internal)?;
+    value.serialize(&mut ser).map_err(|_| RynkError::Internal)?;
+    Ok(ser.output.finalize().map_err(|_| RynkError::Internal)?.len())
+}
+
+/// One page of bulk-response items. Serializes as a postcard seq — the wire
+/// shape of a `Vec` of the items — streaming from the iterator instead of
+/// materializing one.
+struct BulkItems<I>(I);
+
+impl<I> Serialize for BulkItems<I>
+where
+    I: ExactSizeIterator + Clone,
+    I::Item: Serialize,
+{
+    fn serialize<S: serde::Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        let mut seq = ser.serialize_seq(Some(self.0.len()))?;
+        for item in self.0.clone() {
+            seq.serialize_element(&item)?;
+        }
+        seq.end()
+    }
+}
+
+/// One received frame, answered in place: wrap the decoded logical frame
+/// (`[cmd, seq, payload]`), decode the request out of it, then `encode_*` the
+/// reply over it. The header is cached because the reply overwrites the buffer.
 pub struct RynkMessage<'a> {
-    // Invariant: both constructors reject buffers shorter than the header.
     buf: &'a mut [u8],
+    header: RynkHeader,
+    /// Valid prefix of `buf`: the logical frame on arrival, the COBS-framed
+    /// reply after `encode_*`.
+    len: usize,
 }
 
 impl<'a> RynkMessage<'a> {
-    /// Build an outbound message: postcard-encode `value` into the payload,
-    /// then write `cmd`, `seq`, and `payload_len` into the header.
-    pub fn build<T: Serialize>(buf: &'a mut [u8], cmd: Cmd, seq: u8, value: &T) -> Result<Self, RynkError> {
-        let Some((header, body)) = buf.split_first_chunk_mut::<RYNK_HEADER_SIZE>() else {
-            // Outbound encode: a buffer too small for the header is a
-            // firmware-side fault, not a malformed host request.
-            return Err(RynkError::Internal);
-        };
-        let n = postcard::to_slice(value, body)
-            .map(|s| s.len())
-            .map_err(|_| RynkError::Internal)?;
-        header[0..2].copy_from_slice(&cmd.to_le_bytes());
-        header[2] = seq;
-        header[3..5].copy_from_slice(&(n as u16).to_le_bytes());
-        Ok(Self { buf })
-    }
-
-    /// Build a topic push frame.
-    pub fn build_topic<T: Topic>(buf: &'a mut [u8], value: &T::Payload) -> Result<Self, RynkError> {
-        Self::build(buf, T::CMD, 0, value)
+    /// Wrap a decoded logical frame occupying `buf[..len]`; the rest of `buf` is
+    /// scratch the `encode_*` replies may grow into. The caller guarantees
+    /// `len >= RYNK_HEADER_SIZE`, as [`Deframer::next`](super::Deframer::next) does.
+    pub fn from_decoded(buf: &'a mut [u8], len: usize) -> Self {
+        debug_assert!(len >= RYNK_HEADER_SIZE && len <= buf.len());
+        let header = RynkHeader::parse(buf.first_chunk().unwrap());
+        Self { buf, header, len }
     }
 
     /// The decoded header.
     pub const fn header(&self) -> RynkHeader {
-        RynkHeader::parse(self.buf.first_chunk().unwrap())
+        self.header
     }
 
-    /// Total frame length in bytes — header + payload.
-    pub fn frame_len(&self) -> usize {
-        self.header().frame_len()
+    /// Physical bytes available to the reply — the whole wrapped buffer, which
+    /// shrinks when a pipelined tail is parked behind it.
+    pub fn capacity(&self) -> usize {
+        self.buf.len()
     }
 
-    /// The encoded frame: header + payload, ready to transmit.
+    /// The COBS-encoded reply frame, ready to transmit. Valid after `encode_*`.
     pub fn frame(&self) -> &[u8] {
-        &self.buf[..self.frame_len()]
+        &self.buf[..self.len]
     }
 
-    /// Returns the payload bytes specified by the header length.
+    /// The decoded payload bytes. Valid on a received (decoded) message.
     pub fn payload(&self) -> &[u8] {
-        let payload_len = self.header().payload_len as usize;
-        &self.buf[RYNK_HEADER_SIZE..RYNK_HEADER_SIZE + payload_len]
-    }
-
-    fn set_payload_len(&mut self, len: u16) {
-        self.buf[3..5].copy_from_slice(&len.to_le_bytes());
+        &self.buf[RYNK_HEADER_SIZE..self.len]
     }
 
     /// Decode the request payload.
-    /// A short frame is rejected as `Malformed` instead of reading response scratch.
     pub fn decode_request<T: DeserializeOwned>(&self) -> Result<T, RynkError> {
         postcard::from_bytes(self.payload()).map_err(|_| RynkError::Malformed)
     }
 
-    /// Encode `Ok(value)` into the payload and update `LEN`.
+    /// Encode `Ok(value)` as the response frame, replacing the buffer contents.
     pub fn encode_response<T: Serialize>(&mut self, value: &T) -> Result<(), RynkError> {
-        let n = postcard::to_slice(&Ok::<&T, RynkError>(value), &mut self.buf[RYNK_HEADER_SIZE..])
-            .map(|s| s.len())
-            .map_err(|_| RynkError::Internal)?;
-        self.set_payload_len(n as u16);
+        self.len = encode_frame(self.buf, self.header, &Ok::<&T, RynkError>(value))?;
         Ok(())
     }
 
-    /// Encodes a sequence directly into an `Ok` response without allocating a `Vec`.
-    /// The bytes match postcard's `Ok` tag, sequence length, and element encoding.
-    pub fn encode_bulk_ok<T, I>(&mut self, count: usize, items: I) -> Result<(), RynkError>
+    /// Encode `Ok(items)` as a bulk response frame, streaming the page through
+    /// the COBS encoder — no `Vec` needed.
+    pub fn encode_bulk<I>(&mut self, items: I) -> Result<(), RynkError>
     where
-        T: Serialize,
-        I: IntoIterator<Item = T>,
+        I: ExactSizeIterator + Clone,
+        I::Item: Serialize,
     {
-        let body = &mut self.buf[RYNK_HEADER_SIZE..];
-        // postcard encodes `Result::Ok` with tag 0.
-        *body.first_mut().ok_or(RynkError::Internal)? = 0;
-        let mut used = 1;
-        used += postcard::to_slice(&count, &mut body[used..])
-            .map_err(|_| RynkError::Internal)?
-            .len();
-        for item in items {
-            used += postcard::to_slice(&item, &mut body[used..])
-                .map_err(|_| RynkError::Internal)?
-                .len();
-        }
-        self.set_payload_len(used as u16);
+        self.len = encode_frame(self.buf, self.header, &Ok::<_, RynkError>(BulkItems(items)))?;
         Ok(())
-    }
-
-    /// Encode `Err(err)` into the payload and update `LEN`.
-    pub fn encode_error(&mut self, err: RynkError) {
-        let n = postcard::to_slice(&Err::<(), RynkError>(err), &mut self.buf[RYNK_HEADER_SIZE..])
-            .map(|s| s.len())
-            .unwrap_or(0);
-        self.set_payload_len(n as u16);
     }
 }
 
 impl<'a> TryFrom<&'a mut [u8]> for RynkMessage<'a> {
     type Error = RynkError;
 
-    /// Build [`RynkMessage`] from buffer.
+    /// Wrap already-decoded logical frame bytes (the host channel path).
     fn try_from(buf: &'a mut [u8]) -> Result<Self, RynkError> {
-        let Some(header) = buf.first_chunk::<RYNK_HEADER_SIZE>() else {
-            return Err(RynkError::Malformed);
-        };
-        if buf.len() < RynkHeader::parse(header).frame_len() {
+        if buf.len() < RYNK_HEADER_SIZE {
             return Err(RynkError::Malformed);
         }
-        Ok(Self { buf })
+        let len = buf.len();
+        Ok(Self::from_decoded(buf, len))
     }
 }
 
@@ -174,31 +190,72 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_round_trip() {
-        let mut buf = [0u8; 32];
-        let msg = RynkMessage::build(&mut buf, Cmd::GetVersion, 0x42, &[1u8, 2, 3, 4]).unwrap();
-        assert_eq!(msg.header().cmd, Cmd::GetVersion);
-        assert_eq!(msg.header().seq, 0x42);
-        // postcard encodes [u8; 4] as 4 bare bytes
-        assert_eq!(msg.header().payload_len, 4);
-        assert_eq!(&msg.payload()[..4], &[1, 2, 3, 4]);
-        assert_eq!(msg.frame_len(), RYNK_HEADER_SIZE + 4);
-        assert_eq!(msg.frame(), &[0x01, 0x00, 0x42, 0x04, 0x00, 1, 2, 3, 4]);
+    fn encoded_frame_round_trips_through_cobs() {
+        // GetVersion = 0x0001, so cmd_hi is 0x00 — a good test that COBS carries
+        // an interior zero without it aliasing the delimiter.
+        let mut buf = [0u8; 64];
+        let framed_len = encode_frame(
+            &mut buf,
+            RynkHeader {
+                cmd: Cmd::GetVersion,
+                seq: 0x42,
+            },
+            &[1u8, 2, 3, 4],
+        )
+        .unwrap();
+        // The wire frame is delimiter-terminated with no interior 0x00.
+        assert_eq!(buf[framed_len - 1], 0);
+        assert!(buf[..framed_len - 1].iter().all(|&b| b != 0));
+
+        // Decode it back to the logical [cmd, seq, payload].
+        let n = cobs::decode_in_place(&mut buf[..framed_len - 1]).unwrap();
+        let header = RynkHeader::parse(buf[..RYNK_HEADER_SIZE].try_into().unwrap());
+        assert_eq!(header.cmd, Cmd::GetVersion);
+        assert_eq!(header.seq, 0x42);
+        // postcard encodes [u8; 4] as 4 bare bytes.
+        assert_eq!(&buf[RYNK_HEADER_SIZE..n], &[1, 2, 3, 4]);
     }
 
     #[test]
-    fn build_rejects_short_buffer() {
-        let mut buf = [0u8; RYNK_HEADER_SIZE - 1];
+    fn encode_rejects_short_buffer() {
+        // Too small to hold the COBS-framed 3-byte header.
+        let mut buf = [0u8; 2];
         assert_eq!(
-            RynkMessage::build(&mut buf, Cmd::GetVersion, 0, &()).err(),
+            encode_frame(
+                &mut buf,
+                RynkHeader {
+                    cmd: Cmd::GetVersion,
+                    seq: 0
+                },
+                &()
+            )
+            .err(),
             Some(RynkError::Internal),
         );
     }
 
     #[test]
+    fn encode_bulk_streams_the_ok_sequence_shape() {
+        // The streamed bulk reply must be byte-identical to a plain
+        // `Ok(sequence)` value, or hosts can't decode it.
+        let header = RynkHeader {
+            cmd: Cmd::GetKeymapBulk,
+            seq: 7,
+        };
+        let mut buf = [0u8; 64];
+        buf[..RYNK_HEADER_SIZE].copy_from_slice(&header.to_bytes());
+        let mut msg = RynkMessage::from_decoded(&mut buf, RYNK_HEADER_SIZE);
+        msg.encode_bulk([1u8, 2, 3].into_iter().map(|b| b * 2)).unwrap();
+
+        let mut expected = [0u8; 64];
+        let n = encode_frame(&mut expected, header, &Ok::<&[u8], RynkError>(&[2, 4, 6])).unwrap();
+        assert_eq!(msg.frame(), &expected[..n]);
+    }
+
+    #[test]
     fn try_from_rejects_short_buffer() {
         let mut buf = [0u8; RYNK_HEADER_SIZE - 1];
-        assert_eq!(RynkMessage::try_from(&mut buf[..]).err(), Some(RynkError::Malformed),);
+        assert_eq!(RynkMessage::try_from(&mut buf[..]).err(), Some(RynkError::Malformed));
     }
 
     #[test]
@@ -210,30 +267,71 @@ mod tests {
     }
 
     #[test]
-    fn try_from_accepts_valid_header() {
-        let mut buf = [0u8; RYNK_HEADER_SIZE];
-        buf[0..2].copy_from_slice(&Cmd::GetVersion.to_le_bytes());
-        let msg = RynkMessage::try_from(&mut buf[..]).unwrap();
-        assert_eq!(msg.header().cmd, Cmd::GetVersion);
-    }
-
-    #[test]
-    fn try_from_rejects_buffer_shorter_than_payload_len() {
-        // Header says payload_len = 10, but the buffer only has 4 payload bytes.
-        let mut buf = [0u8; RYNK_HEADER_SIZE + 4];
-        buf[0..2].copy_from_slice(&Cmd::GetVersion.to_le_bytes());
-        buf[3..5].copy_from_slice(&10u16.to_le_bytes());
-        assert_eq!(RynkMessage::try_from(&mut buf[..]).err(), Some(RynkError::Malformed),);
-    }
-
-    #[test]
-    fn inbound_payload_views_are_bounded_by_declared_len() {
-        let mut buf = [0xCCu8; 32];
+    fn decoded_payload_spans_header_to_len() {
+        let mut buf = [0u8; 8];
         buf[0..2].copy_from_slice(&Cmd::SetDefaultLayer.to_le_bytes());
         buf[2] = 0x34;
-        buf[3..5].copy_from_slice(&0u16.to_le_bytes());
+        buf[3..].copy_from_slice(&[0xAA, 0xBB, 0xCC, 0xDD, 0xEE]);
 
         let msg = RynkMessage::try_from(&mut buf[..]).unwrap();
-        assert_eq!(msg.payload(), &[]);
+        assert_eq!(msg.header().cmd, Cmd::SetDefaultLayer);
+        assert_eq!(msg.header().seq, 0x34);
+        assert_eq!(msg.payload(), &[0xAA, 0xBB, 0xCC, 0xDD, 0xEE]);
+    }
+
+    #[test]
+    fn max_frame_size_is_exact_for_streaming_cobs() {
+        // COBS worst case is an all-nonzero frame. For each physical size,
+        // max_frame_size bytes must stream-encode into it and one byte more
+        // must not — the inverse of the encoder's worst case is exact, including
+        // at the 254-block boundaries where streaming COBS costs one byte over
+        // one-shot encoding.
+        let nonzero = [0x41u8; 600];
+        let encodes_into = |logical: usize, physical: usize| {
+            let mut store = [0u8; 1024];
+            let mut ser = postcard::Serializer {
+                output: Cobs::try_new(Slice::new(&mut store[..physical])).unwrap(),
+            };
+            ser.output.try_extend(&nonzero[..logical]).is_ok() && ser.output.finalize().is_ok()
+        };
+        for physical in [
+            2usize, 3, 4, 255, 256, 257, 258, 259, 480, 488, 509, 510, 511, 512, 513, 514,
+        ] {
+            let len = max_frame_size(physical);
+            assert!(
+                encodes_into(len, physical),
+                "max_frame_size({physical}) = {len} must fit"
+            );
+            assert!(
+                !encodes_into(len + 1, physical),
+                "{} must not fit in {physical}",
+                len + 1
+            );
+        }
+        // Below one code byte + delimiter, nothing fits.
+        assert_eq!(max_frame_size(0), 0);
+        assert_eq!(max_frame_size(1), 0);
+        assert_eq!(
+            RYNK_MAX_PAYLOAD_SIZE,
+            max_frame_size(crate::constants::RYNK_BUFFER_SIZE) - RYNK_HEADER_SIZE
+        );
+    }
+
+    #[test]
+    fn frame_never_contains_the_delimiter() {
+        // cmd 0x0004 has a zero byte; the encoded frame must not carry a bare 0x00
+        // except the trailing delimiter.
+        let mut buf = [0u8; 64];
+        let n = encode_frame(
+            &mut buf,
+            RynkHeader {
+                cmd: Cmd::from_raw(0x0004),
+                seq: 0,
+            },
+            &[0u8, 0, 0],
+        )
+        .unwrap();
+        assert_eq!(buf[n - 1], 0, "frame is delimiter-terminated");
+        assert!(buf[..n - 1].iter().all(|&b| b != 0), "no interior 0x00");
     }
 }

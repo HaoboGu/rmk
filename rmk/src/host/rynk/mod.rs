@@ -9,8 +9,11 @@ mod uart;
 
 use embassy_futures::select::{Either, select};
 use embedded_io_async::{Read, Write};
+use postcard::experimental::max_size::MaxSize;
 use rmk_types::constants::RYNK_BUFFER_SIZE;
-use rmk_types::protocol::rynk::{Cmd, FirmwareVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, RynkMessage, command};
+use rmk_types::protocol::rynk::{
+    Cmd, Deframer, FirmwareVersion, RYNK_HEADER_SIZE, RynkError, RynkMessage, command, encode_frame, max_wire_size,
+};
 #[allow(unused_imports)] // re-exported at `crate::host` for downstream users
 pub use uart::run_rynk_uart;
 
@@ -90,17 +93,16 @@ impl<'a> RynkService<'a> {
         }
     }
 
-    /// Process one inbound message in place and replace its payload with a
-    /// response envelope. `cmd` and `seq` remain unchanged.
-    async fn dispatch(&self, session: &RynkSession<'_>, msg: &mut RynkMessage<'_>) {
+    /// Serve one inbound message: on success the reply frame replaces the
+    /// payload in place; on error the caller answers with the error envelope.
+    async fn dispatch(&self, session: &RynkSession<'_>, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
         let cmd = msg.header().cmd;
 
         if self.requires_unlock(cmd) && !session.locker.is_unlocked() {
-            msg.encode_error(RynkError::Locked);
-            return;
+            return Err(RynkError::Locked);
         }
 
-        if let Err(error) = match cmd {
+        match cmd {
             Cmd::GetVersion => Serve::<command::GetVersion, _>::serve(self, msg).await,
             Cmd::GetCapabilities => Serve::<command::GetCapabilities, _>::serve(self, msg).await,
             Cmd::Reboot => Serve::<command::Reboot, _>::serve(self, msg).await,
@@ -160,8 +162,6 @@ impl<'a> RynkService<'a> {
             Cmd::GetLayout => Serve::<command::GetLayout, _>::serve(self, msg).await,
 
             _ => Err(RynkError::UnknownCmd),
-        } {
-            msg.encode_error(error);
         }
     }
 
@@ -179,85 +179,79 @@ impl<'a> RynkService<'a> {
             topics: topics::TopicSubscribers::new(),
         };
         let mut buf = [0u8; RYNK_BUFFER_SIZE];
+        let mut df = Deframer::new();
         // Mute topics until the client completes the version handshake.
         let mut handshaked = false;
 
         loop {
-            // Read either a request header or the next outgoing topic.
-            match select(rx.read(&mut buf[..RYNK_HEADER_SIZE]), session.topics.next_event()).await {
-                Either::First(r) => match r {
-                    Ok(0) => return, // EOF
-                    Ok(n) => {
-                        if n < RYNK_HEADER_SIZE && rx.read_exact(&mut buf[n..RYNK_HEADER_SIZE]).await.is_err() {
-                            return;
-                        }
-                    }
-                    Err(_) => return,
-                },
-                Either::Second(event) => {
-                    // Not handshaked yet: drain the event but don't forward it.
-                    if !handshaked {
-                        continue;
-                    }
-                    match event.encode(&mut buf) {
-                        Ok(msg) => {
-                            if tx.write_all(msg.frame()).await.is_err() {
-                                return;
-                            }
-                        }
-                        Err(e) => warn!("Rynk topic encode failed: {:?}", e),
-                    }
-                    continue;
-                }
-            };
-
-            let Some(head) = buf.first_chunk() else { return };
-            let header = RynkHeader::parse(head);
-            let payload_n = header.payload_len as usize;
-            let frame_len = header.frame_len();
-
-            // Drain non-dispatchable payloads to resync. Topics get no reply.
-            let is_topic = header.cmd.is_topic();
-            if is_topic || frame_len > buf.len() {
-                if is_topic {
-                    warn!("Rynk: dropping topic-range request {:?}", header.cmd);
+            // Serve all frames already in the buffer.
+            // Because the input/output shares a same buffer, while a frame is
+            // being served, the pipelined tail behind it is parked at the end
+            // of the buffer, so back-to-back requests all get answers.
+            while let Some(req_len) = df.next(&mut buf) {
+                let parked = df.park_pending(&mut buf);
+                let reply_capacity = buf.len() - parked;
+                let mut msg = RynkMessage::from_decoded(&mut buf[..reply_capacity], req_len);
+                let cmd = msg.header().cmd;
+                if cmd.is_topic() {
+                    // Hosts never send topic-range cmds; drop without a reply.
+                    warn!("Rynk: dropping topic-range request {:?}", cmd);
                 } else {
-                    warn!("Rynk: frame_len {} exceeds buffer {}", frame_len, buf.len());
-                    // Echo cmd/seq back with a Malformed error; the payload was never read.
-                    let err = Err::<(), RynkError>(RynkError::Malformed);
-                    if let Ok(msg) = RynkMessage::build(&mut buf[..], header.cmd, header.seq, &err)
-                        && tx.write_all(msg.frame()).await.is_err()
-                    {
+                    let served = self.dispatch(&session, &mut msg).await;
+                    // The version handshake completes on GetCapabilities.
+                    handshaked |= cmd == Cmd::GetCapabilities;
+                    let written = match served {
+                        Ok(()) => tx.write_all(msg.frame()).await,
+                        Err(error) => {
+                            // A parked tail shrinks the reply window, so an encode
+                            // failure there is backpressure, not a firmware fault.
+                            let error = if parked > 0 && error == RynkError::Internal {
+                                RynkError::Busy
+                            } else {
+                                error
+                            };
+                            let mut err_frame = [0u8; max_wire_size(
+                                RYNK_HEADER_SIZE + <Result<(), RynkError> as MaxSize>::POSTCARD_MAX_SIZE,
+                            )];
+                            let len =
+                                encode_frame(&mut err_frame, msg.header(), &Err::<(), RynkError>(error)).unwrap_or(0);
+                            tx.write_all(&err_frame[..len]).await
+                        }
+                    };
+                    if written.is_err() {
                         return;
                     }
                 }
-                let mut remaining = payload_n;
-                while remaining > 0 {
-                    let take = remaining.min(buf.len());
-                    match rx.read(&mut buf[..take]).await {
-                        Ok(0) => return,
-                        Ok(n) => remaining -= n,
-                        Err(_) => return,
+                df.unpark_pending(&mut buf, parked);
+            }
+
+            // A half-received frame must be finished first.
+            // If the buffer is empty, race a read against the next topic.
+            if df.has_pending() {
+                match rx.read(df.tail(&mut buf)).await {
+                    Ok(0) | Err(_) => return,
+                    Ok(n) => df.commit(n),
+                }
+            } else {
+                match select(rx.read(df.tail(&mut buf)), session.topics.next_event()).await {
+                    Either::First(Ok(0)) | Either::First(Err(_)) => return,
+                    Either::First(Ok(n)) => df.commit(n),
+                    Either::Second(event) => {
+                        // Not handshaked yet: drain the event but don't forward it.
+                        if !handshaked {
+                            continue;
+                        }
+                        // The buffer is empty here, so encoding the topic is safe.
+                        match event.encode(&mut buf) {
+                            Ok(n) => {
+                                if tx.write_all(&buf[..n]).await.is_err() {
+                                    return;
+                                }
+                            }
+                            Err(e) => warn!("Rynk topic encode failed: {:?}", e),
+                        }
                     }
                 }
-                continue;
-            }
-
-            if rx.read_exact(&mut buf[RYNK_HEADER_SIZE..frame_len]).await.is_err() {
-                return;
-            }
-
-            let Ok(mut msg) = RynkMessage::try_from(&mut buf[..]) else {
-                return;
-            };
-
-            self.dispatch(&session, &mut msg).await;
-            // The version has been negotiated, mark handshaked = true.
-            if msg.header().cmd == Cmd::GetCapabilities {
-                handshaked = true;
-            }
-            if tx.write_all(msg.frame()).await.is_err() {
-                return;
             }
         }
     }
@@ -274,7 +268,9 @@ mod tests {
     use embassy_futures::join::join;
     use embedded_io_async::{ErrorKind, ErrorType, Read, Write};
     use rmk_types::action::KeyAction;
-    use rmk_types::protocol::rynk::{LockStatus, MatrixState, ProtocolVersion};
+    use rmk_types::protocol::rynk::{
+        LockStatus, MatrixState, ProtocolVersion, RYNK_HEADER_SIZE, RynkHeader, encode_frame,
+    };
 
     use super::*;
     use crate::config::{BehaviorConfig, LockConfig, PositionalConfig, RmkConfig};
@@ -328,25 +324,41 @@ mod tests {
         }
     }
 
-    /// Bare 5-byte header; `payload_len = 0` is a complete empty request.
-    fn header(cmd_raw: u16, seq: u8, payload_len: u16) -> Vec<u8> {
-        let mut v = vec![0u8; RYNK_HEADER_SIZE];
-        v[0..2].copy_from_slice(&cmd_raw.to_le_bytes());
-        v[2] = seq;
-        v[3..5].copy_from_slice(&payload_len.to_le_bytes());
-        v
+    /// A COBS request frame with an empty payload, as a host sends it.
+    fn req(cmd_raw: u16, seq: u8) -> Vec<u8> {
+        req_with(cmd_raw, seq, &())
     }
 
-    /// Split a captured response stream into `(cmd_raw, payload)` per frame.
-    fn decode_frames(buf: &[u8]) -> Vec<(u16, &[u8])> {
+    /// A COBS request frame carrying `payload`, as a host sends it.
+    fn req_with<T: serde::Serialize>(cmd_raw: u16, seq: u8, payload: &T) -> Vec<u8> {
+        let mut buf = [0u8; 64];
+        let n = encode_frame(
+            &mut buf,
+            RynkHeader {
+                cmd: Cmd::from_raw(cmd_raw),
+                seq,
+            },
+            payload,
+        )
+        .unwrap();
+        buf[..n].to_vec()
+    }
+
+    /// Decode a captured response stream into `(cmd, seq, decoded payload)` per
+    /// frame, using the production Deframer.
+    fn decode_frames(buf: &[u8]) -> Vec<(u16, u8, Vec<u8>)> {
+        let mut work = buf.to_vec();
+        let mut df = Deframer::new();
+        df.commit(work.len());
         let mut out = Vec::new();
-        let mut off = 0;
-        while off + RYNK_HEADER_SIZE <= buf.len() {
-            let cmd = u16::from_le_bytes([buf[off], buf[off + 1]]);
-            let len = u16::from_le_bytes([buf[off + 3], buf[off + 4]]) as usize;
-            let start = off + RYNK_HEADER_SIZE;
-            out.push((cmd, &buf[start..start + len]));
-            off = start + len;
+        loop {
+            let Some(frame_len) = df.next(&mut work) else { break };
+            let frame = &work[..frame_len];
+            out.push((
+                u16::from_le_bytes([frame[0], frame[1]]),
+                frame[2],
+                frame[RYNK_HEADER_SIZE..].to_vec(),
+            ));
         }
         out
     }
@@ -372,13 +384,13 @@ mod tests {
         // Hold the challenge key for the whole session.
         keymap.update_matrix_state(&KeyboardEvent::key(0, 0, true));
 
-        // Locked probe, status, unlock poll, unlocked probe.
-        let mut stream = header(Cmd::GetMatrixState.raw(), 0, 0);
-        stream.extend_from_slice(&header(Cmd::GetLockStatus.raw(), 1, 0));
-        stream.extend_from_slice(&header(Cmd::UnlockPoll.raw(), 2, 0));
-        stream.extend_from_slice(&header(Cmd::GetMatrixState.raw(), 3, 0));
+        // Locked probe, status, unlock poll, unlocked probe — one frame per read,
+        // as the one-in-flight client sends them.
         let mut chunks = VecDeque::new();
-        chunks.push_back(stream);
+        chunks.push_back(req(Cmd::GetMatrixState.raw(), 0));
+        chunks.push_back(req(Cmd::GetLockStatus.raw(), 1));
+        chunks.push_back(req(Cmd::UnlockPoll.raw(), 2));
+        chunks.push_back(req(Cmd::GetMatrixState.raw(), 3));
         let mut rx = ChunkRead { chunks };
         let mut tx = VecWrite { captured: Vec::new() };
         block_on(service.run_session(&mut rx, &mut tx));
@@ -389,13 +401,13 @@ mod tests {
         // Locked matrix reads reject instead of returning an empty bitmap.
         assert_eq!(resp[0].0, Cmd::GetMatrixState.raw());
         assert_eq!(
-            postcard::from_bytes::<Result<MatrixState, RynkError>>(resp[0].1).unwrap(),
+            postcard::from_bytes::<Result<MatrixState, RynkError>>(&resp[0].2).unwrap(),
             Err(RynkError::Locked),
             "keystroke exfiltration is gated"
         );
 
         // Lock status is open while locked.
-        let status: LockStatus = postcard::from_bytes::<Result<LockStatus, RynkError>>(resp[1].1)
+        let status: LockStatus = postcard::from_bytes::<Result<LockStatus, RynkError>>(&resp[1].2)
             .unwrap()
             .unwrap();
         assert!(status.locked);
@@ -406,7 +418,7 @@ mod tests {
         );
 
         // Held challenge key unlocks.
-        let polled: LockStatus = postcard::from_bytes::<Result<LockStatus, RynkError>>(resp[2].1)
+        let polled: LockStatus = postcard::from_bytes::<Result<LockStatus, RynkError>>(&resp[2].2)
             .unwrap()
             .unwrap();
         assert!(!polled.locked, "poll with challenge key held unlocks");
@@ -414,7 +426,7 @@ mod tests {
 
         // Gated command succeeds after unlock.
         assert!(
-            postcard::from_bytes::<Result<MatrixState, RynkError>>(resp[3].1)
+            postcard::from_bytes::<Result<MatrixState, RynkError>>(&resp[3].2)
                 .unwrap()
                 .is_ok(),
             "gated command served once unlocked"
@@ -422,7 +434,7 @@ mod tests {
 
         // New session starts locked again.
         let mut chunks2 = VecDeque::new();
-        chunks2.push_back(header(Cmd::GetMatrixState.raw(), 0, 0));
+        chunks2.push_back(req(Cmd::GetMatrixState.raw(), 0));
         let mut rx2 = ChunkRead { chunks: chunks2 };
         let mut tx2 = VecWrite { captured: Vec::new() };
         block_on(service.run_session(&mut rx2, &mut tx2));
@@ -430,7 +442,7 @@ mod tests {
         let resp2 = decode_frames(&tx2.captured);
         assert_eq!(resp2.len(), 1);
         assert_eq!(
-            postcard::from_bytes::<Result<MatrixState, RynkError>>(resp2[0].1).unwrap(),
+            postcard::from_bytes::<Result<MatrixState, RynkError>>(&resp2[0].2).unwrap(),
             Err(RynkError::Locked),
             "a fresh session has independent locked state"
         );
@@ -450,20 +462,18 @@ mod tests {
         let service = RynkService::new(&keymap, &config);
         keymap.update_matrix_state(&KeyboardEvent::key(0, 0, true));
 
-        let mut stream_a = header(Cmd::UnlockPoll.raw(), 0x11, 0);
-        stream_a.extend_from_slice(&header(Cmd::GetLockStatus.raw(), 0x12, 0));
-        stream_a.extend_from_slice(&header(Cmd::Lock.raw(), 0x13, 0));
-        stream_a.extend_from_slice(&header(Cmd::GetMatrixState.raw(), 0x14, 0));
         let mut chunks_a = VecDeque::new();
-        chunks_a.push_back(stream_a);
+        chunks_a.push_back(req(Cmd::UnlockPoll.raw(), 0x11));
+        chunks_a.push_back(req(Cmd::GetLockStatus.raw(), 0x12));
+        chunks_a.push_back(req(Cmd::Lock.raw(), 0x13));
+        chunks_a.push_back(req(Cmd::GetMatrixState.raw(), 0x14));
         let mut rx_a = ChunkRead { chunks: chunks_a };
         let mut tx_a = VecWrite { captured: Vec::new() };
 
-        let mut stream_b = header(Cmd::GetLockStatus.raw(), 0x21, 0);
-        stream_b.extend_from_slice(&header(Cmd::UnlockPoll.raw(), 0x22, 0));
-        stream_b.extend_from_slice(&header(Cmd::GetMatrixState.raw(), 0x23, 0));
         let mut chunks_b = VecDeque::new();
-        chunks_b.push_back(stream_b);
+        chunks_b.push_back(req(Cmd::GetLockStatus.raw(), 0x21));
+        chunks_b.push_back(req(Cmd::UnlockPoll.raw(), 0x22));
+        chunks_b.push_back(req(Cmd::GetMatrixState.raw(), 0x23));
         let mut rx_b = ChunkRead { chunks: chunks_b };
         let mut tx_b = VecWrite { captured: Vec::new() };
 
@@ -474,35 +484,35 @@ mod tests {
 
         let responses_a = decode_frames(&tx_a.captured);
         assert_eq!(responses_a.len(), 4);
-        let unlocked_a = postcard::from_bytes::<Result<LockStatus, RynkError>>(responses_a[0].1)
+        let unlocked_a = postcard::from_bytes::<Result<LockStatus, RynkError>>(&responses_a[0].2)
             .unwrap()
             .unwrap();
         assert!(!unlocked_a.locked);
-        let status_a = postcard::from_bytes::<Result<LockStatus, RynkError>>(responses_a[1].1)
+        let status_a = postcard::from_bytes::<Result<LockStatus, RynkError>>(&responses_a[1].2)
             .unwrap()
             .unwrap();
         assert!(!status_a.locked);
         assert_eq!(
-            postcard::from_bytes::<Result<(), RynkError>>(responses_a[2].1).unwrap(),
+            postcard::from_bytes::<Result<(), RynkError>>(&responses_a[2].2).unwrap(),
             Ok(())
         );
         assert_eq!(
-            postcard::from_bytes::<Result<MatrixState, RynkError>>(responses_a[3].1).unwrap(),
+            postcard::from_bytes::<Result<MatrixState, RynkError>>(&responses_a[3].2).unwrap(),
             Err(RynkError::Locked),
         );
 
         let responses_b = decode_frames(&tx_b.captured);
         assert_eq!(responses_b.len(), 3);
-        let locked_b = postcard::from_bytes::<Result<LockStatus, RynkError>>(responses_b[0].1)
+        let locked_b = postcard::from_bytes::<Result<LockStatus, RynkError>>(&responses_b[0].2)
             .unwrap()
             .unwrap();
         assert!(locked_b.locked, "session A does not unlock session B");
-        let unlocked_b = postcard::from_bytes::<Result<LockStatus, RynkError>>(responses_b[1].1)
+        let unlocked_b = postcard::from_bytes::<Result<LockStatus, RynkError>>(&responses_b[1].2)
             .unwrap()
             .unwrap();
         assert!(!unlocked_b.locked);
         assert!(
-            postcard::from_bytes::<Result<MatrixState, RynkError>>(responses_b[2].1)
+            postcard::from_bytes::<Result<MatrixState, RynkError>>(&responses_b[2].2)
                 .unwrap()
                 .is_ok(),
             "locking session A does not relock session B"
@@ -526,23 +536,24 @@ mod tests {
         keymap.update_matrix_state(&KeyboardEvent::key(1, 13, true));
 
         let mut chunks = VecDeque::new();
-        chunks.push_back(header(Cmd::GetMatrixState.raw(), 0, 0));
+        chunks.push_back(req(Cmd::GetMatrixState.raw(), 0));
         let mut rx = ChunkRead { chunks };
         let mut tx = VecWrite { captured: Vec::new() };
         block_on(service.run_session(&mut rx, &mut tx));
 
         let resp = decode_frames(&tx.captured);
         assert_eq!(resp.len(), 1);
-        let state: MatrixState = postcard::from_bytes::<Result<MatrixState, RynkError>>(resp[0].1)
+        let state: MatrixState = postcard::from_bytes::<Result<MatrixState, RynkError>>(&resp[0].2)
             .unwrap()
             .unwrap();
         assert_eq!(&state.pressed_bitmap[..4], &[0x01, 0x02, 0x40, 0x20]);
         assert!(state.pressed_bitmap[4..].iter().all(|&b| b == 0));
     }
 
-    /// Pipelined frames split across reads must both be dispatched.
+    /// A read carrying more than one frame serves them all, in order: the
+    /// pipelined tail is parked out of each reply's way, never dropped.
     #[test]
-    fn run_session_preserves_pipelined_trailing_bytes() {
+    fn run_session_serves_every_frame_of_a_coalesced_read() {
         let mut behavior = BehaviorConfig::default();
         let positional: PositionalConfig<1, 1> = PositionalConfig::default();
         let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
@@ -550,69 +561,8 @@ mod tests {
         let config = RmkConfig::default();
         let service = RynkService::new(&keymap, &config);
 
-        let frame_one = header(Cmd::GetVersion.raw(), 0, 0);
-        let frame_two = header(Cmd::GetVersion.raw(), 1, 0);
-
-        let mut chunk_a = frame_one.clone();
-        chunk_a.extend_from_slice(&frame_two[..3]);
-        let chunk_b = frame_two[3..].to_vec();
-
-        let mut chunks = VecDeque::new();
-        chunks.push_back(chunk_a);
-        chunks.push_back(chunk_b);
-
-        let mut rx = ChunkRead { chunks };
-        let mut tx = VecWrite { captured: Vec::new() };
-
-        block_on(service.run_session(&mut rx, &mut tx));
-
-        // Header plus `Ok(ProtocolVersion)`.
-        const RESP_PAYLOAD_LEN: usize = 3;
-        const RESP_FRAME_LEN: usize = RYNK_HEADER_SIZE + RESP_PAYLOAD_LEN;
-
-        assert_eq!(
-            tx.captured.len(),
-            RESP_FRAME_LEN * 2,
-            "expected two complete response frames; got {} bytes (would be {} without the pipelining fix)",
-            tx.captured.len(),
-            RESP_FRAME_LEN,
-        );
-
-        let mut expected_payload = [0u8; RESP_PAYLOAD_LEN];
-        let n = postcard::to_slice(
-            &Ok::<&ProtocolVersion, RynkError>(&ProtocolVersion::CURRENT),
-            &mut expected_payload[..],
-        )
-        .unwrap()
-        .len();
-        assert_eq!(n, RESP_PAYLOAD_LEN);
-
-        for (i, expected_seq) in [0u8, 1u8].iter().enumerate() {
-            let off = i * RESP_FRAME_LEN;
-            let resp = &tx.captured[off..off + RESP_FRAME_LEN];
-            assert_eq!(&resp[0..2], &Cmd::GetVersion.to_le_bytes(), "response {i} cmd echo",);
-            assert_eq!(resp[2], *expected_seq, "response {i} seq echo");
-            assert_eq!(
-                &resp[3..5],
-                &(RESP_PAYLOAD_LEN as u16).to_le_bytes(),
-                "response {i} payload_len",
-            );
-            assert_eq!(&resp[RYNK_HEADER_SIZE..], &expected_payload[..], "response {i} payload",);
-        }
-    }
-
-    /// Coalesced frames must drain before EOF.
-    #[test]
-    fn run_session_drains_pipelined_frames_before_eof() {
-        let mut behavior = BehaviorConfig::default();
-        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
-        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
-        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
-        let config = RmkConfig::default();
-        let service = RynkService::new(&keymap, &config);
-
-        let mut combined = header(Cmd::GetVersion.raw(), 0, 0);
-        combined.extend_from_slice(&header(Cmd::GetVersion.raw(), 1, 0));
+        let mut combined = req(Cmd::GetVersion.raw(), 0);
+        combined.extend_from_slice(&req(Cmd::GetVersion.raw(), 1));
 
         let mut chunks = VecDeque::new();
         chunks.push_back(combined);
@@ -622,14 +572,115 @@ mod tests {
 
         block_on(service.run_session(&mut rx, &mut tx));
 
-        const RESP_FRAME_LEN: usize = RYNK_HEADER_SIZE + 3;
-        assert_eq!(
-            tx.captured.len(),
-            RESP_FRAME_LEN * 2,
-            "expected both pipelined frames to be dispatched before EOF",
+        let resp = decode_frames(&tx.captured);
+        assert_eq!(resp.len(), 2, "both coalesced frames are served");
+        for (i, frame) in resp.iter().enumerate() {
+            assert_eq!(frame.1, i as u8, "replies follow arrival order");
+            assert_eq!(
+                postcard::from_bytes::<Result<ProtocolVersion, RynkError>>(&frame.2).unwrap(),
+                Ok(ProtocolVersion::CURRENT),
+            );
+        }
+    }
+
+    /// A frame split across reads survives the reply served before it completes.
+    #[test]
+    fn run_session_completes_a_partial_frame_after_serving() {
+        let mut behavior = BehaviorConfig::default();
+        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
+        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+        let config = RmkConfig::default();
+        let service = RynkService::new(&keymap, &config);
+
+        let second = req(Cmd::GetVersion.raw(), 1);
+        let split = second.len() / 2;
+        let mut chunk1 = req(Cmd::GetVersion.raw(), 0);
+        chunk1.extend_from_slice(&second[..split]);
+
+        let mut chunks = VecDeque::new();
+        chunks.push_back(chunk1);
+        chunks.push_back(second[split..].to_vec());
+
+        let mut rx = ChunkRead { chunks };
+        let mut tx = VecWrite { captured: Vec::new() };
+
+        block_on(service.run_session(&mut rx, &mut tx));
+
+        let resp = decode_frames(&tx.captured);
+        assert_eq!(resp.len(), 2, "the split frame completes and is served");
+        assert_eq!(resp[0].1, 0);
+        assert_eq!(resp[1].1, 1);
+    }
+
+    /// A bulk page shrinks to the reply window left beside a parked tail
+    /// instead of failing, and stays non-empty.
+    #[test]
+    fn run_session_shrinks_a_bulk_page_beside_a_parked_tail() {
+        let mut behavior = BehaviorConfig::default();
+        let positional: PositionalConfig<8, 8> = PositionalConfig::default();
+        let mut data: KeymapData<8, 8, 1, 0> = KeymapData::new([[[KeyAction::No; 8]; 8]]);
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+        let config = RmkConfig::default();
+        let service = RynkService::new(&keymap, &config);
+
+        // A bulk read followed by 450 delimiter-less bytes (a huge partial
+        // frame) in one read: the parked tail squeezes the reply window.
+        let mut chunk = req_with(Cmd::GetKeymapBulk.raw(), 0, &[0u8, 0, 0]);
+        let tail = vec![0xEEu8; 450];
+        let reply_capacity = RYNK_BUFFER_SIZE - tail.len();
+        chunk.extend_from_slice(&tail);
+        let mut chunks = VecDeque::new();
+        chunks.push_back(chunk);
+
+        let mut rx = ChunkRead { chunks };
+        let mut tx = VecWrite { captured: Vec::new() };
+
+        block_on(service.run_session(&mut rx, &mut tx));
+
+        let expected = rmk_types::protocol::rynk::bulk_key_capacity(reply_capacity);
+        assert!(
+            0 < expected && expected < rmk_types::protocol::rynk::MAX_BULK_KEYS,
+            "premise: the squeezed window holds a smaller, non-empty page"
         );
-        assert_eq!(tx.captured[2], 0, "first response seq");
-        assert_eq!(tx.captured[RESP_FRAME_LEN + 2], 1, "second response seq");
+        let resp = decode_frames(&tx.captured);
+        assert_eq!(resp.len(), 1);
+        let page = postcard::from_bytes::<Result<heapless::Vec<KeyAction, 64>, RynkError>>(&resp[0].2)
+            .unwrap()
+            .unwrap();
+        assert_eq!(page.len(), expected, "page sized to the actual window");
+    }
+
+    /// When the parked tail leaves no room for even the reply, the request is
+    /// still answered — with `Busy`, built outside the squeezed window.
+    #[test]
+    fn run_session_answers_busy_when_the_reply_cannot_fit() {
+        let mut behavior = BehaviorConfig::default();
+        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
+        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+        let config = RmkConfig::default();
+        let service = RynkService::new(&keymap, &config);
+
+        // Fill the whole buffer: a 5-byte GetVersion plus delimiter-less bytes.
+        // The parked tail leaves a window too small even for the version reply.
+        let mut chunk = req(Cmd::GetVersion.raw(), 9);
+        chunk.extend_from_slice(&vec![0xEEu8; RYNK_BUFFER_SIZE - chunk.len()]);
+        let mut chunks = VecDeque::new();
+        chunks.push_back(chunk);
+
+        let mut rx = ChunkRead { chunks };
+        let mut tx = VecWrite { captured: Vec::new() };
+
+        block_on(service.run_session(&mut rx, &mut tx));
+
+        let resp = decode_frames(&tx.captured);
+        assert_eq!(resp.len(), 1, "the request is answered despite the squeeze");
+        assert_eq!(resp[0].1, 9, "seq echo");
+        assert_eq!(
+            postcard::from_bytes::<Result<ProtocolVersion, RynkError>>(&resp[0].2).unwrap(),
+            Err(RynkError::Busy),
+        );
     }
 
     /// Zero-payload requests must still get a full response payload.
@@ -643,31 +694,23 @@ mod tests {
         let service = RynkService::new(&keymap, &config);
 
         let mut chunks = VecDeque::new();
-        chunks.push_back(header(Cmd::GetVersion.raw(), 0x42, 0));
+        chunks.push_back(req(Cmd::GetVersion.raw(), 0x42));
 
         let mut rx = ChunkRead { chunks };
         let mut tx = VecWrite { captured: Vec::new() };
 
         block_on(service.run_session(&mut rx, &mut tx));
 
-        let resp = &tx.captured;
+        let resp = decode_frames(&tx.captured);
+        assert_eq!(resp.len(), 1);
+        assert_eq!(resp[0].0, Cmd::GetVersion.raw(), "cmd echo");
+        assert_eq!(resp[0].1, 0x42, "seq echo");
         assert!(
-            resp.len() > RYNK_HEADER_SIZE,
-            "response must carry a payload, not just a header"
+            !resp[0].2.is_empty(),
+            "response carries a payload, not a swallowed fault"
         );
-        assert_eq!(&resp[0..2], &Cmd::GetVersion.to_le_bytes(), "cmd echo");
-        assert_eq!(resp[2], 0x42, "seq echo");
-
-        let payload_len = u16::from_le_bytes([resp[3], resp[4]]) as usize;
-        assert!(payload_len > 0, "payload_len must be non-zero (not a swallowed fault)");
-        assert_eq!(
-            resp.len(),
-            RYNK_HEADER_SIZE + payload_len,
-            "frame length matches header"
-        );
-
         let decoded: Result<ProtocolVersion, RynkError> =
-            postcard::from_bytes(&resp[RYNK_HEADER_SIZE..]).expect("response payload must decode");
+            postcard::from_bytes(&resp[0].2).expect("response payload must decode");
         assert_eq!(decoded, Ok(ProtocolVersion::CURRENT));
     }
 
@@ -681,32 +724,30 @@ mod tests {
         let config = RmkConfig::default();
         let service = RynkService::new(&keymap, &config);
 
-        // Topic-range request followed by a real request in one chunk.
-        let mut combined = header(Cmd::LayerChange.raw(), 0, 1);
-        combined.push(0xAB);
-        combined.extend_from_slice(&header(Cmd::GetVersion.raw(), 7, 0));
-
+        // A topic-range request, then a real request — one frame per read.
         let mut chunks = VecDeque::new();
-        chunks.push_back(combined);
+        chunks.push_back(req(Cmd::LayerChange.raw(), 0));
+        chunks.push_back(req(Cmd::GetVersion.raw(), 7));
 
         let mut rx = ChunkRead { chunks };
         let mut tx = VecWrite { captured: Vec::new() };
 
         block_on(service.run_session(&mut rx, &mut tx));
 
-        const RESP_FRAME_LEN: usize = RYNK_HEADER_SIZE + 3;
+        let resp = decode_frames(&tx.captured);
         assert_eq!(
-            tx.captured.len(),
-            RESP_FRAME_LEN,
-            "topic-range request must draw no reply; only the GetVersion answers"
+            resp.len(),
+            1,
+            "topic-range request draws no reply; only GetVersion answers"
         );
-        assert_eq!(&tx.captured[0..2], &Cmd::GetVersion.to_le_bytes(), "cmd echo");
-        assert_eq!(tx.captured[2], 7, "reply is for the GetVersion that followed");
+        assert_eq!(resp[0].0, Cmd::GetVersion.raw(), "cmd echo");
+        assert_eq!(resp[0].1, 7, "reply is for the GetVersion that followed");
     }
 
-    /// Oversized topic frames still draw no reply.
+    /// A delimiter-less run larger than the buffer overflows the Deframer and is
+    /// dropped: no reply, and the session keeps running.
     #[test]
-    fn run_session_oversized_topic_frame_draws_no_reply() {
+    fn run_session_oversized_frame_draws_no_reply() {
         let mut behavior = BehaviorConfig::default();
         let positional: PositionalConfig<1, 1> = PositionalConfig::default();
         let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
@@ -714,9 +755,9 @@ mod tests {
         let config = RmkConfig::default();
         let service = RynkService::new(&keymap, &config);
 
-        // No payload follows, so drain hits EOF.
+        // Non-zero bytes with no delimiter, longer than the frame buffer.
         let mut chunks = VecDeque::new();
-        chunks.push_back(header(Cmd::LayerChange.raw(), 0, u16::MAX));
+        chunks.push_back(vec![0xFFu8; RYNK_BUFFER_SIZE + 100]);
 
         let mut rx = ChunkRead { chunks };
         let mut tx = VecWrite { captured: Vec::new() };
@@ -725,14 +766,15 @@ mod tests {
 
         assert!(
             tx.captured.is_empty(),
-            "oversized topic-range frame must draw no reply, got {} bytes",
+            "oversized garbage draws no reply, got {} bytes",
             tx.captured.len()
         );
     }
 
-    /// Oversized normal requests reply `Malformed` with cmd/seq preserved.
+    /// Garbage on the wire is skipped; the session resyncs and answers the next
+    /// well-formed request (no cmd/seq to recover, so no Malformed echo).
     #[test]
-    fn run_session_oversized_request_replies_malformed() {
+    fn run_session_resyncs_after_garbage() {
         let mut behavior = BehaviorConfig::default();
         let positional: PositionalConfig<1, 1> = PositionalConfig::default();
         let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
@@ -740,22 +782,20 @@ mod tests {
         let config = RmkConfig::default();
         let service = RynkService::new(&keymap, &config);
 
-        // No payload follows, so drain hits EOF.
+        // Undecodable bytes terminated by a delimiter, then a real request.
+        let mut stream = vec![0xDEu8, 0xAD, 0xBE, 0xEF, 0x00];
+        stream.extend_from_slice(&req(Cmd::GetVersion.raw(), 0x55));
         let mut chunks = VecDeque::new();
-        chunks.push_back(header(Cmd::GetVersion.raw(), 0x55, u16::MAX));
+        chunks.push_back(stream);
 
         let mut rx = ChunkRead { chunks };
         let mut tx = VecWrite { captured: Vec::new() };
 
         block_on(service.run_session(&mut rx, &mut tx));
 
-        assert!(!tx.captured.is_empty(), "oversized request must draw a Malformed reply");
-        assert_eq!(&tx.captured[0..2], &Cmd::GetVersion.to_le_bytes(), "cmd echo");
-        assert_eq!(tx.captured[2], 0x55, "seq echo");
-        let payload_len = u16::from_le_bytes([tx.captured[3], tx.captured[4]]) as usize;
-        let decoded: Result<(), RynkError> =
-            postcard::from_bytes(&tx.captured[RYNK_HEADER_SIZE..RYNK_HEADER_SIZE + payload_len])
-                .expect("error reply must decode");
-        assert_eq!(decoded, Err(RynkError::Malformed));
+        let resp = decode_frames(&tx.captured);
+        assert_eq!(resp.len(), 1, "garbage skipped, request answered");
+        assert_eq!(resp[0].0, Cmd::GetVersion.raw());
+        assert_eq!(resp[0].1, 0x55, "seq echoed after resync");
     }
 }

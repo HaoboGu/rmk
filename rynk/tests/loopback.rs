@@ -20,7 +20,7 @@ use rmk::keymap::{KeyMap, KeymapData};
 use rmk_types::action::KeyAction;
 use rmk_types::combo::Combo;
 use rmk_types::constants::{MACRO_DATA_SIZE, RYNK_BUFFER_SIZE};
-use rmk_types::protocol::rynk::{MacroData, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, StorageResetMode};
+use rmk_types::protocol::rynk::{MacroData, ProtocolVersion, RYNK_MAX_PAYLOAD_SIZE, RynkError, StorageResetMode};
 use rynk::layout::{Key, Rect, Variant};
 use rynk::{Client, LayoutInfo, RynkDevice, RynkHostError, TopicEvent};
 
@@ -119,7 +119,7 @@ async fn client_against_run_session() {
         let caps = client.get_capabilities().await.unwrap();
         assert_eq!((caps.num_layers, caps.num_rows, caps.num_cols), (2, 2, 2));
         // Client consumes the firmware-advertised payload limit.
-        assert_eq!(caps.max_payload_size as usize, RYNK_BUFFER_SIZE - RYNK_HEADER_SIZE);
+        assert_eq!(caps.max_payload_size as usize, RYNK_MAX_PAYLOAD_SIZE);
 
         let info = client.get_device_info().await.unwrap();
         assert_eq!(info.manufacturer.as_str(), "RMK");
@@ -131,9 +131,15 @@ async fn client_against_run_session() {
         // Get with request payload and typed response decode.
         assert_eq!(client.get_key(0, 0, 0).await.unwrap(), KeyAction::No);
 
-        // Set + readback through the real persistence path.
+        // Set + readback through the real persistence path. The host-driven
+        // default-layer change also surfaces on the topic stream.
         client.set_default_layer(1).await.unwrap();
         assert_eq!(client.get_default_layer().await.unwrap(), 1);
+        let ev = client.next_topic().await;
+        assert!(
+            matches!(ev, TopicEvent::LayerChange(1)),
+            "expected LayerChange(1), got {ev:?}"
+        );
 
         // Round-trip representative remaining domains.
         client.set_key(0, 1, 1, KeyAction::Morse(2)).await.unwrap();

@@ -64,9 +64,9 @@ fn build_sdc<'d, const N: usize>(
     sdc::Builder::new()?
         .support_adv()
         .support_peripheral()
-        // .support_dle_peripheral()
-        // .support_phy_update_peripheral()
-        // .support_le_2m_phy()
+        .support_dle_peripheral()
+        .support_phy_update_peripheral()
+        .support_le_2m_phy()
         .peripheral_count(1)?
         .buffer_cfg(
             DefaultPacketPool::MTU as u16,

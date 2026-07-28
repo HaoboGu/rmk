@@ -27,4 +27,8 @@ pub enum RynkError {
     /// The command is gated by the lock and this session is locked.
     /// The host must complete the unlock ceremony (see `UnlockPoll`) first.
     Locked,
+    /// Transient backpressure: the reply did not fit the buffer space left
+    /// beside pipelined requests still queued in the session buffer. The
+    /// request itself was valid — retry once in-flight requests complete.
+    Busy,
 }

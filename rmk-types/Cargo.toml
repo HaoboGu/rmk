@@ -14,6 +14,8 @@ defmt = { version = "1", optional = true }
 
 serde = { version = "1", default-features = false, features = ["derive"] }
 postcard = { version = "1", default-features = false, features = ["experimental-derive"] }
+# COBS framing for the Rynk transport; core-only (no alloc/std). Enabled by `rynk`.
+cobs = { version = "0.3", default-features = false, optional = true }
 heapless = { version = "0.9", default-features = false, features = ["serde"] }
 strum = { version = "0.28", default-features = false, features = ["derive"] }
 
@@ -38,7 +40,7 @@ defmt = [
 # Feature for proc-macro code generation only, not included in firmware
 _codegen = []
 # Enable RMK's Rynk protocol
-rynk = []
+rynk = ["dep:cobs"]
 # Host tool
 host = ["rynk", "_ble", "split", "steno", "serde/alloc"]
 # TypeScript type + wasm ABI export for the web client. Enabled by a codegen/wasm

@@ -1,26 +1,34 @@
 //! Rynk protocol ICD — RMK's native host-communication protocol.
 //!
 //! Carries RMK's canonical types (`KeyAction`, `Combo`, `Morse`, `Fork`,
-//! `EncoderAction`, `BatteryStatus`, `BleStatus`) on the wire as a 5-byte
-//! fixed header + postcard-encoded payload.
+//! `EncoderAction`, `BatteryStatus`, `BleStatus`) on the wire as a 3-byte
+//! fixed header + postcard-encoded payload, COBS-framed.
 //!
 //! ## Wire format
 //!
 //! ```text
-//! ┌──────────────┬───────────┬────────────────────┐
-//! │ CMD u16 LE   │ SEQ u8    │ LEN u16 LE         │  ← 5-byte header
-//! ├──────────────┴───────────┴────────────────────┤
-//! │              postcard-encoded payload         │  ← LEN bytes
-//! └───────────────────────────────────────────────┘
+//! ┌──────────────┬────────────┐
+//! │  CMD u16 LE  │   SEQ u8   │  ← 3-byte header
+//! ├──────────────┴────────────┤
+//! │ postcard-encoded payload  │
+//! └───────────────────────────┘
 //! ```
+//!
+//! On the wire the whole frame is COBS-encoded and terminated by a single
+//! `0x00` delimiter (see [`message`] and [`Deframer`]), making the byte
+//! stream self-synchronizing.
 //!
 //! - **CMD** — `0x0000..=0x7FFF` request/response, `0x8000..=0xFFFF` topic
 //!   (server→host push).
 //! - **SEQ** — the sequence number of current request. Topics send SEQ = 0.
-//! - **LEN** — payload byte count.
 //!
-//! Responses wrap the payload in postcard `Result<T, RynkError>` (`T = ()` for
-//! `Set*`); requests are the bare postcard struct, unwrapped.
+//! ## Sizing
+//!
+//! One parameter drives every derived size: `rynk_buffer_size` in `keyboard.toml`
+//! (`constants::RYNK_BUFFER_SIZE`). It's the physical RAM of each frame buffer;
+//! COBS framing overhead is deducted internally.
+//! - [`RYNK_MAX_PAYLOAD_SIZE`]: the largest payload one frame can carry.
+//! - [`MAX_BULK_ITEMS`]/[`MAX_BULK_KEYS`]: how many bulk-page items fit.
 //!
 //! ## Module layout
 //!
@@ -29,9 +37,10 @@
 //!   ends can't disagree about a message's types.
 //! - [`endpoint`] — the [`Endpoint`](endpoint::Endpoint) / [`Topic`](endpoint::Topic)
 //!   traits those table entries implement.
-//! - [`message`] — the header, the [`RynkMessage`] buffer view, and the envelope.
-//! - `error` / `payload` (private) — [`RynkError`] and the per-domain payload
-//!   types, re-exported flat at `protocol::rynk::*`.
+//! - [`message`] — the header, [`encode_frame`], and the [`RynkMessage`] reply view.
+//! - `deframer` / `error` / `payload` (private) — the COBS [`Deframer`],
+//!   [`RynkError`], and the per-domain payload types, re-exported flat at
+//!   `protocol::rynk::*`.
 //!
 //! ## Compatibility
 //!
@@ -48,6 +57,7 @@ pub mod command;
 pub mod endpoint;
 pub mod message;
 
+mod deframer;
 mod error;
 mod payload;
 
@@ -56,9 +66,12 @@ pub(crate) mod tests;
 
 #[cfg(not(feature = "host"))]
 pub use self::command::MAX_TOPIC_PAYLOAD;
-pub use self::command::{Cmd, TopicEvent, bulk_keymap_size_for_buffer, bulk_size_for_buffer};
+pub use self::command::{Cmd, TopicEvent};
+pub use self::deframer::Deframer;
 pub use self::error::RynkError;
-pub use self::message::{RYNK_HEADER_SIZE, RynkHeader, RynkMessage};
+pub use self::message::{
+    RYNK_HEADER_SIZE, RYNK_MAX_PAYLOAD_SIZE, RynkHeader, RynkMessage, encode_frame, max_wire_size,
+};
 pub use self::payload::*;
 
 /// Largest single GATT write/notification on the Rynk BLE characteristics.

@@ -14,9 +14,7 @@ use core::sync::atomic::{AtomicU8, Ordering};
 
 use embedded_io_async::{ErrorType, Write};
 use heapless::Vec;
-#[cfg(test)]
-use rmk_types::protocol::rynk::RYNK_HEADER_SIZE;
-use rmk_types::protocol::rynk::{RYNK_BLE_CHUNK_SIZE, RYNK_HID_REPORT_SIZE, RynkHeader};
+use rmk_types::protocol::rynk::{RYNK_BLE_CHUNK_SIZE, RYNK_HID_REPORT_SIZE};
 use trouble_host::prelude::*;
 
 use super::HostWriteOutcome;
@@ -32,7 +30,6 @@ pub(crate) struct HostGattHandler {
     hid_output_handle: u16,
     hid_input_cccd_handle: u16,
     hid_control_point_handle: u16,
-    hid_frame_tracker: RynkHidFrameTracker,
 }
 
 impl HostGattHandler {
@@ -51,7 +48,6 @@ impl HostGattHandler {
                 .cccd_handle
                 .expect("No CCCD for Rynk HID input"),
             hid_control_point_handle: server.rynk_hid_service.hid_control_point.handle,
-            hid_frame_tracker: RynkHidFrameTracker::new(),
         }
     }
 
@@ -75,8 +71,7 @@ impl HostGattHandler {
         } else if handle == self.hid_output_handle {
             if encrypted {
                 if data.len() == RYNK_HID_REPORT_SIZE {
-                    let bytes = self.hid_frame_tracker.take(data);
-                    RYNK_BLE_RX_PIPE.write_all(bytes).await;
+                    RYNK_BLE_RX_PIPE.write_all(data).await;
                     RynkBleSource::Hid.activate();
                 } else {
                     warn!("Wrong Rynk HID report size: {}", data.len());
@@ -144,33 +139,6 @@ impl RynkBleSource {
     }
 }
 
-/// Drops fixed 32-byte WebHID reports' zero-padding to recover the contiguous
-/// rynk byte stream. `remaining` tracks the in-flight frame (0 at a boundary) so
-/// only its final, padded report gets trimmed.
-pub(crate) struct RynkHidFrameTracker {
-    remaining: usize,
-}
-
-impl RynkHidFrameTracker {
-    pub(crate) const fn new() -> Self {
-        Self { remaining: 0 }
-    }
-
-    /// One report's real frame bytes, padding dropped. At a frame boundary the
-    /// LEN comes from the report header; mid-frame reports pass through whole.
-    pub(crate) fn take<'r>(&mut self, report: &'r [u8]) -> &'r [u8] {
-        if self.remaining == 0 {
-            let Some(frame_len) = RynkHeader::peek_frame_len(report) else {
-                return &[];
-            };
-            self.remaining = frame_len;
-        }
-        let n = self.remaining.min(report.len());
-        self.remaining -= n;
-        &report[..n]
-    }
-}
-
 /// Write half: routes each reply/topic frame to the active transport's
 /// characteristic — MTU-chunked on the custom char, or fixed 32-byte report
 /// fragments on the HID char.
@@ -191,7 +159,6 @@ impl<P: PacketPool> Write for RynkBleTx<'_, '_, '_, P> {
         }
         match RynkBleSource::active() {
             RynkBleSource::Hid => {
-                // Fragment into fixed 32-byte reports; LEN strips final padding.
                 for chunk in buf.chunks(RYNK_HID_REPORT_SIZE) {
                     let mut report = [0u8; RYNK_HID_REPORT_SIZE];
                     report[..chunk.len()].copy_from_slice(chunk);
@@ -229,6 +196,8 @@ impl<P: PacketPool> Write for RynkBleTx<'_, '_, '_, P> {
 
 #[cfg(test)]
 mod tests {
+    use rmk_types::protocol::rynk::{Cmd, Deframer, RYNK_HEADER_SIZE, RynkHeader, encode_frame};
+
     use super::*;
 
     #[test]
@@ -264,55 +233,71 @@ mod tests {
         );
     }
 
-    /// A 70-byte frame (header LEN = 65) fragmented into 32-byte reports and
-    /// de-fragmented via the header LEN reassembles exactly, padding dropped.
-    fn frame_70() -> [u8; 70] {
-        let mut frame = [0u8; 70];
-        frame[3..5].copy_from_slice(&65u16.to_le_bytes());
-        for (i, b) in frame.iter_mut().enumerate().skip(RYNK_HEADER_SIZE) {
-            *b = i as u8;
-        }
-        frame
+    /// Build a COBS frame carrying `payload` into `buf`; returns its length.
+    fn cobs_frame(buf: &mut [u8], seq: u8, payload: &[u8]) -> usize {
+        encode_frame(
+            buf,
+            RynkHeader {
+                cmd: Cmd::GetMacro,
+                seq,
+            },
+            &payload,
+        )
+        .unwrap()
     }
 
-    /// Seam → pipe: fragment a frame, de-frame each report through the PRODUCTION
-    /// `RynkHidFrameTracker` (exactly as the WebHID arm of `gatt_events_task`), feed the real bytes
-    /// to [`RYNK_BLE_RX_PIPE`], and read it back through `&RYNK_BLE_RX_PIPE` — the
-    /// `Read` the session consumes — as the original contiguous frame.
-    #[test]
-    fn fragments_reassemble_through_pipe_for_session() {
+    /// Read one frame back out of `RYNK_BLE_RX_PIPE` via a Deframer (the session's
+    /// reassembler), returning its seq and decoded payload.
+    fn read_one_frame() -> (u8, Vec<u8, 64>) {
         use crate::test_support::test_block_on as block_on;
 
-        RYNK_BLE_RX_PIPE.clear();
-        let frame = frame_70();
-
-        let mut tracker = RynkHidFrameTracker::new();
-        for chunk in frame.chunks(RYNK_HID_REPORT_SIZE) {
-            let mut report = [0u8; RYNK_HID_REPORT_SIZE];
-            report[..chunk.len()].copy_from_slice(chunk);
-            let bytes = tracker.take(&report);
-            assert_eq!(RYNK_BLE_RX_PIPE.try_write(bytes).unwrap(), bytes.len());
-        }
-        assert_eq!(tracker.remaining, 0);
-
         let rx = &RYNK_BLE_RX_PIPE;
-        let mut got = [0u8; 70];
-        let mut n = 0;
-        while n < got.len() {
-            n += block_on(rx.read(&mut got[n..]));
+        let mut buf = [0u8; 256];
+        let mut df = Deframer::new();
+        loop {
+            let n = block_on(rx.read(df.tail(&mut buf)));
+            df.commit(n);
+            if let Some(frame_len) = df.next(&mut buf) {
+                let frame = &buf[..frame_len];
+                return (frame[2], postcard::from_bytes(&frame[RYNK_HEADER_SIZE..]).unwrap());
+            }
         }
-        assert_eq!(got, frame);
     }
 
-    /// A frame smaller than one report: only header + payload are taken, the rest
-    /// of the report is padding.
+    /// Fragment a frame into zero-padded 32-byte reports fed to `RYNK_BLE_RX_PIPE`
+    /// as `handle_write`'s WebHID arm does; the padding drops out as empty frames.
+    #[test]
+    fn fragments_reassemble_through_pipe_for_session() {
+        RYNK_BLE_RX_PIPE.clear();
+        let payload: [u8; 60] = core::array::from_fn(|i| i as u8);
+        let mut buf = [0u8; 128];
+        let n = cobs_frame(&mut buf, 9, &payload);
+        assert!(n > RYNK_HID_REPORT_SIZE, "frame must span multiple reports");
+
+        for chunk in buf[..n].chunks(RYNK_HID_REPORT_SIZE) {
+            let mut report = [0u8; RYNK_HID_REPORT_SIZE];
+            report[..chunk.len()].copy_from_slice(chunk);
+            assert_eq!(RYNK_BLE_RX_PIPE.try_write(&report).unwrap(), report.len());
+        }
+
+        let (seq, decoded) = read_one_frame();
+        assert_eq!(seq, 9);
+        assert_eq!(&decoded[..], &payload[..]);
+    }
+
+    /// A frame smaller than one report: the report's trailing zero-padding is
+    /// skipped by the Deframer, leaving just the frame.
     #[test]
     fn small_frame_drops_padding() {
+        RYNK_BLE_RX_PIPE.clear();
+        let mut buf = [0u8; 64];
+        let n = cobs_frame(&mut buf, 3, &[0xAA, 0xBB]);
         let mut report = [0u8; RYNK_HID_REPORT_SIZE];
-        report[3..5].copy_from_slice(&2u16.to_le_bytes()); // LEN = 2 → 7-byte frame
-        report[5..7].copy_from_slice(&[0xAA, 0xBB]);
-        let mut tracker = RynkHidFrameTracker::new();
-        assert_eq!(tracker.take(&report), &report[..7]);
-        assert_eq!(tracker.remaining, 0);
+        report[..n].copy_from_slice(&buf[..n]);
+        assert_eq!(RYNK_BLE_RX_PIPE.try_write(&report).unwrap(), report.len());
+
+        let (seq, decoded) = read_one_frame();
+        assert_eq!(seq, 3);
+        assert_eq!(&decoded[..], &[0xAA, 0xBB]);
     }
 }
