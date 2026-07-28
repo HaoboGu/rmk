@@ -50,7 +50,7 @@ pub(crate) fn expand_default_keymap(keymap: &Keymap, behavior: &Behavior) -> Tok
 }
 
 /// Expand a layer for keymap
-fn expand_layer(
+pub(crate) fn expand_layer(
     layer: Vec<Vec<String>>,
     profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> TokenStream2 {

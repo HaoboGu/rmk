@@ -12,6 +12,16 @@ use syn::parse_macro_input;
 
 use crate::codegen::parse_keyboard_mod;
 
+/// Expand a simulator scenario TOML into `#[test]` fns targeting rmk's
+/// `tests/common` harness. Test-only; see `rmk/tests/scenarios/README.md`.
+#[cfg(feature = "_sim")]
+#[doc(hidden)]
+#[proc_macro]
+pub fn run_tests(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as codegen::sim_tests::RunTestsInput);
+    codegen::sim_tests::expand_run_tests(input).into()
+}
+
 #[proc_macro_attribute]
 pub fn rmk_keyboard(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let item_mod = parse_macro_input!(item as syn::ItemMod);
