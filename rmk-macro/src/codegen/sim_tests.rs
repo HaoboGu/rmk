@@ -159,17 +159,6 @@ fn expand_test(test: &SimTest, file: &str) -> TokenStream2 {
             builder_calls.extend(quote! { .hand(#row, #col, #hand) });
         }
     }
-    for key in &test.keys {
-        let (layer, row, col) = (key.layer as usize, key.row as usize, key.col as usize);
-        if layer >= layers || row >= rows || col >= cols {
-            panic!(
-                "\n❌ {ctx}: key override ({layer}, {row}, {col}) is outside the {layers}x{rows}x{cols} keymap"
-            );
-        }
-        let action = super::action_parser::parse_key(key.action.clone(), &profiles);
-        builder_calls.extend(quote! { .key(#layer, #row, #col, #action) });
-    }
-
     let behavior_stmt = super::behavior::expand_behavior_config(&behavior);
     let builder = quote! {
         crate::common::sim::SimKeyboard::builder::<#rows, #cols, #layers>([#(#layer_tokens),*])

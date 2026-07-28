@@ -1,9 +1,15 @@
 # Combo behavior, ported from keyboard_combo_test.rs.
 #
+# Combos match on actions, so they fire wherever those keys live on the shared
+# split board: W@(1,3) E@(1,4) R@(1,5) T@(1,6); V@(2,3) B@(2,4) N@(2,5)
+# M@(2,7) Comma@(2,8) Dot@(2,9); the tap-hold trio TH(A, LShift)@(2,0)
+# TH(S, LGui)@(2,1) TH(Z, LAlt)@(2,2); and the mouse keys MouseWheelUp@(0,8)
+# MouseAccel2@(0,9).
+#
 # Standard combos below are shared by most tests; tests with their own combo
 # set replace the array via [test.behavior.combo].
 
-keyboard = "boards/test_keymap.toml"
+keyboard = "boards/split.toml"
 
 [behavior.combo]
 timeout = "100ms"
@@ -20,17 +26,17 @@ combos = [
 name = "single_key_in_combo"
 steps = [
   { delay = 10 },
-  { press = [1, 3] },
-  { delay = 50 },
-  { release = [1, 3] },
-  { delay = 10 },
   { press = [1, 4] },
   { delay = 50 },
   { release = [1, 4] },
   { delay = 10 },
   { press = [1, 5] },
-  { delay = 10 },
+  { delay = 50 },
   { release = [1, 5] },
+  { delay = 10 },
+  { press = [1, 6] },
+  { delay = 10 },
+  { release = [1, 6] },
   { expect = ["E"] },
   { expect = "empty" },
   { expect = ["R"] },
@@ -43,9 +49,9 @@ steps = [
 name = "combo_timeout_and_ignore"
 steps = [
   { delay = 10 },
-  { press = [3, 4] },
+  { press = [2, 3] },
   { delay = 100 },
-  { release = [3, 4] },
+  { release = [2, 3] },
   { expect = ["V"] },
   { expect = "empty" },
 ]
@@ -54,17 +60,17 @@ steps = [
 name = "combo_with_mod_then_mod_timeout"
 steps = [
   { delay = 10 },
-  { press = [3, 4] },     # Press V
+  { press = [2, 3] },     # Press V
   { delay = 10 },
-  { press = [3, 5] },     # Press B
+  { press = [2, 4] },     # Press B
   { delay = 50 },
-  { press = [1, 4] },     # Press R
+  { press = [1, 5] },     # Press R
   { delay = 90 },
-  { release = [1, 4] },   # Release R
+  { release = [1, 5] },   # Release R
   { delay = 150 },
-  { release = [3, 4] },   # Release V
+  { release = [2, 3] },   # Release V
   { delay = 170 },
-  { release = [3, 5] },   # Release B
+  { release = [2, 4] },   # Release B
   { expect = { mods = ["LShift"] } },                # V + B = LShift
   { expect = { mods = ["LShift"], keys = ["R"] } },  # Press R
   { expect = { mods = ["LShift"] } },                # Release R
@@ -75,17 +81,17 @@ steps = [
 name = "combo_with_one_shot_modifier"
 steps = [
   { delay = 10 },
-  { press = [1, 3] },
+  { press = [1, 4] },
   { delay = 10 },
-  { press = [1, 5] },
+  { press = [1, 6] },
   { delay = 50 },
-  { release = [1, 3] },
+  { release = [1, 4] },
   { delay = 70 },
-  { release = [1, 5] },
+  { release = [1, 6] },
   { delay = 50 },
-  { press = [1, 3] },
+  { press = [1, 4] },
   { delay = 110 },
-  { release = [1, 3] },
+  { release = [1, 4] },
   { expect = { mods = ["LShift"], keys = ["E"] } },
   { expect = "empty" },
 ]
@@ -96,17 +102,17 @@ timeout = "300ms"
 name = "combo_with_mod"
 steps = [
   { delay = 10 },
-  { press = [3, 4] },     # V
+  { press = [2, 3] },     # V
   { delay = 10 },
-  { press = [3, 5] },     # B
+  { press = [2, 4] },     # B
   { delay = 50 },
-  { press = [3, 6] },     # N, trigger V + B = LShift
+  { press = [2, 5] },     # N, trigger V + B = LShift
   { delay = 70 },
-  { release = [3, 6] },
+  { release = [2, 5] },
   { delay = 100 },
-  { release = [3, 4] },
+  { release = [2, 3] },
   { delay = 110 },
-  { release = [3, 5] },
+  { release = [2, 4] },
   { expect = { mods = ["LShift"] } },
   { expect = { mods = ["LShift"], keys = ["N"] } },
   { expect = { mods = ["LShift"] } },
@@ -117,13 +123,13 @@ steps = [
 name = "fully_overlapped_combo_timeout"
 steps = [
   { delay = 10 },
-  { press = [1, 3] },     # E
+  { press = [1, 4] },     # E
   { delay = 10 },
-  { press = [1, 4] },     # T
+  { press = [1, 5] },     # R
   { delay = 170 },
-  { release = [1, 3] },   # Timeout: E+R triggered within the window -> A
+  { release = [1, 4] },   # Timeout: E+R triggered within the window -> A
   { delay = 10 },
-  { release = [1, 4] },
+  { release = [1, 5] },
   { expect = ["A"] },
   { expect = "empty" },
 ]
@@ -132,13 +138,13 @@ steps = [
 name = "fully_overlapped_combo_trigger_smaller"
 steps = [
   { delay = 10 },
-  { press = [1, 3] },     # E
+  { press = [1, 4] },     # E
   { delay = 10 },
-  { press = [1, 4] },     # T
-  { delay = 10 },
-  { release = [1, 3] },
+  { press = [1, 5] },     # R
   { delay = 10 },
   { release = [1, 4] },
+  { delay = 10 },
+  { release = [1, 5] },
   { expect = ["A"] },
   { expect = "empty" },
 ]
@@ -147,45 +153,45 @@ steps = [
 name = "fully_overlapped_combo"
 steps = [
   { delay = 10 },
-  { press = [1, 3] },     # E
+  { press = [1, 4] },     # E
   { delay = 10 },
-  { press = [1, 5] },     # T
+  { press = [1, 6] },     # T
   { delay = 10 },
-  { press = [1, 4] },     # R
-  { delay = 50 },
-  { release = [1, 3] },
-  { delay = 10 },
-  { release = [1, 5] },
+  { press = [1, 5] },     # R
   { delay = 50 },
   { release = [1, 4] },
   { delay = 10 },
-  { press = [1, 3] },     # E
-  { delay = 10 },
-  { press = [1, 5] },     # T
+  { release = [1, 6] },
   { delay = 50 },
-  { release = [1, 3] },
-  { delay = 10 },
   { release = [1, 5] },
   { delay = 10 },
-  { press = [1, 3] },     # E
+  { press = [1, 4] },     # E
   { delay = 10 },
-  { press = [1, 4] },     # R
-  { delay = 50 },
-  { release = [1, 3] },
+  { press = [1, 6] },     # T
   { delay = 50 },
   { release = [1, 4] },
   { delay = 10 },
-  { press = [1, 3] },     # E
+  { release = [1, 6] },
   { delay = 10 },
-  { press = [1, 5] },     # T
+  { press = [1, 4] },     # E
   { delay = 10 },
-  { press = [1, 4] },     # R
-  { delay = 50 },
-  { release = [1, 3] },
-  { delay = 10 },
-  { release = [1, 5] },
+  { press = [1, 5] },     # R
   { delay = 50 },
   { release = [1, 4] },
+  { delay = 50 },
+  { release = [1, 5] },
+  { delay = 10 },
+  { press = [1, 4] },     # E
+  { delay = 10 },
+  { press = [1, 6] },     # T
+  { delay = 10 },
+  { press = [1, 5] },     # R
+  { delay = 50 },
+  { release = [1, 4] },
+  { delay = 10 },
+  { release = [1, 6] },
+  { delay = 50 },
+  { release = [1, 5] },
   { expect = ["Space"] },
   { expect = "empty" },
   { expect = { mods = ["LShift"], keys = ["A"] } },
@@ -198,21 +204,21 @@ steps = [
 name = "overlapped_combo"
 steps = [
   { delay = 10 },
-  { press = [1, 3] },
-  { delay = 10 },
-  { press = [1, 5] },
-  { delay = 50 },
-  { release = [1, 3] },
-  { delay = 10 },
-  { release = [1, 5] },
-  { delay = 100 },
   { press = [1, 4] },
   { delay = 10 },
-  { press = [1, 3] },
+  { press = [1, 6] },
   { delay = 50 },
   { release = [1, 4] },
   { delay = 10 },
-  { release = [1, 3] },
+  { release = [1, 6] },
+  { delay = 100 },
+  { press = [1, 5] },
+  { delay = 10 },
+  { press = [1, 4] },
+  { delay = 50 },
+  { release = [1, 5] },
+  { delay = 10 },
+  { release = [1, 4] },
   { expect = { mods = ["LShift"], keys = ["A"] } },
   { expect = "empty" },
 ]
@@ -221,17 +227,17 @@ steps = [
 name = "taphold_with_combo"
 steps = [
   { delay = 20 },
-  { press = [2, 1] },     # Press TH(A, LShift)
+  { press = [2, 0] },     # Press TH(A, LShift)
   { delay = 20 },
-  { press = [2, 2] },     # Press TH(S, LGui)
+  { press = [2, 1] },     # Press TH(S, LGui)
   { delay = 20 },
-  { press = [3, 1] },     # Press TH(Z, LAlt)
+  { press = [2, 2] },     # Press TH(Z, LAlt)
   { delay = 10 },
-  { release = [2, 1] },   # Release A
+  { release = [2, 0] },   # Release A
   { delay = 10 },
-  { release = [2, 2] },   # Release S
+  { release = [2, 1] },   # Release S
   { delay = 10 },
-  { release = [3, 1] },   # Release Z
+  { release = [2, 2] },   # Release Z
   { expect = ["C"] },
   { expect = "empty" },
 ]
@@ -253,17 +259,17 @@ combos = [
 name = "re_press_combo_key_while_triggered_does_not_leak_to_hid"
 steps = [
   { delay = 10 },
-  { press = [3, 8] },     # Comma press
+  { press = [2, 8] },     # Comma press
   { delay = 10 },
-  { press = [3, 9] },     # Dot press -> `,+.` triggers -> Backspace pressed
+  { press = [2, 9] },     # Dot press -> `,+.` triggers -> Backspace pressed
   { delay = 10 },
-  { release = [3, 9] },   # Dot release (partial release, swallowed)
+  { release = [2, 9] },   # Dot release (partial release, swallowed)
   { delay = 10 },
-  { press = [3, 9] },     # Dot re-press while combo still held
+  { press = [2, 9] },     # Dot re-press while combo still held
   { delay = 10 },
-  { release = [3, 9] },   # Dot re-release (still part of combo)
+  { release = [2, 9] },   # Dot re-release (still part of combo)
   { delay = 10 },
-  { release = [3, 8] },   # Comma release -> combo fully releases
+  { release = [2, 8] },   # Comma release -> combo fully releases
   { expect = ["Backspace"] },
   { expect = "empty" },
 ]
@@ -281,17 +287,17 @@ combos = [
 name = "overlapping_triggered_combos_release_all_outputs"
 steps = [
   { delay = 10 },
-  { press = [3, 9] },     # Dot press
+  { press = [2, 9] },     # Dot press
   { delay = 10 },
-  { press = [3, 8] },     # Comma press -> `,+.` triggers -> Equal pressed
+  { press = [2, 8] },     # Comma press -> `,+.` triggers -> Equal pressed
   { delay = 10 },
-  { release = [3, 9] },   # Dot release (partial release of triggered combo)
+  { release = [2, 9] },   # Dot release (partial release of triggered combo)
   { delay = 10 },
-  { press = [3, 7] },     # M press -> `M+,` triggers (stale Comma bit)
+  { press = [2, 7] },     # M press -> `M+,` triggers (stale Comma bit)
   { delay = 10 },
-  { release = [3, 7] },   # M release (partial release of triggered combo)
+  { release = [2, 7] },   # M release (partial release of triggered combo)
   { delay = 10 },
-  { release = [3, 8] },   # Comma release -> must release BOTH combo outputs
+  { release = [2, 8] },   # Comma release -> must release BOTH combo outputs
   { expect = ["Equal"] },
   { expect = ["Equal", "RightBracket"] },
   { expect = ["Equal"] },
@@ -308,17 +314,17 @@ combos = [
 name = "combo_with_one_shot_modifier_quick_release"
 steps = [
   { delay = 10 },
-  { press = [1, 3] },
+  { press = [1, 4] },
   { delay = 10 },
-  { press = [1, 5] },
+  { press = [1, 6] },
   { delay = 50 },
-  { release = [1, 3] },
+  { release = [1, 4] },
   { delay = 70 },
-  { release = [1, 5] },
+  { release = [1, 6] },
   { delay = 50 },
-  { press = [1, 3] },
+  { press = [1, 4] },
   { delay = 110 },
-  { release = [1, 3] },
+  { release = [1, 4] },
   { expect = { mods = ["LShift"], keys = ["E"] } },
   { expect = ["E"] },
   { expect = "empty" },
@@ -332,21 +338,21 @@ quick_release = true
 name = "overlapped_combo_quick_release"
 steps = [
   { delay = 10 },
-  { press = [1, 3] },
-  { delay = 10 },
-  { press = [1, 5] },
-  { delay = 50 },
-  { release = [1, 3] },
-  { delay = 10 },
-  { release = [1, 5] },
-  { delay = 100 },
   { press = [1, 4] },
   { delay = 10 },
-  { press = [1, 3] },
+  { press = [1, 6] },
   { delay = 50 },
   { release = [1, 4] },
   { delay = 10 },
-  { release = [1, 3] },
+  { release = [1, 6] },
+  { delay = 100 },
+  { press = [1, 5] },
+  { delay = 10 },
+  { press = [1, 4] },
+  { delay = 50 },
+  { release = [1, 5] },
+  { delay = 10 },
+  { release = [1, 4] },
   { expect = { mods = ["LShift"], keys = ["A"] } },
   { expect = ["A"] },
   { expect = "empty" },
@@ -361,21 +367,21 @@ quick_release = true
 name = "subset_combo_wer_then_r_alone"
 steps = [
   { delay = 10 },
-  { press = [1, 2] },
-  { delay = 10 },
   { press = [1, 3] },
   { delay = 10 },
   { press = [1, 4] },
-  { delay = 30 },
-  { release = [1, 2] },
   { delay = 10 },
+  { press = [1, 5] },
+  { delay = 30 },
   { release = [1, 3] },
   { delay = 10 },
   { release = [1, 4] },
+  { delay = 10 },
+  { release = [1, 5] },
   { delay = 80 },
-  { press = [1, 4] },
+  { press = [1, 5] },
   { delay = 80 },
-  { release = [1, 4] },
+  { release = [1, 5] },
   { expect = { mods = ["LCtrl", "LShift"], keys = ["R"] } },
   { expect = "empty" },
   { expect = ["R"] },
@@ -395,21 +401,21 @@ combos = [
 name = "subset_combo_wer_release_r_first"
 steps = [
   { delay = 10 },
-  { press = [1, 2] },
-  { delay = 10 },
   { press = [1, 3] },
   { delay = 10 },
   { press = [1, 4] },
+  { delay = 10 },
+  { press = [1, 5] },
   { delay = 30 },
+  { release = [1, 5] },
+  { delay = 10 },
   { release = [1, 4] },
   { delay = 10 },
   { release = [1, 3] },
-  { delay = 10 },
-  { release = [1, 2] },
   { delay = 80 },
-  { press = [1, 4] },
+  { press = [1, 5] },
   { delay = 80 },
-  { release = [1, 4] },
+  { release = [1, 5] },
   { expect = { mods = ["LCtrl", "LShift"], keys = ["R"] } },
   { expect = "empty" },
   { expect = ["R"] },
@@ -428,19 +434,15 @@ combos = [
 # otherwise the wheel auto-repeats forever.
 [[test]]
 name = "mouse_key_combo_does_not_stick_wheel"
-keys = [
-  { layer = 0, row = 0, col = 0, action = "MouseWheelUp" },
-  { layer = 0, row = 0, col = 1, action = "MouseAccel2" },
-]
 steps = [
   { delay = 10 },
-  { press = [0, 0] },
+  { press = [0, 8] },
   { delay = 10 },
-  { press = [0, 1] },
+  { press = [0, 9] },
   { delay = 30 },
-  { release = [0, 0] },
+  { release = [0, 8] },
   { delay = 10 },
-  { release = [0, 1] },
+  { release = [0, 9] },
   { no_report = 300 },
 ]
 [test.behavior.combo]
@@ -453,17 +455,13 @@ combos = [
 # the release balances it, and the wheel goes quiet.
 [[test]]
 name = "mouse_wheel_tap_settles"
-keys = [
-  { layer = 0, row = 0, col = 0, action = "MouseWheelUp" },
-  { layer = 0, row = 0, col = 1, action = "MouseAccel2" },
-]
 steps = [
   { delay = 10 },
-  { press = [0, 0] },
+  { press = [0, 8] },
   { delay = 60 },
   { expect_mouse = { wheel = -1 } },
   { delay = 60 },
-  { release = [0, 0] },
+  { release = [0, 8] },
   { expect_mouse = {} },
   { no_report = 300 },
 ]

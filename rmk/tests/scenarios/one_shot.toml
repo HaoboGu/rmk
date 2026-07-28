@@ -1,32 +1,14 @@
 # One-shot modifiers (OSM) and one-shot layers (OSL), ported from
 # keyboard_one_shot_test.rs.
 #
-# The keymap is the shared test board with row 0 as the one-shot fixture:
+# The fixture is row 0, cols 0-5 of the shared split board:
 #   Layer 0: OSM(LShift)          OSL(1)  A  TH(B, C)  OSM(LCtrl)  WM(B, LGui)
 #   Layer 1: OSM(LShift | LCtrl)  No      C  D         E           F
 #
 # Tests inherit the one-shot defaults (timeout 1000ms, activate_on_keypress and
 # quick_release both false) unless they carry a [test.behavior.one_shot*] delta.
 
-keyboard = "boards/test_keymap.toml"
-
-[[keymap.layer]]
-keys = """
-OSM(LShift)  OSL(1)         A            TH(B, C)  OSM(LCtrl)  WM(B, LGui)   Kc6  Kc7  Kc8    Kc9    Kc0        Minus        Equal         Backspace
-Tab          Q              W            E         R           T             Y    U    I      O      P          LeftBracket  RightBracket  Backslash
-Escape       TH(A, LShift)  TH(S, LGui)  D         F           G             H    J    K      L      Semicolon  Quote        No            Enter
-LShift       TH(Z, LAlt)    X            C         V           B             N    M    Comma  Dot    Slash      No           No            RShift
-LCtrl        LGui           LAlt         No        No          LT(1, Space)  No   No   No     MO(1)  RAlt       No           RGui          RCtrl
-"""
-
-[[keymap.layer]]
-keys = """
-OSM(LShift | LCtrl)  No  C           D              E   F   F6  F7  F8  F9  F10   F11  F12   Delete
-No                   _   E           W              No  No  No  No  No  No  No    No   No    No
-CapsLock             No  No          No             No  No  No  No  No  No  No    No   No    No
-No                   No  SHIFTED(X)  WM(X, LShift)  No  No  No  No  No  No  No    No   No    Up
-No                   No  No          No             No  No  No  No  No  No  Left  No   Down  Right
-"""
+keyboard = "boards/split.toml"
 
 # Tap OSM(LShift), then tap A: the modifier lands on A only.
 [[test]]

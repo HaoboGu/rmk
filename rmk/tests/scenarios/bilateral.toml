@@ -5,40 +5,11 @@
 # same-hand combination that includes one falls back to normal mod-tap
 # resolution.
 #
-# The keymap is the shared test board with row 0 as the HRM morse fixture:
-#   Layer 0: A    MT(B, LShift)  MT(C, LGui)  LT(1, D)  MT(E, LAlt)
-#   Layer 1: Kp1  Kp2            Kp3          Kp4       Kp5
-# with hands (0,0) Bilateral, (0,1) Left, (0,2)..(0,4) Right.
+# The fixture is the shared split board's home row plus its bilateral thumb:
+#   A@(3,3) Bilateral, MT(B, LShift)@(1,1) Left,
+#   MT(C, LGui)@(1,7) and LT(1, D)@(1,8) Right (layer 1: Kp3, Kp4).
 
-keyboard = "boards/test_keymap.toml"
-
-[[keymap.layer]]
-keys = """
-A       MT(B, LShift)  MT(C, LGui)  LT(1, D)  MT(E, LAlt)  Kc5           Kc6  Kc7  Kc8    Kc9    Kc0        Minus        Equal         Backspace
-Tab     Q              W            E         R            T             Y    U    I      O      P          LeftBracket  RightBracket  Backslash
-Escape  TH(A, LShift)  TH(S, LGui)  D         F            G             H    J    K      L      Semicolon  Quote        No            Enter
-LShift  TH(Z, LAlt)    X            C         V            B             N    M    Comma  Dot    Slash      No           No            RShift
-LCtrl   LGui           LAlt         No        No           LT(1, Space)  No   No   No     MO(1)  RAlt       No           RGui          RCtrl
-"""
-
-[[keymap.layer]]
-keys = """
-Kp1       Kp2  Kp3         Kp4            Kp5  F5  F6  F7  F8  F9  F10   F11  F12   Delete
-No        _    E           W              No   No  No  No  No  No  No    No   No    No
-CapsLock  No   No          No             No   No  No  No  No  No  No    No   No    No
-No        No   SHIFTED(X)  WM(X, LShift)  No   No  No  No  No  No  No    No   No    Up
-No        No   No          No             No   No  No  No  No  No  Left  No   Down  Right
-"""
-
-# Only `map` is overridden; rows/cols come from the base board.
-[layout]
-map = """
-(0,0,*)  (0,1,L)  (0,2,R)  (0,3,R)  (0,4,R)  (0,5)  (0,6)  (0,7)  (0,8)  (0,9)  (0,10)  (0,11)  (0,12)  (0,13)
-(1,0)    (1,1)    (1,2)    (1,3)    (1,4)    (1,5)  (1,6)  (1,7)  (1,8)  (1,9)  (1,10)  (1,11)  (1,12)  (1,13)
-(2,0)    (2,1)    (2,2)    (2,3)    (2,4)    (2,5)  (2,6)  (2,7)  (2,8)  (2,9)  (2,10)  (2,11)  (2,12)  (2,13)
-(3,0)    (3,1)    (3,2)    (3,3)    (3,4)    (3,5)  (3,6)  (3,7)  (3,8)  (3,9)  (3,10)  (3,11)  (3,12)  (3,13)
-(4,0)    (4,1)    (4,2)    (4,3)    (4,4)    (4,5)  (4,6)  (4,7)  (4,8)  (4,9)  (4,10)  (4,11)  (4,12)  (4,13)
-"""
+keyboard = "boards/split.toml"
 
 [behavior.morse]
 unilateral_tap = true
@@ -60,19 +31,19 @@ morse_actions = [
   { pattern = "000", action = "S" },
 ]
 
-# MT(B, LShift) (col 1, Left) + A (col 0, Bilateral) must NOT trigger unilateral
+# MT(B, LShift) ((1,1), Left) + A ((3,3), Bilateral) must NOT trigger unilateral
 # tap, so permissive hold wins when A is released first.
 [[test]]
 name = "bilateral_exempts_from_unilateral_tap"
 steps = [
   { delay = 150 },
-  { press = [0, 1] },     # Press MT(B, LShift) on the left hand
+  { press = [1, 1] },     # Press MT(B, LShift) on the left hand
   { delay = 10 },
-  { press = [0, 0] },     # Press A, bilateral -> no unilateral tap
+  { press = [3, 3] },     # Press A, bilateral -> no unilateral tap
   { delay = 10 },
-  { release = [0, 0] },   # Release A -> permissive hold for MT(B, LShift)
+  { release = [3, 3] },   # Release A -> permissive hold for MT(B, LShift)
   { delay = 10 },
-  { release = [0, 1] },
+  { release = [1, 1] },
   { expect = { mods = ["LShift"] } },               # Permissive hold
   { expect = { mods = ["LShift"], keys = ["A"] } }, # Press A with shift
   { expect = { mods = ["LShift"] } },               # Release A
@@ -85,13 +56,13 @@ steps = [
 name = "bilateral_cross_hand_unchanged"
 steps = [
   { delay = 150 },
-  { press = [0, 1] },     # Press MT(B, LShift) on the left hand
+  { press = [1, 1] },     # Press MT(B, LShift) on the left hand
   { delay = 10 },
-  { press = [0, 2] },     # Press MT(C, LGui) on the right hand
+  { press = [1, 7] },     # Press MT(C, LGui) on the right hand
   { delay = 10 },
-  { release = [0, 2] },   # Release MT(C, LGui) -> permissive hold
+  { release = [1, 7] },   # Release MT(C, LGui) -> permissive hold
   { delay = 10 },
-  { release = [0, 1] },
+  { release = [1, 1] },
   { expect = { mods = ["LShift"] } },
   { expect = { mods = ["LShift"], keys = ["C"] } }, # Press C with shift
   { expect = { mods = ["LShift"] } },               # Release C
@@ -104,13 +75,13 @@ steps = [
 name = "non_bilateral_same_hand_still_unilateral"
 steps = [
   { delay = 150 },
-  { press = [0, 2] },     # Press MT(C, LGui) on the right hand
+  { press = [1, 7] },     # Press MT(C, LGui) on the right hand
   { delay = 10 },
-  { press = [0, 3] },     # Press LT(1, D); flow tap can't fire, MT is unresolved
+  { press = [1, 8] },     # Press LT(1, D); flow tap can't fire, MT is unresolved
   { delay = 10 },
-  { release = [0, 3] },   # Release LT(1, D) -> unilateral tap still applies
+  { release = [1, 8] },   # Release LT(1, D) -> unilateral tap still applies
   { delay = 10 },
-  { release = [0, 2] },
+  { release = [1, 7] },
   { expect = ["C"] },     # Unilateral tap for MT(C, LGui)
   { expect = ["C", "D"] },
   { expect = ["C"] },
@@ -122,9 +93,9 @@ steps = [
 name = "bilateral_hold_timeout_unchanged"
 steps = [
   { delay = 150 },
-  { press = [0, 1] },     # Press MT(B, LShift)
+  { press = [1, 1] },     # Press MT(B, LShift)
   { delay = 300 },
-  { release = [0, 1] },   # Release after the hold timeout
+  { release = [1, 1] },   # Release after the hold timeout
   { expect = { mods = ["LShift"] } },
   { expect = "empty" },
 ]
@@ -135,13 +106,13 @@ steps = [
 name = "bilateral_reversed_release"
 steps = [
   { delay = 150 },
-  { press = [0, 1] },     # Press MT(B, LShift) on the left hand
+  { press = [1, 1] },     # Press MT(B, LShift) on the left hand
   { delay = 10 },
-  { press = [0, 0] },     # Press A, bilateral
+  { press = [3, 3] },     # Press A, bilateral
   { delay = 10 },
-  { release = [0, 1] },   # Release MT(B, LShift) first -> tap B
+  { release = [1, 1] },   # Release MT(B, LShift) first -> tap B
   { delay = 10 },
-  { release = [0, 0] },
+  { release = [3, 3] },
   { expect = ["B"] },
   { expect = ["B", "A"] },
   { expect = ["A"] },

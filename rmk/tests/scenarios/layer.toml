@@ -1,30 +1,23 @@
-# Layer switching: LM release ordering and PDF default-layer selection.
+# Layer switching: LM release ordering and PDF default-layer selection, on the
+# shared split board's PDF/LM zone: PDF(1)@(0,10), A@(0,11) (layer 1: B),
+# LM(1, LShift)@(0,12).
 #
 # `test_pdf_invalid_layer_is_ignored` stays in keyboard_layer_test.rs: it needs
 # an out-of-range PDF target, which config validation (correctly) rejects here.
 
-[layout]
-rows = 1
-cols = 2
-map = "(0,0) (0,1)"
-
-[[keymap.layer]]
-keys = "A  LM(1, LShift)"
-
-[[keymap.layer]]
-keys = "B  C"
+keyboard = "boards/split.toml"
 
 [[test]]
 name = "lm_release"
 steps = [
   { delay = 0 },
-  { press = [0, 1] },        # LM(1, LShift): layer 1 + LShift
+  { press = [0, 12] },       # LM(1, LShift): layer 1 + LShift
   { delay = 100 },
-  { press = [0, 0] },        # B on layer 1
+  { press = [0, 11] },       # B on layer 1
   { delay = 100 },
-  { release = [0, 0] },
+  { release = [0, 11] },
   { delay = 0 },
-  { release = [0, 1] },
+  { release = [0, 12] },
   { expect = { mods = ["LShift"] } },
   { expect = { mods = ["LShift"], keys = ["B"] } },
   { expect = { mods = ["LShift"] } },
@@ -33,16 +26,10 @@ steps = [
 
 [[test]]
 name = "pdf_sets_default_layer"
-keys = [
-  { layer = 0, row = 0, col = 0, action = "PDF(1)" },
-  { layer = 0, row = 0, col = 1, action = "A" },
-  { layer = 1, row = 0, col = 0, action = "No" },
-  { layer = 1, row = 0, col = 1, action = "B" },
-]
 steps = [
-  { tap = [0, 1, 10] },      # A on layer 0
-  { tap = [0, 0, 10] },      # PDF(1): default layer becomes 1
-  { tap = [0, 1, 10] },      # B on layer 1
+  { tap = [0, 11, 10] },     # A on layer 0
+  { tap = [0, 10, 10] },     # PDF(1): default layer becomes 1
+  { tap = [0, 11, 10] },     # B on layer 1
   { expect = ["A"] },
   { expect = "empty" },
   { expect = ["B"] },

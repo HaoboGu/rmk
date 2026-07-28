@@ -44,21 +44,10 @@ pub struct SimTest {
     pub requires: Vec<String>,
     /// Whether the test runs with an in-memory flash attached.
     pub storage: bool,
-    /// Per-test keymap cell overrides.
-    pub keys: Vec<KeyOverride>,
     pub steps: Vec<Step>,
     /// Keyboard config for this test: base file + scenario sections + per-test
     /// `[test.behavior]` delta, already merged.
     pub config: KeyboardTomlConfig,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct KeyOverride {
-    pub layer: u8,
-    pub row: u8,
-    pub col: u8,
-    pub action: String,
 }
 
 pub enum Step {
@@ -224,13 +213,6 @@ fn parse_test(value: Value, index: usize, keyboard: &Table, file_requires: &[Str
         requires.push("storage".to_string());
     }
 
-    let keys: Vec<KeyOverride> = match table.remove("keys") {
-        None => Vec::new(),
-        Some(v) => v
-            .try_into()
-            .map_err(|e| format!("{ctx}: `keys` must be an array of {{ layer, row, col, action }}: {e}"))?,
-    };
-
     let steps_value = table
         .remove("steps")
         .ok_or_else(|| format!("{ctx}: `steps` is required"))?;
@@ -277,7 +259,6 @@ fn parse_test(value: Value, index: usize, keyboard: &Table, file_requires: &[Str
         name,
         requires,
         storage,
-        keys,
         steps,
         config,
     })

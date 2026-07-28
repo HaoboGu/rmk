@@ -16,34 +16,37 @@ rebuild of the test binary; adding a new file needs one `run_tests!` line in
 ## File layout
 
 ```toml
-keyboard = "boards/test_keymap.toml"  # optional base board; sections below deep-merge over it
+keyboard = "boards/split.toml"        # the keyboard; sections below deep-merge over it
 requires = ["storage"]                # cargo features every test in this file needs
 
-[layout]                              # real keyboard.toml sections
-[keymap]                              # [[keymap.layer]] blocks replace the base's layers wholesale
-[behavior]
-[aliases]
+[behavior]                            # real keyboard.toml behavior config for this file's tests
 
 [[test]]
 name = "hold"                         # unique, valid Rust identifier
 requires = ["vial"]                   # per-test features, unioned with the file's
 storage = true                        # attach an in-memory flash (default false)
-keys = [ ... ]                        # per-test cell overrides
 steps = [ ... ]
 
 [test.behavior.morse]                 # per-test behavior delta, deep-merged
 permissive_hold = false
 ```
 
+All keys live on the boards under `boards/`:
+
+- `boards/split.toml` — a Sofle-style 4x14 split with 4 layers carrying every
+  fixture (one-shot row, HRM/morse home row, combo letters, thumb/variant row).
+  Its header documents the cell assignments.
+- `boards/dusk.toml` — the dusk-on-Saurus layout for the real-layout rollover
+  regressions in `dusk_saurus.toml`.
+
 The keyboard half is the real `keyboard.toml` format, resolved by the same
 `rmk-config` + `rmk-macro` pipeline firmware uses — a user's `keyboard.toml`
-works as a base board as-is (hardware sections are ignored). Only `[layout]`,
-`[keymap]`, `[behavior]`, and `[aliases]` may appear in a scenario; `[rmk]`
-capacities are compile-time constants and are rejected. Merge rule: tables
-merge key-by-key, arrays and scalars replace wholesale.
-
-Per-key hand assignment (for HRM/bilateral tests) lives in the `[layout].map`
-tokens: `(row,col,L)`, `(row,col,R)`, `(row,col,*)`.
+works as a board as-is (hardware sections are ignored). A scenario may also
+define `[layout]`/`[keymap]`/`[aliases]` itself (tables merge key-by-key,
+arrays and scalars replace wholesale), but the suite's files keep all key
+definitions on the boards. `[rmk]` capacities are compile-time constants and
+are rejected. Per-key hand assignment lives in the `[layout].map` tokens:
+`(row,col,L)`, `(row,col,R)`, `(row,col,*)`.
 
 ## Steps
 
