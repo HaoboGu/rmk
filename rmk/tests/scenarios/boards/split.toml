@@ -13,11 +13,31 @@
 # Layer 1 backs the fixtures (keypad digits, one-shot targets, layer-off
 # cells); layers 2-3 are a realistic Fn layer and a transparent spare.
 #
-# The p0/p1 morse profiles exist so the profile-annotated cells parse in every
-# scenario; tests that use them override their settings per test.
+# Like a real keyboard.toml, the board also carries its default behavior:
+# 250 ms morse timeouts and the pattern table behind TD(0). Scenario files set
+# mode flags in their own [behavior.morse] and replace `morses` wholesale when
+# they define their own tables. The p0/p1 morse profiles exist so the
+# profile-annotated cells parse in every scenario; tests that use them
+# override their settings per test.
+
+[behavior.morse]
+hold_timeout = "250ms"
+gap_timeout = "250ms"
 
 [behavior.morse.profiles.p0]
 [behavior.morse.profiles.p1]
+
+[[behavior.morse.morses]]
+morse_actions = [
+  { pattern = "01", action = "A" },
+  { pattern = "1000", action = "B" },
+  { pattern = "1010", action = "C" },
+  { pattern = "101", action = "K" },
+  { pattern = "11", action = "M" },
+  { pattern = "111", action = "O" },
+  { pattern = "010", action = "R" },
+  { pattern = "000", action = "S" },
+]
 
 [layout]
 rows = 4

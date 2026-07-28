@@ -11,20 +11,6 @@ keyboard = "boards/split.toml"
 [behavior.morse]
 unilateral_tap = false
 hold_on_other_press = true
-hold_timeout = "250ms"
-gap_timeout = "250ms"
-
-[[behavior.morse.morses]]
-morse_actions = [
-  { pattern = "01", action = "A" },
-  { pattern = "1000", action = "B" },
-  { pattern = "1010", action = "C" },
-  { pattern = "101", action = "K" },
-  { pattern = "11", action = "M" },
-  { pattern = "111", action = "O" },
-  { pattern = "010", action = "R" },
-  { pattern = "000", action = "S" },
-]
 
 [[test]]
 name = "tap"

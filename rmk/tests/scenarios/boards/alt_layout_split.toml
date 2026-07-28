@@ -23,10 +23,41 @@
 # ported fixture had, so a roll that does resolve as hold still reads L's cell
 # the way the original test did.
 
+# Board-default morse timeouts plus every profile the scenario's morse tables
+# name, from plain modes to the HRM variants the rollover reports used.
+[behavior.morse]
+hold_timeout = "250ms"
+gap_timeout = "250ms"
+
+[behavior.morse.profiles.normal]
+normal_mode = true
+
+[behavior.morse.profiles.hold_on_other]
+hold_on_other_press = true
+
 [behavior.morse.profiles.hrm_hold400]
 unilateral_tap = true
 permissive_hold = true
 hold_timeout = "400ms"
+
+[behavior.morse.profiles.hrm_gap250]
+unilateral_tap = true
+permissive_hold = true
+hold_timeout = "400ms"
+gap_timeout = "250ms"
+
+[behavior.morse.profiles.hrm_gap100]
+unilateral_tap = true
+permissive_hold = true
+hold_timeout = "400ms"
+gap_timeout = "100ms"
+
+[behavior.morse.profiles.hrm_gap100_no_flow]
+unilateral_tap = true
+permissive_hold = true
+hold_timeout = "400ms"
+gap_timeout = "100ms"
+enable_flow_tap = false
 
 [layout]
 rows = 4

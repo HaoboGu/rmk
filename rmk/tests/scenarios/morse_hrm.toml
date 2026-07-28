@@ -16,20 +16,6 @@ enable_flow_tap = true
 prior_idle_time = "120ms"
 unilateral_tap = true
 permissive_hold = true
-hold_timeout = "250ms"
-gap_timeout = "250ms"
-
-[[behavior.morse.morses]]
-morse_actions = [
-  { pattern = "01", action = "A" },
-  { pattern = "1000", action = "B" },
-  { pattern = "1010", action = "C" },
-  { pattern = "101", action = "K" },
-  { pattern = "11", action = "M" },
-  { pattern = "111", action = "O" },
-  { pattern = "010", action = "R" },
-  { pattern = "000", action = "S" },
-]
 
 [[test]]
 name = "tap"

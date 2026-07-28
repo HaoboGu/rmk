@@ -16,8 +16,6 @@ keyboard = "boards/split.toml"
 [behavior.morse]
 unilateral_tap = false
 hold_on_other_press = true
-hold_timeout = "250ms"
-gap_timeout = "250ms"
 
 [[behavior.morse.morses]]
 tap = "A"

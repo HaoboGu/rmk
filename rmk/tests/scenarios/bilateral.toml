@@ -14,22 +14,8 @@ keyboard = "boards/split.toml"
 [behavior.morse]
 unilateral_tap = true
 permissive_hold = true
-hold_timeout = "250ms"
-gap_timeout = "250ms"
 enable_flow_tap = true
 prior_idle_time = "120ms"
-
-[[behavior.morse.morses]]
-morse_actions = [
-  { pattern = "01", action = "A" },
-  { pattern = "1000", action = "B" },
-  { pattern = "1010", action = "C" },
-  { pattern = "101", action = "K" },
-  { pattern = "11", action = "M" },
-  { pattern = "111", action = "O" },
-  { pattern = "010", action = "R" },
-  { pattern = "000", action = "S" },
-]
 
 # MT(B, LShift) ((1,1), Left) + A ((3,3), Bilateral) must NOT trigger unilateral
 # tap, so permissive hold wins when A is released first.

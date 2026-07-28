@@ -7,41 +7,13 @@
 # spelled: `TD(2)`@(1,7) and `TD(6)`@(1,6) in the two morse tables, and
 # `LT(1, C)`@(1,5) as the tap-hold control.
 #
-# `hrm_hold400` is defined on the board, because the board's
-# `LT(1, C, hrm_hold400)` cell names it; the other profiles are only named
-# from the morse tables below.
+# All profiles the morse tables name are defined on the board, next to the
+# `LT(1, C, hrm_hold400)` cell that needs one at parse time.
 
 keyboard = "boards/alt_layout_split.toml"
 
 [behavior.morse]
 unilateral_tap = false
-hold_timeout = "250ms"
-gap_timeout = "250ms"
-
-[behavior.morse.profiles.normal]
-normal_mode = true
-
-[behavior.morse.profiles.hold_on_other]
-hold_on_other_press = true
-
-[behavior.morse.profiles.hrm_gap250]
-unilateral_tap = true
-permissive_hold = true
-hold_timeout = "400ms"
-gap_timeout = "250ms"
-
-[behavior.morse.profiles.hrm_gap100]
-unilateral_tap = true
-permissive_hold = true
-hold_timeout = "400ms"
-gap_timeout = "100ms"
-
-[behavior.morse.profiles.hrm_gap100_no_flow]
-unilateral_tap = true
-permissive_hold = true
-hold_timeout = "400ms"
-gap_timeout = "100ms"
-enable_flow_tap = false
 
 # Regression reported while typing "client" on the alt-layout split.
 #
