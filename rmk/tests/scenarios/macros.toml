@@ -1,0 +1,112 @@
+# Keyboard macros, ported from keyboard_macro_test.rs.
+#
+# (0,0) triggers macro 0 and (0,1) triggers macro 1; each test brings its own
+# macro set via [test.behavior.macro], and every test drives macro 0.
+#
+# `test_macro_with_delay` stays in keyboard_macro_test.rs: the codegen passes
+# `duration` straight to `MacroOperation::Delay`, which is stored as Vial's
+# packed byte pair, so `duration = "50ms"` plays back as 12495ms.
+#
+# The file stem is `macros`, not `macro`, because the generated module name
+# cannot be a Rust keyword.
+
+keyboard = "boards/test_keymap.toml"
+
+keys = [
+  { layer = 0, row = 0, col = 0, action = "MACRO(0)" },
+  { layer = 0, row = 0, col = 1, action = "MACRO(1)" },
+]
+
+[[test]]
+name = "macro_key_a_press_release"
+steps = [
+  { delay = 0 },
+  { press = [0, 0] },     # Press macro 0
+  { delay = 100 },
+  { release = [0, 0] },
+  { expect = ["A"] },     # Press A
+  { expect = "empty" },   # Release A
+]
+[test.behavior.macro]
+macros = [
+  { operations = [
+    { operation = "down", keycode = "A" },
+    { operation = "up", keycode = "A" },
+  ] },
+]
+
+[[test]]
+name = "macro_text"
+steps = [
+  { delay = 0 },
+  { press = [0, 0] },     # Press macro 0
+  { delay = 100 },
+  { release = [0, 0] },
+  { expect = { mods = ["LShift"] } },               # Press shift
+  { expect = { mods = ["LShift"], keys = ["A"] } }, # Press A + shift
+  { expect = { mods = ["LShift"] } },               # Release A
+  { expect = "empty" },                             # Release shift
+  { expect = ["B"] },
+  { expect = "empty" },
+  { expect = { mods = ["LShift"] } },
+  { expect = { mods = ["LShift"], keys = ["C"] } },
+  { expect = { mods = ["LShift"] } },
+  { expect = "empty" },
+  { expect = ["D"] },
+  { expect = "empty" },
+  { expect = ["Kc1"] },
+  { expect = "empty" },
+  { expect = ["Kc2"] },
+  { expect = "empty" },
+  { expect = ["Kc3"] },
+  { expect = "empty" },
+  { expect = ["Kc4"] },
+  { expect = "empty" },
+  { expect = ["Kc5"] },
+  { expect = "empty" },
+  { expect = ["Kc6"] },
+  { expect = "empty" },
+]
+[test.behavior.macro]
+macros = [
+  { operations = [{ operation = "text", text = "AbCd123456" }] },
+]
+
+[[test]]
+name = "macro_tap_key_a"
+steps = [
+  { delay = 0 },
+  { press = [0, 0] },     # Press macro 0
+  { delay = 100 },
+  { release = [0, 0] },
+  { expect = ["A"] },     # Press A
+  { expect = "empty" },   # Release A
+]
+[test.behavior.macro]
+macros = [
+  { operations = [{ operation = "tap", keycode = "A" }] },
+]
+
+[[test]]
+name = "macro_multiple_operations"
+steps = [
+  { delay = 0 },
+  { press = [0, 0] },     # Press macro 0
+  { delay = 100 },
+  { release = [0, 0] },
+  { expect = { mods = ["LShift"] } },               # Press shift
+  { expect = { mods = ["LShift"], keys = ["A"] } }, # Press shift + A
+  { expect = { mods = ["LShift"] } },               # Release A
+  { expect = "empty" },                             # Release shift
+  { expect = ["B"] },
+  { expect = "empty" },
+]
+[test.behavior.macro]
+macros = [
+  { operations = [
+    { operation = "down", keycode = "LShift" },
+    { operation = "tap", keycode = "A" },
+    { operation = "up", keycode = "LShift" },
+    { operation = "tap", keycode = "B" },
+  ] },
+]

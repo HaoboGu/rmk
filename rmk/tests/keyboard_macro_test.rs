@@ -1,282 +1,47 @@
+//! Macro tests live in tests/scenarios/macros.toml; this residual test stays in
+//! Rust because `MacroOperation::Delay` takes Vial's packed two-byte delay,
+//! while the scenario codegen passes `duration` through as raw milliseconds —
+//! `duration = "50ms"` would play back as 12495ms.
+
 pub mod common;
 
-mod macro_test {
-    use heapless::Vec;
-    use rmk::keyboard_macros::{MacroOperation, define_macro_sequences, to_macro_sequence};
-    use rmk::types::action::{Action, KeyAction};
-    use rmk_types::keycode::HidKeyCode;
+use heapless::Vec;
+use rmk::keyboard_macros::{MacroOperation, define_macro_sequences};
+use rmk::types::action::{Action, KeyAction};
+use rmk_types::keycode::HidKeyCode;
 
-    use crate::common::sim::{KeymapOverride, SimKeyboard, SimKeyboardSetup};
-    use crate::common::{KC_LSHIFT, TEST_KEYMAP};
+use crate::common::TEST_KEYMAP;
+use crate::common::sim::SimKeyboard;
 
-    const MACRO_KEY_OVERRIDES: [KeymapOverride; 2] = [
-        KeymapOverride::new(0, 0, 0, KeyAction::Single(Action::TriggerMacro(0))),
-        KeymapOverride::new(0, 0, 1, KeyAction::Single(Action::TriggerMacro(1))),
-    ];
-    const MACRO_SETUP: SimKeyboardSetup = SimKeyboardSetup::new().keys(&MACRO_KEY_OVERRIDES);
+#[test]
+fn test_macro_with_delay() {
+    let macro_sequences = &[Vec::from_slice(&[
+        MacroOperation::Tap(HidKeyCode::A),
+        MacroOperation::Delay(50 << 8), // 50 ms
+        MacroOperation::Tap(HidKeyCode::B),
+    ])
+    .expect("too many elements")];
 
-    #[test]
-    fn test_macro_key_a_press_release() {
-        let macro_sequences = &[Vec::from_slice(&[
-            MacroOperation::Press(HidKeyCode::A),
-            MacroOperation::Release(HidKeyCode::A),
-        ])
-        .expect("too many elements")];
+    let macro_data = define_macro_sequences(macro_sequences);
 
-        let macro_data = define_macro_sequences(macro_sequences);
+    crate::common::test_block_on(async {
+        let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
+            .key(0, 0, 0, KeyAction::Single(Action::TriggerMacro(0)))
+            .key(0, 0, 1, KeyAction::Single(Action::TriggerMacro(1)))
+            .macro_sequences(macro_data)
+            .build()
+            .await;
 
-        crate::common::test_block_on(async {
-            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
-                .setup(MACRO_SETUP)
-                .macro_sequences(macro_data)
-                .build()
-                .await;
-
-            keyboard
-                .delay(0)
-                .press(0, 0) // press Macro0
-                .delay(100)
-                .release(0, 0) // release Macro0
-                .expect_keys([HidKeyCode::A]) // press A
-                .expect_all_up() // release A
-                .run()
-                .await;
-        });
-    }
-
-    // Macros fire on key *press* (matching QMK/ZMK), not release: the macro key is pressed and
-    // never released here, yet the macro still runs to completion.
-    #[test]
-    fn test_macro_triggers_on_press() {
-        let macro_sequences = &[Vec::from_slice(&[
-            MacroOperation::Press(HidKeyCode::A),
-            MacroOperation::Release(HidKeyCode::A),
-        ])
-        .expect("too many elements")];
-
-        let macro_data = define_macro_sequences(macro_sequences);
-        let mut config = BehaviorConfig::default();
-        config.keyboard_macros.macro_sequences = macro_data;
-
-        let keyboard = create_simple_macro_keyboard(config);
-
-        key_sequence_test!(
-            keyboard: keyboard,
-            sequence: [
-                [0, 0, true, 0], // press Macro0 only (no release)
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A down — emitted on press
-                [0, [0, 0, 0, 0, 0, 0]],            // A up
-            ]
-        );
-    }
-
-    #[test]
-    fn test_macro_text() {
-        let macro_sequences = &[to_macro_sequence("AbCd123456")];
-
-        let macro_data = define_macro_sequences(macro_sequences);
-
-        crate::common::test_block_on(async {
-            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
-                .setup(MACRO_SETUP)
-                .macro_sequences(macro_data)
-                .build()
-                .await;
-
-            keyboard
-                .delay(0)
-                .press(0, 0) // press Macro0
-                .delay(100)
-                .release(0, 0) // release Macro0
-                .expect_only_mods(KC_LSHIFT) // press shift
-                .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // press A + shift
-                .expect_only_mods(KC_LSHIFT) // release A
-                .expect_all_up() // release shift
-                .expect_keys([HidKeyCode::B]) // press B
-                .expect_all_up() // release B
-                .expect_only_mods(KC_LSHIFT) // press shift
-                .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::C]) // press C + shift
-                .expect_only_mods(KC_LSHIFT) // release C
-                .expect_all_up() // release shift
-                .expect_keys([HidKeyCode::D]) // press D
-                .expect_all_up() // release D
-                .expect_keys([HidKeyCode::Kc1]) // press 1
-                .expect_all_up() // release 1
-                .expect_keys([HidKeyCode::Kc2]) // press 2
-                .expect_all_up() // release 2
-                .expect_keys([HidKeyCode::Kc3]) // press 3
-                .expect_all_up() // release 3
-                .expect_keys([HidKeyCode::Kc4]) // press 4
-                .expect_all_up() // release 4
-                .expect_keys([HidKeyCode::Kc5]) // press 5
-                .expect_all_up() // release 5
-                .expect_keys([HidKeyCode::Kc6]) // press 6
-                .expect_all_up() // release 6
-                .run()
-                .await;
-        });
-    }
-
-    #[test]
-    fn test_macro_tap_key_a() {
-        let macro_sequences = &[Vec::from_slice(&[MacroOperation::Tap(HidKeyCode::A)]).expect("too many elements")];
-
-        let macro_data = define_macro_sequences(macro_sequences);
-
-        crate::common::test_block_on(async {
-            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
-                .setup(MACRO_SETUP)
-                .macro_sequences(macro_data)
-                .build()
-                .await;
-
-            keyboard
-                .delay(0)
-                .press(0, 0) // press Macro0
-                .delay(100)
-                .release(0, 0) // release Macro0
-                .expect_keys([HidKeyCode::A]) // press A
-                .expect_all_up() // release A
-                .run()
-                .await;
-        });
-    }
-
-    #[test]
-    fn test_macro_multiple_operations() {
-        let macro_sequences = &[Vec::from_slice(&[
-            MacroOperation::Press(HidKeyCode::LShift),
-            MacroOperation::Tap(HidKeyCode::A),
-            MacroOperation::Release(HidKeyCode::LShift),
-            MacroOperation::Tap(HidKeyCode::B),
-        ])
-        .expect("too many elements")];
-
-        let macro_data = define_macro_sequences(macro_sequences);
-
-        crate::common::test_block_on(async {
-            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
-                .setup(MACRO_SETUP)
-                .macro_sequences(macro_data)
-                .build()
-                .await;
-
-            keyboard
-                .delay(0)
-                .press(0, 0) // press macro0
-                .delay(100)
-                .release(0, 0) // release macro0
-                .expect_only_mods(KC_LSHIFT) // press shift
-                .expect_keys_with_mods(KC_LSHIFT, [HidKeyCode::A]) // press shift + A
-                .expect_only_mods(KC_LSHIFT) // release A
-                .expect_all_up() // release shift
-                .expect_keys([HidKeyCode::B]) // press B
-                .expect_all_up() // release B
-                .run()
-                .await;
-        });
-    }
-
-    #[test]
-    fn test_macro_with_delay() {
-        let macro_sequences = &[Vec::from_slice(&[
-            MacroOperation::Tap(HidKeyCode::A),
-            MacroOperation::Delay(50 << 8), // 50 ms
-            MacroOperation::Tap(HidKeyCode::B),
-        ])
-        .expect("too many elements")];
-
-        let macro_data = define_macro_sequences(macro_sequences);
-
-        crate::common::test_block_on(async {
-            let mut keyboard = SimKeyboard::builder(TEST_KEYMAP)
-                .setup(MACRO_SETUP)
-                .macro_sequences(macro_data)
-                .build()
-                .await;
-
-            keyboard
-                .delay(0)
-                .press(0, 0)
-                .delay(100)
-                .release(0, 0)
-                .expect_keys([HidKeyCode::A]) // press A
-                .expect_all_up() // release A
-                .expect_keys([HidKeyCode::B]) // press B
-                .expect_all_up() // release B
-                .run()
-                .await;
-        });
-    }
-
-    // A 16-bit Vial keycode (LCtrl(A) = 0x0104) used as a macro TAP action is serialized as
-    // VIAL_MACRO_EXT_TAP, decoded, and routed through the shared action path so the modifier
-    // is applied exactly like a physical key. This is the mechanism that makes BT/PDF (and any
-    // other 16-bit keycode) work inside a macro.
-    #[cfg(feature = "vial")]
-    #[test]
-    fn test_macro_extended_tap_key_with_modifier() {
-        use rmk::types::modifier::ModifierCombination;
-
-        use crate::common::KC_LCTRL;
-
-        let macro_sequences = &[Vec::from_slice(&[MacroOperation::TapAction(Action::KeyWithModifier(
-            HidKeyCode::A,
-            ModifierCombination::LCTRL,
-        ))])
-        .expect("too many elements")];
-
-        let macro_data = define_macro_sequences(macro_sequences);
-        let mut config = BehaviorConfig::default();
-        config.keyboard_macros.macro_sequences = macro_data;
-
-        let keyboard = create_simple_macro_keyboard(config);
-
-        key_sequence_test!(
-            keyboard: keyboard,
-            sequence: [
-                [0, 0, true, 0],    // press Macro0
-                [0, 0, false, 100], // release Macro0
-            ],
-            expected_reports: [
-                [KC_LCTRL, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // press A with Left Ctrl
-                [0, [0, 0, 0, 0, 0, 0]],                   // release
-            ]
-        );
-    }
-
-    // A macro cannot trigger another macro (which would re-enter the trigger queue and could loop
-    // forever). Macro 0 tries to trigger macro 1, then taps A: the nested trigger is dropped, so
-    // only A is emitted — B (macro 1) never runs — and the rest of macro 0 still executes.
-    #[cfg(feature = "vial")]
-    #[test]
-    fn test_macro_cannot_trigger_macro() {
-        let macro_sequences = &[
-            Vec::from_slice(&[
-                MacroOperation::TapAction(Action::TriggerMacro(1)),
-                MacroOperation::Tap(HidKeyCode::A),
-            ])
-            .expect("too many elements"),
-            Vec::from_slice(&[MacroOperation::Tap(HidKeyCode::B)]).expect("too many elements"),
-        ];
-
-        let macro_data = define_macro_sequences(macro_sequences);
-        let mut config = BehaviorConfig::default();
-        config.keyboard_macros.macro_sequences = macro_data;
-
-        let keyboard = create_simple_macro_keyboard(config);
-
-        key_sequence_test!(
-            keyboard: keyboard,
-            sequence: [
-                [0, 0, true, 0], // press Macro0 (no release needed — fires on press)
-            ],
-            expected_reports: [
-                [0, [kc_to_u8!(A), 0, 0, 0, 0, 0]], // A only; macro 1 was not triggered
-                [0, [0, 0, 0, 0, 0, 0]],
-            ]
-        );
-    }
+        keyboard
+            .delay(0)
+            .press(0, 0)
+            .delay(100)
+            .release(0, 0)
+            .expect_keys([HidKeyCode::A]) // press A
+            .expect_all_up() // release A
+            .expect_keys([HidKeyCode::B]) // press B
+            .expect_all_up() // release B
+            .run()
+            .await;
+    });
 }

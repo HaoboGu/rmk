@@ -1,0 +1,474 @@
+# Combo behavior, ported from keyboard_combo_test.rs.
+#
+# Standard combos below are shared by most tests; tests with their own combo
+# set replace the array via [test.behavior.combo].
+
+keyboard = "boards/test_keymap.toml"
+
+[behavior.combo]
+timeout = "100ms"
+combos = [
+  { actions = ["V", "B"], output = "LShift", layer = 0 },
+  { actions = ["R", "T"], output = "LAlt", layer = 0 },
+  { actions = ["E", "T"], output = "OSM(LShift)", layer = 0 },
+  { actions = ["E", "R"], output = "A", layer = 0 },
+  { actions = ["E", "R", "T"], output = "Space", layer = 0 },
+  { actions = ["V", "B", "T"], output = "Space", layer = 0 },
+]
+
+[[test]]
+name = "single_key_in_combo"
+steps = [
+  { delay = 10 },
+  { press = [1, 3] },
+  { delay = 50 },
+  { release = [1, 3] },
+  { delay = 10 },
+  { press = [1, 4] },
+  { delay = 50 },
+  { release = [1, 4] },
+  { delay = 10 },
+  { press = [1, 5] },
+  { delay = 10 },
+  { release = [1, 5] },
+  { expect = ["E"] },
+  { expect = "empty" },
+  { expect = ["R"] },
+  { expect = "empty" },
+  { expect = ["T"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "combo_timeout_and_ignore"
+steps = [
+  { delay = 10 },
+  { press = [3, 4] },
+  { delay = 100 },
+  { release = [3, 4] },
+  { expect = ["V"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "combo_with_mod_then_mod_timeout"
+steps = [
+  { delay = 10 },
+  { press = [3, 4] },     # Press V
+  { delay = 10 },
+  { press = [3, 5] },     # Press B
+  { delay = 50 },
+  { press = [1, 4] },     # Press R
+  { delay = 90 },
+  { release = [1, 4] },   # Release R
+  { delay = 150 },
+  { release = [3, 4] },   # Release V
+  { delay = 170 },
+  { release = [3, 5] },   # Release B
+  { expect = { mods = ["LShift"] } },                # V + B = LShift
+  { expect = { mods = ["LShift"], keys = ["R"] } },  # Press R
+  { expect = { mods = ["LShift"] } },                # Release R
+  { expect = "empty" },                              # Release V + B
+]
+
+[[test]]
+name = "combo_with_one_shot_modifier"
+steps = [
+  { delay = 10 },
+  { press = [1, 3] },
+  { delay = 10 },
+  { press = [1, 5] },
+  { delay = 50 },
+  { release = [1, 3] },
+  { delay = 70 },
+  { release = [1, 5] },
+  { delay = 50 },
+  { press = [1, 3] },
+  { delay = 110 },
+  { release = [1, 3] },
+  { expect = { mods = ["LShift"], keys = ["E"] } },
+  { expect = "empty" },
+]
+[test.behavior.one_shot]
+timeout = "300ms"
+
+[[test]]
+name = "combo_with_mod"
+steps = [
+  { delay = 10 },
+  { press = [3, 4] },     # V
+  { delay = 10 },
+  { press = [3, 5] },     # B
+  { delay = 50 },
+  { press = [3, 6] },     # N, trigger V + B = LShift
+  { delay = 70 },
+  { release = [3, 6] },
+  { delay = 100 },
+  { release = [3, 4] },
+  { delay = 110 },
+  { release = [3, 5] },
+  { expect = { mods = ["LShift"] } },
+  { expect = { mods = ["LShift"], keys = ["N"] } },
+  { expect = { mods = ["LShift"] } },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "fully_overlapped_combo_timeout"
+steps = [
+  { delay = 10 },
+  { press = [1, 3] },     # E
+  { delay = 10 },
+  { press = [1, 4] },     # T
+  { delay = 170 },
+  { release = [1, 3] },   # Timeout: E+R triggered within the window -> A
+  { delay = 10 },
+  { release = [1, 4] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "fully_overlapped_combo_trigger_smaller"
+steps = [
+  { delay = 10 },
+  { press = [1, 3] },     # E
+  { delay = 10 },
+  { press = [1, 4] },     # T
+  { delay = 10 },
+  { release = [1, 3] },
+  { delay = 10 },
+  { release = [1, 4] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "fully_overlapped_combo"
+steps = [
+  { delay = 10 },
+  { press = [1, 3] },     # E
+  { delay = 10 },
+  { press = [1, 5] },     # T
+  { delay = 10 },
+  { press = [1, 4] },     # R
+  { delay = 50 },
+  { release = [1, 3] },
+  { delay = 10 },
+  { release = [1, 5] },
+  { delay = 50 },
+  { release = [1, 4] },
+  { delay = 10 },
+  { press = [1, 3] },     # E
+  { delay = 10 },
+  { press = [1, 5] },     # T
+  { delay = 50 },
+  { release = [1, 3] },
+  { delay = 10 },
+  { release = [1, 5] },
+  { delay = 10 },
+  { press = [1, 3] },     # E
+  { delay = 10 },
+  { press = [1, 4] },     # R
+  { delay = 50 },
+  { release = [1, 3] },
+  { delay = 50 },
+  { release = [1, 4] },
+  { delay = 10 },
+  { press = [1, 3] },     # E
+  { delay = 10 },
+  { press = [1, 5] },     # T
+  { delay = 10 },
+  { press = [1, 4] },     # R
+  { delay = 50 },
+  { release = [1, 3] },
+  { delay = 10 },
+  { release = [1, 5] },
+  { delay = 50 },
+  { release = [1, 4] },
+  { expect = ["Space"] },
+  { expect = "empty" },
+  { expect = { mods = ["LShift"], keys = ["A"] } },
+  { expect = "empty" },
+  { expect = ["Space"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "overlapped_combo"
+steps = [
+  { delay = 10 },
+  { press = [1, 3] },
+  { delay = 10 },
+  { press = [1, 5] },
+  { delay = 50 },
+  { release = [1, 3] },
+  { delay = 10 },
+  { release = [1, 5] },
+  { delay = 100 },
+  { press = [1, 4] },
+  { delay = 10 },
+  { press = [1, 3] },
+  { delay = 50 },
+  { release = [1, 4] },
+  { delay = 10 },
+  { release = [1, 3] },
+  { expect = { mods = ["LShift"], keys = ["A"] } },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "taphold_with_combo"
+steps = [
+  { delay = 20 },
+  { press = [2, 1] },     # Press TH(A, LShift)
+  { delay = 20 },
+  { press = [2, 2] },     # Press TH(S, LGui)
+  { delay = 20 },
+  { press = [3, 1] },     # Press TH(Z, LAlt)
+  { delay = 10 },
+  { release = [2, 1] },   # Release A
+  { delay = 10 },
+  { release = [2, 2] },   # Release S
+  { delay = 10 },
+  { release = [3, 1] },   # Release Z
+  { expect = ["C"] },
+  { expect = "empty" },
+]
+[test.behavior.morse]
+unilateral_tap = false
+permissive_hold = true
+hold_timeout = "250ms"
+gap_timeout = "250ms"
+[test.behavior.combo]
+timeout = "50ms"
+combos = [
+  { actions = ["TH(A, LShift)", "TH(S, LGui)", "TH(Z, LAlt)"], output = "C" },
+]
+
+# Reproduces a single-combo stuck-key bug: re-pressing a combo key while the
+# combo is still held leaked the re-press into the HID report and overwrote the
+# combo output's slot, leaving the re-pressed key stuck on full release.
+[[test]]
+name = "re_press_combo_key_while_triggered_does_not_leak_to_hid"
+steps = [
+  { delay = 10 },
+  { press = [3, 8] },     # Comma press
+  { delay = 10 },
+  { press = [3, 9] },     # Dot press -> `,+.` triggers -> Backspace pressed
+  { delay = 10 },
+  { release = [3, 9] },   # Dot release (partial release, swallowed)
+  { delay = 10 },
+  { press = [3, 9] },     # Dot re-press while combo still held
+  { delay = 10 },
+  { release = [3, 9] },   # Dot re-release (still part of combo)
+  { delay = 10 },
+  { release = [3, 8] },   # Comma release -> combo fully releases
+  { expect = ["Backspace"] },
+  { expect = "empty" },
+]
+[test.behavior.combo]
+timeout = "40ms"
+combos = [
+  { actions = ["Comma", "Dot"], output = "Backspace", layer = 0 },
+]
+
+# Reproduces a stuck combo-output bug on overlapping triggered combos: the two
+# combos share Comma, and its state bit survives the first trigger, so M
+# completes `M+,` without a fresh Comma press. Releasing Comma must release
+# BOTH combo outputs.
+[[test]]
+name = "overlapping_triggered_combos_release_all_outputs"
+steps = [
+  { delay = 10 },
+  { press = [3, 9] },     # Dot press
+  { delay = 10 },
+  { press = [3, 8] },     # Comma press -> `,+.` triggers -> Equal pressed
+  { delay = 10 },
+  { release = [3, 9] },   # Dot release (partial release of triggered combo)
+  { delay = 10 },
+  { press = [3, 7] },     # M press -> `M+,` triggers (stale Comma bit)
+  { delay = 10 },
+  { release = [3, 7] },   # M release (partial release of triggered combo)
+  { delay = 10 },
+  { release = [3, 8] },   # Comma release -> must release BOTH combo outputs
+  { expect = ["Equal"] },
+  { expect = ["Equal", "RightBracket"] },
+  { expect = ["Equal"] },
+  { expect = "empty" },
+]
+[test.behavior.combo]
+timeout = "40ms"
+combos = [
+  { actions = ["M", "Comma"], output = "RightBracket", layer = 0 },
+  { actions = ["Comma", "Dot"], output = "Equal", layer = 0 },
+]
+
+[[test]]
+name = "combo_with_one_shot_modifier_quick_release"
+steps = [
+  { delay = 10 },
+  { press = [1, 3] },
+  { delay = 10 },
+  { press = [1, 5] },
+  { delay = 50 },
+  { release = [1, 3] },
+  { delay = 70 },
+  { release = [1, 5] },
+  { delay = 50 },
+  { press = [1, 3] },
+  { delay = 110 },
+  { release = [1, 3] },
+  { expect = { mods = ["LShift"], keys = ["E"] } },
+  { expect = ["E"] },
+  { expect = "empty" },
+]
+[test.behavior.one_shot]
+timeout = "300ms"
+[test.behavior.one_shot_modifiers]
+quick_release = true
+
+[[test]]
+name = "overlapped_combo_quick_release"
+steps = [
+  { delay = 10 },
+  { press = [1, 3] },
+  { delay = 10 },
+  { press = [1, 5] },
+  { delay = 50 },
+  { release = [1, 3] },
+  { delay = 10 },
+  { release = [1, 5] },
+  { delay = 100 },
+  { press = [1, 4] },
+  { delay = 10 },
+  { press = [1, 3] },
+  { delay = 50 },
+  { release = [1, 4] },
+  { delay = 10 },
+  { release = [1, 3] },
+  { expect = { mods = ["LShift"], keys = ["A"] } },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+[test.behavior.one_shot_modifiers]
+quick_release = true
+
+# Regression for the overlapping subset combos bug: firing W+E+R must clear the
+# fully-pressed-but-not-triggered `W+E` subset, or it later fires as a phantom
+# F2 and strands R/modifiers on the host.
+[[test]]
+name = "subset_combo_wer_then_r_alone"
+steps = [
+  { delay = 10 },
+  { press = [1, 2] },
+  { delay = 10 },
+  { press = [1, 3] },
+  { delay = 10 },
+  { press = [1, 4] },
+  { delay = 30 },
+  { release = [1, 2] },
+  { delay = 10 },
+  { release = [1, 3] },
+  { delay = 10 },
+  { release = [1, 4] },
+  { delay = 80 },
+  { press = [1, 4] },
+  { delay = 80 },
+  { release = [1, 4] },
+  { expect = { mods = ["LCtrl", "LShift"], keys = ["R"] } },
+  { expect = "empty" },
+  { expect = ["R"] },
+  { expect = "empty" },
+]
+[test.behavior.combo]
+timeout = "50ms"
+combos = [
+  { actions = ["W", "E"], output = "F2", layer = 0 },
+  { actions = ["E", "R"], output = "F4", layer = 0 },
+  { actions = ["W", "E", "R"], output = "WM(R, LShift | LCtrl)", layer = 0 },
+]
+
+# Same, but releasing R first (rolling off the chord) — the ordering that most
+# obviously exposed the stranded-R behavior before the fix.
+[[test]]
+name = "subset_combo_wer_release_r_first"
+steps = [
+  { delay = 10 },
+  { press = [1, 2] },
+  { delay = 10 },
+  { press = [1, 3] },
+  { delay = 10 },
+  { press = [1, 4] },
+  { delay = 30 },
+  { release = [1, 4] },
+  { delay = 10 },
+  { release = [1, 3] },
+  { delay = 10 },
+  { release = [1, 2] },
+  { delay = 80 },
+  { press = [1, 4] },
+  { delay = 80 },
+  { release = [1, 4] },
+  { expect = { mods = ["LCtrl", "LShift"], keys = ["R"] } },
+  { expect = "empty" },
+  { expect = ["R"] },
+  { expect = "empty" },
+]
+[test.behavior.combo]
+timeout = "50ms"
+combos = [
+  { actions = ["W", "E"], output = "F2", layer = 0 },
+  { actions = ["E", "R"], output = "F4", layer = 0 },
+  { actions = ["W", "E", "R"], output = "WM(R, LShift | LCtrl)", layer = 0 },
+]
+
+# Regression for the stuck mouse-wheel bug: when the combo fires it discards
+# the buffered WheelUp press, so it must also consume the WheelUp release —
+# otherwise the wheel auto-repeats forever.
+[[test]]
+name = "mouse_key_combo_does_not_stick_wheel"
+keys = [
+  { layer = 0, row = 0, col = 0, action = "MouseWheelUp" },
+  { layer = 0, row = 0, col = 1, action = "MouseAccel2" },
+]
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },
+  { delay = 10 },
+  { press = [0, 1] },
+  { delay = 30 },
+  { release = [0, 0] },
+  { delay = 10 },
+  { release = [0, 1] },
+  { no_report = 300 },
+]
+[test.behavior.combo]
+timeout = "50ms"
+combos = [
+  { actions = ["MouseAccel2", "MouseWheelUp"], output = "No", layer = 0 },
+]
+
+# Control: a plain WheelUp tap (combo never completes) dispatches on timeout,
+# the release balances it, and the wheel goes quiet.
+[[test]]
+name = "mouse_wheel_tap_settles"
+keys = [
+  { layer = 0, row = 0, col = 0, action = "MouseWheelUp" },
+  { layer = 0, row = 0, col = 1, action = "MouseAccel2" },
+]
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },
+  { delay = 60 },
+  { expect_mouse = { wheel = -1 } },
+  { delay = 60 },
+  { release = [0, 0] },
+  { expect_mouse = {} },
+  { no_report = 300 },
+]
+[test.behavior.combo]
+timeout = "50ms"
+combos = [
+  { actions = ["MouseAccel2", "MouseWheelUp"], output = "No", layer = 0 },
+]

@@ -93,6 +93,8 @@ embassy-usb-dfu = { version = "0.3.0", optional = true, features = ["cortex-m", 
 [dev-dependencies]
 # A hack for enabling 'std' feature in testing, ref: https://github.com/rust-lang/cargo/issues/2911
 rmk = { path = ".", default-features = false, features = ["std", "log"] }
+# Same unification hack: turn on the `run_tests!` scenario macro for tests only
+rmk-macro = { path = "../rmk-macro", features = ["_sim"] }
 critical-section = { version = "1.2", features = ["std"] }
 env_logger = "0.11"
 ctor = "1.0"

@@ -1,4 +1,3 @@
-pub mod morse;
 #[cfg(feature = "rynk")]
 pub mod rynk_hid_link;
 #[cfg(feature = "rynk")]
@@ -44,11 +43,6 @@ pub fn init_log() {
 pub fn test_block_on<F: Future>(future: F) -> F::Output {
     sim::test_block_on(future)
 }
-
-pub const KC_LCTRL: u8 = 1 << 0;
-pub const KC_LSHIFT: u8 = 1 << 1;
-pub const KC_LALT: u8 = 1 << 2;
-pub const KC_LGUI: u8 = 1 << 3;
 
 #[rustfmt::skip]
 pub const TEST_KEYMAP: [[[KeyAction; 14]; 5]; 2] =

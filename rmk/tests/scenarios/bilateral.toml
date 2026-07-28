@@ -1,0 +1,144 @@
+# Bilateral keys in the layout map combined with unilateral_tap, ported from
+# keyboard_bilateral_test.rs.
+#
+# Keys marked Bilateral (`*` in the map) are exempt from unilateral_tap, so a
+# same-hand combination that includes one falls back to normal mod-tap
+# resolution.
+#
+# Row 0 of the shared board is patched to the HRM morse fixture:
+#   Layer 0: A    MT(B, LShift)  MT(C, LGui)  LT(1, D)  MT(E, LAlt)
+#   Layer 1: Kp1  Kp2            Kp3          Kp4       Kp5
+# with hands (0,0) Bilateral, (0,1) Left, (0,2)..(0,4) Right.
+
+keyboard = "boards/test_keymap.toml"
+
+keys = [
+  { layer = 0, row = 0, col = 0, action = "A" },
+  { layer = 0, row = 0, col = 1, action = "MT(B, LShift)" },
+  { layer = 0, row = 0, col = 2, action = "MT(C, LGui)" },
+  { layer = 0, row = 0, col = 3, action = "LT(1, D)" },
+  { layer = 0, row = 0, col = 4, action = "MT(E, LAlt)" },
+  { layer = 1, row = 0, col = 0, action = "Kp1" },
+  { layer = 1, row = 0, col = 1, action = "Kp2" },
+  { layer = 1, row = 0, col = 2, action = "Kp3" },
+  { layer = 1, row = 0, col = 3, action = "Kp4" },
+  { layer = 1, row = 0, col = 4, action = "Kp5" },
+]
+
+# Only `map` is overridden; rows/cols come from the base board.
+[layout]
+map = """
+(0,0,*)  (0,1,L)  (0,2,R)  (0,3,R)  (0,4,R)  (0,5)  (0,6)  (0,7)  (0,8)  (0,9)  (0,10)  (0,11)  (0,12)  (0,13)
+(1,0)    (1,1)    (1,2)    (1,3)    (1,4)    (1,5)  (1,6)  (1,7)  (1,8)  (1,9)  (1,10)  (1,11)  (1,12)  (1,13)
+(2,0)    (2,1)    (2,2)    (2,3)    (2,4)    (2,5)  (2,6)  (2,7)  (2,8)  (2,9)  (2,10)  (2,11)  (2,12)  (2,13)
+(3,0)    (3,1)    (3,2)    (3,3)    (3,4)    (3,5)  (3,6)  (3,7)  (3,8)  (3,9)  (3,10)  (3,11)  (3,12)  (3,13)
+(4,0)    (4,1)    (4,2)    (4,3)    (4,4)    (4,5)  (4,6)  (4,7)  (4,8)  (4,9)  (4,10)  (4,11)  (4,12)  (4,13)
+"""
+
+[behavior.morse]
+unilateral_tap = true
+permissive_hold = true
+hold_timeout = "250ms"
+gap_timeout = "250ms"
+enable_flow_tap = true
+prior_idle_time = "120ms"
+
+[[behavior.morse.morses]]
+morse_actions = [
+  { pattern = "01", action = "A" },
+  { pattern = "1000", action = "B" },
+  { pattern = "1010", action = "C" },
+  { pattern = "101", action = "K" },
+  { pattern = "11", action = "M" },
+  { pattern = "111", action = "O" },
+  { pattern = "010", action = "R" },
+  { pattern = "000", action = "S" },
+]
+
+# MT(B, LShift) (col 1, Left) + A (col 0, Bilateral) must NOT trigger unilateral
+# tap, so permissive hold wins when A is released first.
+[[test]]
+name = "bilateral_exempts_from_unilateral_tap"
+steps = [
+  { delay = 150 },
+  { press = [0, 1] },     # Press MT(B, LShift) on the left hand
+  { delay = 10 },
+  { press = [0, 0] },     # Press A, bilateral -> no unilateral tap
+  { delay = 10 },
+  { release = [0, 0] },   # Release A -> permissive hold for MT(B, LShift)
+  { delay = 10 },
+  { release = [0, 1] },
+  { expect = { mods = ["LShift"] } },               # Permissive hold
+  { expect = { mods = ["LShift"], keys = ["A"] } }, # Press A with shift
+  { expect = { mods = ["LShift"] } },               # Release A
+  { expect = "empty" },
+]
+
+# Cross-hand rolls are unaffected by bilateral: MT(B, LShift) (Left) +
+# MT(C, LGui) (Right) still resolves via permissive hold.
+[[test]]
+name = "bilateral_cross_hand_unchanged"
+steps = [
+  { delay = 150 },
+  { press = [0, 1] },     # Press MT(B, LShift) on the left hand
+  { delay = 10 },
+  { press = [0, 2] },     # Press MT(C, LGui) on the right hand
+  { delay = 10 },
+  { release = [0, 2] },   # Release MT(C, LGui) -> permissive hold
+  { delay = 10 },
+  { release = [0, 1] },
+  { expect = { mods = ["LShift"] } },
+  { expect = { mods = ["LShift"], keys = ["C"] } }, # Press C with shift
+  { expect = { mods = ["LShift"] } },               # Release C
+  { expect = "empty" },
+]
+
+# Same-hand press without a bilateral key still triggers unilateral tap:
+# MT(C, LGui) and LT(1, D) are both on the right hand.
+[[test]]
+name = "non_bilateral_same_hand_still_unilateral"
+steps = [
+  { delay = 150 },
+  { press = [0, 2] },     # Press MT(C, LGui) on the right hand
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D); flow tap can't fire, MT is unresolved
+  { delay = 10 },
+  { release = [0, 3] },   # Release LT(1, D) -> unilateral tap still applies
+  { delay = 10 },
+  { release = [0, 2] },
+  { expect = ["C"] },     # Unilateral tap for MT(C, LGui)
+  { expect = ["C", "D"] },
+  { expect = ["C"] },
+  { expect = "empty" },
+]
+
+# Bilateral only affects the unilateral_tap decision, never the hold timeout.
+[[test]]
+name = "bilateral_hold_timeout_unchanged"
+steps = [
+  { delay = 150 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 300 },
+  { release = [0, 1] },   # Release after the hold timeout
+  { expect = { mods = ["LShift"] } },
+  { expect = "empty" },
+]
+
+# Releasing the mod-tap first still resolves it as a tap through normal morse
+# tap prediction, even though A (bilateral) suppressed unilateral tap.
+[[test]]
+name = "bilateral_reversed_release"
+steps = [
+  { delay = 150 },
+  { press = [0, 1] },     # Press MT(B, LShift) on the left hand
+  { delay = 10 },
+  { press = [0, 0] },     # Press A, bilateral
+  { delay = 10 },
+  { release = [0, 1] },   # Release MT(B, LShift) first -> tap B
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = ["B"] },
+  { expect = ["B", "A"] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]

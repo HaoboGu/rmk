@@ -55,7 +55,6 @@ use rmk::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEventPos};
 use rmk::hid::{KeyboardReport, Report};
 use rmk::input_device::rotary_encoder::Direction;
 use rmk::keyboard::Keyboard;
-use rmk::keyboard::combo::{Combo, ComboConfig};
 use rmk::keymap::{KeyMap, KeymapData};
 #[cfg(not(feature = "_no_usb"))]
 use rmk::state::set_usb_state;
@@ -63,12 +62,11 @@ use rmk::state::set_usb_state;
 use rmk::storage::Storage;
 #[cfg(all(feature = "_no_usb", feature = "_ble"))]
 use rmk::test_exports::set_ble_state;
-use rmk::types::action::{Action, EncoderAction, KeyAction};
+use rmk::types::action::{EncoderAction, KeyAction};
 #[cfg(not(feature = "_no_usb"))]
 use rmk_types::connection::UsbState;
 #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
 use rmk_types::keycode::HidKeyCode;
-use rmk_types::morse::{Morse, MorsePattern, MorseProfile};
 #[cfg(feature = "rynk")]
 use rmk_types::protocol::rynk::{RYNK_HEADER_SIZE, RynkHeader};
 
@@ -207,104 +205,6 @@ where
     (Box::leak(Box::new(keymap)), Box::new(storage))
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct KeymapOverride {
-    layer: usize,
-    row: usize,
-    col: usize,
-    action: KeyAction,
-}
-
-impl KeymapOverride {
-    pub const fn new(layer: usize, row: usize, col: usize, action: KeyAction) -> Self {
-        Self {
-            layer,
-            row,
-            col,
-            action,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct HandOverride {
-    row: usize,
-    col: usize,
-    hand: Hand,
-}
-
-impl HandOverride {
-    pub const fn new(row: usize, col: usize, hand: Hand) -> Self {
-        Self { row, col, hand }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct SimKeyboardSetup {
-    key_overrides: &'static [KeymapOverride],
-    hand_overrides: &'static [HandOverride],
-    morse_patterns: &'static [(u16, Action)],
-    vial_morses: &'static [(Action, Action, Action, Action, MorseProfile)],
-    morse_profile: Option<MorseProfile>,
-    morse_flow_tap: Option<bool>,
-    morse_prior_idle_ms: Option<u64>,
-}
-
-impl SimKeyboardSetup {
-    pub const fn new() -> Self {
-        Self {
-            key_overrides: &[],
-            hand_overrides: &[],
-            morse_patterns: &[],
-            vial_morses: &[],
-            morse_profile: None,
-            morse_flow_tap: None,
-            morse_prior_idle_ms: None,
-        }
-    }
-
-    pub const fn keys(mut self, key_overrides: &'static [KeymapOverride]) -> Self {
-        self.key_overrides = key_overrides;
-        self
-    }
-
-    pub const fn hand_overrides(mut self, hands: &'static [HandOverride]) -> Self {
-        self.hand_overrides = hands;
-        self
-    }
-
-    pub const fn morse_patterns(mut self, patterns: &'static [(u16, Action)]) -> Self {
-        self.morse_patterns = patterns;
-        self
-    }
-
-    pub const fn vial_morses(mut self, morses: &'static [(Action, Action, Action, Action, MorseProfile)]) -> Self {
-        self.vial_morses = morses;
-        self
-    }
-
-    pub const fn morse_profile(mut self, profile: MorseProfile) -> Self {
-        self.morse_profile = Some(profile);
-        self
-    }
-
-    pub const fn morse_flow_tap(mut self, enable: bool) -> Self {
-        self.morse_flow_tap = Some(enable);
-        self
-    }
-
-    pub const fn morse_prior_idle_ms(mut self, prior_idle_ms: u64) -> Self {
-        self.morse_prior_idle_ms = Some(prior_idle_ms);
-        self
-    }
-}
-
-impl Default for SimKeyboardSetup {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 pub struct NoSimStorage;
 
 #[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
@@ -357,166 +257,14 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
         self
     }
 
-    pub fn setup(mut self, setup: SimKeyboardSetup) -> Self {
-        for key in setup.key_overrides {
-            self.keymap[key.layer][key.row][key.col] = key.action;
-        }
-        for hand in setup.hand_overrides {
-            self.positional_config.hand[hand.row][hand.col] = hand.hand;
-        }
-        if let Some(enable) = setup.morse_flow_tap {
-            self = self.morse_flow_tap(enable);
-        }
-        if let Some(prior_idle_ms) = setup.morse_prior_idle_ms {
-            self = self.morse_prior_idle_ms(prior_idle_ms);
-        }
-        if let Some(profile) = setup.morse_profile {
-            self = self.morse_default_profile(profile);
-        }
-        if !setup.morse_patterns.is_empty() {
-            self = self.morse_patterns_slice(setup.morse_patterns);
-        }
-        if !setup.vial_morses.is_empty() {
-            self = self.morses_from_vial_slice(setup.vial_morses);
-        }
+    pub fn hand(mut self, row: usize, col: usize, hand: Hand) -> Self {
+        self.positional_config.hand[row][col] = hand;
         self
     }
 
-    pub fn morse_default_profile(mut self, profile: MorseProfile) -> Self {
-        self.behavior_config.morse.default_profile = profile;
-        self
-    }
-
-    /// Register named morse profiles, indexed by `KeyAction::TapHold(_, _, idx)`.
-    pub fn morse_profiles(mut self, profiles: &[MorseProfile]) -> Self {
-        for &profile in profiles {
-            self.behavior_config
-                .morse
-                .profiles
-                .push(profile)
-                .expect("simulator morse profiles exceed MORSE_PROFILE_MAX_NUM");
-        }
-        self
-    }
-
-    pub fn morse_flow_tap(mut self, enable: bool) -> Self {
-        self.behavior_config.morse.enable_flow_tap = enable;
-        self
-    }
-
-    pub fn morse_prior_idle_ms(mut self, prior_idle_ms: u64) -> Self {
-        self.behavior_config.morse.prior_idle_time = Duration::from_millis(prior_idle_ms);
-        self
-    }
-
-    pub fn morse(mut self, morse: Morse) -> Self {
-        self.behavior_config
-            .morse
-            .morses
-            .push(morse)
-            .expect("simulator morse config exceeds MORSE_MAX_NUM");
-        self
-    }
-
-    pub fn morse_from_vial(
-        self,
-        tap: Action,
-        hold: Action,
-        hold_after_tap: Action,
-        double_tap: Action,
-        profile: MorseProfile,
-    ) -> Self {
-        self.morse(Morse::new_from_vial(tap, hold, hold_after_tap, double_tap, profile))
-    }
-
-    fn morses_from_vial_slice(mut self, morses: &[(Action, Action, Action, Action, MorseProfile)]) -> Self {
-        for &(tap, hold, hold_after_tap, double_tap, profile) in morses {
-            self = self.morse_from_vial(tap, hold, hold_after_tap, double_tap, profile);
-        }
-        self
-    }
-
-    fn morse_patterns_slice(self, patterns: &[(u16, Action)]) -> Self {
-        self.morse(Morse {
-            actions: heapless::LinearMap::from_iter(
-                patterns
-                    .iter()
-                    .copied()
-                    .map(|(pattern, action)| (MorsePattern::from_u16(pattern), action)),
-            ),
-            ..Default::default()
-        })
-    }
-
-    fn combo<const NUM_ACTION: usize>(
-        mut self,
-        actions: [KeyAction; NUM_ACTION],
-        output: KeyAction,
-        layer: Option<u8>,
-    ) -> Self {
-        let combo = Combo::new(ComboConfig::new(actions, output, layer));
-        let slot = self
-            .behavior_config
-            .combo
-            .combos
-            .iter_mut()
-            .find(|combo| combo.is_none())
-            .expect("simulator combo config exceeds COMBO_MAX_NUM");
-        *slot = Some(combo);
-        self
-    }
-
-    pub fn combo_on_layer<const NUM_ACTION: usize>(
-        self,
-        layer: u8,
-        actions: [KeyAction; NUM_ACTION],
-        output: KeyAction,
-    ) -> Self {
-        self.combo(actions, output, Some(layer))
-    }
-
-    pub fn combo_global<const NUM_ACTION: usize>(self, actions: [KeyAction; NUM_ACTION], output: KeyAction) -> Self {
-        self.combo(actions, output, None)
-    }
-
-    pub fn combos_on_layer<const NUM_COMBO: usize, const NUM_ACTION: usize>(
-        mut self,
-        layer: u8,
-        combos: [([KeyAction; NUM_ACTION], KeyAction); NUM_COMBO],
-    ) -> Self {
-        for (actions, output) in combos {
-            self = self.combo_on_layer(layer, actions, output);
-        }
-        self
-    }
-
-    pub fn combos_global<const NUM_COMBO: usize, const NUM_ACTION: usize>(
-        mut self,
-        combos: [([KeyAction; NUM_ACTION], KeyAction); NUM_COMBO],
-    ) -> Self {
-        for (actions, output) in combos {
-            self = self.combo_global(actions, output);
-        }
-        self
-    }
-
-    pub fn combo_timeout_ms(mut self, timeout_ms: u64) -> Self {
-        self.behavior_config.combo.timeout = Duration::from_millis(timeout_ms);
-        self
-    }
-
-    pub fn one_shot_timeout_ms(mut self, timeout_ms: u64) -> Self {
-        self.behavior_config.one_shot.timeout = Duration::from_millis(timeout_ms);
-        self
-    }
-
-    pub fn one_shot_activate_on_keypress(mut self, activate_on_keypress: bool) -> Self {
-        self.behavior_config.one_shot_modifiers.activate_on_keypress = activate_on_keypress;
-        self
-    }
-
-    pub fn one_shot_quick_release(mut self, quick_release: bool) -> Self {
-        self.behavior_config.one_shot_modifiers.quick_release = quick_release;
+    /// Replace the whole behavior config; per-key tweaks chain after this.
+    pub fn behavior_config(mut self, behavior_config: BehaviorConfig) -> Self {
+        self.behavior_config = behavior_config;
         self
     }
 

@@ -1,0 +1,781 @@
+# Morse and tap-hold in the default Normal mode, ported from keyboard_morse_test.rs.
+#
+# Row 0 of the shared board is patched to the morse fixture: A, MT(B, LShift),
+# MT(C, LGui), LT(1, D), TD(0), with Kp1..Kp5 behind them on layer 1. No mode
+# flags are set, so the defaults apply: Normal mode, 250 ms hold/gap timeouts.
+
+keyboard = "boards/test_keymap.toml"
+
+keys = [
+  { layer = 0, row = 0, col = 0, action = "A" },
+  { layer = 0, row = 0, col = 1, action = "MT(B, LShift)" },
+  { layer = 0, row = 0, col = 2, action = "MT(C, LGui)" },
+  { layer = 0, row = 0, col = 3, action = "LT(1, D)" },
+  { layer = 0, row = 0, col = 4, action = "TD(0)" },
+  { layer = 1, row = 0, col = 0, action = "Kp1" },
+  { layer = 1, row = 0, col = 1, action = "Kp2" },
+  { layer = 1, row = 0, col = 2, action = "Kp3" },
+  { layer = 1, row = 0, col = 3, action = "Kp4" },
+  { layer = 1, row = 0, col = 4, action = "Kp5" },
+]
+
+[[behavior.morse.morses]]
+morse_actions = [
+  { pattern = "01", action = "A" },
+  { pattern = "1000", action = "B" },
+  { pattern = "1010", action = "C" },
+  { pattern = "101", action = "K" },
+  { pattern = "11", action = "M" },
+  { pattern = "111", action = "O" },
+  { pattern = "010", action = "R" },
+  { pattern = "000", action = "S" },
+]
+
+[[test]]
+name = "morse_tap"
+steps = [
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 100 },
+  { release = [0, 1] },
+  { expect = ["B"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_hold"
+steps = [
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 300 },
+  { release = [0, 1] },   # Release after hold timeout
+  { expect = { mods = ["LShift"] } },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_1"
+steps = [
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { release = [0, 0] },
+  { delay = 10 },
+  { release = [0, 1] },
+  { expect = ["A"] },
+  { expect = "empty" },
+  { expect = ["B"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_2"
+steps = [
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { release = [0, 1] },   # Release MT first -> tap
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = ["A"] },
+  { expect = ["A", "B"] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_3"
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 10 },
+  { release = [0, 0] },
+  { delay = 10 },
+  { release = [0, 1] },
+  { expect = ["A"] },
+  { expect = "empty" },
+  { expect = ["B"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_4"
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 10 },
+  { release = [0, 1] },
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = ["A"] },
+  { expect = ["A", "B"] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_5"
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { release = [0, 0] },
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 10 },
+  { release = [0, 1] },
+  { expect = ["A"] },
+  { expect = "empty" },
+  { expect = ["B"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_6"
+steps = [
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 10 },
+  { release = [0, 1] },
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = ["B"] },
+  { expect = "empty" },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_timeout_1"
+steps = [
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 260 },
+  { release = [0, 0] },   # Release A after timeout
+  { delay = 10 },
+  { release = [0, 1] },
+  { expect = ["A"] },
+  { expect = { mods = ["LShift"], keys = ["A"] } },  # Timeout
+  { expect = { mods = ["LShift"] } },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_timeout_2"
+steps = [
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 260 },
+  { release = [0, 1] },   # Release MT after timeout
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = ["A"] },
+  { expect = { mods = ["LShift"], keys = ["A"] } },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_timeout_3"
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 260 },
+  { release = [0, 0] },
+  { delay = 10 },
+  { release = [0, 1] },
+  { expect = ["A"] },
+  { expect = { mods = ["LShift"], keys = ["A"] } },  # Timeout
+  { expect = { mods = ["LShift"] } },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_timeout_4"
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 260 },
+  { release = [0, 1] },
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = ["A"] },
+  { expect = { mods = ["LShift"], keys = ["A"] } },  # Timeout
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_timeout_5"
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { release = [0, 0] },
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 260 },
+  { release = [0, 1] },
+  { expect = ["A"] },
+  { expect = "empty" },
+  { expect = { mods = ["LShift"] } },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_timeout_6"
+steps = [
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 270 },
+  { release = [0, 1] },
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = { mods = ["LShift"] } },
+  { expect = "empty" },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_timeout_7"
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 10 },
+  { release = [0, 0] },
+  { delay = 260 },
+  { release = [0, 1] },
+  { expect = ["A"] },
+  { expect = "empty" },
+  { expect = { mods = ["LShift"] } },  # Timeout
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_timeout_8"
+steps = [
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { release = [0, 0] },
+  { delay = 260 },
+  { release = [0, 1] },
+  { expect = ["A"] },
+  { expect = "empty" },
+  { expect = { mods = ["LShift"] } },  # Timeout
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_timeout_9"
+steps = [
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 260 },
+  { press = [0, 0] },     # Press A after timeout
+  { delay = 10 },
+  { release = [0, 0] },
+  { delay = 10 },
+  { release = [0, 1] },
+  { expect = { mods = ["LShift"] } },  # Timeout
+  { expect = { mods = ["LShift"], keys = ["A"] } },
+  { expect = { mods = ["LShift"] } },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_mt_timeout_10"
+steps = [
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 260 },
+  { press = [0, 0] },     # Press A after timeout
+  { delay = 10 },
+  { release = [0, 1] },
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = { mods = ["LShift"] } },  # Timeout
+  { expect = { mods = ["LShift"], keys = ["A"] } },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_1"
+steps = [
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { release = [0, 0] },
+  { delay = 10 },
+  { release = [0, 3] },
+  { expect = ["A"] },
+  { expect = "empty" },
+  { expect = ["D"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_2"
+steps = [
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { release = [0, 3] },   # Release LT first -> tap
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = ["A"] },
+  { expect = ["A", "D"] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_3"
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 10 },
+  { release = [0, 0] },
+  { delay = 10 },
+  { release = [0, 3] },
+  { expect = ["A"] },
+  { expect = "empty" },
+  { expect = ["D"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_4"
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 10 },
+  { release = [0, 3] },
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = ["A"] },
+  { expect = ["A", "D"] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_5"
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { release = [0, 0] },
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 10 },
+  { release = [0, 3] },
+  { expect = ["A"] },
+  { expect = "empty" },
+  { expect = ["D"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_6"
+steps = [
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 10 },
+  { release = [0, 3] },
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = ["D"] },
+  { expect = "empty" },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_timeout_1"
+steps = [
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 260 },
+  { release = [0, 0] },
+  { delay = 10 },
+  { release = [0, 3] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_timeout_2"
+steps = [
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 260 },
+  { release = [0, 3] },
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_timeout_3"
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 260 },
+  { release = [0, 0] },
+  { delay = 10 },
+  { release = [0, 3] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_timeout_4"
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 260 },
+  { release = [0, 3] },
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_timeout_5"
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { release = [0, 0] },
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 260 },
+  { release = [0, 3] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_timeout_6"
+steps = [
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 270 },
+  { release = [0, 3] },
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_timeout_7"
+steps = [
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 10 },
+  { release = [0, 0] },
+  { delay = 260 },
+  { release = [0, 3] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_timeout_8"
+steps = [
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 10 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { release = [0, 0] },
+  { delay = 260 },
+  { release = [0, 3] },
+  { expect = ["A"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_timeout_9"
+steps = [
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 260 },
+  { press = [0, 0] },     # Press A -> Kp1 on layer 1
+  { delay = 10 },
+  { release = [0, 0] },
+  { delay = 10 },
+  { release = [0, 3] },
+  { expect = ["Kp1"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_lt_timeout_10"
+steps = [
+  { delay = 10 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 260 },
+  { press = [0, 0] },     # Press A -> Kp1 on layer 1
+  { delay = 10 },
+  { release = [0, 3] },
+  { delay = 10 },
+  { release = [0, 0] },
+  { expect = ["Kp1"] },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_multi_hold"
+steps = [
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 10 },
+  { press = [0, 2] },     # Press MT(C, LGui)
+  { delay = 270 },
+  { press = [0, 0] },     # Press A after hold timeout
+  { delay = 290 },
+  { release = [0, 0] },
+  { delay = 380 },
+  { release = [0, 1] },   # Release B
+  { delay = 400 },
+  { release = [0, 2] },   # Release C
+  { expect = { mods = ["LShift"] } },
+  { expect = { mods = ["LShift", "LGui"] } },
+  { expect = { mods = ["LShift", "LGui"], keys = ["A"] } },
+  { expect = { mods = ["LShift", "LGui"] } },
+  { expect = { mods = ["LGui"] } },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_hold_after_last_tapping"
+steps = [
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 100 },
+  { release = [0, 1] },
+  { delay = 100 },
+  { press = [0, 1] },     # Hold MT(B, LShift) after tapping
+  { delay = 400 },
+  { release = [0, 1] },
+  { expect = ["B"] },
+  { expect = "empty" },
+  { expect = { mods = ["LShift"] } },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_hold_after_last_tapping_timeout"
+steps = [
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 100 },
+  { release = [0, 1] },
+  { delay = 300 },
+  { press = [0, 1] },     # Hold MT(B, LShift) after tapping timeout
+  { delay = 400 },
+  { release = [0, 1] },
+  { expect = ["B"] },
+  { expect = "empty" },
+  { expect = { mods = ["LShift"] } },
+  { expect = "empty" },
+]
+
+# For normal mode, each morse key is resolved independently
+[[test]]
+name = "morse_rolling"
+steps = [
+  { delay = 30 },
+  { press = [0, 0] },     # Press A
+  { delay = 10 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 10 },
+  { release = [0, 0] },   # Release A
+  { delay = 30 },
+  { press = [0, 3] },     # Press LT(1, D)
+  { delay = 30 },
+  { press = [0, 2] },     # Press MT(C, LGui)
+  { delay = 100 },
+  { release = [0, 3] },   # Release D
+  { delay = 10 },
+  { release = [0, 1] },   # Release B
+  { delay = 150 },
+  { release = [0, 2] },   # Release C (timeout)
+  { expect = ["A"] },
+  { expect = "empty" },
+  { expect = ["D"] },
+  { expect = "empty" },
+  { expect = ["B"] },
+  { expect = "empty" },
+  { expect = { mods = ["LGui"] } },
+  { expect = "empty" },
+]
+
+[[test]]
+name = "morse_with_combo"
+steps = [
+  { delay = 20 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 60 },
+  { press = [0, 2] },     # Press MT(C, LGui) — combo window expired
+  { delay = 10 },
+  { release = [0, 2] },   # Release C
+  { delay = 300 },
+  { release = [0, 1] },   # Release B
+  { expect = ["C"] },
+  { expect = "empty" },
+  { expect = { mods = ["LShift"] } },
+  { expect = "empty" },
+]
+[test.behavior.combo]
+timeout = "50ms"
+combos = [
+  { actions = ["MT(B, LShift)", "MT(C, LGui)"], output = "X" },
+]
+
+[[test]]
+name = "morse_with_combo_2"
+steps = [
+  { delay = 20 },
+  { press = [0, 1] },     # Press MT(B, LShift)
+  { delay = 20 },
+  { press = [0, 2] },     # Press MT(C, LGui) — combo fires
+  { delay = 10 },
+  { release = [0, 2] },   # Release C
+  { delay = 300 },
+  { release = [0, 1] },   # Release B
+  { expect = ["X"] },
+  { expect = "empty" },
+]
+[test.behavior.combo]
+timeout = "50ms"
+combos = [
+  { actions = ["MT(B, LShift)", "MT(C, LGui)"], output = "X" },
+]
+
+# Morse pattern "-.-." on TD(0) -> C
+[[test]]
+name = "morse_abc_c"
+steps = [
+  { delay = 300 },
+  { tap = [0, 4, 300] },  # -
+  { delay = 80 },
+  { tap = [0, 4, 80] },   # .
+  { delay = 80 },
+  { tap = [0, 4, 300] },  # -
+  { delay = 80 },
+  { tap = [0, 4, 80] },   # .
+  { expect = ["C"] },
+  { expect = "empty" },
+]
+
+# Three patterns in a row: "..." -> S, "---" -> O, "..." -> S
+[[test]]
+name = "morse_abc_s_o_s"
+steps = [
+  { delay = 300 },
+  { tap = [0, 4, 10] },   # .
+  { delay = 10 },
+  { tap = [0, 4, 10] },   # .
+  { delay = 10 },
+  { tap = [0, 4, 10] },   # .
+  { delay = 300 },
+  { tap = [0, 4, 300] },  # -
+  { delay = 10 },
+  { tap = [0, 4, 300] },  # -
+  { delay = 10 },
+  { tap = [0, 4, 300] },  # -
+  { delay = 300 },
+  { tap = [0, 4, 10] },   # .
+  { delay = 10 },
+  { tap = [0, 4, 10] },   # .
+  { delay = 10 },
+  { tap = [0, 4, 10] },   # .
+  { expect = ["S"] },
+  { expect = "empty" },
+  { expect = ["O"] },
+  { expect = "empty" },
+  { expect = ["S"] },
+  { expect = "empty" },
+]
+
+# ".-." -> R, "--" -> M, "-.-" -> K
+[[test]]
+name = "morse_rmk"
+steps = [
+  { delay = 300 },
+  { tap = [0, 4, 10] },   # .
+  { delay = 10 },
+  { tap = [0, 4, 300] },  # -
+  { delay = 10 },
+  { tap = [0, 4, 10] },   # .
+  { delay = 300 },
+  { tap = [0, 4, 300] },  # -
+  { delay = 10 },
+  { tap = [0, 4, 300] },  # -
+  { delay = 300 },
+  { tap = [0, 4, 300] },  # -
+  { delay = 10 },
+  { tap = [0, 4, 10] },   # .
+  { delay = 10 },
+  { tap = [0, 4, 300] },  # -
+  { expect = ["R"] },
+  { expect = "empty" },
+  { expect = ["M"] },
+  { expect = "empty" },
+  { expect = ["K"] },
+  { expect = "empty" },
+]
