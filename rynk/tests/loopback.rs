@@ -131,9 +131,15 @@ async fn client_against_run_session() {
         // Get with request payload and typed response decode.
         assert_eq!(client.get_key(0, 0, 0).await.unwrap(), KeyAction::No);
 
-        // Set + readback through the real persistence path.
+        // Set + readback through the real persistence path. The host-driven
+        // default-layer change also surfaces on the topic stream.
         client.set_default_layer(1).await.unwrap();
         assert_eq!(client.get_default_layer().await.unwrap(), 1);
+        let ev = client.next_topic().await;
+        assert!(
+            matches!(ev, TopicEvent::LayerChange(1)),
+            "expected LayerChange(1), got {ev:?}"
+        );
 
         // Round-trip representative remaining domains.
         client.set_key(0, 1, 1, KeyAction::Morse(2)).await.unwrap();

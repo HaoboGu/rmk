@@ -1,5 +1,5 @@
-//! Typed endpoint methods — the version-specific API surface over the driver
-//! core in `driver.rs`.
+//! Typed request methods for each protocol endpoint, built on top of the
+//! driver core in `driver.rs`.
 
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
@@ -36,13 +36,12 @@ use crate::driver::{Client, RynkHostError};
 #[cfg(feature = "alloc")]
 use crate::layout::LayoutInfo;
 
-/// Wire bytes one parked pipelined request occupies in the firmware frame
-/// buffer (a COBS-encoded bulk GET is ≤ 9 B; rounded up for headroom).
+/// Space one waiting request takes in the firmware's frame buffer. A
+/// COBS-encoded bulk GET is at most 9 bytes; 12 leaves headroom.
 #[cfg(feature = "alloc")]
 const PARKED_REQUEST_BYTES: usize = 12;
 
 impl Client {
-    /// Reject a bulk command locally when capabilities lack bulk transfer.
     fn require_bulk_transfer(&self, cmd: Cmd) -> Result<(), RynkHostError> {
         if self.capabilities.bulk_transfer_supported {
             Ok(())
@@ -51,7 +50,6 @@ impl Client {
         }
     }
 
-    /// Reject a BLE-only command locally when capabilities lack BLE.
     fn require_ble(&self, cmd: Cmd) -> Result<(), RynkHostError> {
         if self.capabilities.ble_enabled {
             Ok(())
@@ -65,8 +63,8 @@ impl Client {
         self.request::<command::GetVersion>(&()).await
     }
 
-    /// The firmware's capability set — the connect-handshake snapshot, not a
-    /// wire fetch: capabilities are firmware constants, fixed for the session.
+    /// Return the capability set saved during the connect handshake.
+    /// Capabilities are firmware constants, so nothing is sent to the device.
     pub async fn get_capabilities(&self) -> Result<DeviceCapabilities, RynkHostError> {
         Ok(self.capabilities)
     }
@@ -76,22 +74,22 @@ impl Client {
         self.request::<command::GetDeviceInfo>(&()).await
     }
 
-    /// Reboot the device — fire-and-forget: the firmware resets before its
-    /// session loop can reply, so `Ok(())` only means the request frame was
-    /// queued; keep the driver running until it drains.
+    /// Reboot the device. There is no reply: the firmware resets before it
+    /// can send one, so `Ok(())` only means the request was queued. Keep the
+    /// driver running long enough to actually write it out.
     pub async fn reboot(&self) -> Result<(), RynkHostError> {
         self.send_no_reply::<command::Reboot>(&()).await
     }
 
-    /// Jump to the bootloader (DFU mode) — fire-and-forget, same contract as
+    /// Jump to the bootloader (DFU mode). No reply, exactly like
     /// [`reboot`](Self::reboot).
     pub async fn bootloader_jump(&self) -> Result<(), RynkHostError> {
         self.send_no_reply::<command::BootloaderJump>(&()).await
     }
 
-    /// Reset persistent storage. Rejected locally when storage is disabled
-    /// ([`DeviceCapabilities::storage_enabled`]), where the wipe would be a silent
-    /// no-op.
+    /// Reset persistent storage. Requires
+    /// [`DeviceCapabilities::storage_enabled`]: without storage the wipe would
+    /// silently do nothing, so the call fails without sending anything.
     pub async fn storage_reset(&self, mode: StorageResetMode) -> Result<(), RynkHostError> {
         if !self.capabilities.storage_enabled {
             return Err(RynkHostError::Unsupported(Cmd::StorageReset, "storage not enabled"));
@@ -99,28 +97,31 @@ impl Client {
         self.request::<command::StorageReset>(&mode).await
     }
 
-    /// Read the current lock state without side effects.
+    /// Read the current lock state. Unlike [`unlock_poll`](Self::unlock_poll),
+    /// this has no side effects.
     ///
-    /// [`LockStatus::key_positions`] is the challenge to hold; empty while
-    /// [`locked`](LockStatus::locked) means the device is permanently locked
-    /// (no `unlock_keys` configured in keyboard.toml).
+    /// [`LockStatus::key_positions`] lists the keys the user must hold to
+    /// unlock. If it is empty while [`locked`](LockStatus::locked) is true,
+    /// the device can never be unlocked (no `unlock_keys` in keyboard.toml).
     pub async fn get_lock_status(&self) -> Result<LockStatus, RynkHostError> {
         self.request::<command::GetLockStatus>(&()).await
     }
 
-    /// Arm/refresh a physical-presence unlock attempt and sample the held
-    /// challenge keys.
+    /// Start or keep alive an unlock attempt, and report which of the
+    /// challenge keys are held right now.
     ///
-    /// Poll every ~150 ms while the user holds the challenge keys:
+    /// Call this every ~150 ms while the user holds the keys from
+    /// [`LockStatus::key_positions`]:
     /// [`remaining_keys`](LockStatus::remaining_keys) counts down, and the
-    /// attempt succeeds ([`locked`](LockStatus::locked) `== false`) once all
-    /// are held simultaneously. The firmware window lapses ~500 ms after polls
-    /// stop, so a cancel is just "stop polling".
+    /// device unlocks ([`locked`](LockStatus::locked) turns false) once all
+    /// keys are held at the same time. The attempt expires ~500 ms after the
+    /// last call, so to cancel it, just stop calling.
     pub async fn unlock_poll(&self) -> Result<LockStatus, RynkHostError> {
         self.request::<command::UnlockPoll>(&()).await
     }
 
-    /// Relock immediately. A no-op on an `insecure` device.
+    /// Lock the device again immediately. Does nothing on an `insecure`
+    /// device.
     pub async fn lock(&self) -> Result<(), RynkHostError> {
         self.request::<command::Lock>(&()).await
     }
@@ -166,11 +167,14 @@ impl Client {
         self.request::<command::SetEncoderAction>(&req).await
     }
 
-    /// Read one page of key actions starting at `(layer, start_row, start_col)`,
-    /// walking the row-major, layer-major keymap: up to `max_bulk_keys`, fewer at
-    /// the end. An out-of-geometry position is rejected with `RynkError::Invalid`.
-    /// Bulk firmware only ([`DeviceCapabilities::bulk_transfer_supported`]);
-    /// rejected locally otherwise.
+    /// Read one page of key actions starting at `(layer, start_row, start_col)`.
+    /// Keys are walked in order: column by column, then row by row, then
+    /// layer by layer. A page holds up to `max_bulk_keys` actions; the last
+    /// one may hold fewer. A start position outside the keymap fails with
+    /// `RynkError::Invalid`.
+    ///
+    /// Requires [`DeviceCapabilities::bulk_transfer_supported`]; otherwise
+    /// the call fails without sending anything.
     pub async fn get_keymap_bulk(
         &self,
         layer: u8,
@@ -187,18 +191,21 @@ impl Client {
     }
 
     /// Write `request.actions` into the keymap starting at
-    /// `(request.layer, request.start_row, request.start_col)`. Bulk firmware only
-    /// ([`DeviceCapabilities::bulk_transfer_supported`]); rejected locally otherwise.
+    /// `(request.layer, request.start_row, request.start_col)`, walking the
+    /// same order as [`get_keymap_bulk`](Self::get_keymap_bulk).
+    ///
+    /// Requires [`DeviceCapabilities::bulk_transfer_supported`]; otherwise
+    /// the call fails without sending anything.
     pub async fn set_keymap_bulk(&self, request: SetKeymapBulkRequest) -> Result<(), RynkHostError> {
         self.require_bulk_transfer(Cmd::SetKeymapBulk)?;
         self.request::<command::SetKeymapBulk>(&request).await
     }
 
-    /// Read the physical layout. The firmware serves it as an opaque,
-    /// compressed blob paged over `GetLayout`; this reassembles every page (by
-    /// byte offset), inflates the blob, and decodes it into [`LayoutInfo`]. An
-    /// empty blob (firmware built without a `[layout].map`) yields an empty
-    /// [`LayoutInfo`], not an error.
+    /// Read the physical layout. The firmware stores the layout as one
+    /// compressed blob and serves it in pages; this method fetches every
+    /// page, decompresses the blob, and decodes it into [`LayoutInfo`]. If
+    /// the firmware was built without a `[layout].map`, the blob is empty and
+    /// the result is an empty [`LayoutInfo`], not an error.
     #[cfg(feature = "alloc")]
     pub async fn get_layout(&self) -> Result<LayoutInfo, RynkHostError> {
         const MAX_LAYOUT_BLOB_LEN: usize = 64 * 1024;
@@ -210,7 +217,8 @@ impl Client {
             )));
         }
         let mut collected: Vec<u8> = first.bytes.to_vec();
-        // The advertised length bounds repeated or over-long pages; an empty page ends a stalled transfer.
+        // Each page grows `collected` toward `total_len`. An empty page means
+        // the firmware stopped sending, so give up instead of looping forever.
         while !collected.is_empty() && collected.len() < total_len {
             let chunk = self.request::<command::GetLayout>(&(collected.len() as u32)).await?;
             if chunk.bytes.is_empty() {
@@ -233,19 +241,23 @@ impl Client {
             .await
     }
 
-    /// Read one page of combos starting at slot `start_index`: up to
-    /// `max_bulk_items`, fewer at the end, empty once `start_index` reaches the
-    /// slot count. Bulk firmware only
-    /// ([`DeviceCapabilities::bulk_transfer_supported`]); rejected locally otherwise.
+    /// Read one page of combos starting at slot `start_index`. A page holds
+    /// up to `max_bulk_items` combos; the last one may hold fewer, and a
+    /// `start_index` past the last slot returns an empty page.
+    ///
+    /// Requires [`DeviceCapabilities::bulk_transfer_supported`]; otherwise
+    /// the call fails without sending anything.
     pub async fn get_combo_bulk(&self, start_index: u8) -> Result<GetComboBulkResponse, RynkHostError> {
         self.require_bulk_transfer(Cmd::GetComboBulk)?;
         self.request::<command::GetComboBulk>(&GetComboBulkRequest { start_index })
             .await
     }
 
-    /// Write `request.configs` into the combo table at slot `request.start_index`.
-    /// Bulk firmware only ([`DeviceCapabilities::bulk_transfer_supported`]);
-    /// rejected locally otherwise.
+    /// Write `request.configs` into consecutive combo slots starting at
+    /// `request.start_index`.
+    ///
+    /// Requires [`DeviceCapabilities::bulk_transfer_supported`]; otherwise
+    /// the call fails without sending anything.
     pub async fn set_combo_bulk(&self, request: SetComboBulkRequest) -> Result<(), RynkHostError> {
         self.require_bulk_transfer(Cmd::SetComboBulk)?;
         self.request::<command::SetComboBulk>(&request).await
@@ -273,27 +285,32 @@ impl Client {
             .await
     }
 
-    /// Read one page of morses starting at slot `start_index`: up to
-    /// `max_bulk_items`, fewer at the end, empty once `start_index` reaches the
-    /// slot count. Bulk firmware only
-    /// ([`DeviceCapabilities::bulk_transfer_supported`]); rejected locally otherwise.
+    /// Read one page of morses starting at slot `start_index`. A page holds
+    /// up to `max_bulk_items` morses; the last one may hold fewer, and a
+    /// `start_index` past the last slot returns an empty page.
+    ///
+    /// Requires [`DeviceCapabilities::bulk_transfer_supported`]; otherwise
+    /// the call fails without sending anything.
     pub async fn get_morse_bulk(&self, start_index: u8) -> Result<GetMorseBulkResponse, RynkHostError> {
         self.require_bulk_transfer(Cmd::GetMorseBulk)?;
         self.request::<command::GetMorseBulk>(&GetMorseBulkRequest { start_index })
             .await
     }
 
-    /// Write `request.configs` into the morse table at slot `request.start_index`.
-    /// Bulk firmware only ([`DeviceCapabilities::bulk_transfer_supported`]);
-    /// rejected locally otherwise.
+    /// Write `request.configs` into consecutive morse slots starting at
+    /// `request.start_index`.
+    ///
+    /// Requires [`DeviceCapabilities::bulk_transfer_supported`]; otherwise
+    /// the call fails without sending anything.
     pub async fn set_morse_bulk(&self, request: SetMorseBulkRequest) -> Result<(), RynkHostError> {
         self.require_bulk_transfer(Cmd::SetMorseBulk)?;
         self.request::<command::SetMorseBulk>(&request).await
     }
 
-    /// Read one chunk of macro data at byte `offset`. The reply is always a
-    /// full build-time chunk, zero-filled past the end of macro space —
-    /// termination comes from parsing the macro encoding, not chunk length.
+    /// Read one chunk of macro data starting at byte `offset`. The reply is
+    /// always a full fixed-size chunk, zero-filled past the end of macro
+    /// space, so find the end of the data by parsing the macro encoding, not
+    /// by waiting for a short chunk.
     pub async fn get_macro(&self, offset: u16) -> Result<MacroData, RynkHostError> {
         self.request::<command::GetMacro>(&GetMacroRequest { offset }).await
     }
@@ -320,20 +337,21 @@ impl Client {
         self.request::<command::GetCurrentLayer>(&()).await
     }
 
-    /// Read the matrix scan bitmap.
+    /// Read the matrix state: a bitmap of which keys are physically pressed.
     pub async fn get_matrix_state(&self) -> Result<MatrixState, RynkHostError> {
         self.request::<command::GetMatrixState>(&()).await
     }
 
-    /// Read battery status. BLE firmware only ([`DeviceCapabilities::ble_enabled`]);
-    /// rejected locally otherwise.
+    /// Read battery status. Requires [`DeviceCapabilities::ble_enabled`];
+    /// otherwise the call fails without sending anything.
     pub async fn get_battery_status(&self) -> Result<BatteryStatus, RynkHostError> {
         self.require_ble(Cmd::GetBatteryStatus)?;
         self.request::<command::GetBatteryStatus>(&()).await
     }
 
-    /// Read one split peripheral's status by slot. Split keyboards only
-    /// ([`DeviceCapabilities::is_split`]); rejected locally otherwise.
+    /// Read one split peripheral's status by slot. Requires
+    /// [`DeviceCapabilities::is_split`]; otherwise the call fails without
+    /// sending anything.
     pub async fn get_peripheral_status(&self, slot: u8) -> Result<PeripheralStatus, RynkHostError> {
         if !self.capabilities.is_split {
             return Err(RynkHostError::Unsupported(
@@ -364,29 +382,33 @@ impl Client {
         self.request::<command::GetConnectionType>(&()).await
     }
 
-    /// Read the full connection status — the same payload the `ConnectionChange`
-    /// topic pushes, for recovering a missed push.
+    /// Read the full connection status. This is the same payload the
+    /// `ConnectionChange` topic pushes; use it to catch up after a missed
+    /// push.
     pub async fn get_connection_status(&self) -> Result<ConnectionStatus, RynkHostError> {
         self.request::<command::GetConnectionStatus>(&()).await
     }
 
-    /// Read BLE status (active profile, connection state). BLE firmware only
-    /// ([`DeviceCapabilities::ble_enabled`]); rejected locally otherwise.
+    /// Read BLE status (active profile, connection state). Requires
+    /// [`DeviceCapabilities::ble_enabled`]; otherwise the call fails without
+    /// sending anything.
     pub async fn get_ble_status(&self) -> Result<BleStatus, RynkHostError> {
         self.require_ble(Cmd::GetBleStatus)?;
         self.request::<command::GetBleStatus>(&()).await
     }
 
-    /// Switch to a BLE profile by slot. BLE firmware only; rejected locally
-    /// otherwise.
+    /// Switch to a BLE profile by slot. Requires
+    /// [`DeviceCapabilities::ble_enabled`]; otherwise the call fails without
+    /// sending anything.
     pub async fn switch_ble_profile(&self, slot: u8) -> Result<(), RynkHostError> {
         self.require_ble(Cmd::SwitchBleProfile)?;
         self.request::<command::SwitchBleProfile>(&slot).await
     }
 
-    /// Clear (unbond) a BLE profile by slot. Tears down the active link if it
-    /// targets the connected profile. BLE firmware only; rejected locally
-    /// otherwise.
+    /// Clear (unbond) a BLE profile by slot. Clearing the profile that is
+    /// currently connected drops that connection. Requires
+    /// [`DeviceCapabilities::ble_enabled`]; otherwise the call fails without
+    /// sending anything.
     pub async fn clear_ble_profile(&self, slot: u8) -> Result<(), RynkHostError> {
         self.require_ble(Cmd::ClearBleProfile)?;
         self.request::<command::ClearBleProfile>(&slot).await
@@ -395,8 +417,9 @@ impl Client {
 
 #[cfg(feature = "alloc")]
 impl Client {
-    /// Read the whole keymap (every layer, row-major) by paging `GetKeymapBulk`
-    /// through the slot pool.
+    /// Read the whole keymap — every layer, in
+    /// [`get_keymap_bulk`](Self::get_keymap_bulk) order — with concurrent
+    /// paged reads.
     pub async fn read_all_keymap(&self) -> Result<Vec<KeyAction>, RynkHostError> {
         let caps = self.capabilities;
         let (rows, cols) = (caps.num_rows as u16, caps.num_cols as u16);
@@ -408,7 +431,7 @@ impl Client {
         .await
     }
 
-    /// Read every combo slot by paging `GetComboBulk` through the slot pool.
+    /// Read every combo slot with concurrent paged reads.
     pub async fn read_all_combos(&self) -> Result<Vec<Combo>, RynkHostError> {
         let total = self.capabilities.max_combos as usize;
         self.read_all(total, self.capabilities.max_bulk_items, async |c, start| {
@@ -417,7 +440,7 @@ impl Client {
         .await
     }
 
-    /// Read every morse slot by paging `GetMorseBulk` through the slot pool.
+    /// Read every morse slot with concurrent paged reads.
     pub async fn read_all_morses(&self) -> Result<Vec<Morse>, RynkHostError> {
         let total = self.capabilities.max_morse as usize;
         self.read_all(total, self.capabilities.max_bulk_items, async |c, start| {
@@ -426,12 +449,12 @@ impl Client {
         .await
     }
 
-    /// Write the whole keymap by paging `SetKeymapBulk`, each page packed to
-    /// the device's payload budget.
+    /// Write the whole keymap with concurrent paged writes, each page filled
+    /// up to the device's payload limit.
     pub async fn write_all_keymap(&self, actions: &[KeyAction]) -> Result<(), RynkHostError> {
         let caps = self.capabilities;
         let (rows, cols) = (caps.num_rows as u16, caps.num_cols as u16);
-        // 3 leading bytes: layer, start_row, start_col.
+        // 3 fixed bytes before the items: layer, start_row, start_col.
         self.write_all(Cmd::SetKeymapBulk, 3, actions, async |c, start, actions| {
             let (layer, row, col) = keymap_pos(start, rows, cols);
             c.set_keymap_bulk(SetKeymapBulkRequest {
@@ -445,10 +468,10 @@ impl Client {
         .await
     }
 
-    /// Write every combo by paging `SetComboBulk`, each page packed to the
-    /// device's payload budget.
+    /// Write every combo with concurrent paged writes, each page filled up to
+    /// the device's payload limit.
     pub async fn write_all_combos(&self, configs: &[Combo]) -> Result<(), RynkHostError> {
-        // 1 leading byte: start_index.
+        // 1 fixed byte before the items: start_index.
         self.write_all(Cmd::SetComboBulk, 1, configs, async |c, start, configs| {
             c.set_combo_bulk(SetComboBulkRequest {
                 start_index: start as u8,
@@ -459,10 +482,10 @@ impl Client {
         .await
     }
 
-    /// Write every morse by paging `SetMorseBulk`, each page packed to the
-    /// device's payload budget.
+    /// Write every morse with concurrent paged writes, each page filled up to
+    /// the device's payload limit.
     pub async fn write_all_morses(&self, configs: &[Morse]) -> Result<(), RynkHostError> {
-        // 1 leading byte: start_index.
+        // 1 fixed byte before the items: start_index.
         self.write_all(Cmd::SetMorseBulk, 1, configs, async |c, start, configs| {
             c.set_morse_bulk(SetMorseBulkRequest {
                 start_index: start as u8,
@@ -473,19 +496,21 @@ impl Client {
         .await
     }
 
-    /// Page a whole resource in: speculative fetches on [`MAX_IN_FLIGHT`]
-    /// lanes, reassembled by offset. `advertised` is the device's advertised max
-    /// item count, like `max_bulk_items`/`max_bulk_keys`
+    /// Read a whole resource by fetching pages on [`MAX_IN_FLIGHT`]
+    /// concurrent lanes and stitching them back together by offset.
+    /// `advertised` is the device's maximum items per page (`max_bulk_items`
+    /// or `max_bulk_keys`).
     async fn read_all<Item>(
         &self,
         total: usize,
         advertised: u8,
         fetch: impl AsyncFn(&Self, u16) -> Result<Vec<Item>, RynkHostError>,
     ) -> Result<Vec<Item>, RynkHostError> {
-        // Space fetches at the firmware's worst-case page (every other lane's
-        // request parked in its reply frame), scaled from `advertised` since
-        // its exact item sizes aren't knowable here.
-        const OVERHEAD: usize = 8; // fixed frame bytes, upper bound; overestimating only lowers spacing
+        // `spacing` is the smallest page the firmware may send: replies
+        // shrink when other lanes' requests queue in the same frame buffer.
+        // Overlapping pages are fine (the extra items are skipped below), but
+        // a gap between pages would end the read early.
+        const OVERHEAD: usize = 8; // upper bound on fixed frame bytes; guessing high only lowers `spacing`
         let full = (RYNK_HEADER_SIZE + self.capabilities.max_payload_size as usize).saturating_sub(OVERHEAD);
         let squeezed = full.saturating_sub(MAX_IN_FLIGHT * PARKED_REQUEST_BYTES);
         let spacing = (advertised as usize * squeezed / full.max(1)).max(1);
@@ -497,8 +522,9 @@ impl Client {
                 if start >= total {
                     break Ok::<_, RynkHostError>(pages);
                 }
-                // A concurrent writer's parked frames can squeeze the reply
-                // window shut; the firmware answers `Busy` until they drain.
+                // A concurrent writer can fill the firmware's frame buffer,
+                // leaving no room for our reply; the firmware answers `Busy`
+                // until the buffer drains, so retry instead of failing.
                 let mut retries = 0;
                 let page = loop {
                     match fetch(self, start as u16).await {
@@ -518,7 +544,7 @@ impl Client {
         let mut out = Vec::with_capacity(total);
         for (start, page) in pages {
             if start > out.len() {
-                break; // firmware paged out before reaching `total`
+                break; // an earlier page was short — the device has no more items
             }
             let skip = out.len() - start;
             out.extend(page.into_iter().skip(skip));
@@ -526,9 +552,9 @@ impl Client {
         Ok(out)
     }
 
-    /// Page a whole resource out through the slot pool: pages are disjoint,
-    /// so up to [`MAX_IN_FLIGHT`] ride the transport while the firmware works.
-    /// `fixed` is the request's leading bytes before the item seq.
+    /// Write a whole resource as pre-packed pages. Pages never overlap, so up
+    /// to [`MAX_IN_FLIGHT`] writes can be in flight at once. `fixed` is the
+    /// number of request bytes that come before the item list.
     async fn write_all<Item: Serialize + Clone>(
         &self,
         cmd: Cmd,
@@ -544,7 +570,7 @@ impl Client {
                     break Ok(());
                 };
                 if let Err(e) = store(self, page.start as u16, items[page.clone()].to_vec()).await {
-                    next.store(pages.len(), Ordering::Relaxed); // park the other lanes
+                    next.store(pages.len(), Ordering::Relaxed); // push the index past the end so the other lanes stop
                     break Err(e);
                 }
             }
@@ -554,12 +580,12 @@ impl Client {
     }
 }
 
-/// Split `items` into write pages by real encoded size: each page's request
-/// payload — `fixed` leading bytes, the count varint, then the items — fits
-/// `budget`, the device's advertised `max_payload_size`. Packing measured
-/// sizes carries several times more items per frame than the advertised
-/// count, which must assume worst-case items. An item that alone exceeds the
-/// budget can never be sent and is an [`RynkHostError::Encode`].
+/// Split `items` into write pages. Each page's request payload — `fixed`
+/// leading bytes, then the item-count varint, then the items — must fit in
+/// `budget` (the device's `max_payload_size`). Sizing pages by real encoded
+/// size fits several times more items per frame than the advertised count,
+/// which has to assume every item is worst-case size. An item too big for a
+/// page by itself can never be sent and returns [`RynkHostError::Encode`].
 #[cfg(feature = "alloc")]
 fn pack_pages<Item: Serialize>(
     cmd: Cmd,
@@ -567,6 +593,7 @@ fn pack_pages<Item: Serialize>(
     budget: usize,
     items: &[Item],
 ) -> Result<Vec<core::ops::Range<usize>>, RynkHostError> {
+    // How many bytes postcard's varint needs to encode a count of `n`.
     let varint = |n: usize| {
         if n < 128 {
             1
@@ -595,9 +622,10 @@ fn pack_pages<Item: Serialize>(
     Ok(pages)
 }
 
-/// Map a flat, row-major, layer-major key cursor to its `(layer, row, col)`
-/// address for the device's `rows`×`cols` geometry. `u16` arithmetic since the
-/// keymap can exceed 255 keys; the address components each fit in `u8`.
+/// Convert a flat key index (counting columns, then rows, then layers) into a
+/// `(layer, row, col)` address for a `rows`×`cols` keyboard. The index is
+/// `u16` because a keymap can have more than 255 keys; each address component
+/// still fits in a `u8`.
 #[cfg(feature = "alloc")]
 fn keymap_pos(cursor: u16, rows: u16, cols: u16) -> (u8, u8, u8) {
     let layer = cursor / (rows * cols);
@@ -610,8 +638,9 @@ fn keymap_pos(cursor: u16, rows: u16, cols: u16) -> (u8, u8, u8) {
 mod tests {
     use super::*;
 
-    /// Pack, then re-check every page: contiguous cover of `items`, none empty,
-    /// and each page's recomputed payload within `budget`. Returns the count.
+    /// Pack `items`, then verify every page: pages cover `items` in order
+    /// with no gaps, none is empty, and each page's payload fits `budget`.
+    /// Returns the page count.
     fn assert_packed<Item: Serialize>(fixed: usize, budget: usize, items: &[Item]) -> usize {
         let pages = pack_pages(Cmd::SetComboBulk, fixed, budget, items).unwrap();
         let mut expected_start = 0;
@@ -629,15 +658,17 @@ mod tests {
 
     #[test]
     fn packs_by_real_encoded_size() {
-        // 101-byte items (len varint + 100) into a 482-byte budget: 4 per page,
-        // so 10 items take 3 pages — a count cap of 2 would take 5.
+        // Each item encodes to 101 bytes (1 length byte + 100 data bytes), so
+        // a 482-byte budget fits 4 per page and 10 items take 3 pages. Paging
+        // by an advertised count of 2 would take 5.
         let items = vec![vec![0x11u8; 100]; 10];
         assert_eq!(assert_packed(1, 482, &items), 3);
     }
 
     #[test]
     fn count_varint_growth_is_budgeted() {
-        // 1-byte items so the count varint's 1→2 byte step at 128 matters.
+        // 1-byte items, so the count varint growing from 1 to 2 bytes at 128
+        // items affects what fits.
         let items = vec![0u8; 300];
         assert_packed(1, 132, &items);
     }

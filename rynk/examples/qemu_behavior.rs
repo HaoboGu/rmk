@@ -20,7 +20,7 @@ use rynk::rmk_types::led_indicator::LedIndicator;
 use rynk::rmk_types::modifier::ModifierCombination;
 use rynk::rmk_types::morse::{Morse, MorseProfile};
 use rynk::rmk_types::protocol::rynk::{MacroData, ProtocolVersion, RynkError, StorageResetMode};
-use rynk::{Client, LayoutInfo, RynkDevice, RynkHostError};
+use rynk::{Client, LayoutInfo, RynkDevice, RynkHostError, TopicEvent};
 use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
@@ -145,6 +145,19 @@ async fn script(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
     );
     client.set_default_layer(0).await?;
     assert_eq!(client.get_default_layer().await?, 0);
+
+    // Host-driven default-layer changes surface on the topic stream (the
+    // activated layer follows the default); the rejected set publishes nothing
+    // in between.
+    for expected in [1u8, 0] {
+        let ev = tokio::time::timeout(REQUEST_TIMEOUT, client.next_topic())
+            .await
+            .map_err(|_| format!("no LayerChange({expected}) topic within timeout"))?;
+        assert!(
+            matches!(ev, TopicEvent::LayerChange(l) if l == expected),
+            "expected LayerChange({expected}), got {ev:?}"
+        );
+    }
 
     let expected_layers = [
         [

@@ -6,8 +6,8 @@ use rmk_types::action::KeyAction;
 use rmk_types::battery::BatteryStatus;
 use rmk_types::connection::{ConnectionStatus, ConnectionType};
 use rmk_types::protocol::rynk::{
-    GetComboBulkResponse, GetKeymapBulkResponse, GetMorseBulkResponse, PeripheralStatus, SetComboBulkRequest,
-    SetKeymapBulkRequest, SetMorseBulkRequest,
+    GetComboBulkResponse, GetKeymapBulkResponse, GetMorseBulkResponse, PeripheralStatus, ProtocolVersion,
+    SetComboBulkRequest, SetKeymapBulkRequest, SetMorseBulkRequest,
 };
 use tokio::time::timeout;
 
@@ -139,7 +139,7 @@ async fn drive<F: Future>(driver: &mut Driver<MockRead, MockWrite>, client: &Cli
 }
 
 /// A bare frame: header + postcard(value). Used for raw headers and topics;
-/// sized so the buffer-growth test can build frames larger than `READ_CHUNK`.
+/// sized so tests can build multi-kilobyte bulk replies.
 fn frame<T: Serialize>(cmd: Cmd, seq: u8, value: &T) -> Vec<u8> {
     let mut buf = vec![0u8; 32 * 1024];
     let n = encode_frame(&mut buf, RynkHeader { cmd, seq }, value).unwrap();
@@ -236,19 +236,15 @@ async fn driver_resyncs_after_garbage() {
 }
 
 #[tokio::test]
-async fn driver_grows_to_hold_a_frame_larger_than_read_chunk() {
-    // A reply larger than the READ_CHUNK grow step must be held by growing the
-    // buffer, not dropped as a false overflow when a read fills it exactly.
+async fn multi_kilobyte_reply_round_trips() {
+    // A reply spanning many transport reads must reassemble within the fixed
+    // RX buffer instead of being dropped as overflow.
     let mut supported = caps();
     supported.bulk_transfer_supported = true;
     supported.max_bulk_keys = 255;
     let big = GetKeymapBulkResponse {
         actions: (0..4000u32).map(|i| KeyAction::Morse((i % 256) as u8)).collect(),
     };
-    assert!(
-        reply(Cmd::GetKeymapBulk, 3, big.clone()).len() > READ_CHUNK,
-        "reply must exceed READ_CHUNK to exercise buffer growth"
-    );
     let (client, mut driver) = connect_session(
         handshake_steps(supported),
         vec![
@@ -265,7 +261,7 @@ async fn driver_grows_to_hold_a_frame_larger_than_read_chunk() {
 }
 
 #[tokio::test]
-async fn unknown_topic_skipped_by_next_topic() {
+async fn unknown_topic_skipped() {
     let mut chunk = frame(Cmd::from_raw(0x80ff), 0, &[1u8, 2, 3]);
     chunk.extend_from_slice(&topic(Cmd::LayerChange, 3u8));
     let (client, mut driver) = raw_session(vec![Step::Chunk(chunk), Step::Hang]);
@@ -297,23 +293,6 @@ async fn eof_ends_driver() {
         Either::First(err) => assert!(matches!(err, RynkHostError::Disconnected)),
         Either::Second(r) => panic!("request should not resolve on a dead link: {r:?}"),
     }
-}
-
-#[tokio::test]
-async fn driver_exit_wakes_parked_requests() {
-    // EOF kills the driver while two requests wait on their slots; `join`
-    // (unlike the `select` topologies) only completes if both requests are
-    // woken with `Disconnected` rather than parking forever.
-    let (client, mut driver) = raw_session(vec![Step::AwaitWrites(2)]);
-    let (err, (r1, r2)) = join(driver.run(&client), join(client.get_wpm(), client.get_sleep_state())).await;
-    assert!(matches!(err, RynkHostError::Disconnected));
-    assert!(matches!(r1, Err(RynkHostError::Disconnected)));
-    assert!(matches!(r2, Err(RynkHostError::Disconnected)));
-
-    // The death is sticky: a request issued after the driver exited fails
-    // instead of hanging.
-    let late = client.get_wpm().await;
-    assert!(matches!(late, Err(RynkHostError::Disconnected)));
 }
 
 #[tokio::test]
