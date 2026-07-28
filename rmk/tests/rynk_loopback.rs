@@ -549,9 +549,8 @@ fn keymap_bulk_round_trip_wraps_layer_boundary() {
 
 #[test]
 fn keymap_bulk_max_capacity_round_trip() {
-    use rmk_types::constants::BULK_KEYMAP_SIZE;
-    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, SetKeymapBulkRequest};
-    // The 256-key keymap holds a full multi-layer bulk run.
+    use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, MAX_BULK_KEYS, SetKeymapBulkRequest};
+    // The 48-key keymap holds a full multi-layer bulk run.
     let service = service_4x8x8();
     link_session(&service, async |client| {
         let mut actions: HVec<KeyAction, MAX_BULK_KEYS> = HVec::new();
@@ -691,7 +690,7 @@ fn keymap_bulk_clamps_and_rejects() {
 fn keymap_bulk_get_caps_page_at_budget() {
     use rmk_types::protocol::rynk::{GetKeymapBulkRequest, GetKeymapBulkResponse, MAX_BULK_KEYS};
     // GET from 0 is capped by message budget, not keymap span.
-    const { assert!(BULK_KEYMAP_SIZE < 256, "fixture must hold more than one full run") };
+    assert!(MAX_BULK_KEYS < 256, "fixture must hold more than one full run");
     let service = service_4x8x8();
     link_session(&service, async |client| {
         let got = client
@@ -708,8 +707,8 @@ fn keymap_bulk_get_caps_page_at_budget() {
             .expect("Ok envelope");
         assert_eq!(
             got.actions.len(),
-            BULK_KEYMAP_SIZE,
-            "page capped at the per-message budget even though 256 keys remain"
+            MAX_BULK_KEYS,
+            "page capped at the per-message budget even though 48 keys remain"
         );
     });
 }

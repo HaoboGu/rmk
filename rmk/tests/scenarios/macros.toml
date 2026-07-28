@@ -61,6 +61,8 @@ steps = [
   { expect = "empty" },
   { expect = ["Kc6"] },
   { expect = "empty" },
+  # The extended-macro text decode emits a final all-up report (#989).
+  { expect = "empty" },
 ]
 [test.behavior.macro]
 macros = [
@@ -103,5 +105,25 @@ macros = [
     { operation = "tap", keycode = "A" },
     { operation = "up", keycode = "LShift" },
     { operation = "tap", keycode = "B" },
+  ] },
+]
+
+# Macros fire on key press (matching QMK/ZMK), not release: both macro reports
+# arrive while the macro key is still held.
+[[test]]
+name = "macro_triggers_on_press"
+steps = [
+  { delay = 0 },
+  { press = [0, 6] },     # Press macro 0 and keep holding
+  { expect = ["A"] },     # A down — emitted on press
+  { expect = "empty" },   # A up
+  { delay = 100 },
+  { release = [0, 6] },   # Release only to satisfy the end-of-run checks
+]
+[test.behavior.macro]
+macros = [
+  { operations = [
+    { operation = "down", keycode = "A" },
+    { operation = "up", keycode = "A" },
   ] },
 ]

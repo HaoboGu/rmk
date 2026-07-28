@@ -67,9 +67,6 @@ use rmk::types::action::{EncoderAction, KeyAction};
 use rmk_types::connection::UsbState;
 #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
 use rmk_types::keycode::HidKeyCode;
-#[cfg(feature = "rynk")]
-use rmk_types::protocol::rynk::{RYNK_HEADER_SIZE, RynkHeader};
-
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Bytes per direction of the in-memory host↔device link. One full protocol
@@ -733,20 +730,20 @@ impl<'a> SimKeyboard<'a> {
                     SimStep::RynkPacket { request, expected } => {
                         #[cfg(feature = "storage")]
                         rmk::test_exports::reset_flash_operation();
-                        // Send the framed request, then reassemble the response frame
-                        // (fixed header, then its declared payload) off the duplex.
+                        // Send the framed request, then read the response off the
+                        // duplex up to the COBS delimiter (0x00 never occurs
+                        // inside an encoded frame).
                         let exchange = async {
                             to_device.write_all(&request).await;
                             let mut rx: &Link = &from_device;
-                            let mut header = [0u8; RYNK_HEADER_SIZE];
-                            rx.read_exact(&mut header).await.expect("read Rynk response header");
-                            let payload_len = RynkHeader::parse(&header).payload_len as usize;
-                            let mut frame = std::vec![0u8; RYNK_HEADER_SIZE + payload_len];
-                            frame[..RYNK_HEADER_SIZE].copy_from_slice(&header);
-                            if payload_len > 0 {
-                                rx.read_exact(&mut frame[RYNK_HEADER_SIZE..])
-                                    .await
-                                    .expect("read Rynk response payload");
+                            let mut frame = Vec::new();
+                            let mut byte = [0u8; 1];
+                            loop {
+                                rx.read_exact(&mut byte).await.expect("read Rynk response byte");
+                                frame.push(byte[0]);
+                                if byte[0] == 0 {
+                                    break;
+                                }
                             }
                             frame
                         };

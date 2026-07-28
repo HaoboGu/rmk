@@ -3,7 +3,7 @@ use std::vec::Vec;
 
 use rmk::types::action::{EncoderAction, KeyAction};
 use rmk_types::protocol::rynk::endpoint::Endpoint;
-use rmk_types::protocol::rynk::{Cmd, RynkError, RynkMessage, command};
+use rmk_types::protocol::rynk::{Cmd, RynkError, RynkHeader, command, encode_frame};
 
 use super::{SimHost, SimKeyboard};
 
@@ -94,28 +94,19 @@ impl<'k, 'a, E: Endpoint> SimRynkReply<'k, 'a, E> {
     }
 }
 
+// Wire frames (COBS-encoded); the expected reply compares byte-for-byte
+// because the device uses the same deterministic encoder.
 fn rynk_request_frame<T: serde::Serialize>(cmd: Cmd, seq: u8, payload: &T) -> Vec<u8> {
     let mut buf = std::vec![0u8; rmk_types::constants::RYNK_BUFFER_SIZE];
-    let msg = RynkMessage::build(&mut buf, cmd, seq, payload).expect("simulator Rynk request should encode");
-    let frame_len = msg.frame_len();
-    buf.truncate(frame_len);
+    let n = encode_frame(&mut buf, RynkHeader { cmd, seq }, payload).expect("simulator Rynk request should encode");
+    buf.truncate(n);
     buf
 }
 
 fn rynk_response_frame<T: serde::Serialize>(cmd: Cmd, seq: u8, payload: &T) -> Vec<u8> {
-    let mut buf = std::vec![0u8; rmk_types::constants::RYNK_BUFFER_SIZE];
-    let msg = RynkMessage::build(&mut buf, cmd, seq, &Ok::<&T, RynkError>(payload))
-        .expect("simulator Rynk response should encode");
-    let frame_len = msg.frame_len();
-    buf.truncate(frame_len);
-    buf
+    rynk_request_frame(cmd, seq, &Ok::<&T, RynkError>(payload))
 }
 
 fn rynk_error_response_frame(cmd: Cmd, seq: u8, error: RynkError) -> Vec<u8> {
-    let mut buf = std::vec![0u8; rmk_types::constants::RYNK_BUFFER_SIZE];
-    let msg = RynkMessage::build(&mut buf, cmd, seq, &Err::<(), RynkError>(error))
-        .expect("simulator Rynk error response should encode");
-    let frame_len = msg.frame_len();
-    buf.truncate(frame_len);
-    buf
+    rynk_request_frame(cmd, seq, &Err::<(), RynkError>(error))
 }
