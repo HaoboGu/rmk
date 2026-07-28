@@ -60,6 +60,9 @@ osm_action = { ^"OSM" ~ "(" ~ modifier_combination ~ ")" }
 // Rule 4.1: DF(n) - Switch Default Layer
 df_action = { ^"DF" ~ "(" ~ layer_reference ~ ")" }
 
+// Rule 4.1b: PDF(n) - Switch Default Layer persistently (saved to storage)
+pdf_action = { ^"PDF" ~ "(" ~ layer_reference ~ ")" }
+
 // Rule 4.2: MO(n) - Momentary Layer Activate
 mo_action = { ^"MO" ~ "(" ~ layer_reference ~ ")" }
 
@@ -83,7 +86,7 @@ to_action = { ^"TO" ~ "(" ~ layer_reference ~ ")" }
 
 // Grouping for Layer Actions
 layer_action = _{
-    df_action | mo_action | lm_action | lt_action |
+    df_action | pdf_action | mo_action | lm_action | lt_action |
     osl_action | tt_action | tg_action | to_action
 }
 
@@ -94,7 +97,7 @@ layer_action = _{
 // accepted as a slot argument.
 nestable_action = _{
     wm_action | mod_action | osm_action | shifted_action | trigger_macro_action |
-    df_action | mo_action | lm_action | osl_action | tg_action | to_action |
+    df_action | pdf_action | mo_action | lm_action | osl_action | tg_action | to_action |
     keycode_name
 }
 
