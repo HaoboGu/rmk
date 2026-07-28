@@ -1,5 +1,8 @@
-# The `dusk`-on-Saurus board: a 36-key split (3x5 alphas + 3 thumbs per half)
-# carrying the home-row-mod layout whose rollovers `dusk_saurus.toml` replays.
+# Alt-layout split board: a 36-key split (3x5 alphas + 3 thumbs per half)
+# whose home row is morse/tap-hold keys, used by the rollover regressions in
+# `morse_rollover.toml`. It replicates the real setup those bugs were reported
+# on — the "dusk" letter arrangement on a Saurus split — so the alphas are
+# deliberately not QWERTY.
 #
 # Left half is cols 0-4 (hand L), right half cols 5-9 (hand R) — the hands are
 # what the layout's `unilateral_tap` profiles decide rolls on.
@@ -12,15 +15,15 @@
 #   row 3        thumbs
 #
 # (1,5) (1,6) (1,7) are three spellings of the same C key — the layer-tap
-# `LT(1, C)`, and the tap-dance cell of each scenario's morse table (the dusk
-# table puts C at index 6, the Saurus one at index 2). One regression drives
-# each spelling through the identical physical rollover.
+# `LT(1, C)`, and the tap-dance cell of each scenario's morse table (one table
+# puts C at index 6, the other at index 2). One regression drives each
+# spelling through the identical physical rollover.
 #
 # Layer 1 is what the morse holds switch to. (0,2) keeps the F2 backing the
 # ported fixture had, so a roll that does resolve as hold still reads L's cell
 # the way the original test did.
 
-[behavior.morse.profiles.dusk_hrm]
+[behavior.morse.profiles.hrm_hold400]
 unilateral_tap = true
 permissive_hold = true
 hold_timeout = "400ms"
@@ -37,10 +40,10 @@ map = """
 
 [[keymap.layer]]
 keys = """
-Q      W   L       P      B      J                   F          O       U      Y
-TD(0)  R   A       TD(1)  G      LT(1, C, dusk_hrm)  TD(6)      TD(2)   TD(3)  TD(4)
-Z      X   M       D      V      K                   Quote      Comma   Dot    Slash
-No     No  Escape  MO(1)  Space  Enter               Backspace  Delete  No     No
+Q      W   L       P      B      J                      F          O       U      Y
+TD(0)  R   A       TD(1)  G      LT(1, C, hrm_hold400)  TD(6)      TD(2)   TD(3)  TD(4)
+Z      X   M       D      V      K                      Quote      Comma   Dot    Slash
+No     No  Escape  MO(1)  Space  Enter                  Backspace  Delete  No     No
 """
 
 [[keymap.layer]]

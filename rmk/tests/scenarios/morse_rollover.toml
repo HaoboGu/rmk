@@ -1,46 +1,49 @@
-# Real-layout rollover regressions, ported from keyboard_morse_tap_dance_test.rs.
+# Rollover ordering on morse/tap-hold keys, ported from
+# keyboard_morse_tap_dance_test.rs: when letters are rolled quickly across
+# home-row morse keys, a later letter must never overtake one already held.
 #
-# All four replay a roll over the home-row C of the `dusk` layout on a Saurus
-# split, where the next letter must not overtake one that is already held. They
-# differ only in how C is spelled: `TD(2)`@(1,7) in the Saurus morse table,
-# `TD(6)`@(1,6) in the dusk one, and `LT(1, C)`@(1,5) as the tap-hold control.
+# All four tests replay real-world reports from the alt-layout split in
+# boards/alt_layout_split.toml. They differ only in how the rolled C key is
+# spelled: `TD(2)`@(1,7) and `TD(6)`@(1,6) in the two morse tables, and
+# `LT(1, C)`@(1,5) as the tap-hold control.
 #
-# `dusk_hrm` is defined on the board, because the board's `LT(1, C, dusk_hrm)`
-# cell names it; the other profiles are only named from the morse tables below.
+# `hrm_hold400` is defined on the board, because the board's
+# `LT(1, C, hrm_hold400)` cell names it; the other profiles are only named
+# from the morse tables below.
 
-keyboard = "boards/dusk.toml"
+keyboard = "boards/alt_layout_split.toml"
 
 [behavior.morse]
 unilateral_tap = false
 hold_timeout = "250ms"
 gap_timeout = "250ms"
 
-[behavior.morse.profiles.dusk_normal]
+[behavior.morse.profiles.normal]
 normal_mode = true
 
-[behavior.morse.profiles.dusk_hold_on_other]
+[behavior.morse.profiles.hold_on_other]
 hold_on_other_press = true
 
-[behavior.morse.profiles.saurus_hrm]
+[behavior.morse.profiles.hrm_gap250]
 unilateral_tap = true
 permissive_hold = true
 hold_timeout = "400ms"
 gap_timeout = "250ms"
 
-[behavior.morse.profiles.saurus_short_gap]
+[behavior.morse.profiles.hrm_gap100]
 unilateral_tap = true
 permissive_hold = true
 hold_timeout = "400ms"
 gap_timeout = "100ms"
 
-[behavior.morse.profiles.saurus_short_gap_no_flow]
+[behavior.morse.profiles.hrm_gap100_no_flow]
 unilateral_tap = true
 permissive_hold = true
 hold_timeout = "400ms"
 gap_timeout = "100ms"
 enable_flow_tap = false
 
-# Regression for a Saurus-shaped `dusk` layout while typing "client".
+# Regression reported while typing "client" on the alt-layout split.
 #
 # The final `e`/`n`/`t` roll leaves `N` pressed before `T`, while `E` only
 # resolves after `N` is already held. `T` then flow-taps because `E` just
@@ -48,7 +51,7 @@ enable_flow_tap = false
 # override, the later flow-tapped `T` must not overtake it, or the host sees
 # "clietn".
 [[test]]
-name = "saurus_client_roll_with_flow_tap_override_keeps_n_before_t"
+name = "client_roll_with_flow_tap_override_keeps_n_before_t"
 steps = [
   { delay = 150 },
   { tap = [1, 7, 30] },   # C
@@ -91,20 +94,20 @@ normal_mode = true
 enable_flow_tap = true
 prior_idle_time = "120ms"
 morses = [
-  { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "saurus_short_gap_no_flow" },
-  { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "saurus_hrm" },
-  { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "saurus_hrm" },
-  { tap = "E", hold = "RCtrl", hold_after_tap = "E", profile = "saurus_hrm" },
-  { tap = "I", hold = "RShift", hold_after_tap = "I", profile = "saurus_short_gap" },
+  { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "hrm_gap100_no_flow" },
+  { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "hrm_gap250" },
+  { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "hrm_gap250" },
+  { tap = "E", hold = "RCtrl", hold_after_tap = "E", profile = "hrm_gap250" },
+  { tap = "I", hold = "RShift", hold_after_tap = "I", profile = "hrm_gap100" },
 ]
 
-# Regression for the user's `dusk` layout rollover while typing "could".
+# Regression reported while typing "could" on the alt-layout split.
 #
 # C is configured as TD(6) with tap=C and hold_after_tap=C. The physical
 # rollover is C down, O down, C up, U down, O up, U up. C must not allow U to
 # overtake the already-held O.
 [[test]]
-name = "dusk_tap_dance_cou_rollover_keeps_o_before_u"
+name = "tap_dance_cou_rollover_keeps_o_before_u"
 steps = [
   { delay = 150 },
   { press = [1, 6] },     # C
@@ -139,20 +142,20 @@ normal_mode = true
 enable_flow_tap = true
 prior_idle_time = "120ms"
 morses = [
-  { tap = "Tab", hold = "MO(1)", hold_after_tap = "Tab", profile = "dusk_normal" },
-  { tap = "Space", hold = "MO(1)", hold_after_tap = "Space", profile = "dusk_hold_on_other" },
-  { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "dusk_hrm" },
-  { tap = "S", hold = "LCtrl", hold_after_tap = "S", profile = "dusk_hrm" },
-  { tap = "H", hold = "LGui", hold_after_tap = "H", profile = "dusk_hrm" },
-  { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "dusk_hrm" },
-  { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "dusk_hrm" },
+  { tap = "Tab", hold = "MO(1)", hold_after_tap = "Tab", profile = "normal" },
+  { tap = "Space", hold = "MO(1)", hold_after_tap = "Space", profile = "hold_on_other" },
+  { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "hrm_hold400" },
+  { tap = "S", hold = "LCtrl", hold_after_tap = "S", profile = "hrm_hold400" },
+  { tap = "H", hold = "LGui", hold_after_tap = "H", profile = "hrm_hold400" },
+  { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "hrm_hold400" },
+  { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "hrm_hold400" },
 ]
 
 # Same C/O/U rollover, but U is delayed past the early-fired C gap timeout.
 # Documents that the buffered O is flushed correctly once the gap timer expires
 # before the next key arrives.
 [[test]]
-name = "dusk_tap_dance_cou_rollover_after_gap_timeout"
+name = "tap_dance_cou_rollover_after_gap_timeout"
 steps = [
   { delay = 150 },
   { press = [1, 6] },     # C
@@ -179,19 +182,19 @@ normal_mode = true
 enable_flow_tap = true
 prior_idle_time = "120ms"
 morses = [
-  { tap = "Tab", hold = "MO(1)", hold_after_tap = "Tab", profile = "dusk_normal" },
-  { tap = "Space", hold = "MO(1)", hold_after_tap = "Space", profile = "dusk_hold_on_other" },
-  { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "dusk_hrm" },
-  { tap = "S", hold = "LCtrl", hold_after_tap = "S", profile = "dusk_hrm" },
-  { tap = "H", hold = "LGui", hold_after_tap = "H", profile = "dusk_hrm" },
-  { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "dusk_hrm" },
-  { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "dusk_hrm" },
+  { tap = "Tab", hold = "MO(1)", hold_after_tap = "Tab", profile = "normal" },
+  { tap = "Space", hold = "MO(1)", hold_after_tap = "Space", profile = "hold_on_other" },
+  { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "hrm_hold400" },
+  { tap = "S", hold = "LCtrl", hold_after_tap = "S", profile = "hrm_hold400" },
+  { tap = "H", hold = "LGui", hold_after_tap = "H", profile = "hrm_hold400" },
+  { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "hrm_hold400" },
+  { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "hrm_hold400" },
 ]
 
 # Control case: the same physical rollover over the tap-hold spelling of C,
-# LT(1, C, dusk_hrm)@(1,5) instead of TD(6)@(1,6), keeps the text order correct.
+# LT(1, C, hrm_hold400)@(1,5) instead of TD(6)@(1,6), keeps the text order correct.
 [[test]]
-name = "dusk_tap_hold_cou_rollover_keeps_o_before_u"
+name = "tap_hold_cou_rollover_keeps_o_before_u"
 steps = [
   { delay = 150 },
   { press = [1, 5] },     # C
@@ -218,11 +221,11 @@ normal_mode = true
 enable_flow_tap = true
 prior_idle_time = "120ms"
 morses = [
-  { tap = "Tab", hold = "MO(1)", hold_after_tap = "Tab", profile = "dusk_normal" },
-  { tap = "Space", hold = "MO(1)", hold_after_tap = "Space", profile = "dusk_hold_on_other" },
-  { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "dusk_hrm" },
-  { tap = "S", hold = "LCtrl", hold_after_tap = "S", profile = "dusk_hrm" },
-  { tap = "H", hold = "LGui", hold_after_tap = "H", profile = "dusk_hrm" },
-  { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "dusk_hrm" },
-  { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "dusk_hrm" },
+  { tap = "Tab", hold = "MO(1)", hold_after_tap = "Tab", profile = "normal" },
+  { tap = "Space", hold = "MO(1)", hold_after_tap = "Space", profile = "hold_on_other" },
+  { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "hrm_hold400" },
+  { tap = "S", hold = "LCtrl", hold_after_tap = "S", profile = "hrm_hold400" },
+  { tap = "H", hold = "LGui", hold_after_tap = "H", profile = "hrm_hold400" },
+  { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "hrm_hold400" },
+  { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "hrm_hold400" },
 ]

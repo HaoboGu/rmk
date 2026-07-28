@@ -36,8 +36,9 @@ All keys live on the boards under `boards/`:
 - `boards/split.toml` — a Sofle-style 4x14 split with 4 layers carrying every
   fixture (one-shot row, HRM/morse home row, combo letters, thumb/variant row).
   Its header documents the cell assignments.
-- `boards/dusk.toml` — the dusk-on-Saurus layout for the real-layout rollover
-  regressions in `dusk_saurus.toml`.
+- `boards/alt_layout_split.toml` — a 36-key split with morse keys on the home
+  row, replicating the real setup behind the rollover regressions in
+  `morse_rollover.toml`.
 
 The keyboard half is the real `keyboard.toml` format, resolved by the same
 `rmk-config` + `rmk-macro` pipeline firmware uses — a user's `keyboard.toml`
