@@ -37,7 +37,7 @@ use rmk_types::protocol::rynk::{
 };
 
 use crate::common::rynk_link::{RynkHostClient, link_session, link_two_sessions};
-use crate::common::sim::SimKeyboard;
+use crate::common::simulator::SimKeyboard;
 use crate::common::test_block_on;
 
 /// Leak an always-unlocked config so these cases exercise protocol mechanics.

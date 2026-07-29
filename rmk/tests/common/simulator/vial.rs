@@ -1,12 +1,14 @@
-use rmk::test_exports::to_via_keycode;
+use rmk::test_support::to_via_keycode;
 use rmk::types::action::{EncoderAction, KeyAction};
 use rmk_types::protocol::vial::{SettingKey, ViaCommand, VialCommand, VialDynamic};
 
-use super::{SimHost, SimKeyboard};
+use super::{ReplyFraming, SimHost, SimKeyboard};
+
+/// Via/Vial exchanges are a fixed 32-byte report each way.
+const REPORT: usize = 32;
 
 impl SimHost {
     pub fn vial<'k, 'a>(&self, keyboard: &'k mut SimKeyboard<'a>) -> SimVial<'k, 'a> {
-        keyboard.enable_host();
         SimVial { keyboard }
     }
 }
@@ -19,12 +21,15 @@ pub struct SimHostReply<'k, 'a> {
 
 impl<'k, 'a> SimHostReply<'k, 'a> {
     pub fn expect_ok(self) -> &'k mut SimKeyboard<'a> {
-        self.keyboard.vial_packet(self.data, self.data);
+        let echo = self.data.to_vec();
+        self.keyboard
+            .host_exchange(self.data.to_vec(), echo, ReplyFraming::Fixed(REPORT));
         self.keyboard
     }
 
     pub fn expect(self, reply: [u8; 32]) -> &'k mut SimKeyboard<'a> {
-        self.keyboard.vial_packet(self.data, reply);
+        self.keyboard
+            .host_exchange(self.data.to_vec(), reply.to_vec(), ReplyFraming::Fixed(REPORT));
         self.keyboard
     }
 }
@@ -163,7 +168,7 @@ impl<'k, 'a> SimVial<'k, 'a> {
         output: KeyAction,
     ) -> SimVialDynamicSetReply<'k, 'a> {
         assert!(
-            N <= rmk::test_exports::COMBO_MAX_LENGTH,
+            N <= rmk::test_support::COMBO_MAX_LENGTH,
             "simulator combo helper received too many actions"
         );
 
@@ -176,7 +181,7 @@ impl<'k, 'a> SimVial<'k, 'a> {
             let start = 4 + idx * 2;
             data[start..start + 2].copy_from_slice(&to_via_keycode(action).to_le_bytes());
         }
-        let output_start = 4 + rmk::test_exports::COMBO_MAX_LENGTH * 2;
+        let output_start = 4 + rmk::test_support::COMBO_MAX_LENGTH * 2;
         data[output_start..output_start + 2].copy_from_slice(&to_via_keycode(output).to_le_bytes());
 
         SimVialDynamicSetReply { reply: self.raw(data) }
@@ -227,9 +232,11 @@ pub struct SimVialSetEncoderReply<'k, 'a> {
 
 impl<'k, 'a> SimVialSetEncoderReply<'k, 'a> {
     pub fn expect_ok(self) -> &'k mut SimKeyboard<'a> {
-        self.keyboard.vial_packet(self.clockwise, self.clockwise);
-        self.keyboard
-            .vial_packet(self.counter_clockwise, self.counter_clockwise);
+        for request in [self.clockwise, self.counter_clockwise] {
+            let echo = request.to_vec();
+            self.keyboard
+                .host_exchange(request.to_vec(), echo, ReplyFraming::Fixed(REPORT));
+        }
         self.keyboard
     }
 }
@@ -281,7 +288,7 @@ pub struct SimVialComboReply<'k, 'a> {
 impl<'k, 'a> SimVialComboReply<'k, 'a> {
     pub fn expect<const N: usize>(self, actions: [KeyAction; N], output: KeyAction) -> &'k mut SimKeyboard<'a> {
         assert!(
-            N <= rmk::test_exports::COMBO_MAX_LENGTH,
+            N <= rmk::test_support::COMBO_MAX_LENGTH,
             "simulator combo helper received too many actions"
         );
 
@@ -291,7 +298,7 @@ impl<'k, 'a> SimVialComboReply<'k, 'a> {
             let start = 1 + idx * 2;
             expected[start..start + 2].copy_from_slice(&to_via_keycode(action).to_le_bytes());
         }
-        let output_start = 1 + rmk::test_exports::COMBO_MAX_LENGTH * 2;
+        let output_start = 1 + rmk::test_support::COMBO_MAX_LENGTH * 2;
         expected[output_start..output_start + 2].copy_from_slice(&to_via_keycode(output).to_le_bytes());
         self.reply.expect(expected)
     }

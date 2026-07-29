@@ -2,7 +2,7 @@
 pub mod rynk_hid_link;
 #[cfg(feature = "rynk")]
 pub mod rynk_link;
-pub mod sim;
+pub mod simulator;
 
 use core::future::Future;
 
@@ -41,7 +41,7 @@ pub fn init_log() {
 }
 
 pub fn test_block_on<F: Future>(future: F) -> F::Output {
-    sim::test_block_on(future)
+    simulator::test_block_on(future)
 }
 
 #[rustfmt::skip]

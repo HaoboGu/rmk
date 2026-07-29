@@ -5,11 +5,10 @@ use rmk::types::action::{EncoderAction, KeyAction};
 use rmk_types::protocol::rynk::endpoint::Endpoint;
 use rmk_types::protocol::rynk::{Cmd, RynkError, RynkHeader, command, encode_frame};
 
-use super::{SimHost, SimKeyboard};
+use super::{ReplyFraming, SimHost, SimKeyboard};
 
 impl SimHost {
     pub fn rynk<'k, 'a>(&self, keyboard: &'k mut SimKeyboard<'a>) -> SimRynk<'k, 'a> {
-        keyboard.enable_host();
         SimRynk { keyboard }
     }
 }
@@ -76,7 +75,8 @@ pub struct SimRynkReply<'k, 'a, E: Endpoint> {
 impl<'k, 'a, E: Endpoint> SimRynkReply<'k, 'a, E> {
     pub fn expect(self, response: E::Response) -> &'k mut SimKeyboard<'a> {
         let expected = rynk_response_frame(E::CMD, 0, &response);
-        self.keyboard.rynk_packet(self.request, expected);
+        self.keyboard
+            .host_exchange(self.request, expected, ReplyFraming::CobsDelimited);
         self.keyboard
     }
 
@@ -89,7 +89,8 @@ impl<'k, 'a, E: Endpoint> SimRynkReply<'k, 'a, E> {
 
     pub fn expect_error(self, error: RynkError) -> &'k mut SimKeyboard<'a> {
         let expected = rynk_error_response_frame(E::CMD, 0, error);
-        self.keyboard.rynk_packet(self.request, expected);
+        self.keyboard
+            .host_exchange(self.request, expected, ReplyFraming::CobsDelimited);
         self.keyboard
     }
 }

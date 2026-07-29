@@ -3,10 +3,6 @@
 # On the shared split board MACRO(0) sits at (0,6) and MACRO(1) at (0,7); each
 # test brings its own macro set via [test.behavior.macro] and drives macro 0.
 #
-# `test_macro_with_delay` stays in keyboard_macro_test.rs: the codegen passes
-# `duration` straight to `MacroOperation::Delay`, which is stored as Vial's
-# packed byte pair, so `duration = "50ms"` plays back as 12495ms.
-#
 # The file stem is `macros`, not `macro`, because the generated module name
 # cannot be a Rust keyword.
 
@@ -106,6 +102,69 @@ macros = [
     { operation = "up", keycode = "LShift" },
     { operation = "tap", keycode = "B" },
   ] },
+]
+
+[[test]]
+name = "macro_with_delay"
+steps = [
+  { delay = 0 },
+  { press = [0, 6] },     # Press macro 0
+  { delay = 100 },
+  { release = [0, 6] },
+  { expect = ["A"] },     # Press A
+  { expect = "empty" },   # Release A
+  { expect = ["B"] },     # Press B, 50ms later
+  { expect = "empty" },   # Release B
+]
+[test.behavior.macro]
+macros = [
+  { operations = [
+    { operation = "tap", keycode = "A" },
+    { operation = "delay", duration = "50ms" },
+    { operation = "tap", keycode = "B" },
+  ] },
+]
+
+# An operation whose key is a richer action than a plain keycode is serialized as
+# Vial's extended keycode and routed through the shared action path, so the
+# modifier applies exactly as it would from a physical key.
+[[test]]
+name = "macro_taps_a_key_with_modifier"
+features = ["vial"]
+steps = [
+  { delay = 0 },
+  { press = [0, 6] },     # Press macro 0
+  { delay = 100 },
+  { release = [0, 6] },
+  { expect = { mods = ["LCtrl"], keys = ["A"] } },
+  { expect = "empty" },
+]
+[test.behavior.macro]
+macros = [
+  { operations = [{ operation = "tap", keycode = "WM(A, LCtrl)" }] },
+]
+
+# A macro cannot trigger another macro: that would re-enter the trigger queue and
+# could loop forever. Macro 0 tries to trigger macro 1, then taps A — the nested
+# trigger is dropped, so only A is emitted and the rest of macro 0 still runs.
+[[test]]
+name = "macro_cannot_trigger_macro"
+features = ["vial"]
+steps = [
+  { delay = 0 },
+  { press = [0, 6] },     # Press macro 0
+  { delay = 100 },
+  { release = [0, 6] },
+  { expect = ["A"] },     # A only; macro 1 never ran
+  { expect = "empty" },
+]
+[test.behavior.macro]
+macros = [
+  { operations = [
+    { operation = "tap", keycode = "MACRO(1)" },
+    { operation = "tap", keycode = "A" },
+  ] },
+  { operations = [{ operation = "tap", keycode = "B" }] },
 ]
 
 # Macros fire on key press (matching QMK/ZMK), not release: both macro reports

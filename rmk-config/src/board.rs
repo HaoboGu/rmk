@@ -70,6 +70,25 @@ impl BoardConfig {
     }
 }
 
+impl KeyboardTomlConfig {
+    /// Board-wide encoder count, without resolving the board.
+    ///
+    /// Split halves declare their own encoders; every other shape — unibody, or a
+    /// hardware-less config such as a simulator scenario — uses the top-level
+    /// `[input_device]`.
+    pub(crate) fn total_encoders(&self) -> usize {
+        let count =
+            |device: &Option<InputDeviceConfig>| device.as_ref().and_then(|d| d.encoder.as_ref()).map_or(0, Vec::len);
+        match &self.split {
+            Some(split) => {
+                count(&split.central.input_device)
+                    + split.peripheral.iter().map(|p| count(&p.input_device)).sum::<usize>()
+            }
+            None => count(&self.input_device),
+        }
+    }
+}
+
 /// Check a matrix's pin counts against its declared `rows`/`cols`. `row2col` only flips
 /// scan direction (In/Out pins), never the pin-list lengths, so there is no swap here.
 fn validate_matrix_dims(matrix: &MatrixConfig, rows: usize, cols: usize, ctx: &str) -> Result<(), String> {

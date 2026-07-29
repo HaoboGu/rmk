@@ -11,6 +11,7 @@ use crate::modifier::ModifierCombination;
 // All key codes defined in HID spec
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, FromRepr, MaxSize)]
+#[cfg_attr(feature = "_codegen", derive(strum::VariantNames))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]

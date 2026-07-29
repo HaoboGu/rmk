@@ -1,0 +1,47 @@
+# BLE passkey entry, ported from keyboard_passkey_test.rs.
+#
+# While passkey entry is open the keyboard swallows every key it recognises, so
+# both tests end with `no_report` to prove nothing leaked to the host. All the
+# keys involved are on the board's row 4 passkey fixture: digits 1-6 at cols
+# 0-5, Escape at col 6, Enter at col 7.
+
+features = ["passkey_entry"]
+keyboard = "boards/split.toml"
+
+[[test]]
+name = "six_digits_then_enter_submits_the_passkey"
+steps = [
+  { passkey = "begin" },
+  { tap = [4, 0, 50] },   # 1
+  { delay = 50 },
+  { tap = [4, 1, 50] },   # 2
+  { delay = 50 },
+  { tap = [4, 2, 50] },   # 3
+  { delay = 50 },
+  { tap = [4, 3, 50] },   # 4
+  { delay = 50 },
+  { tap = [4, 4, 50] },   # 5
+  { delay = 50 },
+  { tap = [4, 5, 50] },   # 6
+  { delay = 50 },
+  { tap = [4, 7, 50] },   # Enter submits
+  { delay = 100 },
+  { expect_passkey = 123456 },
+  { no_report = 200 },
+  { passkey = "end" },
+]
+
+[[test]]
+name = "escape_cancels_the_passkey"
+steps = [
+  { passkey = "begin" },
+  { tap = [4, 0, 50] },   # 1
+  { delay = 50 },
+  { tap = [4, 1, 50] },   # 2
+  { delay = 50 },
+  { tap = [4, 6, 50] },   # Escape, before the passkey is complete
+  { delay = 100 },
+  { expect_passkey = "cancelled" },
+  { no_report = 200 },
+  { passkey = "end" },
+]

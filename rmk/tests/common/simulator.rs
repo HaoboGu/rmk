@@ -7,7 +7,7 @@
 //! electrical behavior.
 //!
 //! Lives in the test crate, so it drives only rmk's public API (plus the
-//! `#[doc(hidden)]` `rmk::test_exports` gate for a few internal signals).
+//! `#[doc(hidden)]` `rmk::test_support` gate for a few internal signals).
 
 #![allow(dead_code)] // the harness API is used piecewise across test binaries
 
@@ -61,7 +61,7 @@ use rmk::state::set_usb_state;
 #[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
 use rmk::storage::Storage;
 #[cfg(all(feature = "_no_usb", feature = "_ble"))]
-use rmk::test_exports::set_ble_state;
+use rmk::test_support::set_ble_state;
 use rmk::types::action::{EncoderAction, KeyAction};
 #[cfg(not(feature = "_no_usb"))]
 use rmk_types::connection::UsbState;
@@ -73,7 +73,7 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 /// frame must fit so a writer never blocks on an unpolled reader.
 #[cfg(feature = "rynk")]
 const SIM_LINK_BYTES: usize = rmk_types::constants::RYNK_BUFFER_SIZE;
-#[cfg(all(feature = "vial", not(feature = "rynk")))]
+#[cfg(all(feature = "host", not(feature = "rynk")))]
 const SIM_LINK_BYTES: usize = 64;
 
 /// In-memory host↔device byte link for driving `run_session` in tests.
@@ -84,7 +84,7 @@ type Link = Pipe<NoopRawMutex, SIM_LINK_BYTES>;
 fn reset() {
     KeyboardEvent::publisher_async().clear();
 
-    rmk::test_exports::reset_connection_status();
+    rmk::test_support::reset_connection_status();
     #[cfg(not(feature = "_no_usb"))]
     set_usb_state(UsbState::Configured);
     #[cfg(all(feature = "_no_usb", feature = "_ble"))]
@@ -96,7 +96,7 @@ fn reset() {
     rmk::channel::BLE_REPORT_CHANNEL.clear();
 
     #[cfg(feature = "storage")]
-    rmk::test_exports::clear_flash_channel();
+    rmk::test_support::clear_flash_channel();
 }
 
 #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
@@ -265,7 +265,7 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
         self
     }
 
-    pub fn macro_sequences(mut self, macro_sequences: [u8; rmk::test_exports::MACRO_SPACE_SIZE]) -> Self {
+    pub fn macro_sequences(mut self, macro_sequences: [u8; rmk::test_support::MACRO_SPACE_SIZE]) -> Self {
         self.behavior_config.keyboard_macros.macro_sequences = macro_sequences;
         self
     }
@@ -357,6 +357,19 @@ where
     }
 }
 
+/// How a host protocol marks the end of a reply. This is the only thing the
+/// timeline needs to know about a protocol; everything else — which command,
+/// what payload, what the reply should be — is bytes assembled by the protocol
+/// modules under `simulator/`.
+#[cfg(feature = "host")]
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ReplyFraming {
+    /// A fixed-size report, as Via/Vial use.
+    Fixed(usize),
+    /// Bytes up to a `0x00` delimiter, as COBS-framed Rynk uses.
+    CobsDelimited,
+}
+
 #[derive(Debug)]
 enum SimStep {
     Event(KeyboardEvent),
@@ -370,15 +383,11 @@ enum SimStep {
     ExpectReport(Report),
     #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
     ExpectNoReport(Duration),
-    #[cfg(feature = "vial")]
-    VialPacket {
-        data: [u8; 32],
-        expected: [u8; 32],
-    },
-    #[cfg(feature = "rynk")]
-    RynkPacket {
+    #[cfg(feature = "host")]
+    HostExchange {
         request: Vec<u8>,
         expected: Vec<u8>,
+        reply: ReplyFraming,
     },
     #[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
     WaitStorage,
@@ -534,21 +543,22 @@ impl<'a> SimKeyboard<'a> {
         }
     }
 
-    #[cfg(feature = "vial")]
-    fn vial_packet(&mut self, data: [u8; 32], expected: [u8; 32]) -> &mut Self {
-        self.steps.push(SimStep::VialPacket { data, expected });
+    /// Send `request` to the device's host session and assert the reply, which
+    /// `reply` says how to read off the byte stream.
+    #[cfg(feature = "host")]
+    pub(crate) fn host_exchange(&mut self, request: Vec<u8>, expected: Vec<u8>, reply: ReplyFraming) -> &mut Self {
+        self.enable_host();
+        self.steps.push(SimStep::HostExchange {
+            request,
+            expected,
+            reply,
+        });
         self
     }
 
     #[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
     pub fn wait_storage(&mut self) -> &mut Self {
         self.steps.push(SimStep::WaitStorage);
-        self
-    }
-
-    #[cfg(feature = "rynk")]
-    fn rynk_packet(&mut self, request: Vec<u8>, expected: Vec<u8>) -> &mut Self {
-        self.steps.push(SimStep::RynkPacket { request, expected });
         self
     }
 
@@ -638,7 +648,7 @@ impl<'a> SimKeyboard<'a> {
         timeout: Duration,
         protocol_config: Option<&RmkConfig<'static>>,
     ) {
-        #[cfg(not(any(feature = "vial", feature = "rynk")))]
+        #[cfg(not(feature = "host"))]
         let _ = (keymap, protocol_config);
 
         let sender = KeyboardEvent::publisher_async();
@@ -708,58 +718,46 @@ impl<'a> SimKeyboard<'a> {
                             }
                         }
                     }
-                    #[cfg(feature = "vial")]
-                    SimStep::VialPacket { data, expected } => {
+                    #[cfg(feature = "host")]
+                    SimStep::HostExchange {
+                        request,
+                        expected,
+                        reply,
+                    } => {
                         #[cfg(feature = "storage")]
-                        rmk::test_exports::reset_flash_operation();
-                        // 32-byte request in, 32-byte reply out, across the duplex.
-                        let exchange = async {
-                            to_device.write_all(&data).await;
-                            let mut reply = [0u8; 32];
-                            let mut rx: &Link = &from_device;
-                            rx.read_exact(&mut reply).await.expect("read Vial reply");
-                            reply
-                        };
-                        let reply = match select(Timer::after(timeout), exchange).await {
-                            Either::First(_) => panic!("simulator timed out on Vial packet at step #{idx}"),
-                            Either::Second(reply) => reply,
-                        };
-                        assert_eq!(expected, reply, "on Vial reply at step #{idx}");
-                    }
-                    #[cfg(feature = "rynk")]
-                    SimStep::RynkPacket { request, expected } => {
-                        #[cfg(feature = "storage")]
-                        rmk::test_exports::reset_flash_operation();
-                        // Send the framed request, then read the response off the
-                        // duplex up to the COBS delimiter (0x00 never occurs
-                        // inside an encoded frame).
+                        rmk::test_support::reset_flash_operation();
                         let exchange = async {
                             to_device.write_all(&request).await;
                             let mut rx: &Link = &from_device;
-                            let mut frame = Vec::new();
-                            let mut byte = [0u8; 1];
-                            loop {
-                                rx.read_exact(&mut byte).await.expect("read Rynk response byte");
-                                frame.push(byte[0]);
-                                if byte[0] == 0 {
-                                    break;
+                            let mut actual = Vec::new();
+                            match reply {
+                                ReplyFraming::Fixed(len) => {
+                                    actual.resize(len, 0);
+                                    rx.read_exact(&mut actual).await.expect("read host reply");
+                                }
+                                // 0x00 never occurs inside a COBS-encoded frame.
+                                ReplyFraming::CobsDelimited => {
+                                    let mut byte = [0u8; 1];
+                                    while byte[0] != 0 || actual.is_empty() {
+                                        rx.read_exact(&mut byte).await.expect("read host reply byte");
+                                        actual.push(byte[0]);
+                                    }
                                 }
                             }
-                            frame
+                            actual
                         };
-                        let reply = match select(Timer::after(timeout), exchange).await {
-                            Either::First(_) => panic!("simulator timed out on Rynk packet at step #{idx}"),
-                            Either::Second(frame) => frame,
+                        let actual = match select(Timer::after(timeout), exchange).await {
+                            Either::First(_) => panic!("simulator timed out on host exchange at step #{idx}"),
+                            Either::Second(actual) => actual,
                         };
                         assert_eq!(
-                            expected, reply,
-                            "on Rynk reply at step #{idx}: expected {:?}, actual {:?}",
-                            expected, reply
+                            expected, actual,
+                            "on host reply at step #{idx}: expected {expected:?}, actual {actual:?}"
                         );
                     }
                     #[cfg(all(feature = "storage", any(not(feature = "_no_usb"), feature = "_ble")))]
                     SimStep::WaitStorage => {
-                        match select(Timer::after(timeout), rmk::test_exports::flash_operation_finished()).await {
+                        match select(Timer::after(timeout), rmk::test_support::flash_operation_finished()).await {
                             Either::First(_) => panic!("simulator timed out waiting for storage write at step #{idx}"),
                             Either::Second(true) => {}
                             Either::Second(false) => panic!("storage write failed at step #{idx}"),

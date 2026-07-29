@@ -14,8 +14,10 @@
 // suppress them crate-wide rather than littering individual BLE structs.
 #![allow(clippy::needless_borrows_for_generic_args)]
 #![allow(clippy::needless_update)]
-// Enable std for espidf and test
-#![cfg_attr(not(test), no_std)]
+// Enable std for espidf and test. The `std` feature is test-only, and
+// `test_support` needs std in the build the integration tests link against —
+// that one is not `cfg(test)`, since `tests/` is a separate target.
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 
 // Mutual exclusivity guard
 #[cfg(all(feature = "rynk", feature = "vial"))]
@@ -34,8 +36,6 @@ compile_error!(
 
 // Re-export self as ::rmk for macro-generated code to work both inside and outside the crate
 extern crate self as rmk;
-#[cfg(feature = "std")]
-extern crate std;
 
 include!(concat!(env!("OUT_DIR"), "/constants.rs"));
 
@@ -107,56 +107,11 @@ pub mod usb;
 #[cfg(feature = "watchdog")]
 pub mod watchdog;
 
-// Test-only re-exports of crate internals the simulator harness (in
-// `tests/common/sim`) drives. Gated on the dev-only `std` feature, so none of
-// this is part of the shipping firmware API.
-#[cfg(feature = "std")]
+// Test-only helpers for `#[cfg(test)]` modules under `src/` and for the
+// simulator harness in `tests/common/simulator`; never part of a firmware build.
+#[cfg(any(test, feature = "std"))]
 #[doc(hidden)]
-pub mod test_exports {
-    //! Thin accessors for the few `pub(crate)` internals the simulator harness
-    //! (in `tests/common/sim`) drives. Wrappers rather than `pub use` — the
-    //! latter can't widen `pub(crate)` visibility. Std-gated, so none of this is
-    //! compiled into firmware.
-
-    pub const COMBO_MAX_LENGTH: usize = crate::COMBO_MAX_LENGTH;
-    pub const MACRO_SPACE_SIZE: usize = crate::MACRO_SPACE_SIZE;
-
-    #[cfg(feature = "vial")]
-    pub fn to_via_keycode(action: rmk_types::action::KeyAction) -> u16 {
-        crate::host::via::keycode_convert::to_via_keycode(action)
-    }
-
-    #[cfg(all(feature = "_no_usb", feature = "_ble"))]
-    pub fn set_ble_state(state: rmk_types::ble::BleState) {
-        crate::state::set_ble_state(state);
-    }
-
-    #[cfg(any(not(feature = "_no_usb"), feature = "_ble"))]
-    pub fn reset_connection_status() {
-        crate::state::CONNECTION_STATUS.lock(|c| c.set(rmk_types::connection::ConnectionStatus::default()));
-    }
-
-    #[cfg(feature = "storage")]
-    pub fn clear_flash_channel() {
-        crate::channel::FLASH_CHANNEL.clear();
-    }
-
-    #[cfg(feature = "storage")]
-    pub fn reset_flash_operation() {
-        crate::storage::FLASH_OPERATION_FINISHED.reset();
-    }
-
-    #[cfg(feature = "storage")]
-    pub async fn flash_operation_finished() -> bool {
-        crate::storage::FLASH_OPERATION_FINISHED.wait().await
-    }
-}
-
-// Self-contained `block_on` over embassy-time's mock clock for `#[cfg(test)]`
-// modules under `src/` (the simulator harness lives in the separate test crate,
-// out of their reach). Also runs the nextest process guard.
-#[cfg(test)]
-pub(crate) mod test_support;
+pub mod test_support;
 
 pub async fn initialize_keymap<
     'a,

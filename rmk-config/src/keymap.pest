@@ -98,7 +98,7 @@ layer_action = _{
 nestable_action = _{
     wm_action | mod_action | osm_action | shifted_action | trigger_macro_action |
     df_action | pdf_action | mo_action | lm_action | osl_action | tg_action | to_action |
-    keycode_name
+    stn_action | keycode_name
 }
 
 // Rule 5: MT(key, modifier) - Modifier Tap-Hold
@@ -116,12 +116,15 @@ morse_action = { (^"TD" | ^"MORSE") ~ "(" ~ number ~ ")" }
 // Rule 9: Macro(n) - Trigger Macro
 trigger_macro_action = { ^"MACRO" ~ "(" ~ number ~ ")" }
 
+// Rule 10: STN(key) - Plover HID steno key, named by its position in the chart
+stn_action = { ^"STN" ~ "(" ~ keycode_name ~ ")" }
+
 // --- Top Level Rules ---
 
 // A single key action entry in the map
 // Order is important: more specific function-like rules first, then aliases/specials, then simple keycodes.
 key_action = _{ // Consume surrounding whitespace/comments implicitly
-    wm_action | mod_action | osm_action | layer_action | mt_action | th_action | shifted_action | morse_action | trigger_macro_action | no_action | transparent_action | simple_keycode
+    wm_action | mod_action | osm_action | layer_action | mt_action | th_action | shifted_action | morse_action | trigger_macro_action | stn_action | no_action | transparent_action | simple_keycode
 }
 
 // The entire key map string: Start, zero or more key actions, End.

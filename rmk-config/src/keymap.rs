@@ -799,6 +799,9 @@ mod tests {
         // Out-of-range layer refs would be dead keys at runtime.
         let err = KeyboardTomlConfig::keymap_parser("MO(2)", &aliases, &layer_names, 2).unwrap_err();
         assert!(err.contains("out of range"), "{err}");
+        // Every layer-taking form goes through the same check, `PDF` included.
+        let err = KeyboardTomlConfig::keymap_parser("PDF(5)", &aliases, &layer_names, 2).unwrap_err();
+        assert!(err.contains("out of range"), "{err}");
         // In-range references pass, including nested ones.
         assert!(KeyboardTomlConfig::keymap_parser("MO(1) LT(0, A) TH(MO(1), B)", &aliases, &layer_names, 2).is_ok());
     }

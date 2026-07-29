@@ -2,7 +2,7 @@
 //!
 use std::collections::HashMap;
 
-use quote::quote;
+use quote::{format_ident, quote};
 use rmk_config::resolved::Behavior;
 use rmk_config::resolved::behavior::{
     AutoMouseLayer, Combos, Forks, MacroOperation, Macros, Morse, MorseActionPair, MorseKey,
@@ -10,8 +10,10 @@ use rmk_config::resolved::behavior::{
 };
 
 use super::action_parser::{
-    expand_profile, expand_profile_name, get_key_with_alias, parse_key, sorted_profile_names,
+    as_hid_keycode, expand_profile, expand_profile_name, get_key_with_alias, parse_action,
+    parse_key, sorted_profile_names,
 };
+use super::feature::{get_rmk_features, is_feature_enabled};
 
 fn expand_tri_layer(tri_layer: &Option<[u8; 3]>) -> proc_macro2::TokenStream {
     match tri_layer {
@@ -223,6 +225,33 @@ fn expand_combos(
     }
 }
 
+/// One key-carrying macro operation. A plain keycode takes the compact 3-byte
+/// encoding; a richer action (`WM(A, LCtrl)`, `PDF(1)`, `MACRO(0)`) takes Vial's
+/// 4-byte extended form, which is decoded through the Vial keycode table and so
+/// needs the `vial` feature.
+fn expand_macro_key(key: &str, compact: &str, extended: &str) -> proc_macro2::TokenStream {
+    let key = key.trim();
+    if let Some(keycode) = as_hid_keycode(key) {
+        let variant = format_ident!("{compact}");
+        return quote! {
+            ::rmk::keyboard_macros::MacroOperation::#variant(::rmk::types::keycode::HidKeyCode::#keycode).into_iter()
+        };
+    }
+    // No feature list means no `rmk` dependency to read — rmk's own test crate,
+    // where the scenario's `features` gate decides instead. Only reject when the
+    // manifest positively says `vial` is off.
+    if let Some(features) = get_rmk_features()
+        && !is_feature_enabled(&Some(features), "vial")
+    {
+        panic!(
+            "\n\u{274c} keyboard.toml: macro operation `{key}` is not a plain keycode, so it needs the extended encoding — enable rmk's `vial` feature or use a plain keycode"
+        );
+    }
+    let action = parse_action(key);
+    let variant = format_ident!("{extended}");
+    quote! { ::rmk::keyboard_macros::MacroOperation::#variant(#action).into_iter() }
+}
+
 fn expand_macros(macros: &Option<Macros>) -> proc_macro2::TokenStream {
     let default = quote! { ::core::default::Default::default() };
 
@@ -234,20 +263,13 @@ fn expand_macros(macros: &Option<Macros>) -> proc_macro2::TokenStream {
                     return quote! { ::rmk::heapless::Vec::new() };
                 }
                 let operations = m.operations.iter().map(|op| match op {
-                    MacroOperation::Tap { keycode } => {
-                        let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Tap(::rmk::types::keycode::HidKeyCode::#key).into_iter() }
-                    }
-                    MacroOperation::Down { keycode } => {
-                        let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Press(::rmk::types::keycode::HidKeyCode::#key).into_iter() }
-                    }
-                    MacroOperation::Up { keycode } => {
-                        let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::types::keycode::HidKeyCode::#key).into_iter() }
-                    }
+                    MacroOperation::Tap { keycode } => expand_macro_key(keycode, "Tap", "TapAction"),
+                    MacroOperation::Down { keycode } => expand_macro_key(keycode, "Press", "PressAction"),
+                    MacroOperation::Up { keycode } => expand_macro_key(keycode, "Release", "ReleaseAction"),
                     MacroOperation::Delay { duration_ms } => {
-                        let millis = *duration_ms as u16;
+                        let millis = u16::try_from(*duration_ms).ok().filter(|ms| *ms <= 65024).unwrap_or_else(|| {
+                            panic!("\n\u{274c} keyboard.toml: macro delay {duration_ms}ms exceeds the 65024ms the Vial macro encoding can hold")
+                        });
                         quote! { ::rmk::keyboard_macros::MacroOperation::Delay(#millis).into_iter() }
                     }
                     MacroOperation::Text { text } => {
