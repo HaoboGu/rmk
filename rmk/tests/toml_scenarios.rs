@@ -5,6 +5,7 @@ pub mod common;
 
 rmk_macro::run_tests!("tests/scenarios/bilateral.toml");
 rmk_macro::run_tests!("tests/scenarios/combo.toml");
+rmk_macro::run_tests!("tests/scenarios/encoder.toml");
 rmk_macro::run_tests!("tests/scenarios/hold_on_other_press.toml");
 rmk_macro::run_tests!("tests/scenarios/layer.toml");
 rmk_macro::run_tests!("tests/scenarios/macros.toml");

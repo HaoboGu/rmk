@@ -17,8 +17,17 @@ impl crate::KeyboardTomlConfig {
     /// Resolve the keymap configuration from TOML config.
     pub fn keymap(&self) -> Result<Keymap, String> {
         let (keymap_config, key_info) = self.get_keymap_config()?;
-        // Encoders may be spread across split halves; only the board-wide total is used downstream.
-        let num_encoder: usize = self.get_board_config()?.get_num_encoder().iter().sum();
+        // Encoders may be spread across split halves; only the board-wide total is used
+        // downstream. Simulator scenarios have no [matrix]/[split] to spread them over, so
+        // theirs come straight from [input_device].
+        let num_encoder: usize = match (&self.matrix, &self.split) {
+            (None, None) => self
+                .input_device
+                .as_ref()
+                .and_then(|d| d.encoder.as_ref())
+                .map_or(0, Vec::len),
+            _ => self.get_board_config()?.get_num_encoder().iter().sum(),
+        };
 
         // Encoder maps are all-or-none; partial lists would leave encoders dead.
         for (i, encoders) in keymap_config.encoder_map.iter().enumerate() {
@@ -39,33 +48,6 @@ impl crate::KeyboardTomlConfig {
             encoder_map: keymap_config.encoder_map,
             key_info,
             num_encoder,
-        })
-    }
-
-    /// Resolve the keymap without a board definition ([matrix]/[split]).
-    ///
-    /// Used by simulator scenarios, which have no physical matrix. The encoder
-    /// count comes from the board config, so encoder maps are rejected here.
-    pub fn keymap_headless(&self) -> Result<Keymap, String> {
-        let (keymap_config, key_info) = self.get_keymap_config()?;
-
-        for (i, encoders) in keymap_config.encoder_map.iter().enumerate() {
-            if !encoders.is_empty() {
-                return Err(format!(
-                    "keyboard.toml: [[keymap.layer]] #{i} defines encoders, which need a board config \
-                     and aren't supported in simulator scenarios"
-                ));
-            }
-        }
-
-        Ok(Keymap {
-            rows: keymap_config.rows,
-            cols: keymap_config.cols,
-            layers: keymap_config.layers,
-            keymap: keymap_config.keymap,
-            encoder_map: keymap_config.encoder_map,
-            key_info,
-            num_encoder: 0,
         })
     }
 }

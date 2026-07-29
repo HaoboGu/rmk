@@ -782,6 +782,17 @@ mod tests {
     }
 
     #[test]
+    fn encoders_resolve_without_a_board() {
+        // Simulator scenarios have no [matrix]/[split]; [input_device] still counts.
+        let cfg = config(
+            "[layout]\nrows = 1\ncols = 1\nmap = \"(0,0)\"\n\
+             [keymap]\n[[keymap.layer]]\nkeys = \"A\"\nencoders = [[\"Up\", \"Down\"]]\n\
+             [[input_device.encoder]]\npin_a = \"a0\"\npin_b = \"b0\"\n",
+        );
+        assert_eq!(cfg.keymap().unwrap().num_encoder, 1);
+    }
+
+    #[test]
     fn numeric_layer_reference_must_be_in_range() {
         let aliases = HashMap::new();
         let layer_names = HashMap::new();

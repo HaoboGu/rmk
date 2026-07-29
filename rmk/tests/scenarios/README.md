@@ -34,8 +34,8 @@ permissive_hold = false
 All keys live on the boards under `boards/`:
 
 - `boards/split.toml` — a Sofle-style 4x14 split with 4 layers carrying every
-  fixture (one-shot row, HRM/morse home row, combo letters, thumb/variant row).
-  Its header documents the cell assignments.
+  fixture (one-shot row, HRM/morse home row, combo letters, thumb/variant row)
+  plus two encoders. Its header documents the cell assignments.
 - `boards/alt_layout_split.toml` — a 36-key split with morse keys on the home
   row, replicating the real setup behind the rollover regressions in
   `morse_rollover.toml`.
@@ -49,12 +49,17 @@ definitions on the boards. `[rmk]` capacities are compile-time constants and
 are rejected. Per-key hand assignment lives in the `[layout].map` tokens:
 `(row,col,L)`, `(row,col,R)`, `(row,col,*)`.
 
+Encoders come from `[[input_device.encoder]]` as on any board — the only
+hardware section a scenario keeps, since simulated knobs still need a count.
+Their pins are ignored; `[[keymap.layer]].encoders` maps them per layer.
+
 ## Steps
 
 | Step | Meaning |
 |---|---|
 | `{ press = [r, c] }` / `{ release = [r, c] }` | key down / up at matrix position |
 | `{ tap = [r, c, ms] }` | press, wait `ms`, release |
+| `{ rotary_cw = id }` / `{ rotary_ccw = id }` | one detent of encoder `id` (a press plus a release) |
 | `{ delay = ms }` | advance virtual time |
 | `{ expect = ["A", "B"] }` | next keyboard report: no modifiers, exactly these keycodes (order-insensitive) |
 | `{ expect = { mods = ["LShift"], keys = ["B"] } }` | modifiers + keycodes; omit `keys` for modifier-only |

@@ -2,16 +2,16 @@
 //!
 //! A scenario document holds a keyboard definition (a `keyboard.toml` subset,
 //! optionally deep-merged over a referenced base file) and an array of named
-//! tests, each an ordered list of input/expectation steps. Parsing happens at
-//! macro-expansion time — `rmk-macro`'s `run_tests!` turns each [`SimTest`]
-//! into a generated `#[test]` against the simulator harness.
+//! tests, each an ordered list of input/expectation steps. The keyboard half
+//! deserializes into the ordinary [`KeyboardTomlConfig`]; only the `[[test]]`
+//! half is scenario-specific. [`super::sim_tests`] turns each [`SimTest`] into
+//! a generated `#[test]` against the simulator harness.
 
 use std::collections::HashSet;
 
+use rmk_config::KeyboardTomlConfig;
 use serde::Deserialize;
 use toml::{Table, Value};
-
-use crate::KeyboardTomlConfig;
 
 /// Cargo features a scenario may require. `ble`/`no_usb` map to rmk's internal
 /// `_ble`/`_no_usb` feature names when the macro emits `#[cfg]`.
@@ -31,14 +31,15 @@ const KNOWN_FEATURES: &[&str] = &[
 
 /// Sections a scenario may define. Everything else is either hardware-only
 /// (meaningless in simulation) or compile-time (`[rmk]` capacities are baked
-/// into the test binary by `rmk-types/build.rs`).
-const SCENARIO_SECTIONS: &[&str] = &["layout", "keymap", "behavior", "aliases"];
+/// into the test binary by `rmk-types/build.rs`). `[input_device]` is kept for
+/// the encoders it declares; its pins are ignored.
+const SCENARIO_SECTIONS: &[&str] = &["layout", "keymap", "behavior", "aliases", "input_device"];
 
-pub struct Scenario {
+pub(crate) struct Scenario {
     pub tests: Vec<SimTest>,
 }
 
-pub struct SimTest {
+pub(crate) struct SimTest {
     pub name: String,
     /// Cargo features (public names) this test needs.
     pub requires: Vec<String>,
@@ -50,7 +51,7 @@ pub struct SimTest {
     pub config: KeyboardTomlConfig,
 }
 
-pub enum Step {
+pub(crate) enum Step {
     Press(u8, u8),
     Release(u8, u8),
     Tap(u8, u8, u64),
@@ -74,7 +75,7 @@ pub enum Step {
 
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields, default)]
-pub struct MouseSpec {
+pub(crate) struct MouseSpec {
     pub buttons: u8,
     pub x: i8,
     pub y: i8,
@@ -86,7 +87,7 @@ pub struct MouseSpec {
 ///
 /// The caller resolves and reads the path (relative to the scenario file) and
 /// passes the content to [`parse_scenario_str`].
-pub fn scenario_base_path(doc: &str) -> Result<Option<String>, String> {
+pub(crate) fn scenario_base_path(doc: &str) -> Result<Option<String>, String> {
     let table: Table = toml::from_str(doc).map_err(|e| format!("scenario TOML: {e}"))?;
     match table.get("keyboard") {
         None => Ok(None),
@@ -97,7 +98,7 @@ pub fn scenario_base_path(doc: &str) -> Result<Option<String>, String> {
 
 /// Parse a scenario document, merging its keyboard sections over an optional
 /// base keyboard.toml.
-pub fn parse_scenario_str(doc: &str, base: Option<&str>) -> Result<Scenario, String> {
+pub(crate) fn parse_scenario_str(doc: &str, base: Option<&str>) -> Result<Scenario, String> {
     let mut doc_table: Table = toml::from_str(doc).map_err(|e| format!("scenario TOML: {e}"))?;
 
     doc_table.remove("keyboard"); // already consumed via `scenario_base_path`
@@ -109,7 +110,7 @@ pub fn parse_scenario_str(doc: &str, base: Option<&str>) -> Result<Scenario, Str
     for key in doc_table.keys() {
         if !SCENARIO_SECTIONS.contains(&key.as_str()) {
             return Err(format!(
-                "scenario TOML: section [{key}] cannot take effect in sim tests (allowed: [layout], [keymap], [behavior], [aliases])"
+                "scenario TOML: section [{key}] cannot take effect in sim tests (allowed: [layout], [keymap], [behavior], [aliases], [input_device])"
             ));
         }
     }
@@ -118,7 +119,8 @@ pub fn parse_scenario_str(doc: &str, base: Option<&str>) -> Result<Scenario, Str
     // simulation so a real keyboard's hardware sections need no stripping.
     let mut keyboard = match base {
         Some(base) => {
-            let base_table: Table = toml::from_str(base).map_err(|e| format!("base keyboard TOML: {e}"))?;
+            let base_table: Table =
+                toml::from_str(base).map_err(|e| format!("base keyboard TOML: {e}"))?;
             let mut kept = Table::new();
             for section in SCENARIO_SECTIONS {
                 if let Some(v) = base_table.get(*section) {
@@ -143,7 +145,10 @@ pub fn parse_scenario_str(doc: &str, base: Option<&str>) -> Result<Scenario, Str
     for (index, raw) in raw_tests.into_iter().enumerate() {
         let test = parse_test(raw, index, &keyboard, &file_requires)?;
         if !names.insert(test.name.clone()) {
-            return Err(format!("scenario TOML: duplicate test name '{}'", test.name));
+            return Err(format!(
+                "scenario TOML: duplicate test name '{}'",
+                test.name
+            ));
         }
         tests.push(test);
     }
@@ -181,7 +186,12 @@ fn take_requires(table: &mut Table, ctx: &str) -> Result<Vec<String>, String> {
     Ok(list)
 }
 
-fn parse_test(value: Value, index: usize, keyboard: &Table, file_requires: &[String]) -> Result<SimTest, String> {
+fn parse_test(
+    value: Value,
+    index: usize,
+    keyboard: &Table,
+    file_requires: &[String],
+) -> Result<SimTest, String> {
     let Value::Table(mut table) = value else {
         return Err(format!("[[test]] #{index} must be a table"));
     };
@@ -191,7 +201,9 @@ fn parse_test(value: Value, index: usize, keyboard: &Table, file_requires: &[Str
     };
     let ctx = format!("test '{name}'");
     let mut chars = name.chars();
-    let valid_ident = chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+    let valid_ident = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
     if !valid_ident {
         return Err(format!("{ctx}: name must be a valid Rust identifier"));
@@ -232,7 +244,11 @@ fn parse_test(value: Value, index: usize, keyboard: &Table, file_requires: &[Str
         .enumerate()
         .map(|(i, step)| parse_step(step).map_err(|e| format!("{ctx}, steps[{i}]: {e}")))
         .collect::<Result<Vec<_>, _>>()?;
-    if !storage && steps.iter().any(|s| matches!(s, Step::WaitStorage | Step::Restart)) {
+    if !storage
+        && steps
+            .iter()
+            .any(|s| matches!(s, Step::WaitStorage | Step::Restart))
+    {
         return Err(format!(
             "{ctx}: \"wait_storage\"/\"restart\" steps need `storage = true`"
         ));
@@ -294,10 +310,9 @@ fn parse_step(value: &Value) -> Result<Step, String> {
                 "rotary_ccw" => id(v, "rotary_ccw").map(Step::RotaryCcw),
                 "expect" => parse_expect(v),
                 "expect_mouse" => {
-                    let spec: MouseSpec = v
-                        .clone()
-                        .try_into()
-                        .map_err(|e| format!("`expect_mouse` must be {{ buttons, x, y, wheel, pan }}: {e}"))?;
+                    let spec: MouseSpec = v.clone().try_into().map_err(|e| {
+                        format!("`expect_mouse` must be {{ buttons, x, y, wheel, pan }}: {e}")
+                    })?;
                     Ok(Step::ExpectMouse(spec))
                 }
                 other => Err(format!("unknown step op `{other}`")),
@@ -319,7 +334,10 @@ fn parse_expect(value: &Value) -> Result<Step, String> {
             if keys.is_empty() {
                 return Err("`expect = []` is ambiguous; use `expect = \"empty\"`".to_string());
             }
-            Ok(Step::Expect { mods: Vec::new(), keys })
+            Ok(Step::Expect {
+                mods: Vec::new(),
+                keys,
+            })
         }
         Value::Table(_) => {
             #[derive(Deserialize, Default)]
@@ -333,7 +351,10 @@ fn parse_expect(value: &Value) -> Result<Step, String> {
                 .try_into()
                 .map_err(|e| format!("`expect` must be {{ mods = [..], keys = [..] }}: {e}"))?;
             if spec.mods.is_empty() && spec.keys.is_empty() {
-                return Err("`expect` with neither mods nor keys is ambiguous; use `expect = \"empty\"`".to_string());
+                return Err(
+                    "`expect` with neither mods nor keys is ambiguous; use `expect = \"empty\"`"
+                        .to_string(),
+                );
             }
             Ok(Step::Expect {
                 mods: spec.mods,
@@ -388,20 +409,24 @@ steps = [{ press = [0, 0] }, { release = [0, 0] }, { expect = "empty" }]
         let scenario = parse_scenario_str(MINIMAL, None).unwrap();
         assert_eq!(scenario.tests.len(), 1);
         assert_eq!(scenario.tests[0].steps.len(), 3);
-        scenario.tests[0].config.keymap_headless().unwrap();
+        scenario.tests[0].config.keymap().unwrap();
     }
 
     #[test]
     fn rmk_section_is_rejected() {
         let doc = format!("{MINIMAL}\n[rmk]\ncombo_max_num = 16\n");
-        let err = parse_scenario_str(&doc, None).err().expect("expected error");
+        let err = parse_scenario_str(&doc, None)
+            .err()
+            .expect("expected error");
         assert!(err.contains("[rmk]"), "unexpected error: {err}");
     }
 
     #[test]
     fn unknown_step_op_is_rejected() {
         let doc = MINIMAL.replace("{ press = [0, 0] }", "{ pres = [0, 0] }");
-        let err = parse_scenario_str(&doc, None).err().expect("expected error");
+        let err = parse_scenario_str(&doc, None)
+            .err()
+            .expect("expected error");
         assert!(
             err.contains("steps[0]") && err.contains("pres"),
             "unexpected error: {err}"
@@ -411,7 +436,9 @@ steps = [{ press = [0, 0] }, { release = [0, 0] }, { expect = "empty" }]
     #[test]
     fn storage_steps_need_storage_flag() {
         let doc = MINIMAL.replace("{ expect = \"empty\" }", "\"restart\"");
-        let err = parse_scenario_str(&doc, None).err().expect("expected error");
+        let err = parse_scenario_str(&doc, None)
+            .err()
+            .expect("expected error");
         assert!(err.contains("storage = true"), "unexpected error: {err}");
     }
 
@@ -436,7 +463,19 @@ name = "t"
 steps = [{ delay = 1 }]
 "#;
         let scenario = parse_scenario_str(doc, Some(base)).unwrap();
-        let keymap = scenario.tests[0].config.keymap_headless().unwrap();
+        let keymap = scenario.tests[0].config.keymap().unwrap();
         assert_eq!((keymap.rows, keymap.cols), (1, 2));
+    }
+
+    /// Hardware sections are stripped, but `[input_device]` survives to declare encoders.
+    #[test]
+    fn base_input_device_survives_the_strip() {
+        let base = "[matrix]\nrow_pins = [\"r0\"]\ncol_pins = [\"c0\"]\n\
+             [layout]\nrows = 1\ncols = 1\nmap = \"(0,0)\"\n\
+             [[keymap.layer]]\nkeys = \"A\"\nencoders = [[\"Up\", \"Down\"]]\n\
+             [[input_device.encoder]]\npin_a = \"a0\"\npin_b = \"b0\"\n";
+        let doc = "[[test]]\nname = \"t\"\nsteps = [{ rotary_cw = 0 }]\n";
+        let scenario = parse_scenario_str(doc, Some(base)).unwrap();
+        assert_eq!(scenario.tests[0].config.keymap().unwrap().num_encoder, 1);
     }
 }

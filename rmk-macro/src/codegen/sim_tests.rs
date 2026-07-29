@@ -1,6 +1,6 @@
 //! Expand `run_tests!` scenario files into simulator `#[test]` fns.
 //!
-//! Each scenario TOML (parsed by `rmk_config::sim_tests`) becomes a
+//! Each scenario TOML (parsed by [`super::scenario`]) becomes a
 //! `mod <file_stem>` of tests targeting the `SimKeyboard` harness in rmk's
 //! `tests/common/sim.rs`. Generated code is exactly what a hand-written test
 //! would contain: a keymap array from the canonical `parse_key` pipeline, an
@@ -12,9 +12,10 @@ use std::path::{Path, PathBuf};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::resolved::behavior::MorseProfile;
-use rmk_config::sim_tests::{MouseSpec, SimTest, Step, parse_scenario_str, scenario_base_path};
 use syn::parse::{Parse, ParseStream};
 use syn::{Ident, LitStr, Token};
+
+use super::scenario::{MouseSpec, SimTest, Step, parse_scenario_str, scenario_base_path};
 
 /// `run_tests!("tests/scenarios/foo.toml")` or
 /// `run_tests!(keyboard = "tests/scenarios/boards/bar.toml", tests = "tests/scenarios/foo.toml")`.
@@ -124,7 +125,7 @@ fn expand_test(test: &SimTest, file: &str) -> TokenStream2 {
     let ctx = format!("{file}, test '{}'", test.name);
     let keymap = test
         .config
-        .keymap_headless()
+        .keymap()
         .unwrap_or_else(|e| panic!("\n❌ {ctx}: {e}"));
     let behavior = test
         .config
@@ -147,6 +148,23 @@ fn expand_test(test: &SimTest, file: &str) -> TokenStream2 {
         .map(|layer| super::keymap::expand_layer(layer.clone(), &profiles))
         .collect();
 
+    // Layers that list no `encoders` get all-`No` actions.
+    let num_encoder = keymap.num_encoder;
+    let encoder_call = (num_encoder > 0).then(|| {
+        let mut encoder_layers: Vec<_> = keymap
+            .encoder_map
+            .iter()
+            .map(|encoders| {
+                super::keymap::expand_encoder_layer(encoders.clone(), num_encoder, &profiles)
+            })
+            .collect();
+        encoder_layers.resize(
+            layers,
+            quote! { [::rmk::encoder!(::rmk::k!(No), ::rmk::k!(No)); #num_encoder] },
+        );
+        quote! { .encoders([#(#encoder_layers),*]) }
+    });
+
     let mut builder_calls = TokenStream2::new();
     for row in 0..rows {
         for col in 0..cols {
@@ -163,6 +181,7 @@ fn expand_test(test: &SimTest, file: &str) -> TokenStream2 {
     let builder = quote! {
         crate::common::sim::SimKeyboard::builder::<#rows, #cols, #layers>([#(#layer_tokens),*])
             .behavior_config(behavior_config)
+            #encoder_call
             #builder_calls
     };
 
@@ -174,7 +193,7 @@ fn expand_test(test: &SimTest, file: &str) -> TokenStream2 {
             step => phases
                 .last_mut()
                 .expect("phases start non-empty")
-                .push(expand_step(step, rows, cols, &step_ctx)),
+                .push(expand_step(step, rows, cols, num_encoder, &step_ctx)),
         }
     }
 
@@ -218,10 +237,23 @@ fn expand_test(test: &SimTest, file: &str) -> TokenStream2 {
     }
 }
 
-fn expand_step(step: &Step, rows: usize, cols: usize, ctx: &str) -> TokenStream2 {
+fn expand_step(
+    step: &Step,
+    rows: usize,
+    cols: usize,
+    num_encoder: usize,
+    ctx: &str,
+) -> TokenStream2 {
     let check_pos = |row: u8, col: u8| {
         if row as usize >= rows || col as usize >= cols {
             panic!("\n❌ {ctx}: position ({row}, {col}) is outside the {rows}x{cols} matrix");
+        }
+    };
+    let check_encoder = |id: u8| {
+        if id as usize >= num_encoder {
+            panic!(
+                "\n❌ {ctx}: encoder {id} is outside the {num_encoder} declared in [input_device]"
+            );
         }
     };
     match step {
@@ -239,10 +271,13 @@ fn expand_step(step: &Step, rows: usize, cols: usize, ctx: &str) -> TokenStream2
         }
         Step::Delay(ms) => quote! { .delay(#ms) },
         Step::NoReport(ms) => quote! { .expect_no_report(#ms) },
-        Step::RotaryCw(_) | Step::RotaryCcw(_) => {
-            panic!(
-                "\n❌ {ctx}: rotary steps need an encoder map, which scenarios don't support yet"
-            )
+        Step::RotaryCw(id) => {
+            check_encoder(*id);
+            quote! { .rotary_cw(#id) }
+        }
+        Step::RotaryCcw(id) => {
+            check_encoder(*id);
+            quote! { .rotary_ccw(#id) }
         }
         Step::Expect { mods, keys } => {
             let modifier = modifier_bits(mods, ctx);

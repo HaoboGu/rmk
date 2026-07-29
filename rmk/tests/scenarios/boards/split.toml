@@ -10,6 +10,10 @@
 #   row 3        thumbs + variant zone: layer-off triple (cols 0-2), bilateral A (3,3),
 #                profile-annotated tap-holds (p0/p1), extra tap-dance keys
 #
+# Two encoders, declared like any board's in `[[input_device.encoder]]` (the
+# pins are ignored in simulation). They scrub and scroll on layer 0 and page
+# around on layer 1; layers 2-3 leave them unmapped.
+#
 # Layer 1 backs the fixtures (keypad digits, one-shot targets, layer-off
 # cells); layers 2-3 are a realistic Fn layer and a transparent spare.
 #
@@ -49,6 +53,14 @@ map = """
 (3,0,L)  (3,1,L)  (3,2,L)  (3,3,*)  (3,4,*)  (3,5,L)  (3,6,L)  (3,7,R)  (3,8,R)  (3,9,*)  (3,10,*)  (3,11,R)  (3,12,R)  (3,13,R)
 """
 
+[[input_device.encoder]]
+pin_a = "P0_00"
+pin_b = "P0_01"
+
+[[input_device.encoder]]
+pin_a = "P0_02"
+pin_b = "P0_03"
+
 [[keymap.layer]]
 keys = """
 OSM(LShift)    OSL(1)         A            TH(B, C)  OSM(LCtrl)  WM(B, LGui)   MACRO(0)           MACRO(1)           MouseWheelUp  MouseAccel2  PDF(1)     A      LM(1, LShift)  No
@@ -56,6 +68,7 @@ A              MT(B, LShift)  TD(0)        W         E           R             T
 TH(A, LShift)  TH(S, LGui)    TH(Z, LAlt)  V         B           N             D                  M                  Comma         Dot          L          X      C              F
 MO(1)          No             A            A         Space       LT(1, D, p0)  MT(B, LShift, p0)  MT(B, LShift, p1)  TD(1)         Enter        Backspace  TD(2)  No             No
 """
+encoders = [["Right", "Left"], ["Down", "Up"]]
 
 [[keymap.layer]]
 keys = """
@@ -64,6 +77,7 @@ Kp1                  Kp2  Kp5  No  No  No  No  Kp3  Kp4  Kp5  No  No  No  No
 No                   No   No   No  No  No  No  No   No   No   No  No  No  No
 _                    B    _    No  No  _   No  Kp1  No   No   No  No  No  No
 """
+encoders = [["PageDown", "PageUp"], ["End", "Home"]]
 
 [[keymap.layer]]
 keys = """

@@ -23,7 +23,6 @@ pub(crate) mod keymap;
 pub(crate) mod layout;
 pub use layout::{STOCK_WIDTHS, layout_blob_from_toml};
 pub(crate) mod light;
-pub mod sim_tests;
 pub(crate) mod storage;
 
 /// Protocol-level capacity ceilings for wire-format Vec sizes.

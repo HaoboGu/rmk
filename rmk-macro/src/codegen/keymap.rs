@@ -71,7 +71,7 @@ fn expand_row(row: Vec<String>, profiles: &Option<HashMap<String, MorseProfile>>
 }
 
 /// Expand a layer for encoder map
-fn expand_encoder_layer(
+pub(crate) fn expand_encoder_layer(
     encoder_layer: Vec<[String; 2]>,
     num_encoder: usize,
     profiles: &Option<HashMap<String, MorseProfile>>,

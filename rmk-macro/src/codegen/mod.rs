@@ -13,6 +13,8 @@ pub(crate) mod orchestrator;
 pub(crate) mod override_helper;
 pub(crate) mod registered_processor;
 #[cfg(feature = "_sim")]
+pub(crate) mod scenario;
+#[cfg(feature = "_sim")]
 pub(crate) mod sim_tests;
 pub(crate) mod split;
 pub(crate) mod watchdog;
