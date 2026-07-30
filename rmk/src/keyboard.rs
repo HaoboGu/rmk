@@ -607,7 +607,13 @@ impl<'a> Keyboard<'a> {
 
                                     let final_action =
                                         Self::try_predict_final_action(self.keymap, &key_action, pattern);
-                                    if let Some(action) = final_action {
+                                    let defer_for_quick_tap = matches!(held_key.state, KeyState::Pressed(_))
+                                        && !pattern.is_empty()
+                                        && pattern.is_all_taps()
+                                        && Self::quick_tap_window(self.keymap, &key_action).is_some();
+                                    if let Some(action) = final_action
+                                        && !defer_for_quick_tap
+                                    {
                                         debug!("tap prediction {:?} -> {:?}", pattern, action);
                                         self.process_key_action_normal(action, held_key.event).await;
                                         held_key.state = KeyState::ProcessedButReleaseNotReportedYet(action);

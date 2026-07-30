@@ -104,6 +104,7 @@ pub enum SettingKey {
     TapCapslockInterval = 0x13,
     PermissiveHold = 0x16,
     HoldOnOtherKeyPress = 0x17,
+    QuickTapTerm = 0x19,
     UnilateralTap = 0x1A,
     PriorIdleTime = 0x1B,
 }
