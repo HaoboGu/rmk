@@ -9,8 +9,9 @@
 
 #[cfg(not(feature = "host"))]
 use postcard::experimental::max_size::MaxSize;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
-use super::endpoint::{Endpoint, Topic};
 use super::message::{RynkHeader, encode_frame};
 use super::{
     BehaviorConfig, DeviceCapabilities, DeviceInfo, GetComboBulkRequest, GetComboBulkResponse, GetEncoderRequest,
@@ -34,6 +35,16 @@ use crate::protocol::rynk::PeripheralStatus;
 
 /// CMD high bit marking a topic (server → host push).
 const RYNK_TOPIC_BIT: u16 = 0x8000;
+
+/// A request/response endpoint: its [`Cmd`] plus both payload types — the wire
+/// schema and nothing else. Buffer sizing stays out of it: postcard is
+/// slice-driven, so `MaxSize` matters only to the no-allocator firmware, which
+/// folds it into `MAX_ENDPOINT_PAYLOAD` below.
+pub trait Endpoint {
+    const CMD: Cmd;
+    type Request: Serialize + DeserializeOwned;
+    type Response: Serialize + DeserializeOwned;
+}
 
 /// The command identifier carried in the header CMD field. The named
 /// `Cmd` constants are generated from the `endpoints!`/`topics!` table below.
@@ -176,32 +187,24 @@ macro_rules! endpoints {
     };
 }
 
-/// Macro for defining the topic table.
+/// Macro for defining the topic table. Topics have no marker types: the
+/// generated [`TopicEvent`] union is the whole consumer side.
 macro_rules! topics {
     ($( $(#[$meta:meta])* $name:ident = $cmd:literal : $payload:ty; )*) => {
         #[allow(non_upper_case_globals)]
         impl Cmd {
             $( $(#[$meta])* pub const $name: Self = Cmd::from_raw($cmd); )*
         }
-        $(
-            $(#[$meta])*
-            pub enum $name {}
-            $(#[$meta])*
-            impl Topic for $name {
-                const CMD: Cmd = Cmd::$name;
-                type Payload = $payload;
-            }
-        )*
         const _: () = {
             $( core::assert!(Cmd::from_raw($cmd).is_topic(), "topic CMD value outside the topic range"); )*
             assert_unique(&[$($cmd),*]);
         };
         /// Largest payload across the whole topic table — feeds the firmware
-        /// buffer assertion and sizes the no-alloc host's topic frames.
-        /// Absent on `host` builds, which are alloc and need no bound.
+        /// buffer assertion below. Absent on `host` builds, which are alloc
+        /// and need no bound.
         #[cfg(not(feature = "host"))]
         #[allow(unused_doc_comments)]
-        pub const MAX_TOPIC_PAYLOAD: usize = {
+        const MAX_TOPIC_PAYLOAD: usize = {
             let mut m = 0;
             $( $(#[$meta])* {
                 let p = <$payload as MaxSize>::POSTCARD_MAX_SIZE;
@@ -231,13 +234,6 @@ macro_rules! topics {
         }
 
         impl TopicEvent {
-            /// The `Cmd` this event is pushed under.
-            pub fn cmd(&self) -> Cmd {
-                match self {
-                    $( $(#[$meta])* TopicEvent::$name(_) => Cmd::$name, )*
-                }
-            }
-
             /// Decode a topic frame's `payload` as the topic named by `cmd`.
             /// `None` for a `cmd` outside the topic table, or a payload that
             /// fails to decode. Trailing bytes are ignored.
@@ -419,7 +415,6 @@ mod tests {
         let n = df.next(&mut buf).expect("one whole topic frame");
         let header = RynkHeader::parse(buf[..RYNK_HEADER_SIZE].try_into().unwrap());
         assert_eq!(header.cmd, Cmd::LayerChange);
-        assert_eq!(header.cmd, ev.cmd());
         assert_eq!(header.seq, 0, "topics push with SEQ 0");
         let decoded = TopicEvent::decode(header.cmd, &buf[RYNK_HEADER_SIZE..n]);
         assert!(matches!(decoded, Some(TopicEvent::LayerChange(7))));

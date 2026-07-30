@@ -32,15 +32,14 @@
 //!
 //! ## Module layout
 //!
-//! - [`command`] — the [`Cmd`] ids and the table binding each command/topic to
-//!   its payload types; firmware and host both compile against it, so the two
-//!   ends can't disagree about a message's types.
-//! - [`endpoint`] — the [`Endpoint`](endpoint::Endpoint) / [`Topic`](endpoint::Topic)
-//!   traits those table entries implement.
-//! - [`message`] — the header, [`encode_frame`], and the [`RynkMessage`] reply view.
-//! - `deframer` / `error` / `payload` (private) — the COBS [`Deframer`],
-//!   [`RynkError`], and the per-domain payload types, re-exported flat at
-//!   `protocol::rynk::*`.
+//! [`command`] is the only public sub-module: the [`Cmd`] ids, the table
+//! binding each command to its payload types, and the
+//! [`Endpoint`](command::Endpoint) trait its rows implement. Firmware and host
+//! both compile against it, so the two ends can't disagree about a message's
+//! types. Everything else — the framing (`message`, [`RynkHeader`],
+//! [`encode_frame`], [`RynkMessage`], the COBS [`Deframer`]), [`RynkError`],
+//! and the per-domain payload types — is private and re-exported flat at
+//! `protocol::rynk::*`.
 //!
 //! ## Compatibility
 //!
@@ -54,18 +53,15 @@
 //! files (`tests.rs`) fail on any accidental drift.
 
 pub mod command;
-pub mod endpoint;
-pub mod message;
 
 mod deframer;
 mod error;
+mod message;
 mod payload;
 
 #[cfg(test)]
 pub(crate) mod tests;
 
-#[cfg(not(feature = "host"))]
-pub use self::command::MAX_TOPIC_PAYLOAD;
 pub use self::command::{Cmd, TopicEvent};
 pub use self::deframer::Deframer;
 pub use self::error::RynkError;

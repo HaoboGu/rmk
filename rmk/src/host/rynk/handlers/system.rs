@@ -5,12 +5,34 @@ use rmk_types::protocol::rynk::command::{
     BootloaderJump, GetCapabilities, GetDeviceInfo, GetLockStatus, GetVersion, Lock, Reboot, StorageReset, UnlockPoll,
 };
 use rmk_types::protocol::rynk::{
-    DEVICE_INFO_STRING_SIZE, DeviceCapabilities, DeviceInfo, LockStatus, MAX_BULK_ITEMS, MAX_BULK_KEYS,
-    ProtocolVersion, RYNK_MAX_PAYLOAD_SIZE, RynkError, StorageResetMode,
+    DEVICE_INFO_STRING_SIZE, DeviceCapabilities, DeviceInfo, FirmwareVersion, LockStatus, MAX_BULK_ITEMS,
+    MAX_BULK_KEYS, ProtocolVersion, RYNK_MAX_PAYLOAD_SIZE, RynkError, StorageResetMode,
 };
 
-use super::super::{RMK_VERSION, RynkService, RynkSession};
+use super::super::RynkService;
 use super::Handle;
+use crate::host::lock::HostLock;
+
+/// The `rmk` crate version baked into the firmware, so hosts can key
+/// version-specific behavior off the library release, not the user's app.
+const RMK_VERSION: FirmwareVersion = {
+    const fn component(s: &str) -> u8 {
+        let bytes = s.as_bytes();
+        let mut i = 0;
+        let mut value = 0u8;
+        while i < bytes.len() {
+            value = value * 10 + (bytes[i] - b'0');
+            i += 1;
+        }
+        value
+    }
+
+    FirmwareVersion {
+        major: component(env!("CARGO_PKG_VERSION_MAJOR")),
+        minor: component(env!("CARGO_PKG_VERSION_MINOR")),
+        patch: component(env!("CARGO_PKG_VERSION_PATCH")),
+    }
+};
 
 impl Handle<GetVersion> for RynkService<'_> {
     async fn handle(&self, _: ()) -> Result<ProtocolVersion, RynkError> {
@@ -83,23 +105,24 @@ impl Handle<StorageReset> for RynkService<'_> {
     }
 }
 
-// Lock endpoints stay dispatchable while locked.
+// Lock endpoints are served by the session's own gate, and stay dispatchable
+// while locked.
 
-impl Handle<GetLockStatus> for RynkSession<'_> {
+impl Handle<GetLockStatus> for HostLock<'_> {
     async fn handle(&self, _: ()) -> Result<LockStatus, RynkError> {
-        Ok(self.locker.status())
+        Ok(self.status())
     }
 }
 
-impl Handle<UnlockPoll> for RynkSession<'_> {
+impl Handle<UnlockPoll> for HostLock<'_> {
     async fn handle(&self, _: ()) -> Result<LockStatus, RynkError> {
-        Ok(self.locker.poll())
+        Ok(self.poll())
     }
 }
 
-impl Handle<Lock> for RynkSession<'_> {
+impl Handle<Lock> for HostLock<'_> {
     async fn handle(&self, _: ()) -> Result<(), RynkError> {
-        self.locker.lock();
+        self.lock();
         Ok(())
     }
 }

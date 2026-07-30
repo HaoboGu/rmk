@@ -9,7 +9,6 @@ use embassy_futures::yield_now;
 use embedded_io_async::{Read, Write};
 use panic_halt as _;
 use rmk::config::{BehaviorConfig, LockConfig, PositionalConfig, RmkConfig};
-use rmk::host::run_rynk_uart;
 use rmk::keymap::KeymapData;
 use rmk::types::action::{EncoderAction, KeyAction};
 use rmk::types::fork::{Fork, StateBits};
@@ -90,8 +89,8 @@ const DEFAULT_ENCODER_MAP: [[EncoderAction; NUM_ENCODER]; NUM_LAYER] = [
 async fn main(_spawner: Spawner) {
     println!("[RMK] starting");
 
-    let rx = Uart::new();
-    let tx = Uart::new();
+    let mut rx = Uart::new();
+    let mut tx = Uart::new();
 
     let mut keymap_data = KeymapData::new_with_encoder(get_default_keymap(), DEFAULT_ENCODER_MAP);
     let mut behavior_config = BehaviorConfig::default();
@@ -129,5 +128,9 @@ async fn main(_spawner: Spawner) {
     });
 
     let service = rmk::host::HostService::new(&keymap, rmk_config);
-    run_rynk_uart(rx, tx, &service).await;
+    // A UART has no "connected" notion, so just restart the framing session on
+    // every read/write error, dropping whatever frame was in flight.
+    loop {
+        service.run_session(&mut rx, &mut tx).await;
+    }
 }

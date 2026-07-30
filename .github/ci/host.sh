@@ -15,6 +15,12 @@ cargo +stable test --workspace --lib --tests
 log_section "Doctests"
 cargo +stable test -p rynk --doc
 
+log_section "No-alloc smoke check"
+# The dongle build: every other job runs `rynk` with default features (std ⇒
+# alloc), so without this its `#[cfg(not(feature = "alloc"))]` half is never
+# compiled.
+cargo +stable clippy -p rynk --lib --no-default-features -- -D warnings
+
 log_section "Wasm smoke check"
 cargo +stable check -p rynk --lib --target wasm32-unknown-unknown
 cargo +stable check -p rynk-wasm --target wasm32-unknown-unknown

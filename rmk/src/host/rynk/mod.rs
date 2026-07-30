@@ -1,23 +1,22 @@
 //! Rynk host service — RMK-native protocol server.
 //!
 //! `RynkService` owns the global keyboard state and dispatch policy. Each
-//! transport run creates independent authorization and topic-subscription state.
+//! [`run_session`](RynkService::run_session) creates its own authorization gate
+//! ([`HostLock`]) and topic subscriptions, so transports never share either.
 
 mod handlers;
 mod topics;
-mod uart;
 
 use embassy_futures::select::{Either, select};
 use embedded_io_async::{Read, Write};
 use postcard::experimental::max_size::MaxSize;
 use rmk_types::constants::RYNK_BUFFER_SIZE;
 use rmk_types::protocol::rynk::{
-    Cmd, Deframer, FirmwareVersion, RYNK_HEADER_SIZE, RynkError, RynkMessage, command, encode_frame, max_wire_size,
+    Cmd, Deframer, RYNK_HEADER_SIZE, RynkError, RynkMessage, command, encode_frame, max_wire_size,
 };
-#[allow(unused_imports)] // re-exported at `crate::host` for downstream users
-pub use uart::run_rynk_uart;
 
-use self::handlers::Serve;
+use self::handlers::{serve, serve_bulk};
+use self::topics::TopicSubscribers;
 use super::context::KeyboardContext;
 use super::lock::HostLock;
 use crate::config::{DeviceConfig, LockConfig, RmkConfig};
@@ -26,25 +25,6 @@ use crate::keymap::KeyMap;
 /// Unlock attempts live long enough for BLE WebHID round trips.
 const RYNK_UNLOCK_WINDOW: embassy_time::Duration = embassy_time::Duration::from_millis(500);
 
-const RMK_VERSION: FirmwareVersion = {
-    const fn component(s: &str) -> u8 {
-        let bytes = s.as_bytes();
-        let mut i = 0;
-        let mut value = 0u8;
-        while i < bytes.len() {
-            value = value * 10 + (bytes[i] - b'0');
-            i += 1;
-        }
-        value
-    }
-
-    FirmwareVersion {
-        major: component(env!("CARGO_PKG_VERSION_MAJOR")),
-        minor: component(env!("CARGO_PKG_VERSION_MINOR")),
-        patch: component(env!("CARGO_PKG_VERSION_PATCH")),
-    }
-};
-
 /// Transport-agnostic Rynk service.
 pub struct RynkService<'a> {
     ctx: KeyboardContext<'a>,
@@ -52,11 +32,6 @@ pub struct RynkService<'a> {
     device: DeviceConfig<'static>,
     /// Policy copied into each session's authorization gate.
     lock_config: LockConfig,
-}
-
-struct RynkSession<'a> {
-    locker: HostLock<'a>,
-    topics: topics::TopicSubscribers,
 }
 
 impl<'a> RynkService<'a> {
@@ -95,71 +70,71 @@ impl<'a> RynkService<'a> {
 
     /// Serve one inbound message: on success the reply frame replaces the
     /// payload in place; on error the caller answers with the error envelope.
-    async fn dispatch(&self, session: &RynkSession<'_>, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
+    async fn dispatch(&self, locker: &HostLock<'_>, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
         let cmd = msg.header().cmd;
 
-        if self.requires_unlock(cmd) && !session.locker.is_unlocked() {
+        if self.requires_unlock(cmd) && !locker.is_unlocked() {
             return Err(RynkError::Locked);
         }
 
         match cmd {
-            Cmd::GetVersion => Serve::<command::GetVersion, _>::serve(self, msg).await,
-            Cmd::GetCapabilities => Serve::<command::GetCapabilities, _>::serve(self, msg).await,
-            Cmd::Reboot => Serve::<command::Reboot, _>::serve(self, msg).await,
-            Cmd::BootloaderJump => Serve::<command::BootloaderJump, _>::serve(self, msg).await,
-            Cmd::StorageReset => Serve::<command::StorageReset, _>::serve(self, msg).await,
-            Cmd::GetLockStatus => Serve::<command::GetLockStatus, _>::serve(session, msg).await,
-            Cmd::UnlockPoll => Serve::<command::UnlockPoll, _>::serve(session, msg).await,
-            Cmd::Lock => Serve::<command::Lock, _>::serve(session, msg).await,
-            Cmd::GetDeviceInfo => Serve::<command::GetDeviceInfo, _>::serve(self, msg).await,
+            Cmd::GetVersion => serve::<command::GetVersion, _>(self, msg).await,
+            Cmd::GetCapabilities => serve::<command::GetCapabilities, _>(self, msg).await,
+            Cmd::Reboot => serve::<command::Reboot, _>(self, msg).await,
+            Cmd::BootloaderJump => serve::<command::BootloaderJump, _>(self, msg).await,
+            Cmd::StorageReset => serve::<command::StorageReset, _>(self, msg).await,
+            Cmd::GetLockStatus => serve::<command::GetLockStatus, _>(locker, msg).await,
+            Cmd::UnlockPoll => serve::<command::UnlockPoll, _>(locker, msg).await,
+            Cmd::Lock => serve::<command::Lock, _>(locker, msg).await,
+            Cmd::GetDeviceInfo => serve::<command::GetDeviceInfo, _>(self, msg).await,
 
-            Cmd::GetKeyAction => Serve::<command::GetKeyAction, _>::serve(self, msg).await,
-            Cmd::SetKeyAction => Serve::<command::SetKeyAction, _>::serve(self, msg).await,
-            Cmd::GetDefaultLayer => Serve::<command::GetDefaultLayer, _>::serve(self, msg).await,
-            Cmd::SetDefaultLayer => Serve::<command::SetDefaultLayer, _>::serve(self, msg).await,
-            Cmd::GetEncoderAction => Serve::<command::GetEncoderAction, _>::serve(self, msg).await,
-            Cmd::SetEncoderAction => Serve::<command::SetEncoderAction, _>::serve(self, msg).await,
-            Cmd::GetKeymapBulk => Serve::<command::GetKeymapBulk, _>::serve(self, msg).await,
-            Cmd::SetKeymapBulk => Serve::<command::SetKeymapBulk, _>::serve(self, msg).await,
+            Cmd::GetKeyAction => serve::<command::GetKeyAction, _>(self, msg).await,
+            Cmd::SetKeyAction => serve::<command::SetKeyAction, _>(self, msg).await,
+            Cmd::GetDefaultLayer => serve::<command::GetDefaultLayer, _>(self, msg).await,
+            Cmd::SetDefaultLayer => serve::<command::SetDefaultLayer, _>(self, msg).await,
+            Cmd::GetEncoderAction => serve::<command::GetEncoderAction, _>(self, msg).await,
+            Cmd::SetEncoderAction => serve::<command::SetEncoderAction, _>(self, msg).await,
+            Cmd::GetKeymapBulk => serve_bulk::<command::GetKeymapBulk, _>(self, msg).await,
+            Cmd::SetKeymapBulk => serve_bulk::<command::SetKeymapBulk, _>(self, msg).await,
 
-            Cmd::GetMacro => Serve::<command::GetMacro, _>::serve(self, msg).await,
-            Cmd::SetMacro => Serve::<command::SetMacro, _>::serve(self, msg).await,
+            Cmd::GetMacro => serve::<command::GetMacro, _>(self, msg).await,
+            Cmd::SetMacro => serve::<command::SetMacro, _>(self, msg).await,
 
-            Cmd::GetCombo => Serve::<command::GetCombo, _>::serve(self, msg).await,
-            Cmd::SetCombo => Serve::<command::SetCombo, _>::serve(self, msg).await,
-            Cmd::GetComboBulk => Serve::<command::GetComboBulk, _>::serve(self, msg).await,
-            Cmd::SetComboBulk => Serve::<command::SetComboBulk, _>::serve(self, msg).await,
-            Cmd::GetMorse => Serve::<command::GetMorse, _>::serve(self, msg).await,
-            Cmd::SetMorse => Serve::<command::SetMorse, _>::serve(self, msg).await,
-            Cmd::GetMorseBulk => Serve::<command::GetMorseBulk, _>::serve(self, msg).await,
-            Cmd::SetMorseBulk => Serve::<command::SetMorseBulk, _>::serve(self, msg).await,
+            Cmd::GetCombo => serve::<command::GetCombo, _>(self, msg).await,
+            Cmd::SetCombo => serve::<command::SetCombo, _>(self, msg).await,
+            Cmd::GetComboBulk => serve_bulk::<command::GetComboBulk, _>(self, msg).await,
+            Cmd::SetComboBulk => serve_bulk::<command::SetComboBulk, _>(self, msg).await,
+            Cmd::GetMorse => serve::<command::GetMorse, _>(self, msg).await,
+            Cmd::SetMorse => serve::<command::SetMorse, _>(self, msg).await,
+            Cmd::GetMorseBulk => serve_bulk::<command::GetMorseBulk, _>(self, msg).await,
+            Cmd::SetMorseBulk => serve_bulk::<command::SetMorseBulk, _>(self, msg).await,
 
-            Cmd::GetFork => Serve::<command::GetFork, _>::serve(self, msg).await,
-            Cmd::SetFork => Serve::<command::SetFork, _>::serve(self, msg).await,
+            Cmd::GetFork => serve::<command::GetFork, _>(self, msg).await,
+            Cmd::SetFork => serve::<command::SetFork, _>(self, msg).await,
 
-            Cmd::GetBehaviorConfig => Serve::<command::GetBehaviorConfig, _>::serve(self, msg).await,
-            Cmd::SetBehaviorConfig => Serve::<command::SetBehaviorConfig, _>::serve(self, msg).await,
+            Cmd::GetBehaviorConfig => serve::<command::GetBehaviorConfig, _>(self, msg).await,
+            Cmd::SetBehaviorConfig => serve::<command::SetBehaviorConfig, _>(self, msg).await,
 
-            Cmd::GetConnectionType => Serve::<command::GetConnectionType, _>::serve(self, msg).await,
-            Cmd::GetConnectionStatus => Serve::<command::GetConnectionStatus, _>::serve(self, msg).await,
+            Cmd::GetConnectionType => serve::<command::GetConnectionType, _>(self, msg).await,
+            Cmd::GetConnectionStatus => serve::<command::GetConnectionStatus, _>(self, msg).await,
             #[cfg(feature = "_ble")]
-            Cmd::GetBleStatus => Serve::<command::GetBleStatus, _>::serve(self, msg).await,
+            Cmd::GetBleStatus => serve::<command::GetBleStatus, _>(self, msg).await,
             #[cfg(feature = "_ble")]
-            Cmd::SwitchBleProfile => Serve::<command::SwitchBleProfile, _>::serve(self, msg).await,
+            Cmd::SwitchBleProfile => serve::<command::SwitchBleProfile, _>(self, msg).await,
             #[cfg(feature = "_ble")]
-            Cmd::ClearBleProfile => Serve::<command::ClearBleProfile, _>::serve(self, msg).await,
+            Cmd::ClearBleProfile => serve::<command::ClearBleProfile, _>(self, msg).await,
 
-            Cmd::GetCurrentLayer => Serve::<command::GetCurrentLayer, _>::serve(self, msg).await,
-            Cmd::GetMatrixState => Serve::<command::GetMatrixState, _>::serve(self, msg).await,
+            Cmd::GetCurrentLayer => serve::<command::GetCurrentLayer, _>(self, msg).await,
+            Cmd::GetMatrixState => serve::<command::GetMatrixState, _>(self, msg).await,
             #[cfg(feature = "_ble")]
-            Cmd::GetBatteryStatus => Serve::<command::GetBatteryStatus, _>::serve(self, msg).await,
+            Cmd::GetBatteryStatus => serve::<command::GetBatteryStatus, _>(self, msg).await,
             #[cfg(feature = "split")]
-            Cmd::GetPeripheralStatus => Serve::<command::GetPeripheralStatus, _>::serve(self, msg).await,
-            Cmd::GetWpm => Serve::<command::GetWpm, _>::serve(self, msg).await,
-            Cmd::GetSleepState => Serve::<command::GetSleepState, _>::serve(self, msg).await,
-            Cmd::GetLedIndicator => Serve::<command::GetLedIndicator, _>::serve(self, msg).await,
+            Cmd::GetPeripheralStatus => serve::<command::GetPeripheralStatus, _>(self, msg).await,
+            Cmd::GetWpm => serve::<command::GetWpm, _>(self, msg).await,
+            Cmd::GetSleepState => serve::<command::GetSleepState, _>(self, msg).await,
+            Cmd::GetLedIndicator => serve::<command::GetLedIndicator, _>(self, msg).await,
 
-            Cmd::GetLayout => Serve::<command::GetLayout, _>::serve(self, msg).await,
+            Cmd::GetLayout => serve::<command::GetLayout, _>(self, msg).await,
 
             _ => Err(RynkError::UnknownCmd),
         }
@@ -169,15 +144,13 @@ impl<'a> RynkService<'a> {
     ///
     /// Owns frame reassembly/dispatch; transport setup and reconnect stay outside.
     pub async fn run_session<R: Read, T: Write>(&self, rx: &mut R, tx: &mut T) {
-        let mut session = RynkSession {
-            locker: HostLock::new(
-                self.lock_config.unlock_keys,
-                self.ctx.keymap,
-                self.lock_config.insecure,
-                RYNK_UNLOCK_WINDOW,
-            ),
-            topics: topics::TopicSubscribers::new(),
-        };
+        let locker = HostLock::new(
+            self.lock_config.unlock_keys,
+            self.ctx.keymap,
+            self.lock_config.insecure,
+            RYNK_UNLOCK_WINDOW,
+        );
+        let mut topics = TopicSubscribers::new();
         let mut buf = [0u8; RYNK_BUFFER_SIZE];
         let mut df = Deframer::new();
         // Mute topics until the client completes the version handshake.
@@ -197,7 +170,7 @@ impl<'a> RynkService<'a> {
                     // Hosts never send topic-range cmds; drop without a reply.
                     warn!("Rynk: dropping topic-range request {:?}", cmd);
                 } else {
-                    let served = self.dispatch(&session, &mut msg).await;
+                    let served = self.dispatch(&locker, &mut msg).await;
                     // The version handshake completes on GetCapabilities.
                     handshaked |= cmd == Cmd::GetCapabilities;
                     let written = match served {
@@ -233,7 +206,7 @@ impl<'a> RynkService<'a> {
                     Ok(n) => df.commit(n),
                 }
             } else {
-                match select(rx.read(df.tail(&mut buf)), session.topics.next_event()).await {
+                match select(rx.read(df.tail(&mut buf)), topics.next_event()).await {
                     Either::First(Ok(0)) | Either::First(Err(_)) => return,
                     Either::First(Ok(n)) => df.commit(n),
                     Either::Second(event) => {
