@@ -661,6 +661,7 @@ pub(crate) struct LightingLayerSceneTomlConfig {
 pub(crate) struct LightingConditionalSceneTomlConfig {
     pub layer: Option<LightingLayerConditionTomlConfig>,
     pub battery: Option<LightingBatteryConditionTomlConfig>,
+    pub output_mode: Option<LightingOutputModeToml>,
     #[serde(default, rename = "cell")]
     pub cells: Vec<LightingSceneCellTomlConfig>,
 }
