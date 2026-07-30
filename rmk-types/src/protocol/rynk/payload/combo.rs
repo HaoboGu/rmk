@@ -4,6 +4,14 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 use crate::combo::Combo;
+#[cfg(not(feature = "host"))]
+use crate::protocol::rynk::payload::bulk_capacity::MAX_BULK_ITEMS;
+
+// Firmware uses a bounded Vec; host bounds transfers from capabilities.
+#[cfg(not(feature = "host"))]
+type BulkCombos = heapless::Vec<Combo, MAX_BULK_ITEMS>;
+#[cfg(feature = "host")]
+type BulkCombos = alloc::vec::Vec<Combo>;
 
 /// Request payload for `SetCombo`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
@@ -14,63 +22,46 @@ pub struct SetComboRequest {
     pub config: Combo,
 }
 
-mod bulk {
-    use postcard::experimental::max_size::MaxSize;
-    use serde::{Deserialize, Serialize};
-
-    use crate::combo::Combo;
-    #[cfg(not(feature = "host"))]
-    use crate::protocol::rynk::payload::bulk_capacity::MAX_BULK_ITEMS;
-
-    // Firmware uses a bounded Vec; host bounds transfers from capabilities.
-    #[cfg(not(feature = "host"))]
-    type BulkCombos = heapless::Vec<Combo, MAX_BULK_ITEMS>;
-    #[cfg(feature = "host")]
-    type BulkCombos = alloc::vec::Vec<Combo>;
-
-    /// Request payload for `GetComboBulk`: read a page of combos starting at slot
-    /// `start_index`. The firmware returns as many as fit, or an empty page once
-    /// `start_index` reaches the slot count.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
-    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
-    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-    pub struct GetComboBulkRequest {
-        pub start_index: u8,
-    }
-
-    /// Bulk request payload for `SetComboBulk`: write `configs` starting at slot
-    /// `start_index`.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
-    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-    pub struct SetComboBulkRequest {
-        pub start_index: u8,
-        #[cfg_attr(feature = "wasm", tsify(type = "Combo[]"))]
-        pub configs: BulkCombos,
-    }
-
-    // Set pages pack by real encoded size, so the wire bound is the whole payload budget.
-    #[cfg(not(feature = "host"))]
-    impl MaxSize for SetComboBulkRequest {
-        const POSTCARD_MAX_SIZE: usize = crate::protocol::rynk::RYNK_MAX_PAYLOAD_SIZE;
-    }
-
-    /// Bulk response for getting multiple combos at once.
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-    #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
-    #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-    pub struct GetComboBulkResponse {
-        #[cfg_attr(feature = "wasm", tsify(type = "Combo[]"))]
-        pub configs: BulkCombos,
-    }
-
-    #[cfg(not(feature = "host"))]
-    impl MaxSize for GetComboBulkResponse {
-        const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<Combo, MAX_BULK_ITEMS>();
-    }
+/// Request payload for `GetComboBulk`: read a page of combos starting at slot
+/// `start_index`. The firmware returns as many as fit, or an empty page once
+/// `start_index` reaches the slot count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct GetComboBulkRequest {
+    pub start_index: u8,
 }
 
-pub use bulk::*;
+/// Bulk request payload for `SetComboBulk`: write `configs` starting at slot
+/// `start_index`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct SetComboBulkRequest {
+    pub start_index: u8,
+    #[cfg_attr(feature = "wasm", tsify(type = "Combo[]"))]
+    pub configs: BulkCombos,
+}
+
+// Set pages pack by real encoded size, so the wire bound is the whole payload budget.
+#[cfg(not(feature = "host"))]
+impl MaxSize for SetComboBulkRequest {
+    const POSTCARD_MAX_SIZE: usize = crate::protocol::rynk::RYNK_MAX_PAYLOAD_SIZE;
+}
+
+/// Bulk response for getting multiple combos at once.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
+pub struct GetComboBulkResponse {
+    #[cfg_attr(feature = "wasm", tsify(type = "Combo[]"))]
+    pub configs: BulkCombos,
+}
+
+#[cfg(not(feature = "host"))]
+impl MaxSize for GetComboBulkResponse {
+    const POSTCARD_MAX_SIZE: usize = crate::heapless_vec_max_size::<Combo, MAX_BULK_ITEMS>();
+}
 
 #[cfg(test)]
 mod tests {

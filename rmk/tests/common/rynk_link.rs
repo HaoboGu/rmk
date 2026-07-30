@@ -163,7 +163,17 @@ pub struct RynkClient<'p> {
     rxbuf: [u8; RYNK_BUFFER_SIZE],
 }
 
-impl RynkClient<'_> {
+impl<'p> RynkClient<'p> {
+    fn new(rx: &'p Link, tx: &'p Link) -> Self {
+        Self {
+            rx,
+            tx,
+            buf: [0u8; RYNK_BUFFER_SIZE],
+            df: Deframer::new(),
+            rxbuf: [0u8; RYNK_BUFFER_SIZE],
+        }
+    }
+
     /// Send hand-built bytes verbatim — for garbage / adversarial framing.
     pub async fn send_raw(&mut self, bytes: &[u8]) {
         self.tx.write_all(bytes).await;
@@ -217,13 +227,7 @@ pub fn link_session<T>(service: &RynkService<'_>, script: impl AsyncFnOnce(&mut 
     let d2h = Link::new();
     let mut dev_rx: &Link = &h2d;
     let mut dev_tx: &Link = &d2h;
-    let mut client = RynkClient {
-        rx: &d2h,
-        tx: &h2d,
-        buf: [0u8; RYNK_BUFFER_SIZE],
-        df: Deframer::new(),
-        rxbuf: [0u8; RYNK_BUFFER_SIZE],
-    };
+    let mut client = RynkClient::new(&d2h, &h2d);
     test_block_on(async {
         // Drain test flash writes so storage handlers cannot block the session.
         let device = select(
@@ -250,20 +254,8 @@ pub fn link_two_sessions<T>(
     let mut dev_tx_a: &Link = &d2h_a;
     let mut dev_rx_b: &Link = &h2d_b;
     let mut dev_tx_b: &Link = &d2h_b;
-    let mut client_a = RynkClient {
-        rx: &d2h_a,
-        tx: &h2d_a,
-        buf: [0u8; RYNK_BUFFER_SIZE],
-        df: Deframer::new(),
-        rxbuf: [0u8; RYNK_BUFFER_SIZE],
-    };
-    let mut client_b = RynkClient {
-        rx: &d2h_b,
-        tx: &h2d_b,
-        buf: [0u8; RYNK_BUFFER_SIZE],
-        df: Deframer::new(),
-        rxbuf: [0u8; RYNK_BUFFER_SIZE],
-    };
+    let mut client_a = RynkClient::new(&d2h_a, &h2d_a);
+    let mut client_b = RynkClient::new(&d2h_b, &h2d_b);
     test_block_on(async {
         // Both sessions run concurrently and never EOF; the pair is dropped once
         // the script returns. Either resolving first is a framing/guard bug.

@@ -34,7 +34,7 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::{Channel, TrySendError};
 use embassy_sync::signal::Signal;
 use embedded_io_async::{Error as _, ErrorKind, Read, Write};
-use rmk_types::protocol::rynk::endpoint::Endpoint;
+use rmk_types::protocol::rynk::command::Endpoint;
 use rmk_types::protocol::rynk::{
     Cmd, Deframer, DeviceCapabilities, RYNK_HEADER_SIZE, RynkError, RynkHeader, TopicEvent, encode_frame, max_wire_size,
 };

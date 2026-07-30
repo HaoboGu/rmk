@@ -23,8 +23,5 @@ pub(crate) mod via;
 /// two are mutually exclusive).
 #[cfg(feature = "rynk")]
 pub use rynk::RynkService as HostService;
-/// UART-backed rynk transport helper.
-#[cfg(feature = "rynk")]
-pub use rynk::run_rynk_uart;
 #[cfg(feature = "vial")]
 pub use via::VialService as HostService;

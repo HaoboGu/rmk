@@ -2,7 +2,7 @@
 //!
 //! [`Deframer`] cuts COBS frames back out of a received byte stream, decoding
 //! in place and resyncing at the next `0x00` delimiter on any garbage. The
-//! encode side lives in [`message`](super::message).
+//! encode side lives in `message`.
 
 use super::message::RYNK_HEADER_SIZE;
 
@@ -47,12 +47,6 @@ impl Deframer {
     /// Mark `n` freshly read bytes as valid.
     pub fn commit(&mut self, n: usize) {
         self.filled += n;
-    }
-
-    /// Valid bytes currently buffered — for callers that grow the backing
-    /// buffer before [`tail`](Self::tail).
-    pub fn filled(&self) -> usize {
-        self.filled
     }
 
     /// Whether a partial frame is buffered. A caller reusing the buffer (e.g. to

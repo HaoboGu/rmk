@@ -172,19 +172,6 @@ impl<'a> RynkMessage<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a mut [u8]> for RynkMessage<'a> {
-    type Error = RynkError;
-
-    /// Wrap already-decoded logical frame bytes (the host channel path).
-    fn try_from(buf: &'a mut [u8]) -> Result<Self, RynkError> {
-        if buf.len() < RYNK_HEADER_SIZE {
-            return Err(RynkError::Malformed);
-        }
-        let len = buf.len();
-        Ok(Self::from_decoded(buf, len))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,27 +240,13 @@ mod tests {
     }
 
     #[test]
-    fn try_from_rejects_short_buffer() {
-        let mut buf = [0u8; RYNK_HEADER_SIZE - 1];
-        assert_eq!(RynkMessage::try_from(&mut buf[..]).err(), Some(RynkError::Malformed));
-    }
-
-    #[test]
-    fn try_from_accepts_unknown_discriminant() {
-        let mut buf = [0u8; RYNK_HEADER_SIZE];
-        buf[0..2].copy_from_slice(&0xFFFFu16.to_le_bytes());
-        let msg = RynkMessage::try_from(&mut buf[..]).unwrap();
-        assert_eq!(msg.header().cmd, Cmd::from_raw(0xFFFF));
-    }
-
-    #[test]
     fn decoded_payload_spans_header_to_len() {
         let mut buf = [0u8; 8];
         buf[0..2].copy_from_slice(&Cmd::SetDefaultLayer.to_le_bytes());
         buf[2] = 0x34;
         buf[3..].copy_from_slice(&[0xAA, 0xBB, 0xCC, 0xDD, 0xEE]);
 
-        let msg = RynkMessage::try_from(&mut buf[..]).unwrap();
+        let msg = RynkMessage::from_decoded(&mut buf, 8);
         assert_eq!(msg.header().cmd, Cmd::SetDefaultLayer);
         assert_eq!(msg.header().seq, 0x34);
         assert_eq!(msg.payload(), &[0xAA, 0xBB, 0xCC, 0xDD, 0xEE]);
