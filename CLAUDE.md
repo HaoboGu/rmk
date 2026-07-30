@@ -21,6 +21,11 @@ The `scripts` directory contains useful scripts for checking/formatting code
 
 ### Testing
 
+Keyboard behavior is tested by the TOML scenarios in `rmk/tests/scenarios/`, which
+`run_tests!` expands into ordinary tests. Read `rmk/tests/scenarios/README.md`
+before adding a test: it documents the step and assertion vocabulary, and how to
+write a case that fails for the right reason.
+
 Dev loop — one feature set, from `rmk/` (requires `cargo nextest`):
 ```bash
 cargo nextest run --no-default-features --features=split,vial,storage,async_matrix,_ble
@@ -30,12 +35,12 @@ Run macro tests from `rmk-macro/` (requires `cargo expand`).
 
 Run format test from root:
 ```bash
-sh scripts/format_all.sh
+bash scripts/format_all.sh
 ```
 
-Full feature matrix (what CI runs, ~40 s when clean):
+Behavioral test suite (the three RMK feature rows CI runs):
 ```bash
-sh scripts/test_all.sh
+bash scripts/test_all.sh
 ```
 
 ### Building examples

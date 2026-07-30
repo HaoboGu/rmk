@@ -36,3 +36,37 @@ pub(super) fn take_bulk<'a, T: DeserializeOwned + 'a>(
     }
     Ok((start..start + count).zip(core::iter::from_fn(move || take_element::<T>(&mut elements).ok())))
 }
+
+#[cfg(test)]
+mod tests {
+    extern crate alloc;
+
+    use alloc::vec::Vec;
+
+    use rmk_types::action::KeyAction;
+    use rmk_types::protocol::rynk::MAX_BULK_KEYS;
+
+    use super::*;
+
+    #[test]
+    fn bulk_write_decodes_every_element_before_mutation() {
+        let count = MAX_BULK_KEYS + 1;
+        let mut bytes = [0; 512];
+        let mut len = postcard::to_slice(&(count as u16), &mut bytes).unwrap().len();
+        for _ in 0..count {
+            len += postcard::to_slice(&KeyAction::No, &mut bytes[len..]).unwrap().len();
+        }
+        let mut input = &bytes[..len];
+        let items: Vec<_> = take_bulk::<KeyAction>(&mut input, 0, count).unwrap().collect();
+        assert_eq!(items.len(), count);
+
+        let mut len = postcard::to_slice(&2u16, &mut bytes).unwrap().len();
+        len += postcard::to_slice(&KeyAction::No, &mut bytes[len..]).unwrap().len();
+        bytes[len] = 0x7f;
+        let mut input = &bytes[..=len];
+        assert!(matches!(
+            take_bulk::<KeyAction>(&mut input, 0, 2),
+            Err(RynkError::Malformed)
+        ));
+    }
+}

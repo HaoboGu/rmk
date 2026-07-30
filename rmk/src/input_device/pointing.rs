@@ -758,15 +758,6 @@ mod tests {
     use crate::input_device::InputDevice;
     use crate::test_support::test_block_on as block_on;
 
-    // Init logger for tests
-    #[ctor::ctor(unsafe)]
-    fn init_log() {
-        let _ = env_logger::builder()
-            .filter_level(log::LevelFilter::Debug)
-            .is_test(true)
-            .try_init();
-    }
-
     struct DummyDriver {
         pub motion_pending: bool,
         pub motion: MotionData,

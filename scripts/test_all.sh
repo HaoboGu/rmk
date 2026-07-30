@@ -15,7 +15,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../.github/ci/_lib.sh"
 # repo root. Pass it explicitly.
 nx=(nextest run --config-file "$repo_root/.config/nextest.toml")
 
-sh "$repo_root/scripts/check_simulator_tests.sh"
+bash "$repo_root/scripts/check_simulator_tests.sh"
 
 # rmk-types: default-features run + host-feature run (the latter enables
 # rynk/_ble/split/steno, which is required to compile the wire-format
@@ -24,7 +24,7 @@ cargo "${nx[@]}" --manifest-path rmk-types/Cargo.toml
 cargo "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features host
 cargo "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features steno
 
-for feats in "${RMK_FEATURESETS[@]}"; do
+for feats in "${RMK_TEST_FEATURESETS[@]}"; do
     if [[ -z "$feats" ]]; then
         cargo "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features
     else

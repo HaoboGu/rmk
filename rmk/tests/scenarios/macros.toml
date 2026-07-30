@@ -1,7 +1,7 @@
-# Keyboard macros, ported from keyboard_macro_test.rs.
+# Keyboard macros.
 #
 # On the shared split board MACRO(0) sits at (0,6) and MACRO(1) at (0,7); each
-# test brings its own macro set via [test.behavior.macro] and drives macro 0.
+# test brings its own macro set via `behavior.macro` and drives macro 0.
 #
 # The file stem is `macros`, not `macro`, because the generated module name
 # cannot be a Rust keyword.
@@ -9,120 +9,79 @@
 keyboard = "boards/split.toml"
 
 [[test]]
-name = "macro_key_a_press_release"
-steps = [
-  { delay = 0 },
-  { press = [0, 6] },     # Press macro 0
-  { delay = 100 },
-  { release = [0, 6] },
-  { expect = ["A"] },     # Press A
-  { expect = "empty" },   # Release A
-]
-[test.behavior.macro]
-macros = [
-  { operations = [
-    { operation = "down", keycode = "A" },
-    { operation = "up", keycode = "A" },
-  ] },
-]
-
-[[test]]
 name = "macro_text"
+behavior.macro = { macros = [{ operations = [{ operation = "text", text = "AbCd123456" }] }] }
 steps = [
-  { delay = 0 },
-  { press = [0, 6] },     # Press macro 0
-  { delay = 100 },
-  { release = [0, 6] },
-  { expect = { mods = ["LShift"] } },               # Press shift
-  { expect = { mods = ["LShift"], keys = ["A"] } }, # Press A + shift
-  { expect = { mods = ["LShift"] } },               # Release A
-  { expect = "empty" },                             # Release shift
-  { expect = ["B"] },
-  { expect = "empty" },
-  { expect = { mods = ["LShift"] } },
-  { expect = { mods = ["LShift"], keys = ["C"] } },
-  { expect = { mods = ["LShift"] } },
-  { expect = "empty" },
-  { expect = ["D"] },
-  { expect = "empty" },
-  { expect = ["Kc1"] },
-  { expect = "empty" },
-  { expect = ["Kc2"] },
-  { expect = "empty" },
-  { expect = ["Kc3"] },
-  { expect = "empty" },
-  { expect = ["Kc4"] },
-  { expect = "empty" },
-  { expect = ["Kc5"] },
-  { expect = "empty" },
-  { expect = ["Kc6"] },
-  { expect = "empty" },
+  { tap = { pos = [0, 6], duration = 100 } },
+]
+expect = [
+  ["LShift"],       # Press shift
+  ["LShift", "A"],  # Press A + shift
+  ["LShift"],       # Release A
+  [],               # Release shift
+  ["B"],
+  [],
+  ["LShift"],
+  ["LShift", "C"],
+  ["LShift"],
+  [],
+  ["D"],
+  [],
+  ["Kc1"],
+  [],
+  ["Kc2"],
+  [],
+  ["Kc3"],
+  [],
+  ["Kc4"],
+  [],
+  ["Kc5"],
+  [],
+  ["Kc6"],
+  [],
   # The extended-macro text decode emits a final all-up report (#989).
-  { expect = "empty" },
-]
-[test.behavior.macro]
-macros = [
-  { operations = [{ operation = "text", text = "AbCd123456" }] },
-]
-
-[[test]]
-name = "macro_tap_key_a"
-steps = [
-  { delay = 0 },
-  { press = [0, 6] },     # Press macro 0
-  { delay = 100 },
-  { release = [0, 6] },
-  { expect = ["A"] },     # Press A
-  { expect = "empty" },   # Release A
-]
-[test.behavior.macro]
-macros = [
-  { operations = [{ operation = "tap", keycode = "A" }] },
+  [],
 ]
 
 [[test]]
 name = "macro_multiple_operations"
-steps = [
-  { delay = 0 },
-  { press = [0, 6] },     # Press macro 0
-  { delay = 100 },
-  { release = [0, 6] },
-  { expect = { mods = ["LShift"] } },               # Press shift
-  { expect = { mods = ["LShift"], keys = ["A"] } }, # Press shift + A
-  { expect = { mods = ["LShift"] } },               # Release A
-  { expect = "empty" },                             # Release shift
-  { expect = ["B"] },
-  { expect = "empty" },
-]
-[test.behavior.macro]
-macros = [
+behavior.macro = { macros = [
   { operations = [
     { operation = "down", keycode = "LShift" },
     { operation = "tap", keycode = "A" },
     { operation = "up", keycode = "LShift" },
     { operation = "tap", keycode = "B" },
   ] },
+] }
+steps = [
+  { tap = { pos = [0, 6], duration = 100 } },
+]
+expect = [
+  ["LShift"],       # Press shift
+  ["LShift", "A"],  # Press shift + A
+  ["LShift"],       # Release A
+  [],               # Release shift
+  ["B"],
+  [],
 ]
 
 [[test]]
 name = "macro_with_delay"
-steps = [
-  { delay = 0 },
-  { press = [0, 6] },     # Press macro 0
-  { delay = 100 },
-  { release = [0, 6] },
-  { expect = ["A"] },     # Press A
-  { expect = "empty" },   # Release A
-  { expect = ["B"] },     # Press B, 50ms later
-  { expect = "empty" },   # Release B
-]
-[test.behavior.macro]
-macros = [
+behavior.macro = { macros = [
   { operations = [
     { operation = "tap", keycode = "A" },
     { operation = "delay", duration = "50ms" },
     { operation = "tap", keycode = "B" },
   ] },
+] }
+steps = [
+  { tap = { pos = [0, 6], duration = 100 } },
+]
+expect = [
+  ["A"],  # Press A
+  [],     # Release A
+  ["B"],  # Press B, 50ms later
+  [],     # Release B
 ]
 
 # An operation whose key is a richer action than a plain keycode is serialized as
@@ -130,59 +89,51 @@ macros = [
 # modifier applies exactly as it would from a physical key.
 [[test]]
 name = "macro_taps_a_key_with_modifier"
+behavior.macro = { macros = [{ operations = [{ operation = "tap", keycode = "WM(A, LCtrl)" }] }] }
 features = ["vial"]
 steps = [
-  { delay = 0 },
-  { press = [0, 6] },     # Press macro 0
-  { delay = 100 },
-  { release = [0, 6] },
-  { expect = { mods = ["LCtrl"], keys = ["A"] } },
-  { expect = "empty" },
+  { tap = { pos = [0, 6], duration = 100 } },
 ]
-[test.behavior.macro]
-macros = [
-  { operations = [{ operation = "tap", keycode = "WM(A, LCtrl)" }] },
-]
+expect = [["LCtrl", "A"], []]
 
 # A macro cannot trigger another macro: that would re-enter the trigger queue and
 # could loop forever. Macro 0 tries to trigger macro 1, then taps A — the nested
 # trigger is dropped, so only A is emitted and the rest of macro 0 still runs.
 [[test]]
 name = "macro_cannot_trigger_macro"
-features = ["vial"]
-steps = [
-  { delay = 0 },
-  { press = [0, 6] },     # Press macro 0
-  { delay = 100 },
-  { release = [0, 6] },
-  { expect = ["A"] },     # A only; macro 1 never ran
-  { expect = "empty" },
-]
-[test.behavior.macro]
-macros = [
+behavior.macro = { macros = [
   { operations = [
     { operation = "tap", keycode = "MACRO(1)" },
     { operation = "tap", keycode = "A" },
   ] },
   { operations = [{ operation = "tap", keycode = "B" }] },
+] }
+features = ["vial"]
+steps = [
+  { tap = { pos = [0, 6], duration = 100 } },
+]
+expect = [
+  ["A"],  # A only; macro 1 never ran
+  [],
 ]
 
-# Macros fire on key press (matching QMK/ZMK), not release: both macro reports
-# arrive while the macro key is still held.
+# Macros fire on key press (matching QMK/ZMK), not release: the macro reports
+# arrive while the macro key is still held, so they precede the W tapped under
+# it. Firing on release would put W first.
 [[test]]
 name = "macro_triggers_on_press"
+behavior.macro = { macros = [
+  { operations = [{ operation = "down", keycode = "A" }, { operation = "up", keycode = "A" }] },
+] }
 steps = [
-  { delay = 0 },
-  { press = [0, 6] },     # Press macro 0 and keep holding
-  { expect = ["A"] },     # A down — emitted on press
-  { expect = "empty" },   # A up
+  { press = [0, 6] },  # Press macro 0 and keep holding
+  { tap = { pos = [1, 3], duration = 10 } },
   { delay = 100 },
-  { release = [0, 6] },   # Release only to satisfy the end-of-run checks
+  { release = [0, 6] },
 ]
-[test.behavior.macro]
-macros = [
-  { operations = [
-    { operation = "down", keycode = "A" },
-    { operation = "up", keycode = "A" },
-  ] },
+expect = [
+  ["A"],  # A down — emitted on press
+  [],     # A up
+  ["W"],
+  [],
 ]

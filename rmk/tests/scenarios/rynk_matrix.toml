@@ -1,0 +1,38 @@
+# Matrix-state bit order on a full-width board. The bitmap is row-major with one
+# bit per column, and a host slices it using `num_rows`/`num_cols` from
+# `GetCapabilities` — so the packing has to be exact, not merely non-empty.
+features = ["rynk"]
+
+[layout]
+rows = 2
+cols = 14
+map = """
+(0,0)  (0,1)  (0,2)  (0,3)  (0,4)  (0,5)  (0,6)  (0,7)  (0,8)  (0,9)  (0,10)  (0,11)  (0,12)  (0,13)
+(1,0)  (1,1)  (1,2)  (1,3)  (1,4)  (1,5)  (1,6)  (1,7)  (1,8)  (1,9)  (1,10)  (1,11)  (1,12)  (1,13)
+"""
+
+# All `No`, so holding a key adds no HID traffic to reason about.
+[[keymap.layer]]
+keys = """
+No  No  No  No  No  No  No  No  No  No  No  No  No  No
+No  No  No  No  No  No  No  No  No  No  No  No  No  No
+"""
+
+# `GetMatrixState` is gated unconditionally; this board opts out of the gate
+# rather than carrying a challenge, since the bit packing is what is under test.
+[host]
+insecure = true
+
+[[test]]
+name = "matrix_state_packs_columns_in_rynk_order"
+steps = [
+  { press = [0, 0] },
+  { press = [0, 9] },
+  { press = [1, 6] },
+  { press = [1, 13] },
+  { rynk = { cmd = "GetMatrixState", reply = { pressed_bitmap = [1, 2, 64, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } } },
+  { release = [0, 0] },
+  { release = [0, 9] },
+  { release = [1, 6] },
+  { release = [1, 13] },
+]

@@ -55,8 +55,16 @@ macro_rules! bitfield_named_serde {
         impl<'de> serde::Deserialize<'de> for $bitfield {
             fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> ::core::result::Result<Self, D::Error> {
                 if deserializer.is_human_readable() {
+                    // A flag left out is a flag that is off: the only reading a
+                    // bitfield has for an absent bool. Lets a caller name the
+                    // flags it sets instead of all of them.
                     #[derive(serde::Deserialize)]
+                    #[serde(default)]
                     struct Repr { $($field: bool,)+ }
+
+                    impl ::core::default::Default for Repr {
+                        fn default() -> Self { Self { $($field: false,)+ } }
+                    }
                     let r = <Repr as serde::Deserialize>::deserialize(deserializer)?;
                     ::core::result::Result::Ok(Self::new() $(.$setter(r.$field))+)
                 } else {

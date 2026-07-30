@@ -1,0 +1,139 @@
+# Combos whose members are themselves HRM keys.
+#
+# Every case is the same question: did the chord land inside the 50 ms combo
+# window? Inside, the combo output replaces the members; outside, each member
+# falls back to ordinary HRM resolution.
+#
+# The fixture is the shared split board's home row under the HRM behavior:
+# A@(1,0) and MT(B, LShift)@(1,1) on the left, MT(C, LGui)@(1,7) and
+# LT(1, D)@(1,8) on the right.
+
+keyboard = "boards/split.toml"
+
+[behavior.morse]
+enable_flow_tap = true
+prior_idle_time = "120ms"
+unilateral_tap = true
+permissive_hold = true
+
+[behavior.combo]
+timeout = "50ms"
+combos = [
+  { actions = ["MT(B, LShift)", "MT(C, LGui)"], output = "X" },
+  { actions = ["A", "MT(B, LShift)"], output = "Y" },
+  { actions = ["MT(B, LShift)", "MT(C, LGui)", "LT(1, D)"], output = "Z" },
+]
+
+[[test]]
+name = "two_key_in_window"
+steps = [
+  { delay = 200 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 20 },
+  { tap = { pos = [1, 7], duration = 10 } },
+  { delay = 300 },
+  { release = [1, 1] },  # Release B
+]
+expect = [["X"], []]
+
+[[test]]
+name = "two_key_in_window_both_held"
+steps = [
+  { delay = 200 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 20 },
+  { press = [1, 7] },    # Press MT(C, LGui) — combo fires
+  { delay = 20 },
+  { release = [1, 1] },  # Release B
+  { release = [1, 7] },  # Release C
+]
+expect = [["X"], []]
+
+[[test]]
+name = "two_key_misses_window"
+steps = [
+  { delay = 200 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 60 },
+  { tap = { pos = [1, 7], duration = 10 } },
+  { delay = 300 },
+  { release = [1, 1] },  # Release B
+]
+expect = [["LShift"], ["LShift", "C"], ["LShift"], []]
+
+[[test]]
+name = "two_key_misses_window_both_held"
+steps = [
+  { delay = 200 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 60 },
+  { press = [1, 7] },    # Press MT(C, LGui) — combo window expired
+  { delay = 20 },
+  { release = [1, 1] },  # Release B
+  { release = [1, 7] },  # Release C
+]
+expect = [["B"], [], ["C"], []]
+
+[[test]]
+name = "three_key_in_window"
+steps = [
+  { delay = 200 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 20 },
+  { press = [1, 8] },    # Press LT(1, D)
+  { delay = 20 },
+  { press = [1, 7] },    # Press MT(C, LGui) — 3-key combo fires
+  { delay = 20 },
+  { release = [1, 1] },  # Release B
+  { release = [1, 7] },  # Release C
+  { release = [1, 8] },  # Release D
+]
+expect = [["Z"], []]
+
+[[test]]
+name = "three_key_misses_window"
+steps = [
+  { delay = 200 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 20 },
+  { press = [1, 8] },    # Press LT(1, D)
+  { delay = 60 },
+  { press = [1, 7] },    # Press MT(C, LGui)
+  { delay = 20 },
+  { release = [1, 1] },  # Release B
+  { release = [1, 8] },  # Release D
+  { release = [1, 7] },  # Release C
+]
+expect = [["B"], [], ["D"], [], ["C"], []]
+
+[[test]]
+name = "three_key_misses_window_rolled_release"
+steps = [
+  { delay = 200 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 20 },
+  { press = [1, 8] },    # Press LT(1, D)
+  { delay = 60 },
+  { press = [1, 7] },    # Press MT(C, LGui)
+  { delay = 20 },
+  { release = [1, 1] },  # Release B
+  { release = [1, 7] },  # Release C -> unilateral tap of LT(1, D) fires before B resolves
+  { release = [1, 8] },  # Release D
+]
+expect = [["B"], [], ["D"], ["D", "C"], ["D"], []]
+
+[[test]]
+name = "three_key_misses_window_after_first_key_held"
+steps = [
+  { delay = 200 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 200 },
+  { press = [1, 8] },    # Press LT(1, D)
+  { delay = 60 },
+  { press = [1, 7] },    # Press MT(C, LGui)
+  { delay = 20 },
+  { release = [1, 1] },  # Release B
+  { release = [1, 7] },  # Release C -> unilateral tap of LT(1, D) fires before B resolves
+  { release = [1, 8] },  # Release D
+]
+expect = [["LShift"], [], ["D"], ["D", "C"], ["D"], []]

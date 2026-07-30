@@ -1,0 +1,95 @@
+# Keymap endpoints: every write is proved by the key it changes, and every read
+# by the value a write just put there.
+features = ["rynk"]
+
+[layout]
+rows = 1
+cols = 2
+map = """
+(0,0)  (0,1)
+"""
+
+[[keymap.layer]]
+keys = "A  B"
+encoders = [["Up", "Down"]]
+
+[[keymap.layer]]
+keys = "C  D"
+encoders = [["Left", "Right"]]
+
+[[input_device.encoder]]
+pin_a = "a0"
+pin_b = "b0"
+
+[[test]]
+name = "key_write_changes_the_key"
+steps = [
+  { rynk = { cmd = "SetKeyAction", payload = { position = { layer = 0, row = 0, col = 0 }, action = { Single = { Key = { Hid = "B" } } } } } },
+  { tap = { pos = [0, 0], duration = 10 } },
+]
+expect = [["B"], []]
+
+[[test]]
+name = "key_read_returns_what_was_written"
+steps = [
+  { rynk = { cmd = "GetKeyAction", payload = { layer = 0, row = 0, col = 0 }, reply = { Single = { Key = { Hid = "A" } } } } },
+  { rynk = { cmd = "SetKeyAction", payload = { position = { layer = 0, row = 0, col = 0 }, action = { Single = { Key = { Hid = "Z" } } } } } },
+  { rynk = { cmd = "GetKeyAction", payload = { layer = 0, row = 0, col = 0 }, reply = { Single = { Key = { Hid = "Z" } } } } },
+]
+
+[[test]]
+name = "default_layer_write_changes_the_layer"
+steps = [
+  { rynk = { cmd = "GetDefaultLayer", reply = 0 } },
+  { rynk = { cmd = "SetDefaultLayer", payload = 1 } },
+  { rynk = { cmd = "GetDefaultLayer", reply = 1 } },
+  { tap = { pos = [0, 0], duration = 10 } },
+]
+expect = [["C"], []]
+
+# A layer beyond the keymap must not take effect; the keyboard keeps reporting
+# from the layer it was on.
+[[test]]
+name = "out_of_range_default_layer_is_ignored"
+steps = [
+  { rynk = { cmd = "SetKeyAction", payload = { position = { layer = 0, row = 0, col = 0 }, action = { Single = { PersistentDefaultLayer = 5 } } } } },
+  { tap = { pos = [0, 1], duration = 10 } },
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 1], duration = 10 } },
+]
+expect = [["B"], [], ["B"], []]
+
+[[test]]
+name = "encoder_write_changes_the_knob"
+steps = [
+  { rynk = { cmd = "GetEncoderAction", payload = { encoder_id = 0, layer = 0 }, reply = { clockwise = { Single = { Key = { Hid = "Up" } } }, counter_clockwise = { Single = { Key = { Hid = "Down" } } } } } },
+  { rynk = { cmd = "SetEncoderAction", payload = { encoder_id = 0, layer = 0, action = { clockwise = { Single = { Key = { Hid = "C" } } }, counter_clockwise = { Single = { Key = { Hid = "D" } } } } } } },
+  { rotary_cw = 0 },
+  { rotary_ccw = 0 },
+]
+expect = [["C"], [], ["D"], []]
+
+# The keymap is flat, row-major then layer-major, so one page spans both layers
+# of this 1x2 board.
+[[test]]
+name = "bulk_read_walks_the_flat_keymap"
+steps = [
+  { rynk = { cmd = "GetKeymapBulk", payload = { layer = 0, start_row = 0, start_col = 0 }, reply = { actions = [
+    { Single = { Key = { Hid = "A" } } },
+    { Single = { Key = { Hid = "B" } } },
+    { Single = { Key = { Hid = "C" } } },
+    { Single = { Key = { Hid = "D" } } },
+  ] } } },
+]
+
+[[test]]
+name = "bulk_write_changes_the_keys"
+steps = [
+  { rynk = { cmd = "SetKeymapBulk", payload = { layer = 0, start_row = 0, start_col = 1, actions = [
+    { Single = { Key = { Hid = "Y" } } },
+    { Single = { Key = { Hid = "Z" } } },
+  ] } } },
+  { tap = { pos = [0, 1], duration = 10 } },
+  { rynk = { cmd = "GetKeyAction", payload = { layer = 1, row = 0, col = 0 }, reply = { Single = { Key = { Hid = "Z" } } } } },
+]
+expect = [["Y"], []]

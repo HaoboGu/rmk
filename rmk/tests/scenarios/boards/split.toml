@@ -1,35 +1,5 @@
-# Shared simulator board: a Sofle-style 5x14 split with 4 layers.
-#
-# Left half is cols 0-6 (hand L), right half cols 7-13 (hand R); the four
-# thumb keys (3,3) (3,4) (3,9) (3,10) are Bilateral. Fixtures live at fixed
-# cells and scenario files select behavior around them:
-#
-#   row 0        one-shot fixture (cols 0-5), macros, mouse keys, PDF/LM zone
-#   row 1        home row: HRM/morse fixture split across the halves + QWERTY-ish letters
-#   row 2        tap-hold letters + combo letters
-#   row 3        thumbs + variant zone: layer-off triple (cols 0-2), bilateral A (3,3),
-#                profile-annotated tap-holds (p0/p1), extra tap-dance keys
-#   row 4        passkey fixture: digits 1-6 and Escape on the left half,
-#                Enter, digits 7-0 and Backspace on the right — every key BLE
-#                passkey entry reacts to, on one row
-#
-# Two encoders, declared like any board's in `[[input_device.encoder]]` (the
-# pins are ignored in simulation). They scrub and scroll on layer 0 and page
-# around on layer 1; layers 2-3 leave them unmapped.
-#
-# Layer 1 backs the fixtures (keypad digits, one-shot targets, layer-off
-# cells); layers 2-3 are a realistic Fn layer and a transparent spare.
-#
-# Like a real keyboard.toml, the board also carries its default behavior:
-# 250 ms morse timeouts and the pattern table behind TD(0). Scenario files set
-# mode flags in their own [behavior.morse] and replace `morses` wholesale when
-# they define their own tables. The p0/p1 morse profiles exist so the
-# profile-annotated cells parse in every scenario; tests that use them
-# override their settings per test.
-
-[behavior.morse]
-hold_timeout = "250ms"
-gap_timeout = "250ms"
+# Shared 5x14 split fixture. Columns 0-6 are left-handed, 7-13 are
+# right-handed, and the four inner thumb positions are bilateral.
 
 [behavior.morse.profiles.p0]
 [behavior.morse.profiles.p1]
@@ -84,21 +54,3 @@ _                    B    _    No  No  _   No  Kp1  No   No   No  No  No  No
 No                   No   No   No  No  No  No  No   No   No   No  No  No  No
 """
 encoders = [["PageDown", "PageUp"], ["End", "Home"]]
-
-[[keymap.layer]]
-keys = """
-F1  F2  F3  F4  F5  F6  F7  F8  F9  F10  F11  F12  No  No
-_   _   _   _   _   _   _   _   _   _    _    _    _   _
-_   _   _   _   _   _   _   _   _   _    _    _    _   _
-_   _   _   _   _   _   _   _   _   _    _    _    _   _
-_   _   _   _   _   _   _   _   _   _    _    _    _   _
-"""
-
-[[keymap.layer]]
-keys = """
-_  _  _  _  _  _  _  _  _  _  _  _  _  _
-_  _  _  _  _  _  _  _  _  _  _  _  _  _
-_  _  _  _  _  _  _  _  _  _  _  _  _  _
-_  _  _  _  _  _  _  _  _  _  _  _  _  _
-_  _  _  _  _  _  _  _  _  _  _  _  _  _
-"""

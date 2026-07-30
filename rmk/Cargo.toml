@@ -9,6 +9,11 @@ readme = "../README.md"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 resolver = "2"
+autotests = false
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
 
 [dependencies]
 rmk-macro = { version = "=0.7.1", path = "../rmk-macro" }
@@ -96,9 +101,12 @@ rmk = { path = ".", default-features = false, features = ["std", "log"] }
 # Same unification hack: turn on the `run_tests!` scenario macro for tests only
 rmk-macro = { path = "../rmk-macro", features = ["_simulator"] }
 critical-section = { version = "1.2", features = ["std"] }
-env_logger = "0.11"
-ctor = "1.0"
 embedded-hal-mock = { version = "0.11.1", features = ["embedded-hal-async"] }
+# Scenario files spell Rynk payloads as data; `run_tests!` forwards them as JSON
+# for the test to deserialize into the real request type. Alloc-only: enabling
+# `serde/std` here would break `ssmarshal`, which implements `serde::de::Error`
+# without a `StdError` impl.
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
 
 [build-dependencies]
 crc32fast = "1.3"

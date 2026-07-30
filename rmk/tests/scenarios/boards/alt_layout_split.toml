@@ -1,34 +1,4 @@
-# Alt-layout split board: a 36-key split (3x5 alphas + 3 thumbs per half)
-# whose home row is morse/tap-hold keys, used by the rollover regressions in
-# `morse_rollover.toml`. It replicates the real setup those bugs were reported
-# on — the "dusk" letter arrangement on a Saurus split — so the alphas are
-# deliberately not QWERTY.
-#
-# Left half is cols 0-4 (hand L), right half cols 5-9 (hand R) — the hands are
-# what the layout's `unilateral_tap` profiles decide rolls on.
-#
-#   row 0        top alphas: L@(0,2) and O@(0,7) U@(0,8) Y@(0,9)
-#   row 1        home row of morse keys: TD(0)@(1,0) TD(1)@(1,3) on the left,
-#                TD(2)@(1,7) TD(3)@(1,8) TD(4)@(1,9) on the right. Each
-#                scenario's morse table names them.
-#   row 2        bottom alphas: D@(2,3)
-#   row 3        thumbs
-#
-# (1,5) (1,6) (1,7) are three spellings of the same C key — the layer-tap
-# `LT(1, C)`, and the tap-dance cell of each scenario's morse table (one table
-# puts C at index 6, the other at index 2). One regression drives each
-# spelling through the identical physical rollover.
-#
-# Layer 1 is what the morse holds switch to. (0,2) keeps the F2 backing the
-# ported fixture had, so a roll that does resolve as hold still reads L's cell
-# the way the original test did.
-
-# Board-default morse timeouts plus every profile the scenario's morse tables
-# name, from plain modes to the HRM variants the rollover reports used.
-[behavior.morse]
-hold_timeout = "250ms"
-gap_timeout = "250ms"
-
+# 36-key split fixture for the alternate-layout rollover regressions.
 [behavior.morse.profiles.normal]
 normal_mode = true
 

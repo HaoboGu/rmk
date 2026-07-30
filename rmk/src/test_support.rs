@@ -1,11 +1,8 @@
 //! Test-only helpers, never compiled into firmware.
 //!
-//! Serves two consumers:
-//!
-//! - `#[cfg(test)]` modules under `src/`, via [`test_block_on`] — they can't
-//!   import the equivalent helper from `tests/`, a separate compilation target.
-//! - the simulator harness in `tests/common/simulator`, via the accessors below.
-//!   Wrappers rather than `pub use`, which can't widen `pub(crate)` visibility.
+//! Serves two consumers: `#[cfg(test)]` modules under `src/`, and the simulator
+//! harness in `tests/simulator`. The accessors below are wrappers rather than
+//! `pub use`, which can't widen `pub(crate)` visibility.
 
 use core::future::Future;
 use core::pin::pin;
@@ -50,8 +47,8 @@ const STEP: Duration = Duration::from_micros(100);
 const MAX_ITERS: usize = 600_000; // 60 s of virtual time
 
 /// Drop-in replacement for `embassy_futures::block_on` that advances
-/// `embassy-time`'s mock clock. Mirrors `tests/common/simulator/executor.rs`.
-pub(crate) fn test_block_on<F: Future>(fut: F) -> F::Output {
+/// `embassy-time`'s mock clock.
+pub fn test_block_on<F: Future>(fut: F) -> F::Output {
     require_nextest();
     MockDriver::get().reset();
 
@@ -85,7 +82,7 @@ fn require_nextest() {
              Then from rmk/:\n\n  \
              cargo nextest run --no-default-features \
              --features=split,vial,storage,async_matrix,_ble\n\n\
-             Or for the full feature matrix: `sh scripts/test_all.sh` from the repo root.\n"
+             Or for the behavioral suite: `bash scripts/test_all.sh` from the repo root.\n"
         );
     }
 }

@@ -1,0 +1,257 @@
+# Behavior endpoints: combos, morses, forks, and the shared timing config.
+# A write lands in the same live keymap the keyboard task reads at use time, so
+# each case proves it by making the keyboard behave differently afterwards.
+features = ["rynk"]
+
+[layout]
+rows = 1
+cols = 3
+map = """
+(0,0)  (0,1)  (0,2)
+"""
+
+[[keymap.layer]]
+keys = "A  B  TD(0)"
+
+# Overwritten over the wire below; present so `TD(0)` resolves.
+[[behavior.morse.morses]]
+tap = "X"
+hold = "Y"
+
+[[test]]
+name = "combo_write_changes_the_chord"
+steps = [
+  { rynk = { cmd = "SetCombo", payload = { index = 0, config = { actions = [
+    { Single = { Key = { Hid = "A" } } },
+    { Single = { Key = { Hid = "B" } } },
+  ], output = { Single = { Key = { Hid = "C" } } } } } } },
+  { rynk = { cmd = "SetBehaviorConfig", payload = { combo_timeout_ms = 80, oneshot_timeout_ms = 1000, tap_interval_ms = 200, tap_capslock_interval_ms = 250 } } },
+  # One combo key alone stays silent until the written timeout expires, which is
+  # what proves the timeout came from the wire and not the compiled default.
+  { press = [0, 0] },
+  { no_report = 60 },
+  { delay = 40 },
+  { release = [0, 0] },
+  { delay = 20 },
+  { press = [0, 0] },
+  { delay = 10 },
+  { press = [0, 1] },
+  { release = [0, 0] },
+  { release = [0, 1] },
+]
+expect = [["A"], [], ["C"], []]
+
+# Two different writes, each read back: the read follows the write instead of
+# echoing a default that happens to match it.
+[[test]]
+name = "combo_read_returns_what_was_written"
+steps = [
+  { rynk = { cmd = "SetCombo", payload = { index = 1, config = { actions = [
+    { Single = { Key = { Hid = "A" } } },
+    { Single = { Key = { Hid = "B" } } },
+  ], output = { Single = { Key = { Hid = "C" } } }, layer = 0 } } } },
+  { rynk = { cmd = "GetCombo", payload = 1, reply = { actions = [
+    { Single = { Key = { Hid = "A" } } },
+    { Single = { Key = { Hid = "B" } } },
+  ], output = { Single = { Key = { Hid = "C" } } }, layer = 0 } } },
+  { rynk = { cmd = "SetCombo", payload = { index = 1, config = { actions = [
+    { Single = { Key = { Hid = "B" } } },
+  ], output = { Single = { Key = { Hid = "D" } } }, layer = 1 } } } },
+  { rynk = { cmd = "GetCombo", payload = 1, reply = { actions = [
+    { Single = { Key = { Hid = "B" } } },
+  ], output = { Single = { Key = { Hid = "D" } } }, layer = 1 } } },
+]
+
+# An untouched slot reads as the empty config rather than erroring — that is what
+# a host walking the table sees before it writes anything.
+[[test]]
+name = "untouched_combo_slot_reads_as_empty"
+steps = [
+  { rynk = { cmd = "GetCombo", payload = 3, reply = { actions = [], output = "No" } } },
+]
+
+# Writing an empty config removes the combo, so the chord it used to fire goes
+# back to reporting its keys one by one.
+[[test]]
+name = "an_empty_combo_write_clears_the_slot"
+steps = [
+  { rynk = { cmd = "SetCombo", payload = { index = 0, config = { actions = [
+    { Single = { Key = { Hid = "A" } } },
+    { Single = { Key = { Hid = "B" } } },
+  ], output = { Single = { Key = { Hid = "C" } } } } } } },
+  { press = [0, 0] },
+  { press = [0, 1] },
+  { release = [0, 0] },
+  { release = [0, 1] },
+  { rynk = { cmd = "SetCombo", payload = { index = 0, config = { actions = [], output = "No" } } } },
+  { press = [0, 0] },
+  { press = [0, 1] },
+  { release = [0, 0] },
+  { release = [0, 1] },
+]
+expect = [["C"], [], ["A"], ["A", "B"], ["B"], []]
+
+[[test]]
+name = "behavior_config_read_returns_what_was_written"
+steps = [
+  { rynk = { cmd = "SetBehaviorConfig", payload = { combo_timeout_ms = 42, oneshot_timeout_ms = 900, tap_interval_ms = 180, tap_capslock_interval_ms = 240 } } },
+  { rynk = { cmd = "GetBehaviorConfig", reply = { combo_timeout_ms = 42, oneshot_timeout_ms = 900, tap_interval_ms = 180, tap_capslock_interval_ms = 240 } } },
+]
+
+# `actions` is a pattern-to-action map: 2 = tap, 3 = hold, 4 = double tap,
+# 5 = hold after tap.
+[[test]]
+name = "morse_write_changes_the_tap"
+steps = [
+  { rynk = { cmd = "SetMorse", payload = { index = 0, config = { profile = { unilateral_tap = false, mode = "Normal", hold_timeout_ms = 80, gap_timeout_ms = 80 }, actions = [
+    [2, { Key = { Hid = "A" } }],
+    [3, { Key = { Hid = "B" } }],
+  ] } } } },
+  { delay = 150 },
+  { tap = { pos = [0, 2], duration = 20 } },
+]
+expect = [["A"], []]
+
+[[test]]
+name = "morse_hold_resolves_after_the_written_timeout"
+steps = [
+  { rynk = { cmd = "SetMorse", payload = { index = 0, config = { profile = { unilateral_tap = false, mode = "Normal", hold_timeout_ms = 80, gap_timeout_ms = 80 }, actions = [
+    [2, { Key = { Hid = "A" } }],
+    [3, { Key = { Hid = "B" } }],
+  ] } } } },
+  { delay = 150 },
+  { tap = { pos = [0, 2], duration = 120 } },
+]
+expect = [["B"], []]
+
+# A morse slot's untouched value is a packed profile of unset fields, so the
+# second write is what proves the read follows it — no default is named here.
+[[test]]
+name = "morse_read_returns_what_was_written"
+steps = [
+  { rynk = { cmd = "SetMorse", payload = { index = 0, config = { profile = { unilateral_tap = true, enable_flow_tap = false, mode = "PermissiveHold", hold_timeout_ms = 120, gap_timeout_ms = 90 }, actions = [
+    [2, { Key = { Hid = "A" } }],
+  ] } } } },
+  { rynk = { cmd = "GetMorse", payload = 0, reply = { profile = { unilateral_tap = true, enable_flow_tap = false, mode = "PermissiveHold", hold_timeout_ms = 120, gap_timeout_ms = 90 }, actions = [
+    [2, { Key = { Hid = "A" } }],
+  ] } } },
+  { rynk = { cmd = "SetMorse", payload = { index = 0, config = { profile = { unilateral_tap = false, enable_flow_tap = true, mode = "HoldOnOtherPress", hold_timeout_ms = 200, gap_timeout_ms = 150 }, actions = [
+    [2, { Key = { Hid = "B" } }],
+    [3, { Key = { Hid = "C" } }],
+  ] } } } },
+  { rynk = { cmd = "GetMorse", payload = 0, reply = { profile = { unilateral_tap = false, enable_flow_tap = true, mode = "HoldOnOtherPress", hold_timeout_ms = 200, gap_timeout_ms = 150 }, actions = [
+    [2, { Key = { Hid = "B" } }],
+    [3, { Key = { Hid = "C" } }],
+  ] } } },
+]
+
+# A fork rewrites the trigger's output when the match state holds; with no
+# modifier down, the negative branch is what reaches the host.
+[[test]]
+name = "fork_write_changes_the_key"
+steps = [
+  { rynk = { cmd = "SetFork", payload = { index = 0, config = { trigger = { Single = { Key = { Hid = "A" } } }, negative_output = { Single = { Key = { Hid = "B" } } }, positive_output = { Single = { Key = { Hid = "C" } } }, match_any = { modifiers = { left_shift = true }, leds = {}, mouse = {} }, match_none = { modifiers = {}, leds = {}, mouse = {} }, kept_modifiers = {}, bindable = true } } } },
+  { tap = { pos = [0, 0], duration = 10 } },
+]
+expect = [["B"], []]
+
+[[test]]
+name = "fork_read_returns_what_was_written"
+steps = [
+  { rynk = { cmd = "SetFork", payload = { index = 0, config = { trigger = { Single = { Key = { Hid = "A" } } }, negative_output = { Single = { Key = { Hid = "B" } } }, positive_output = { Single = { Key = { Hid = "C" } } }, match_any = { modifiers = { left_shift = true }, leds = {}, mouse = {} }, match_none = { modifiers = {}, leds = {}, mouse = {} }, kept_modifiers = {}, bindable = true } } } },
+  { rynk = { cmd = "GetFork", payload = 0, reply = { trigger = { Single = { Key = { Hid = "A" } } }, negative_output = { Single = { Key = { Hid = "B" } } }, positive_output = { Single = { Key = { Hid = "C" } } }, match_any = { modifiers = { left_shift = true }, leds = {}, mouse = {} }, match_none = { modifiers = {}, leds = {}, mouse = {} }, kept_modifiers = {}, bindable = true } } },
+  # Every field differs from the first write, including the match state and the
+  # bindable flag, so a read that dropped one would not agree twice.
+  { rynk = { cmd = "SetFork", payload = { index = 0, config = { trigger = { Single = { Key = { Hid = "B" } } }, negative_output = { Single = { Key = { Hid = "Z" } } }, positive_output = { Single = { Key = { Hid = "Y" } } }, match_any = { modifiers = { right_shift = true }, leds = { caps_lock = true }, mouse = {} }, match_none = { modifiers = { left_ctrl = true }, leds = {}, mouse = {} }, kept_modifiers = { right_shift = true }, bindable = false } } } },
+  { rynk = { cmd = "GetFork", payload = 0, reply = { trigger = { Single = { Key = { Hid = "B" } } }, negative_output = { Single = { Key = { Hid = "Z" } } }, positive_output = { Single = { Key = { Hid = "Y" } } }, match_any = { modifiers = { right_shift = true }, leds = { caps_lock = true }, mouse = {} }, match_none = { modifiers = { left_ctrl = true }, leds = {}, mouse = {} }, kept_modifiers = { right_shift = true }, bindable = false } } },
+]
+
+# Reading near the end of the table keeps the page short: 8 slots, so a run from
+# index 6 is two entries however large the buffer is.
+[[test]]
+name = "combo_bulk_reads_back_a_bulk_write"
+steps = [
+  { rynk = { cmd = "SetComboBulk", payload = { start_index = 6, configs = [
+    { actions = [{ Single = { Key = { Hid = "A" } } }], output = { Single = { Key = { Hid = "C" } } }, layer = 0 },
+    { actions = [{ Single = { Key = { Hid = "B" } } }], output = { Single = { Key = { Hid = "D" } } }, layer = 1 },
+  ] } } },
+  { rynk = { cmd = "GetComboBulk", payload = { start_index = 6 }, reply = { configs = [
+    { actions = [{ Single = { Key = { Hid = "A" } } }], output = { Single = { Key = { Hid = "C" } } }, layer = 0 },
+    { actions = [{ Single = { Key = { Hid = "B" } } }], output = { Single = { Key = { Hid = "D" } } }, layer = 1 },
+  ] } } },
+]
+
+[[test]]
+name = "morse_bulk_reads_back_a_bulk_write"
+steps = [
+  { rynk = { cmd = "SetMorseBulk", payload = { start_index = 6, configs = [
+    { profile = { mode = "Normal", hold_timeout_ms = 80, gap_timeout_ms = 80 }, actions = [[2, { Key = { Hid = "A" } }]] },
+    { profile = { mode = "Normal", hold_timeout_ms = 90, gap_timeout_ms = 90 }, actions = [[2, { Key = { Hid = "B" } }]] },
+  ] } } },
+  { rynk = { cmd = "GetMorseBulk", payload = { start_index = 6 }, reply = { configs = [
+    { profile = { mode = "Normal", hold_timeout_ms = 80, gap_timeout_ms = 80 }, actions = [[2, { Key = { Hid = "A" } }]] },
+    { profile = { mode = "Normal", hold_timeout_ms = 90, gap_timeout_ms = 90 }, actions = [[2, { Key = { Hid = "B" } }]] },
+  ] } } },
+]
+
+[[test]]
+name = "combo_bulk_round_trips"
+steps = [
+  { rynk = { cmd = "SetComboBulk", payload = { start_index = 0, configs = [
+    { actions = [{ Single = { Key = { Hid = "A" } } }, { Single = { Key = { Hid = "B" } } }], output = { Single = { Key = { Hid = "C" } } }, layer = 0 },
+    { actions = [{ Single = { Key = { Hid = "A" } } }], output = { Single = { Key = { Hid = "D" } } }, layer = 0 },
+  ] } } },
+  { rynk = { cmd = "GetCombo", payload = 1, reply = { actions = [{ Single = { Key = { Hid = "A" } } }], output = { Single = { Key = { Hid = "D" } } }, layer = 0 } } },
+]
+
+[[test]]
+name = "morse_bulk_round_trips"
+steps = [
+  { rynk = { cmd = "SetMorseBulk", payload = { start_index = 0, configs = [
+    { profile = { mode = "Normal", hold_timeout_ms = 80, gap_timeout_ms = 80 }, actions = [[2, { Key = { Hid = "A" } }]] },
+  ] } } },
+  { rynk = { cmd = "GetMorse", payload = 0, reply = { profile = { mode = "Normal", hold_timeout_ms = 80, gap_timeout_ms = 80 }, actions = [[2, { Key = { Hid = "A" } }]] } } },
+]
+
+# All three tables are filled to their compiled capacity, so slot 8 of an 8-slot
+# table is the first one that does not exist. A slot past the end is refused
+# rather than wrapping onto slot 0 or growing the table.
+[[test]]
+name = "out_of_range_slots_are_refused"
+steps = [
+  { rynk = { cmd = "GetCombo", payload = 8, error = "Invalid" } },
+  { rynk = { cmd = "SetCombo", payload = { index = 8, config = { actions = [{ Single = { Key = { Hid = "A" } } }], output = { Single = { Key = { Hid = "C" } } } } }, error = "Invalid" } },
+  { rynk = { cmd = "GetMorse", payload = 8, error = "Invalid" } },
+  { rynk = { cmd = "SetMorse", payload = { index = 8, config = { profile = { mode = "Normal", hold_timeout_ms = 80, gap_timeout_ms = 80 }, actions = [[2, { Key = { Hid = "A" } }]] } }, error = "Invalid" } },
+  { rynk = { cmd = "GetFork", payload = 8, error = "Invalid" } },
+  { rynk = { cmd = "SetFork", payload = { index = 8, config = { trigger = { Single = { Key = { Hid = "A" } } }, negative_output = { Single = { Key = { Hid = "B" } } }, positive_output = { Single = { Key = { Hid = "C" } } }, match_any = { modifiers = { left_shift = true }, leds = {}, mouse = {} }, match_none = { modifiers = {}, leds = {}, mouse = {} }, kept_modifiers = {}, bindable = true } }, error = "Invalid" } },
+]
+
+# A bulk write is validated whole before any slot is touched, so a page that runs
+# off the end of the table leaves every slot it would have covered alone. An
+# empty page is refused too: it would be a write that writes nothing.
+[[test]]
+name = "bulk_writes_out_of_bounds_change_nothing"
+steps = [
+  { rynk = { cmd = "SetCombo", payload = { index = 7, config = { actions = [
+    { Single = { Key = { Hid = "A" } } },
+  ], output = { Single = { Key = { Hid = "C" } } }, layer = 0 } } } },
+  { rynk = { cmd = "SetComboBulk", payload = { start_index = 7, configs = [] }, error = "Invalid" } },
+  # Two configs from slot 7 need slots 7 and 8; the table ends at 7.
+  { rynk = { cmd = "SetComboBulk", payload = { start_index = 7, configs = [
+    { actions = [{ Single = { Key = { Hid = "B" } } }], output = { Single = { Key = { Hid = "D" } } }, layer = 0 },
+    { actions = [{ Single = { Key = { Hid = "B" } } }], output = { Single = { Key = { Hid = "E" } } }, layer = 0 },
+  ] }, error = "Invalid" } },
+  { rynk = { cmd = "GetCombo", payload = 7, reply = { actions = [
+    { Single = { Key = { Hid = "A" } } },
+  ], output = { Single = { Key = { Hid = "C" } } }, layer = 0 } } },
+]
+
+# A read that starts past the end is an empty page, not an error: that is how a
+# host paging through the table learns it has reached the end.
+[[test]]
+name = "bulk_reads_past_the_table_are_an_empty_page"
+steps = [
+  { rynk = { cmd = "GetComboBulk", payload = { start_index = 8 }, reply = { configs = [] } } },
+  { rynk = { cmd = "GetMorseBulk", payload = { start_index = 8 }, reply = { configs = [] } } },
+]

@@ -1,0 +1,116 @@
+# The lock gate, driven the way a user drives it: by holding physical keys.
+# `[host].unlock_keys` names the challenge, so the ceremony is ordinary matrix
+# input rather than a simulated one.
+features = ["rynk"]
+
+[layout]
+rows = 1
+cols = 3
+map = """
+(0,0)  (0,1)  (0,2)
+"""
+
+# The challenge keys are `No` so holding them adds no HID traffic of its own.
+[[keymap.layer]]
+keys = "A  No  No"
+
+# `write_requires_unlock` moves every setter into the gated set, so the file also
+# covers the write tier. No test here writes without unlocking first.
+[host]
+unlock_keys = [[0, 1], [0, 2]]
+write_requires_unlock = true
+
+[[test]]
+name = "a_new_session_starts_locked"
+steps = [
+  { rynk = { cmd = "GetLockStatus", reply = { locked = true, unlocking = false, remaining_keys = 2, key_positions = [[0, 1], [0, 2]] } } },
+]
+
+# `GetMatrixState` is gated unconditionally: an unlocked one would leak
+# keystrokes.
+[[test]]
+name = "gated_commands_are_refused_while_locked"
+steps = [
+  { rynk = { cmd = "GetMatrixState", error = "Locked" } },
+]
+
+# `GetLockStatus` is a snapshot: it must not arm an attempt, so the challenge
+# count stays whole even with the keys held.
+[[test]]
+name = "status_does_not_arm_an_attempt"
+steps = [
+  { press = [0, 1] },
+  { press = [0, 2] },
+  { rynk = { cmd = "GetLockStatus", reply = { locked = true, unlocking = false, remaining_keys = 2, key_positions = [[0, 1], [0, 2]] } } },
+  { release = [0, 1] },
+  { release = [0, 2] },
+]
+
+[[test]]
+name = "polling_with_the_challenge_held_unlocks"
+steps = [
+  { press = [0, 1] },
+  { press = [0, 2] },
+  { rynk = { cmd = "UnlockPoll", reply = { locked = false, unlocking = false, remaining_keys = 0, key_positions = [[0, 1], [0, 2]] } } },
+  { rynk = { cmd = "GetLockStatus", reply = { locked = false, unlocking = false, remaining_keys = 2, key_positions = [[0, 1], [0, 2]] } } },
+  { release = [0, 1] },
+  { release = [0, 2] },
+]
+
+[[test]]
+name = "polling_with_part_of_the_challenge_reports_progress"
+steps = [
+  { press = [0, 1] },
+  { rynk = { cmd = "UnlockPoll", reply = { locked = true, unlocking = true, remaining_keys = 1, key_positions = [[0, 1], [0, 2]] } } },
+  { release = [0, 1] },
+]
+
+[[test]]
+name = "unlocking_opens_the_gate_and_lock_closes_it_again"
+steps = [
+  { rynk = { cmd = "GetMatrixState", error = "Locked" } },
+  { press = [0, 1] },
+  { press = [0, 2] },
+  { rynk = { cmd = "UnlockPoll", reply = { locked = false, unlocking = false, remaining_keys = 0, key_positions = [[0, 1], [0, 2]] } } },
+  { release = [0, 1] },
+  { release = [0, 2] },
+  { rynk = { cmd = "GetMatrixState", reply = { pressed_bitmap = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } } },
+  { rynk = { cmd = "Lock" } },
+  { rynk = { cmd = "GetMatrixState", error = "Locked" } },
+]
+
+# The refused write must leave the keymap alone, so (0,0) still reports A; the
+# same write after the ceremony changes it.
+[[test]]
+name = "writes_need_an_unlock_when_the_write_tier_is_gated"
+steps = [
+  { rynk = { cmd = "SetKeyAction", payload = { position = { layer = 0, row = 0, col = 0 }, action = { Single = { Key = { Hid = "B" } } } }, error = "Locked" } },
+  { tap = { pos = [0, 0], duration = 10 } },
+  { press = [0, 1] },
+  { press = [0, 2] },
+  { rynk = { cmd = "UnlockPoll", reply = { locked = false, unlocking = false, remaining_keys = 0, key_positions = [[0, 1], [0, 2]] } } },
+  { release = [0, 1] },
+  { release = [0, 2] },
+  { rynk = { cmd = "SetKeyAction", payload = { position = { layer = 0, row = 0, col = 0 }, action = { Single = { Key = { Hid = "B" } } } } } },
+  { tap = { pos = [0, 0], duration = 10 } },
+]
+expect = [["A"], [], ["B"], []]
+
+# An armed attempt survives only 500 ms without a refreshing poll. While it is
+# armed the status reports live progress; once it lapses the count reverts to the
+# whole challenge even though the key is still held.
+[[test]]
+name = "an_armed_attempt_expires_after_the_window"
+steps = [
+  { press = [0, 1] },
+  { rynk = { cmd = "UnlockPoll", reply = { locked = true, unlocking = true, remaining_keys = 1, key_positions = [[0, 1], [0, 2]] } } },
+  { rynk = { cmd = "GetLockStatus", reply = { locked = true, unlocking = true, remaining_keys = 1, key_positions = [[0, 1], [0, 2]] } } },
+  { delay = 600 },
+  { rynk = { cmd = "GetLockStatus", reply = { locked = true, unlocking = false, remaining_keys = 2, key_positions = [[0, 1], [0, 2]] } } },
+  # Polling arms a fresh attempt, so the lapse costs the host a round trip, not
+  # the unlock itself.
+  { press = [0, 2] },
+  { rynk = { cmd = "UnlockPoll", reply = { locked = false, unlocking = false, remaining_keys = 0, key_positions = [[0, 1], [0, 2]] } } },
+  { release = [0, 1] },
+  { release = [0, 2] },
+]

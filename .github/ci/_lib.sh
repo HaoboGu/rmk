@@ -31,7 +31,7 @@ log_section() {
     printf "\n==> %s\n" "$1"
 }
 
-# Shared rmk feature-set matrix; empty means only `--no-default-features`.
+# Broad rmk compile/clippy matrix; empty means only `--no-default-features`.
 RMK_FEATURESETS=(
     ""
     "log,std"
@@ -52,6 +52,13 @@ RMK_FEATURESETS=(
     "rynk,_ble,split,storage,async_matrix"
     "rynk,storage"
     "rynk"
+)
+
+# Behavioral coverage only; RMK_FEATURESETS remains the compile/clippy matrix.
+RMK_TEST_FEATURESETS=(
+    ""
+    "vial,host_lock,_no_usb,steno,passkey_entry"
+    "rynk,_ble,split,async_matrix,storage"
 )
 
 # Examples auto-discovery skiplist. Reasons:

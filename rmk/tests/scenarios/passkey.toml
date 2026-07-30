@@ -1,9 +1,5 @@
-# BLE passkey entry, ported from keyboard_passkey_test.rs.
-#
-# While passkey entry is open the keyboard swallows every key it recognises, so
-# both tests end with `no_report` to prove nothing leaked to the host. All the
-# keys involved are on the board's row 4 passkey fixture: digits 1-6 at cols
-# 0-5, Escape at col 6, Enter at col 7.
+# Passkey entry consumes recognized keys; the simulator's final guard rejects
+# leaked HID reports. Row 4 contains digits 1-6, Escape, and Enter.
 
 features = ["passkey_entry"]
 keyboard = "boards/split.toml"
@@ -12,36 +8,34 @@ keyboard = "boards/split.toml"
 name = "six_digits_then_enter_submits_the_passkey"
 steps = [
   { passkey = "begin" },
-  { tap = [4, 0, 50] },   # 1
+  { tap = { pos = [4, 0], duration = 50 } },
   { delay = 50 },
-  { tap = [4, 1, 50] },   # 2
+  { tap = { pos = [4, 1], duration = 50 } },
   { delay = 50 },
-  { tap = [4, 2, 50] },   # 3
+  { tap = { pos = [4, 2], duration = 50 } },
   { delay = 50 },
-  { tap = [4, 3, 50] },   # 4
+  { tap = { pos = [4, 3], duration = 50 } },
   { delay = 50 },
-  { tap = [4, 4, 50] },   # 5
+  { tap = { pos = [4, 4], duration = 50 } },
   { delay = 50 },
-  { tap = [4, 5, 50] },   # 6
+  { tap = { pos = [4, 5], duration = 50 } },
   { delay = 50 },
-  { tap = [4, 7, 50] },   # Enter submits
-  { delay = 100 },
-  { expect_passkey = 123456 },
-  { no_report = 200 },
+  { tap = { pos = [4, 7], duration = 50 } },
+  { delay = 300 },
   { passkey = "end" },
 ]
+expect = [{ passkey = 123456 }]
 
 [[test]]
 name = "escape_cancels_the_passkey"
 steps = [
   { passkey = "begin" },
-  { tap = [4, 0, 50] },   # 1
+  { tap = { pos = [4, 0], duration = 50 } },
   { delay = 50 },
-  { tap = [4, 1, 50] },   # 2
+  { tap = { pos = [4, 1], duration = 50 } },
   { delay = 50 },
-  { tap = [4, 6, 50] },   # Escape, before the passkey is complete
-  { delay = 100 },
-  { expect_passkey = "cancelled" },
-  { no_report = 200 },
+  { tap = { pos = [4, 6], duration = 50 } },
+  { delay = 300 },
   { passkey = "end" },
 ]
+expect = [{ passkey = "cancelled" }]

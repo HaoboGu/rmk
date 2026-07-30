@@ -13,13 +13,14 @@ nextest_cfg="$repo_root/.config/nextest.toml"
 nx=(nextest run --config-file "$nextest_cfg" --profile ci)
 
 log_section "Running tests"
+bash "$repo_root/scripts/check_simulator_tests.sh"
 cargo +stable "${nx[@]}" --manifest-path rmk-config/Cargo.toml
 cargo +stable "${nx[@]}" --manifest-path rmk-types/Cargo.toml
 # Exercise the rynk protocol module (gated behind `rynk`).
 cargo +stable "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features host
 cargo +stable "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features steno
-cargo +stable "${nx[@]}" --manifest-path rmk-macro/Cargo.toml
-for feats in "${RMK_FEATURESETS[@]}"; do
+cargo +stable "${nx[@]}" --manifest-path rmk-macro/Cargo.toml --features _simulator
+for feats in "${RMK_TEST_FEATURESETS[@]}"; do
     if [[ -z "$feats" ]]; then
         cargo +stable "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features
     else

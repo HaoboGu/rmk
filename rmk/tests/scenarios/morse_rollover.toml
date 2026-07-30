@@ -1,5 +1,4 @@
-# Rollover ordering on morse/tap-hold keys, ported from
-# keyboard_morse_tap_dance_test.rs: when letters are rolled quickly across
+# Rollover ordering on morse/tap-hold keys: when letters are rolled quickly across
 # home-row morse keys, a later letter must never overtake one already held.
 #
 # All four tests replay real-world reports from the alt-layout split in
@@ -24,54 +23,42 @@ unilateral_tap = false
 # "clietn".
 [[test]]
 name = "client_roll_with_flow_tap_override_keeps_n_before_t"
+behavior.morse = {
+  hold_on_other_press = false,
+  normal_mode = true,
+  enable_flow_tap = true,
+  prior_idle_time = "120ms",
+  morses = [
+    { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "hrm_gap100_no_flow" },
+    { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "hrm_gap250" },
+    { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "hrm_gap250" },
+    { tap = "E", hold = "RCtrl", hold_after_tap = "E", profile = "hrm_gap250" },
+    { tap = "I", hold = "RShift", hold_after_tap = "I", profile = "hrm_gap100" },
+  ]
+}
 steps = [
   { delay = 150 },
-  { tap = [1, 7, 30] },   # C
+  { tap = { pos = [1, 7], duration = 30 } },
   { delay = 30 },
-  { tap = [0, 2, 30] },   # L
+  { tap = { pos = [0, 2], duration = 30 } },
   { delay = 30 },
-  { tap = [1, 9, 30] },   # I
+  { tap = { pos = [1, 9], duration = 30 } },
   { delay = 150 },
-  { press = [1, 8] },     # E
+  { press = [1, 8] },  # E
   { delay = 40 },
-  { press = [1, 0] },     # N
+  { press = [1, 0] },  # N
   { delay = 30 },
   { release = [1, 8] },
   { delay = 30 },
-  { press = [1, 3] },     # T
+  { press = [1, 3] },  # T
   { delay = 30 },
   { release = [1, 0] },
   { delay = 30 },
   { release = [1, 3] },
   { delay = 300 },
-  { tap = [0, 9, 30] },   # Y
-  { expect = ["C"] },
-  { expect = "empty" },
-  { expect = ["L"] },
-  { expect = "empty" },
-  { expect = ["I"] },
-  { expect = "empty" },
-  { expect = ["E"] },
-  { expect = "empty" },
-  { expect = ["N"] },
-  { expect = "empty" },
-  { expect = ["T"] },
-  { expect = "empty" },
-  { expect = ["Y"] },
-  { expect = "empty" },
+  { tap = { pos = [0, 9], duration = 30 } },
 ]
-[test.behavior.morse]
-hold_on_other_press = false
-normal_mode = true
-enable_flow_tap = true
-prior_idle_time = "120ms"
-morses = [
-  { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "hrm_gap100_no_flow" },
-  { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "hrm_gap250" },
-  { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "hrm_gap250" },
-  { tap = "E", hold = "RCtrl", hold_after_tap = "E", profile = "hrm_gap250" },
-  { tap = "I", hold = "RShift", hold_after_tap = "I", profile = "hrm_gap100" },
-]
+expect = [["C"], [], ["L"], [], ["I"], [], ["E"], [], ["N"], [], ["T"], [], ["Y"], []]
 
 # Regression reported while typing "could" on the alt-layout split.
 #
@@ -80,124 +67,108 @@ morses = [
 # overtake the already-held O.
 [[test]]
 name = "tap_dance_cou_rollover_keeps_o_before_u"
+behavior.morse = {
+  hold_on_other_press = false,
+  normal_mode = true,
+  enable_flow_tap = true,
+  prior_idle_time = "120ms",
+  morses = [
+    { tap = "Tab", hold = "MO(1)", hold_after_tap = "Tab", profile = "normal" },
+    { tap = "Space", hold = "MO(1)", hold_after_tap = "Space", profile = "hold_on_other" },
+    { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "hrm_hold400" },
+    { tap = "S", hold = "LCtrl", hold_after_tap = "S", profile = "hrm_hold400" },
+    { tap = "H", hold = "LGui", hold_after_tap = "H", profile = "hrm_hold400" },
+    { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "hrm_hold400" },
+    { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "hrm_hold400" },
+  ]
+}
 steps = [
   { delay = 150 },
-  { press = [1, 6] },     # C
+  { press = [1, 6] },  # C
   { delay = 30 },
-  { press = [0, 7] },     # O
+  { press = [0, 7] },  # O
   { delay = 30 },
   { release = [1, 6] },
   { delay = 30 },
-  { press = [0, 8] },     # U
+  { press = [0, 8] },  # U
   { delay = 30 },
   { release = [0, 7] },
   { delay = 30 },
   { release = [0, 8] },
   { delay = 30 },
-  { tap = [0, 2, 30] },   # L
+  { tap = { pos = [0, 2], duration = 30 } },
   { delay = 30 },
-  { tap = [2, 3, 30] },   # D
-  { expect = ["C"] },
-  { expect = "empty" },
-  { expect = ["O"] },
-  { expect = ["O", "U"] },
-  { expect = ["U"] },
-  { expect = "empty" },
-  { expect = ["L"] },
-  { expect = "empty" },
-  { expect = ["D"] },
-  { expect = "empty" },
+  { tap = { pos = [2, 3], duration = 30 } },
 ]
-[test.behavior.morse]
-hold_on_other_press = false
-normal_mode = true
-enable_flow_tap = true
-prior_idle_time = "120ms"
-morses = [
-  { tap = "Tab", hold = "MO(1)", hold_after_tap = "Tab", profile = "normal" },
-  { tap = "Space", hold = "MO(1)", hold_after_tap = "Space", profile = "hold_on_other" },
-  { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "hrm_hold400" },
-  { tap = "S", hold = "LCtrl", hold_after_tap = "S", profile = "hrm_hold400" },
-  { tap = "H", hold = "LGui", hold_after_tap = "H", profile = "hrm_hold400" },
-  { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "hrm_hold400" },
-  { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "hrm_hold400" },
-]
+expect = [["C"], [], ["O"], ["O", "U"], ["U"], [], ["L"], [], ["D"], []]
 
 # Same C/O/U rollover, but U is delayed past the early-fired C gap timeout.
 # Documents that the buffered O is flushed correctly once the gap timer expires
 # before the next key arrives.
 [[test]]
 name = "tap_dance_cou_rollover_after_gap_timeout"
+behavior.morse = {
+  hold_on_other_press = false,
+  normal_mode = true,
+  enable_flow_tap = true,
+  prior_idle_time = "120ms",
+  morses = [
+    { tap = "Tab", hold = "MO(1)", hold_after_tap = "Tab", profile = "normal" },
+    { tap = "Space", hold = "MO(1)", hold_after_tap = "Space", profile = "hold_on_other" },
+    { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "hrm_hold400" },
+    { tap = "S", hold = "LCtrl", hold_after_tap = "S", profile = "hrm_hold400" },
+    { tap = "H", hold = "LGui", hold_after_tap = "H", profile = "hrm_hold400" },
+    { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "hrm_hold400" },
+    { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "hrm_hold400" },
+  ]
+}
 steps = [
   { delay = 150 },
-  { press = [1, 6] },     # C
+  { press = [1, 6] },  # C
   { delay = 30 },
-  { press = [0, 7] },     # O
+  { press = [0, 7] },  # O
   { delay = 30 },
   { release = [1, 6] },
   { delay = 300 },
-  { press = [0, 8] },     # U
+  { press = [0, 8] },  # U
   { delay = 30 },
   { release = [0, 7] },
   { delay = 30 },
   { release = [0, 8] },
-  { expect = ["C"] },
-  { expect = "empty" },
-  { expect = ["O"] },
-  { expect = ["O", "U"] },
-  { expect = ["U"] },
-  { expect = "empty" },
 ]
-[test.behavior.morse]
-hold_on_other_press = false
-normal_mode = true
-enable_flow_tap = true
-prior_idle_time = "120ms"
-morses = [
-  { tap = "Tab", hold = "MO(1)", hold_after_tap = "Tab", profile = "normal" },
-  { tap = "Space", hold = "MO(1)", hold_after_tap = "Space", profile = "hold_on_other" },
-  { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "hrm_hold400" },
-  { tap = "S", hold = "LCtrl", hold_after_tap = "S", profile = "hrm_hold400" },
-  { tap = "H", hold = "LGui", hold_after_tap = "H", profile = "hrm_hold400" },
-  { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "hrm_hold400" },
-  { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "hrm_hold400" },
-]
+expect = [["C"], [], ["O"], ["O", "U"], ["U"], []]
 
 # Control case: the same physical rollover over the tap-hold spelling of C,
 # LT(1, C, hrm_hold400)@(1,5) instead of TD(6)@(1,6), keeps the text order correct.
 [[test]]
 name = "tap_hold_cou_rollover_keeps_o_before_u"
+behavior.morse = {
+  hold_on_other_press = false,
+  normal_mode = true,
+  enable_flow_tap = true,
+  prior_idle_time = "120ms",
+  morses = [
+    { tap = "Tab", hold = "MO(1)", hold_after_tap = "Tab", profile = "normal" },
+    { tap = "Space", hold = "MO(1)", hold_after_tap = "Space", profile = "hold_on_other" },
+    { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "hrm_hold400" },
+    { tap = "S", hold = "LCtrl", hold_after_tap = "S", profile = "hrm_hold400" },
+    { tap = "H", hold = "LGui", hold_after_tap = "H", profile = "hrm_hold400" },
+    { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "hrm_hold400" },
+    { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "hrm_hold400" },
+  ]
+}
 steps = [
   { delay = 150 },
-  { press = [1, 5] },     # C
+  { press = [1, 5] },  # C
   { delay = 30 },
-  { press = [0, 7] },     # O
+  { press = [0, 7] },  # O
   { delay = 30 },
   { release = [1, 5] },
   { delay = 30 },
-  { press = [0, 8] },     # U
+  { press = [0, 8] },  # U
   { delay = 30 },
   { release = [0, 7] },
   { delay = 30 },
   { release = [0, 8] },
-  { expect = ["C"] },
-  { expect = ["C", "O"] },
-  { expect = ["O"] },
-  { expect = ["U", "O"] },
-  { expect = ["U"] },
-  { expect = "empty" },
 ]
-[test.behavior.morse]
-hold_on_other_press = false
-normal_mode = true
-enable_flow_tap = true
-prior_idle_time = "120ms"
-morses = [
-  { tap = "Tab", hold = "MO(1)", hold_after_tap = "Tab", profile = "normal" },
-  { tap = "Space", hold = "MO(1)", hold_after_tap = "Space", profile = "hold_on_other" },
-  { tap = "N", hold = "LShift", hold_after_tap = "N", profile = "hrm_hold400" },
-  { tap = "S", hold = "LCtrl", hold_after_tap = "S", profile = "hrm_hold400" },
-  { tap = "H", hold = "LGui", hold_after_tap = "H", profile = "hrm_hold400" },
-  { tap = "T", hold = "MO(1)", hold_after_tap = "T", profile = "hrm_hold400" },
-  { tap = "C", hold = "MO(1)", hold_after_tap = "C", profile = "hrm_hold400" },
-]
+expect = [["C"], ["C", "O"], ["O"], ["U", "O"], ["U"], []]

@@ -1,5 +1,3 @@
-# Plover HID stenography, ported from simulator_test.rs.
-#
 # A steno key is a bit index into the 64-bit chord bitmap, so the report says
 # which keys are down rather than which keycodes were typed. `STN(..)` only
 # exists with the `steno` feature, so the whole file is gated on it.
@@ -18,7 +16,6 @@ keys = "STN(S1)"
 name = "steno_key_sets_its_chord_bit"
 steps = [
   { press = [0, 0] },
-  { expect_steno = ["S1"] },
   { release = [0, 0] },
-  { expect_steno = "empty" },
 ]
+expect = [{ steno = ["S1"] }, { steno = [] }]

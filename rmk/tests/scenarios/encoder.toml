@@ -12,32 +12,20 @@ keyboard = "boards/split.toml"
 name = "turns_send_the_base_layer_actions"
 steps = [
   { rotary_cw = 0 },
-  { expect = ["Right"] },
-  { expect = "empty" },
   { rotary_ccw = 0 },
-  { expect = ["Left"] },
-  { expect = "empty" },
   { rotary_cw = 1 },
-  { expect = ["Down"] },
-  { expect = "empty" },
   { rotary_ccw = 1 },
-  { expect = ["Up"] },
-  { expect = "empty" },
 ]
+expect = [["Right"], [], ["Left"], [], ["Down"], [], ["Up"], []]
 
 [[test]]
 name = "turns_follow_the_held_layer"
 steps = [
   { press = [3, 0] },
   { rotary_cw = 0 },
-  { expect = ["PageDown"] },
-  { expect = "empty" },
   { rotary_ccw = 1 },
-  { expect = ["Home"] },
-  { expect = "empty" },
   { release = [3, 0] },
   # Back on the base layer the same knob scrubs again.
   { rotary_cw = 0 },
-  { expect = ["Right"] },
-  { expect = "empty" },
 ]
+expect = [["PageDown"], [], ["Home"], [], ["Right"], []]

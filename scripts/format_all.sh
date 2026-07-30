@@ -66,7 +66,6 @@ log_section "Formatting host tooling"
 cargo +nightly fmt --manifest-path rynk/Cargo.toml --all
 
 log_section "Formatting examples"
-# A pipe, not process substitution, so `sh scripts/format_all.sh` works too.
 list_example_manifests | while IFS= read -r manifest; do
     cargo +nightly fmt --manifest-path "$manifest"
 done

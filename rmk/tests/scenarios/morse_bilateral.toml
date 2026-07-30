@@ -1,0 +1,81 @@
+# Bilateral keys in the layout map combined with unilateral_tap.
+#
+# Keys marked Bilateral (`*` in the map) are exempt from unilateral_tap, so a
+# same-hand combination that includes one falls back to normal mod-tap
+# resolution.
+#
+# The fixture is the shared split board's home row plus its bilateral thumb:
+#   A@(3,3) Bilateral, MT(B, LShift)@(1,1) Left,
+#   MT(C, LGui)@(1,7) and LT(1, D)@(1,8) Right (layer 1: Kp3, Kp4).
+
+keyboard = "boards/split.toml"
+
+[behavior.morse]
+unilateral_tap = true
+permissive_hold = true
+enable_flow_tap = true
+prior_idle_time = "120ms"
+
+# MT(B, LShift) ((1,1), Left) + A ((3,3), Bilateral) must NOT trigger unilateral
+# tap, so permissive hold wins when A is released first.
+[[test]]
+name = "bilateral_exempts_from_unilateral_tap"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },  # Press MT(B, LShift) on the left hand
+  { tap = { pos = [3, 3], duration = 10 } },
+  { release = [1, 1] },
+]
+expect = [
+  ["LShift"],       # Permissive hold
+  ["LShift", "A"],  # Press A with shift
+  ["LShift"],       # Release A
+  [],
+]
+
+# Cross-hand rolls are unaffected by bilateral: MT(B, LShift) (Left) +
+# MT(C, LGui) (Right) still resolves via permissive hold.
+[[test]]
+name = "bilateral_cross_hand_unchanged"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },  # Press MT(B, LShift) on the left hand
+  { tap = { pos = [1, 7], duration = 10 } },
+  { release = [1, 1] },
+]
+expect = [
+  ["LShift"],
+  ["LShift", "C"],  # Press C with shift
+  ["LShift"],       # Release C
+  [],
+]
+
+# Same-hand press without a bilateral key still triggers unilateral tap:
+# MT(C, LGui) and LT(1, D) are both on the right hand.
+[[test]]
+name = "non_bilateral_same_hand_still_unilateral"
+steps = [
+  { delay = 150 },
+  { press = [1, 7] },  # Press MT(C, LGui) on the right hand
+  { tap = { pos = [1, 8], duration = 10 } },
+  { release = [1, 7] },
+]
+expect = [
+  ["C"],  # Unilateral tap for MT(C, LGui)
+  ["C", "D"],
+  ["C"],
+  [],
+]
+
+# Releasing the mod-tap first still resolves it as a tap through normal morse
+# tap prediction, even though A (bilateral) suppressed unilateral tap.
+[[test]]
+name = "bilateral_reversed_release"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },    # Press MT(B, LShift) on the left hand
+  { press = [3, 3] },    # Press A, bilateral
+  { release = [1, 1] },  # Release MT(B, LShift) first -> tap B
+  { release = [3, 3] },
+]
+expect = [["B"], ["B", "A"], ["A"], []]

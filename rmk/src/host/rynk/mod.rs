@@ -336,9 +336,12 @@ mod tests {
         out
     }
 
-    /// Lock gate over `run_session`, including fresh authorization per session.
+    /// A second session over the same service starts locked again. The gate
+    /// itself lives in `tests/scenarios/rynk_lock.toml`, which holds the
+    /// challenge with real matrix input; only the session boundary needs a
+    /// second `run_session`, which one timeline cannot express.
     #[test]
-    fn run_session_lock_gate_and_new_session_starts_locked() {
+    fn a_new_session_starts_locked_again() {
         let mut behavior = BehaviorConfig::default();
         let positional: PositionalConfig<2, 2> = PositionalConfig::default();
         let mut data: KeymapData<2, 2, 1, 0> =
@@ -354,58 +357,25 @@ mod tests {
         };
         let service = RynkService::new(&keymap, &config);
 
-        // Hold the challenge key for the whole session.
+        // Hold the challenge key throughout, so only the session boundary can
+        // account for the second session being locked.
         keymap.update_matrix_state(&KeyboardEvent::key(0, 0, true));
 
-        // Locked probe, status, unlock poll, unlocked probe — one frame per read,
-        // as the one-in-flight client sends them.
         let mut chunks = VecDeque::new();
-        chunks.push_back(req(Cmd::GetMatrixState.raw(), 0));
-        chunks.push_back(req(Cmd::GetLockStatus.raw(), 1));
-        chunks.push_back(req(Cmd::UnlockPoll.raw(), 2));
-        chunks.push_back(req(Cmd::GetMatrixState.raw(), 3));
+        chunks.push_back(req(Cmd::UnlockPoll.raw(), 0));
+        chunks.push_back(req(Cmd::GetMatrixState.raw(), 1));
         let mut rx = ChunkRead { chunks };
         let mut tx = VecWrite { captured: Vec::new() };
         block_on(service.run_session(&mut rx, &mut tx));
 
         let resp = decode_frames(&tx.captured);
-        assert_eq!(resp.len(), 4, "one reply per request");
-
-        // Locked matrix reads reject instead of returning an empty bitmap.
-        assert_eq!(resp[0].0, Cmd::GetMatrixState.raw());
-        assert_eq!(
-            postcard::from_bytes::<Result<MatrixState, RynkError>>(&resp[0].2).unwrap(),
-            Err(RynkError::Locked),
-            "keystroke exfiltration is gated"
-        );
-
-        // Lock status is open while locked.
-        let status: LockStatus = postcard::from_bytes::<Result<LockStatus, RynkError>>(&resp[1].2)
-            .unwrap()
-            .unwrap();
-        assert!(status.locked);
-        assert_eq!(
-            status.key_positions.as_slice(),
-            &[(0, 0)],
-            "challenge advertised while locked"
-        );
-
-        // Held challenge key unlocks.
-        let polled: LockStatus = postcard::from_bytes::<Result<LockStatus, RynkError>>(&resp[2].2)
-            .unwrap()
-            .unwrap();
-        assert!(!polled.locked, "poll with challenge key held unlocks");
-        assert_eq!(polled.remaining_keys, 0);
-
-        // Gated command succeeds after unlock.
         assert!(
-            postcard::from_bytes::<Result<MatrixState, RynkError>>(&resp[3].2)
+            postcard::from_bytes::<Result<MatrixState, RynkError>>(&resp[1].2)
                 .unwrap()
                 .is_ok(),
             "gated command served once unlocked"
         );
 
-        // New session starts locked again.
         let mut chunks2 = VecDeque::new();
         chunks2.push_back(req(Cmd::GetMatrixState.raw(), 0));
         let mut rx2 = ChunkRead { chunks: chunks2 };
@@ -490,37 +460,6 @@ mod tests {
                 .is_ok(),
             "locking session A does not relock session B"
         );
-    }
-
-    #[test]
-    fn matrix_state_uses_rynk_column_order() {
-        let mut behavior = BehaviorConfig::default();
-        let positional: PositionalConfig<2, 14> = PositionalConfig::default();
-        let mut data: KeymapData<2, 14, 1, 0> = KeymapData::new([[[KeyAction::No; 14]; 2]]);
-        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
-
-        let mut config = RmkConfig::default();
-        config.lock_config.insecure = true;
-        let service = RynkService::new(&keymap, &config);
-
-        keymap.update_matrix_state(&KeyboardEvent::key(0, 0, true));
-        keymap.update_matrix_state(&KeyboardEvent::key(0, 9, true));
-        keymap.update_matrix_state(&KeyboardEvent::key(1, 6, true));
-        keymap.update_matrix_state(&KeyboardEvent::key(1, 13, true));
-
-        let mut chunks = VecDeque::new();
-        chunks.push_back(req(Cmd::GetMatrixState.raw(), 0));
-        let mut rx = ChunkRead { chunks };
-        let mut tx = VecWrite { captured: Vec::new() };
-        block_on(service.run_session(&mut rx, &mut tx));
-
-        let resp = decode_frames(&tx.captured);
-        assert_eq!(resp.len(), 1);
-        let state: MatrixState = postcard::from_bytes::<Result<MatrixState, RynkError>>(&resp[0].2)
-            .unwrap()
-            .unwrap();
-        assert_eq!(&state.pressed_bitmap[..4], &[0x01, 0x02, 0x40, 0x20]);
-        assert!(state.pressed_bitmap[4..].iter().all(|&b| b == 0));
     }
 
     /// A read carrying more than one frame serves them all, in order: the
@@ -654,121 +593,5 @@ mod tests {
             postcard::from_bytes::<Result<ProtocolVersion, RynkError>>(&resp[0].2).unwrap(),
             Err(RynkError::Busy),
         );
-    }
-
-    /// Zero-payload requests must still get a full response payload.
-    #[test]
-    fn run_session_empty_request_gets_full_response() {
-        let mut behavior = BehaviorConfig::default();
-        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
-        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
-        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
-        let config = RmkConfig::default();
-        let service = RynkService::new(&keymap, &config);
-
-        let mut chunks = VecDeque::new();
-        chunks.push_back(req(Cmd::GetVersion.raw(), 0x42));
-
-        let mut rx = ChunkRead { chunks };
-        let mut tx = VecWrite { captured: Vec::new() };
-
-        block_on(service.run_session(&mut rx, &mut tx));
-
-        let resp = decode_frames(&tx.captured);
-        assert_eq!(resp.len(), 1);
-        assert_eq!(resp[0].0, Cmd::GetVersion.raw(), "cmd echo");
-        assert_eq!(resp[0].1, 0x42, "seq echo");
-        assert!(
-            !resp[0].2.is_empty(),
-            "response carries a payload, not a swallowed fault"
-        );
-        let decoded: Result<ProtocolVersion, RynkError> =
-            postcard::from_bytes(&resp[0].2).expect("response payload must decode");
-        assert_eq!(decoded, Ok(ProtocolVersion::CURRENT));
-    }
-
-    /// Topic-range requests are drained without creating phantom topic replies.
-    #[test]
-    fn run_session_drops_topic_range_request_without_reply() {
-        let mut behavior = BehaviorConfig::default();
-        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
-        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
-        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
-        let config = RmkConfig::default();
-        let service = RynkService::new(&keymap, &config);
-
-        // A topic-range request, then a real request — one frame per read.
-        let mut chunks = VecDeque::new();
-        chunks.push_back(req(Cmd::LayerChange.raw(), 0));
-        chunks.push_back(req(Cmd::GetVersion.raw(), 7));
-
-        let mut rx = ChunkRead { chunks };
-        let mut tx = VecWrite { captured: Vec::new() };
-
-        block_on(service.run_session(&mut rx, &mut tx));
-
-        let resp = decode_frames(&tx.captured);
-        assert_eq!(
-            resp.len(),
-            1,
-            "topic-range request draws no reply; only GetVersion answers"
-        );
-        assert_eq!(resp[0].0, Cmd::GetVersion.raw(), "cmd echo");
-        assert_eq!(resp[0].1, 7, "reply is for the GetVersion that followed");
-    }
-
-    /// A delimiter-less run larger than the buffer overflows the Deframer and is
-    /// dropped: no reply, and the session keeps running.
-    #[test]
-    fn run_session_oversized_frame_draws_no_reply() {
-        let mut behavior = BehaviorConfig::default();
-        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
-        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
-        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
-        let config = RmkConfig::default();
-        let service = RynkService::new(&keymap, &config);
-
-        // Non-zero bytes with no delimiter, longer than the frame buffer.
-        let mut chunks = VecDeque::new();
-        chunks.push_back(vec![0xFFu8; RYNK_BUFFER_SIZE + 100]);
-
-        let mut rx = ChunkRead { chunks };
-        let mut tx = VecWrite { captured: Vec::new() };
-
-        block_on(service.run_session(&mut rx, &mut tx));
-
-        assert!(
-            tx.captured.is_empty(),
-            "oversized garbage draws no reply, got {} bytes",
-            tx.captured.len()
-        );
-    }
-
-    /// Garbage on the wire is skipped; the session resyncs and answers the next
-    /// well-formed request (no cmd/seq to recover, so no Malformed echo).
-    #[test]
-    fn run_session_resyncs_after_garbage() {
-        let mut behavior = BehaviorConfig::default();
-        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
-        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
-        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
-        let config = RmkConfig::default();
-        let service = RynkService::new(&keymap, &config);
-
-        // Undecodable bytes terminated by a delimiter, then a real request.
-        let mut stream = vec![0xDEu8, 0xAD, 0xBE, 0xEF, 0x00];
-        stream.extend_from_slice(&req(Cmd::GetVersion.raw(), 0x55));
-        let mut chunks = VecDeque::new();
-        chunks.push_back(stream);
-
-        let mut rx = ChunkRead { chunks };
-        let mut tx = VecWrite { captured: Vec::new() };
-
-        block_on(service.run_session(&mut rx, &mut tx));
-
-        let resp = decode_frames(&tx.captured);
-        assert_eq!(resp.len(), 1, "garbage skipped, request answered");
-        assert_eq!(resp[0].0, Cmd::GetVersion.raw());
-        assert_eq!(resp[0].1, 0x55, "seq echoed after resync");
     }
 }

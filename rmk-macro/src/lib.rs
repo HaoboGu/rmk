@@ -12,14 +12,15 @@ use syn::parse_macro_input;
 
 use crate::codegen::parse_keyboard_mod;
 
-/// Expand a simulator scenario TOML into `#[test]` fns targeting rmk's
-/// `tests/common` harness. Test-only; see `rmk/tests/scenarios/README.md`.
+/// Expand a directory of simulator scenario TOMLs into `#[test]` fns targeting
+/// rmk's `tests/simulator` harness. Test-only; see
+/// `rmk/tests/scenarios/README.md`.
 #[cfg(feature = "_simulator")]
 #[doc(hidden)]
 #[proc_macro]
 pub fn run_tests(input: TokenStream) -> TokenStream {
-    let scenario = parse_macro_input!(input as syn::LitStr);
-    codegen::simulator::expand_run_tests(scenario).into()
+    let dir = parse_macro_input!(input as syn::LitStr);
+    codegen::simulator::expand_run_tests(dir).into()
 }
 
 #[proc_macro_attribute]
