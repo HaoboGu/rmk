@@ -16,6 +16,8 @@ use rmk_types::morse::{MorseMode, MorsePattern, TAP};
 use rmk_types::mouse_button::MouseButtons;
 use usbd_hid::descriptor::{MediaKeyboardReport, SystemControlReport};
 
+#[cfg(feature = "_ble")]
+use crate::ble::sleep::report_activity;
 use crate::channel::send_hid_report;
 use crate::core_traits::Runnable;
 #[cfg(all(feature = "split", feature = "_ble"))]
@@ -31,8 +33,6 @@ use crate::keyboard::mouse::{MouseAction, MouseState};
 use crate::keyboard::oneshot::OneShotState;
 use crate::keyboard_macros::MacroOperation;
 use crate::keymap::KeyMap;
-#[cfg(all(feature = "split", feature = "_ble"))]
-use crate::split::ble::central::update_activity_time;
 use crate::{COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, boot};
 
 pub(crate) mod auto_mouse_layer;
@@ -365,9 +365,9 @@ impl<'a> Keyboard<'a> {
         #[cfg(feature = "host_security")]
         self.keymap.update_matrix_state(&event);
 
-        // Update activity time for BLE split central sleep management
-        #[cfg(all(feature = "split", feature = "_ble"))]
-        update_activity_time();
+        // Report activity for sleep management
+        #[cfg(feature = "_ble")]
+        report_activity();
 
         // Capture the event time once per event and thread it through.
         let event_time = Instant::now();

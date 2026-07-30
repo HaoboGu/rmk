@@ -241,7 +241,7 @@ fn resolve_passkey_enabled(ble: &crate::BleConfig) -> Result<Passkey, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_passkey_enabled;
+    use super::{BuildConstants, resolve_passkey_enabled};
     use crate::{BleConfig, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS, MIN_PASSKEY_ENTRY_TIMEOUT_SECS};
 
     #[test]
@@ -308,5 +308,24 @@ mod tests {
     fn deactivate_on_key_with_action_subs_set_is_accepted() {
         let toml = "[event.action]\nchannel_size = 16\npubs = 1\nsubs = 1\n\n[[behavior.auto_mouse_layer]]\ntarget_layer = 1\ndeactivate_on_key = true\n";
         assert!(parse(toml).build_constants(&[]).is_ok());
+    }
+
+    #[test]
+    fn ble_reserves_advertising_timeout_wake_subscribers() {
+        // ble/mod.rs subscribes to KeyboardEvent/PointingEvent when advertising
+        // times out, on top of every permanent subscriber. Without a reserved
+        // slot that call panics instead of sleeping until the next key press.
+        let base = parse("").build_constants(&[]).unwrap();
+        let ble = parse("").build_constants(&["_ble"]).unwrap();
+
+        let subs =
+            |constants: &BuildConstants, event: &str| constants.events.iter().find(|e| e.name == event).unwrap().subs;
+        for event in ["keyboard", "pointing"] {
+            assert_eq!(
+                subs(&ble, event),
+                subs(&base, event) + 1,
+                "{event} needs a wake subscriber slot under _ble"
+            );
+        }
     }
 }
