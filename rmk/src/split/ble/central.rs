@@ -515,12 +515,22 @@ async fn sleep_manager_task<
             // `conn` is the split central -> peripheral BLE link. While the
             // central is sleeping, use a longer interval to reduce central-side
             // radio wakeups; normal params are restored on activity.
-            let conn_params = RequestedConnParams {
-                min_connection_interval: Duration::from_millis(200),
-                max_connection_interval: Duration::from_millis(200),
-                max_latency: 25, // 5s
-                supervision_timeout: Duration::from_secs(11),
-                ..Default::default()
+            let conn_params = if crate::state::active_transport().is_some() {
+                RequestedConnParams {
+                    min_connection_interval: Duration::from_millis(20),
+                    max_connection_interval: Duration::from_millis(20),
+                    max_latency: 200, // 4s
+                    supervision_timeout: Duration::from_secs(9),
+                    ..Default::default()
+                }
+            } else {
+                RequestedConnParams {
+                    min_connection_interval: Duration::from_millis(200),
+                    max_connection_interval: Duration::from_millis(200),
+                    max_latency: 25, // 5s
+                    supervision_timeout: Duration::from_secs(11),
+                    ..Default::default()
+                }
             };
 
             // Update connection parameters
