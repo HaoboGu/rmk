@@ -65,7 +65,6 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
 - [ ] Default bootloader
 - [x] USB DFU
 - [x] Flashing peripherals from the central via uart
-- [ ] Flashing peripherals from the central via ble
-- [ ] OTA updates
+- [x] OTA updates (only for nrf52840 and Pico W)
 
 If you want to contribute, please feel free to open an issue or PR, or just ping me! Any forms of contribution are welcome :D

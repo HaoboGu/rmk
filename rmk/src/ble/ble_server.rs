@@ -3,6 +3,8 @@ use usbd_hid::descriptor::{AsInputReport, SerializedDescriptor};
 
 use super::battery_service::BatteryService;
 use super::device_info::DeviceConfigurationService;
+#[cfg(feature = "dfu_ble")]
+use super::dfu_service::{ButtonlessDfuService, DfuService};
 #[cfg(feature = "host")]
 use crate::hid::ViaReport;
 use crate::hid::{BleCompositeReport, CompositeReportType, HidError, HidWriterTrait, Report};
@@ -11,16 +13,17 @@ use crate::hid::{BleCompositeReport, CompositeReportType, HidError, HidWriterTra
 // per-connection client-specific attribute buffer size.
 pub(crate) const CCCD_TABLE_SIZE: usize = trouble_host::config::CLIENT_ATT_TABLE_SIZE;
 
-// `gatt_server` compiles every member regardless of the surrounding `cfg` —
-// gating an individual field with `#[cfg(feature = "host")]` doesn't work. So
-// the whole struct is duplicated, with and without `host_service`.
-#[cfg(feature = "host")]
 #[gatt_server]
 pub(crate) struct Server {
     pub(crate) battery_service: BatteryService,
     pub(crate) hid_service: HidService,
+    #[cfg(feature = "host")]
     pub(crate) host_service: VialService,
     pub(crate) device_config_service: DeviceConfigurationService,
+    #[cfg(feature = "dfu_ble")]
+    pub(crate) dfu_service: DfuService,
+    #[cfg(feature = "dfu_ble")]
+    pub(crate) buttonless_dfu_service: ButtonlessDfuService,
 }
 
 /// GATT service exposing the Vial-over-HID protocol. The keyboard writes replies via
@@ -44,14 +47,6 @@ pub(crate) struct VialService {
     #[descriptor(uuid = "2908", read, value = [0u8, 2u8])]
     #[characteristic(uuid = "2a4d", read, write, write_without_response)]
     pub(crate) output_data: [u8; 32],
-}
-
-#[cfg(not(feature = "host"))]
-#[gatt_server]
-pub(crate) struct Server {
-    pub(crate) battery_service: BatteryService,
-    pub(crate) hid_service: HidService,
-    pub(crate) device_config_service: DeviceConfigurationService,
 }
 
 /// The single HID service carrying all reports, distinguished by report id via

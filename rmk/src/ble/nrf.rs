@@ -1,6 +1,12 @@
 use embassy_sync::once_lock::OnceLock;
 use heapless::String;
 
+#[cfg(feature = "dfu_ble")]
+pub(crate) fn make_dfu_handler(
+    mgr: &crate::dfu::DfuFlashManager,
+) -> crate::dfu::ble_dfu::BleDfuHandler<crate::dfu::ble_nrf::AsyncDfuPartition> {
+    crate::dfu::ble_nrf::AsyncDfuPartition::make_dfu_handler(mgr)
+}
 pub(crate) fn get_serial_number() -> &'static str {
     static SERIAL: OnceLock<String<20>> = OnceLock::new();
 

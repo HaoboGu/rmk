@@ -392,3 +392,72 @@ Without `mark_booted()` embassy-boot will revert the update at next reboot, beca
 | Peripheral flashes 3 times after update | Firmware crashed or `mark_booted()` not called in the peripheral. Add `[dfu]` to `keyboard.toml` (using config) or call `rmk::dfu::mark_booted()` (using Rust). |
 | `dfu-util -a 1` shows `dfuERROR` or hangs at 0% | Peripheral not connected or its firmware is built without the `dfu_split` feature. |
 
+---
+
+## BLE DFU (dfu_ble)
+
+RMK supports wireless firmware updates over BLE on nRF52 chips. This feature implements the [Nordic Secure DFU protocol](https://infocenter.nordicsemi.com/topic/sdk_nrf5_v17.1.0/ble_sdk_app_dfu_bootloader.html) in the application firmware via the [`nrf-dfu-target`](https://docs.rs/nrf-dfu-target/) crate. Firmware updates could be sent wirelessly using Nordic-compatible DFU tools. However, the problem with most of those tools is that they expect the nRF's `mcuboot` bootloader to be present. They want to reboot the device into this bootloader to flash the firmware. RMK does not do that; it receives the firmware at runtime, so every tool that expects the `mcuboot` bootloader to respond won't work. Only tools, that don't require the device to be in the bootloader work. Therefore RMK has its own command-line tool, [B.O.L.T](https://codeberg.org/Schievel/bolt). 
+
+### Requirements
+
+- nRF52840 chip or RP2040 with CYW43439 (Pico W)
+- embassy-boot flash setup (see above, flash partitioning and a fitting memory.x)
+- fitting embassy-boot bootloader flashed to the chip (e.g. bootymcbootface)
+- A BLE feature gate (e.g., `nrf52840_ble` or `rp2040_ble`)
+- Feature `dfu_nrf` (nRF) or `dfu_rp` (Pico W) for DFU handling + `dfu_ble` for BLE DFU
+
+### Feature flags
+
+```toml title="Cargo.toml"
+# for nRF52840
+rmk = { version = "...", features = ["nrf52840_ble", "dfu_nrf", "dfu_ble"] }
+# for Pico W:
+# rmk = { version = "...", features = ["rp2040_ble", "dfu_rp", "dfu_ble"] }
+```
+
+The `dfu_ble` feature adds two GATT services to the BLE advertisement:
+- **Secure DFU Service** (`0000fe59-0000-1000-8000-00805f9b34fb`) — handles the firmware transfer protocol
+- **Buttonless DFU Service** (`8ec90003-f315-4f60-9fb8-838830daea50`) — allows initiating DFU without a physical button
+
+### How it works
+
+1. Keyboard advertises with the DFU services alongside HID
+2. DFU tool (B.O.L.T.) connects and discovers the DFU services
+3. Init packet is transferred (command phase) via the Control Point characteristic
+4. Firmware binary is written in chunks (data phase) via the Packet characteristic
+5. On completion, the firmware is verified, marked as valid, and the device reboots
+6. The bootloader swaps the new firmware into the ACTIVE partition of the flash
+
+::: note
+
+USB DFU and BLE DFU can be used simultaneously.
+
+:::
+
+### Configuration
+
+In `keyboard.toml`, the `[dfu]` section applies to both USB DFU and BLE DFU:
+
+```toml
+[dfu]
+led = "P0_15"
+```
+
+See the [bootloader configuration](../../configuration/bootloader.mdx) for full DFU configuration options.
+
+### Split keyboards
+
+For split keyboards, the peripheral must advertise directly over BLE to accept a DFU transfer. Since RMK split peripherals only advertise when they are not connected to their central, you need to **power off or reset the central side** first. The peripheral will then time out after 10 seconds trying to connect to its central and fall back to a dedicated DFU advertising mode that advertises the device name.
+
+1. Power off or reset the central half
+2. Wait for the peripheral to enter DFU advertising mode (up to 10 seconds — look for the device name in BLE scans)
+3. Run B.O.L.T with the peripheral's device name (usually `"<name> per<id>"`, e.g. `"My RMK Keyboard per0"`)
+
+```bash
+bolt flash --elf path/to/peripheral.elf -n "My RMK Keyboard per0" --prn 500
+```
+
+The transfer works identically to a non-split device. After the peripheral reboots with the new firmware, power on the central again to re-establish the split connection.
+
+### Security
+The BLE DFU firmware transmission only works with a device that is paired, but for simple pairing (without `passkey_entry`) this does not prevent anyone from secretly flashing the keyboard. Therefore it is recommended to use the [dfu_lock](#unlocking-dfu-optional-dfu_lock) feature or [BLE Passkey Entry](../../features/wireless.md#ble-passkey-entry) if there are concerns about attacks.

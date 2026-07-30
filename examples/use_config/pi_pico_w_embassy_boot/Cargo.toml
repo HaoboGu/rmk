@@ -1,0 +1,79 @@
+[package]
+name = "rmk-pi-pico-w-embassy-boot"
+version = "0.2.0"
+authors = ["Haobo Gu <haobogu@outlook.com>"]
+description = "Keyboard firmware written in Rust"
+homepage = "https://github.com/haobogu/rmk"
+repository = "https://github.com/haobogu/rmk"
+readme = "../../README.md"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+rmk = { path = "../../../rmk", features = ["pico_w_ble", "rp2040", "dfu_ble", "dfu_rp"] }
+embassy-time = { version = "0.5", features = ["defmt"] }
+embassy-rp = { version = "0.10", features = [
+    "rp2040",
+    "defmt",
+    "time-driver",
+    "critical-section-impl",
+] }
+embassy-executor = { version = "0.10", features = [
+    "defmt",
+    "platform-cortex-m",
+    "executor-thread",
+] }
+cortex-m-rt = { version = "0.7.5", features = ["set-vtor"] }
+portable-atomic = { version = "1", features = ["critical-section"] }
+defmt = "1"
+defmt-rtt = "1"
+panic-probe = { version = "1", features = ["print-defmt"] }
+cyw43 = { version = "0.7.0", features = ["defmt", "firmware-logs", "bluetooth"] }
+cyw43-pio = { version = "0.10.0", features = ["defmt"] }
+static_cell = "2"
+bt-hci = { version = "0.9", features = ["defmt"] }
+
+
+[features]
+skip-cyw43-firmware = []
+
+[build-dependencies]
+xz2 = "0.1.7"
+json = "0.12"
+const-gen = "1.6"
+reqwest = { version = "0.13", features = ["blocking"]}
+
+[[bin]]
+name = "rmk-pi-pico-w-embassy-boot"
+test = false
+bench = false
+
+[profile.dev]
+codegen-units = 1
+debug = true
+opt-level = 1
+overflow-checks = true
+lto = false
+panic = 'unwind'
+
+[profile.release]
+codegen-units = 1
+debug = true
+opt-level = "z"
+overflow-checks = false
+lto = "fat"
+
+[patch.crates-io]
+cyw43 = { git = "https://github.com/embassy-rs/embassy", rev = "e372d1e1e624032ddc5ea932ac4c368b28ccb0dd" }
+cyw43-pio = { git = "https://github.com/embassy-rs/embassy", rev = "e372d1e1e624032ddc5ea932ac4c368b28ccb0dd" }
+embassy-rp = { git = "https://github.com/embassy-rs/embassy", rev = "e372d1e1e624032ddc5ea932ac4c368b28ccb0dd" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "e372d1e1e624032ddc5ea932ac4c368b28ccb0dd" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy", rev = "e372d1e1e624032ddc5ea932ac4c368b28ccb0dd" }
+embassy-time-queue-utils = { git = "https://github.com/embassy-rs/embassy", rev = "e372d1e1e624032ddc5ea932ac4c368b28ccb0dd" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy", rev = "e372d1e1e624032ddc5ea932ac4c368b28ccb0dd" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy", rev = "e372d1e1e624032ddc5ea932ac4c368b28ccb0dd" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy", rev = "e372d1e1e624032ddc5ea932ac4c368b28ccb0dd" }
+embassy-usb = { git = "https://github.com/embassy-rs/embassy", rev = "e372d1e1e624032ddc5ea932ac4c368b28ccb0dd" }
+embassy-usb-driver = { git = "https://github.com/embassy-rs/embassy", rev = "e372d1e1e624032ddc5ea932ac4c368b28ccb0dd" }
+embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy", rev = "e372d1e1e624032ddc5ea932ac4c368b28ccb0dd" }
+embassy-hal-internal = { git = "https://github.com/embassy-rs/embassy", rev = "e372d1e1e624032ddc5ea932ac4c368b28ccb0dd" }
