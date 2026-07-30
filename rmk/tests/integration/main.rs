@@ -1,4 +1,4 @@
-//! rmk's only test target — `Cargo.toml` sets `autotests = false` and names it.
+//! rmk's only test target, named `integration` after this directory.
 //!
 //! [`simulator`] is the harness every case runs on. `run_tests!` expands each
 //! `scenarios/*.toml` into a `mod` of keyboard-behavior tests;

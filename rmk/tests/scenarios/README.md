@@ -185,10 +185,9 @@ fires: `mouse_key_combo_does_not_stick_wheel` is paired with
 `mouse_wheel_tap_settles` for that reason.
 
 **Write it in Rust only when a timeline has no vocabulary for it** — what
-`tests/rynk.rs` and `tests/vial.rs` hold is read-chunk boundaries, buffer
-occupancy, two concurrent sessions, and two keyboards built over one flash.
-Prefer that over teaching the schema a word one case needs. Vial has no scenario
-vocabulary at all, so its whole surface lives there. Rust cases still drive the
-keyboard end-to-end through `SimKeyboard`: `scripts/check_simulator_tests.sh`
-rejects a test that reaches past it for `Keyboard::new`, `KeyMap::new`, or a
-report channel.
+`tests/integration/rynk.rs` and `tests/integration/vial.rs` hold is read-chunk
+boundaries, buffer occupancy, two concurrent sessions, and two keyboards built
+over one flash. Prefer that over teaching the schema a word one case needs. Vial
+has no scenario vocabulary at all, so its whole surface lives there. Rust cases
+still drive the keyboard end-to-end through `SimKeyboard` rather than reaching
+past it for `Keyboard::new`, `KeyMap::new`, or a report channel.

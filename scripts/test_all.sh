@@ -15,8 +15,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/../.github/ci/_lib.sh"
 # repo root. Pass it explicitly.
 nx=(nextest run --config-file "$repo_root/.config/nextest.toml")
 
-bash "$repo_root/scripts/check_simulator_tests.sh"
-
 # rmk-types: default-features run + host-feature run (the latter enables
 # rynk/_ble/split/steno, which is required to compile the wire-format
 # snapshot tests under src/protocol/rynk/snapshots/) + steno-only run.

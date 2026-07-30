@@ -324,8 +324,7 @@ mod tests {
         let mut df = Deframer::new();
         df.commit(work.len());
         let mut out = Vec::new();
-        loop {
-            let Some(frame_len) = df.next(&mut work) else { break };
+        while let Some(frame_len) = df.next(&mut work) {
             let frame = &work[..frame_len];
             out.push((
                 u16::from_le_bytes([frame[0], frame[1]]),
@@ -349,11 +348,13 @@ mod tests {
         let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
 
         const UNLOCK_KEYS: &[(u8, u8)] = &[(0, 0)];
-        let mut config = RmkConfig::default();
-        config.lock_config = LockConfig {
-            unlock_keys: UNLOCK_KEYS,
-            insecure: false,
-            write_requires_unlock: false,
+        let config = RmkConfig {
+            lock_config: LockConfig {
+                unlock_keys: UNLOCK_KEYS,
+                insecure: false,
+                write_requires_unlock: false,
+            },
+            ..Default::default()
         };
         let service = RynkService::new(&keymap, &config);
 

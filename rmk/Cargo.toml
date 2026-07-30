@@ -9,11 +9,6 @@ readme = "../README.md"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 resolver = "2"
-autotests = false
-
-[[test]]
-name = "integration"
-path = "tests/integration.rs"
 
 [dependencies]
 rmk-macro = { version = "=0.7.1", path = "../rmk-macro" }

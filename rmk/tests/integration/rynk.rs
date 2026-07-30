@@ -17,7 +17,9 @@ use rmk::event::{
 use rmk::k;
 use rmk::test_support::test_block_on;
 use rmk::types::keycode::HidKeyCode;
-use rmk_types::protocol::rynk::endpoint::{Endpoint, Topic};
+use rmk_types::connection::ConnectionStatus;
+use rmk_types::led_indicator::LedIndicator;
+use rmk_types::protocol::rynk::command::Endpoint;
 use rmk_types::protocol::rynk::{Cmd, RynkError, RynkHeader, command, encode_frame};
 
 use crate::simulator::SimKeyboard;
@@ -43,17 +45,27 @@ impl SimKeyboard {
     }
 
     /// Assert the device's next frame is this topic push. Topics carry a bare
-    /// payload at seq 0, not a `Result`.
-    pub(crate) fn rynk_topic<T: Topic>(&mut self, payload_json: &str) -> &mut Self {
-        let payload = payload::<T::Payload>(payload_json, "topic");
-        self.expect_host_frame(frame(T::CMD, 0, &payload))
+    /// payload at seq 0, not a `Result`. The topic table has no marker types, so
+    /// `cmd` names the payload type here, the way it names the event below.
+    pub(crate) fn rynk_topic(&mut self, cmd: Cmd, json: &str) -> &mut Self {
+        let expected = match cmd {
+            Cmd::LayerChange => frame(cmd, 0, &payload::<u8>(json, "topic")),
+            Cmd::WpmUpdate => frame(cmd, 0, &payload::<u16>(json, "topic")),
+            Cmd::ConnectionChange => frame(cmd, 0, &payload::<ConnectionStatus>(json, "topic")),
+            Cmd::SleepState => frame(cmd, 0, &payload::<bool>(json, "topic")),
+            Cmd::LedIndicatorChange => frame(cmd, 0, &payload::<LedIndicator>(json, "topic")),
+            #[cfg(feature = "_ble")]
+            Cmd::BatteryStatusChange => frame(cmd, 0, &payload::<rmk_types::battery::BatteryStatus>(json, "topic")),
+            cmd => panic!("{cmd:?} is not a topic"),
+        };
+        self.expect_host_frame(expected)
     }
 
-    /// Publish the internal event topic `T` forwards, to cause its push. Only
+    /// Publish the internal event `cmd`'s topic forwards, to cause its push. Only
     /// the topics fed by state a timeline cannot otherwise reach need this;
     /// `LayerChange` is caused by pressing a layer key.
-    pub(crate) fn rynk_publish<T: Topic>(&mut self, json: &str) -> &mut Self {
-        match T::CMD {
+    pub(crate) fn rynk_publish(&mut self, cmd: Cmd, json: &str) -> &mut Self {
+        match cmd {
             Cmd::WpmUpdate => self.publish(publish_event_async(WpmUpdateEvent(payload(json, "topic")))),
             Cmd::SleepState => self.publish(publish_event_async(SleepStateEvent(payload(json, "topic")))),
             Cmd::LedIndicatorChange => self.publish(publish_event_async(LedIndicatorEvent(payload(json, "topic")))),

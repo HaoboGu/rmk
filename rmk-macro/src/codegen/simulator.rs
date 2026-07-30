@@ -9,7 +9,7 @@
 //! and behavior, and never resolves its hardware.
 //!
 //! Each file becomes a `mod <file_stem>` of tests driving the `SimKeyboard`
-//! harness in rmk's `tests/simulator`, expanding to what a
+//! harness in rmk's `tests/integration/simulator`, expanding to what a
 //! hand-written test would contain.
 
 use std::fs;
@@ -63,7 +63,36 @@ fn expand_dir(relative: &str) -> Result<TokenStream2, String> {
         .iter()
         .map(|path| expand_file(path).map_err(|e| format!("{}: {e}", path.display())))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(quote! { #(#mods)* })
+
+    // `expand_file` has rustc track every file this macro reads, but nothing
+    // tracks the listing: a scenario added later changes no tracked file, so
+    // cargo keeps the test binary that predates it. A deleted one leaves a
+    // tracked path that no longer exists, which does rebuild — so only
+    // additions can go unnoticed, and this catches them at run time.
+    let names = paths.iter().map(|p| {
+        let name = p.file_name().and_then(|n| n.to_str());
+        name.expect("scenario paths are UTF-8 and name a file")
+    });
+    Ok(quote! {
+        #(#mods)*
+
+        #[test]
+        fn scenarios_are_registered() {
+            let expanded = [#(#names),*];
+            let dir = ::std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(#relative);
+            let listing = ::std::fs::read_dir(&dir).expect("scenario directory");
+            let added: Vec<String> = listing
+                .map(|e| e.expect("scenario entry").file_name().to_string_lossy().into_owned())
+                .filter(|name| name.ends_with(".toml") && !expanded.contains(&name.as_str()))
+                .collect();
+            assert!(
+                added.is_empty(),
+                "{added:?} reached this directory after the test binary was built; \
+                 `touch {}` to expand them too",
+                file!(),
+            );
+        }
+    })
 }
 
 /// Read one scenario and its base board, then expand the whole file.
@@ -87,12 +116,20 @@ fn expand_file(path: &Path) -> Result<TokenStream2, String> {
     let tests = expand_scenario(doc, base.as_deref())?;
     let stem = path.file_stem().and_then(|s| s.to_str());
     let stem = stem.expect("scenario paths are UTF-8 and name a file");
-    // Editing a scenario has to re-expand it, which cargo only knows to do
-    // because rmk's build script watches the directory.
     let mod_name = format_ident!("{}", stem.replace('-', "_"));
+
+    // Editing a scenario has to re-expand it, and cargo only rebuilds on files
+    // rustc reports as read. `include_bytes!` is that report; the constant
+    // itself is never used.
+    let tracked = [Some(path), base_path.as_deref()].into_iter().flatten();
+    let tracked = tracked.map(|path| {
+        let path = path.to_str().expect("scenario paths are UTF-8");
+        quote! { const _: &[u8] = include_bytes!(#path); }
+    });
 
     Ok(quote! {
         mod #mod_name {
+            #(#tracked)*
             #(#tests)*
         }
     })
@@ -369,7 +406,7 @@ fn input_step(keymap: &Keymap, value: &Value) -> Result<TokenStream2, String> {
             let topic = command_ident(&step.topic)?;
             let payload = json(step.payload.as_ref())?;
             let method = format_ident!("{op}");
-            quote! { .#method::<::rmk::types::protocol::rynk::command::#topic>(#payload) }
+            quote! { .#method(::rmk::types::protocol::rynk::Cmd::#topic, #payload) }
         }
         // Bytes straight onto the link, framed by nothing: the only way to state
         // what a malformed or oversized frame does to a session. `rynk_reply`

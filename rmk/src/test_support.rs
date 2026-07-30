@@ -1,8 +1,8 @@
 //! Test-only helpers, never compiled into firmware.
 //!
 //! Serves two consumers: `#[cfg(test)]` modules under `src/`, and the simulator
-//! harness in `tests/simulator`. The accessors below are wrappers rather than
-//! `pub use`, which can't widen `pub(crate)` visibility.
+//! harness in `tests/integration/simulator`. The accessors below are wrappers
+//! rather than `pub use`, which can't widen `pub(crate)` visibility.
 
 use core::future::Future;
 use core::pin::pin;

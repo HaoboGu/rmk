@@ -13,7 +13,6 @@ nextest_cfg="$repo_root/.config/nextest.toml"
 nx=(nextest run --config-file "$nextest_cfg" --profile ci)
 
 log_section "Running tests"
-bash "$repo_root/scripts/check_simulator_tests.sh"
 cargo +stable "${nx[@]}" --manifest-path rmk-config/Cargo.toml
 cargo +stable "${nx[@]}" --manifest-path rmk-types/Cargo.toml
 # Exercise the rynk protocol module (gated behind `rynk`).

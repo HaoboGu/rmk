@@ -13,7 +13,7 @@ use syn::parse_macro_input;
 use crate::codegen::parse_keyboard_mod;
 
 /// Expand a directory of simulator scenario TOMLs into `#[test]` fns targeting
-/// rmk's `tests/simulator` harness. Test-only; see
+/// rmk's `tests/integration/simulator` harness. Test-only; see
 /// `rmk/tests/scenarios/README.md`.
 #[cfg(feature = "_simulator")]
 #[doc(hidden)]

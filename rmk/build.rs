@@ -11,9 +11,6 @@ fn main() {
     common::set_target_cfgs(&mut cfgs);
 
     println!("cargo:rerun-if-changed=build.rs");
-    // `run_tests!` reads these at macro-expansion time, which cargo cannot see,
-    // so an added scenario would otherwise not rebuild the test target.
-    println!("cargo:rerun-if-changed=tests/scenarios");
 
     // Compute build hash and write to constants.rs
     let build_hash = compute_build_hash();
