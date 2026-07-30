@@ -263,15 +263,29 @@ fn default_central_conn_param() -> RequestedConnParams {
     }
 }
 
-/// Parameters for the central -> peripheral link while the central sleeps: a
-/// long interval plus peripheral latency to cut central-side radio wakeups.
+/// Parameters for the central -> peripheral link while the central sleeps.
+///
+/// With a host connected, the central's radio is busy serving the host link
+/// anyway, so keep a short interval — the first key after wake-up arrives
+/// quickly, and the peripheral still saves power through its latency. With no
+/// host, a long interval also cuts the central-side radio wakeups.
 fn sleep_central_conn_param() -> RequestedConnParams {
-    RequestedConnParams {
-        min_connection_interval: Duration::from_millis(200),
-        max_connection_interval: Duration::from_millis(200),
-        max_latency: 25, // 5s
-        supervision_timeout: Duration::from_secs(11),
-        ..Default::default()
+    if crate::state::active_transport().is_some() {
+        RequestedConnParams {
+            min_connection_interval: Duration::from_millis(20),
+            max_connection_interval: Duration::from_millis(20),
+            max_latency: 200, // 4s
+            supervision_timeout: Duration::from_secs(9),
+            ..Default::default()
+        }
+    } else {
+        RequestedConnParams {
+            min_connection_interval: Duration::from_millis(200),
+            max_connection_interval: Duration::from_millis(200),
+            max_latency: 25, // 5s
+            supervision_timeout: Duration::from_secs(11),
+            ..Default::default()
+        }
     }
 }
 

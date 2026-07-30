@@ -151,11 +151,6 @@ where
         let profile_manager = &mut self.profile_manager;
         let product_name = self.product_name;
 
-        // Waker on key or pointing activity after the advertising
-        // timeout.
-        let mut key_wake = crate::event::KeyboardEvent::subscriber();
-        let mut pointing_wake = crate::event::PointingEvent::subscriber();
-
         let connection_loop = async {
             loop {
                 match select(
@@ -199,6 +194,13 @@ where
 
                         request_sleep();
 
+                        // Wake on key or pointing activity after the advertising
+                        // timeout. Subscribed here, not up front: a permanently
+                        // idle subscriber stalls `publish_event_async` once the
+                        // channel fills, and its backlog would satisfy this wait
+                        // instantly with a stale event.
+                        let mut key_wake = crate::event::KeyboardEvent::subscriber();
+                        let mut pointing_wake = crate::event::PointingEvent::subscriber();
                         let _ = select(key_wake.next_message_pure(), pointing_wake.next_message_pure()).await;
 
                         report_activity();
