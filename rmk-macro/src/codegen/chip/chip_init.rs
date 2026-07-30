@@ -5,6 +5,7 @@ use rmk_config::resolved::Hardware;
 use rmk_config::resolved::hardware::{BoardConfig, ChipModel, ChipSeries, CommunicationConfig};
 use syn::{ItemFn, ItemMod};
 
+use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
 use crate::codegen::override_helper::{Overwritten, find_overwritten};
 
 /// Expand chip initialization code
@@ -94,7 +95,13 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
             // Unibody: 4696. Split central: 6080 + (N-1) * 2288 per peripheral.
             let sdc_mem_size = if peripheral_id.is_none() {
                 if peri_num > 0 {
-                    6080 + (peri_num.saturating_sub(1)) * 2288
+                    // Subrating needs extra memory
+                    // TODO: Check how much exactly
+                    if is_feature_enabled(&get_rmk_features(), "subrating") {
+                        6400 + (peri_num.saturating_sub(1)) * 2288
+                    } else {
+                        6080 + (peri_num.saturating_sub(1)) * 2288
+                    }
                 } else {
                     4696
                 }

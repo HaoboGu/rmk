@@ -1,6 +1,8 @@
 #[cfg(feature = "_ble")]
 use core::cell::RefCell;
 
+#[cfg(feature = "subrating")]
+use bt_hci::cmd::le::LeSubrateRequest;
 #[cfg(not(feature = "_ble"))]
 use embedded_io_async::{Read, Write};
 #[cfg(feature = "_ble")]
@@ -30,10 +32,15 @@ pub async fn run_peripheral_manager<
     const COL: usize,
     const ROW_OFFSET: usize,
     const COL_OFFSET: usize,
-    #[cfg(feature = "_ble")] C: Controller
+    #[cfg(all(feature = "_ble", not(feature = "subrating")))] C: Controller
         + ControllerCmdSync<LeSetScanParams>
         + ControllerCmdAsync<LeSetPhy>
         + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    #[cfg(all(feature = "_ble", feature = "subrating"))] C: Controller
+        + ControllerCmdSync<LeSetScanParams>
+        + ControllerCmdAsync<LeSetPhy>
+        + ControllerCmdSync<LeReadLocalSupportedFeatures>
+        + ControllerCmdAsync<LeSubrateRequest>,
     #[cfg(not(feature = "_ble"))] S: Read + Write,
 >(
     id: usize,

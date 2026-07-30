@@ -1,4 +1,6 @@
-use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
+use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetHostFeature, LeSetPhy};
+#[cfg(feature = "subrating")]
+use bt_hci::cmd::le::{LeSubrateRequest, LeSubrateRequestParams};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use embassy_futures::join::join3;
 use embassy_futures::select::{Either, Either3, select, select3};
@@ -38,6 +40,9 @@ pub(crate) mod nrf;
 pub mod passkey;
 pub(crate) mod profile;
 pub(crate) mod sleep;
+
+#[cfg(all(feature = "subrating", feature = "_no_subrating"))]
+compile_error!("You may not enable feature `subrating` on unsupported platforms!");
 
 /// Max number of connections
 pub(crate) const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + 1;
@@ -152,7 +157,10 @@ where
 impl<'a, 'b, 's, C> Runnable for BleTransport<'a, 'b, 's, C>
 where
     's: 'b,
-    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    C: Controller
+        + ControllerCmdAsync<LeSetPhy>
+        + ControllerCmdSync<LeReadLocalSupportedFeatures>
+        + ControllerCmdSync<LeSetHostFeature>,
 {
     async fn run(&mut self) -> ! {
         // Load the preferred connection from storage
@@ -173,6 +181,20 @@ where
         let product_name = self.product_name;
 
         let connection_loop = async {
+            // Set subrating host support feature flag
+            #[cfg(feature = "subrating")]
+            {
+                const CONN_SUBRATING_HOST_BIT: u8 = 38;
+                let cmd = LeSetHostFeature::new(CONN_SUBRATING_HOST_BIT, 1);
+                if let Err(e) = stack.command(cmd).await {
+                    error!("error setting host feature: {:?}", e);
+                }
+            }
+
+            #[cfg(feature = "split")]
+            // Signal to indicate the stack is started
+            crate::split::ble::central::STACK_STARTED.signal(true);
+
             loop {
                 match select(
                     advertise(product_name, &mut peripheral, server),
@@ -284,6 +306,34 @@ pub(crate) async fn ble_task<C: Controller + ControllerCmdAsync<LeSetPhy>, P: Pa
             error!("[ble_task] runner error: {:?}", e);
             embassy_time::Timer::after_millis(100).await;
         }
+<<<<<<< HEAD
+||||||| parent of 31ec794c (Enable Bluetooth LE Connection Subrating for split communication)
+
+        #[cfg(feature = "split")]
+        {
+            // Signal to indicate the stack is started
+            crate::split::ble::central::STACK_STARTED.signal(true);
+            if let Err(_e) = runner
+                .run_with_handler(&crate::split::ble::central::ScanHandler {})
+                .await
+            {
+                error!("[ble_task] runner.run_with_handler error");
+                embassy_time::Timer::after_millis(100).await;
+            }
+        }
+=======
+
+        #[cfg(feature = "split")]
+        {
+            if let Err(_e) = runner
+                .run_with_handler(&crate::split::ble::central::ScanHandler {})
+                .await
+            {
+                error!("[ble_task] runner.run_with_handler error");
+                embassy_time::Timer::after_millis(100).await;
+            }
+        }
+>>>>>>> 31ec794c (Enable Bluetooth LE Connection Subrating for split communication)
     }
 }
 
@@ -807,6 +857,47 @@ pub(crate) async fn update_conn_params<
                 return false;
             }
             Ok(_) => return true,
+        }
+    }
+    warn!("[update_conn_params] controller stayed busy, giving up");
+    false
+}
+
+/// Update the subrate factor.
+///
+/// Returns whether the request reached the controller, so callers that mirror
+/// the parameters in their own state don't record params that never landed.
+#[cfg(feature = "subrating")]
+pub(crate) async fn update_subrate_factor<
+    'a,
+    'b,
+    C: Controller + ControllerCmdAsync<LeSubrateRequest>,
+    P: PacketPool,
+>(
+    stack: &Stack<'a, C, P>,
+    params: LeSubrateRequestParams,
+) -> bool {
+    for _ in 0..10 {
+        let subrate_request = LeSubrateRequest::from(params);
+
+        match stack.async_command(subrate_request).await {
+            Ok(_) => return true,
+            Err(BleHostError::BleHost(Error::Hci(error))) => {
+                if 0x3A == error.to_status().into_inner() {
+                    // Busy, retry
+                    info!("[update_subrate_factor] HCI busy: {:?}", error);
+                    embassy_time::Timer::after_millis(100).await;
+                    continue;
+                }
+                error!("[update_subrate_factor] HCI error: {:?}", error);
+                return false;
+            }
+            Err(e) => {
+                #[cfg(feature = "defmt")]
+                let e = defmt::Debug2Format(&e);
+                error!("[update_subrate_factor] BLE host error: {:?}", e);
+                return false;
+            }
         }
     }
     warn!("[update_conn_params] controller stayed busy, giving up");
