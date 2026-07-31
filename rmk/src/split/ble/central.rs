@@ -260,7 +260,7 @@ fn default_central_conn_param() -> RequestedConnParams {
     RequestedConnParams {
         min_connection_interval: Duration::from_micros(7500),
         max_connection_interval: Duration::from_micros(7500),
-        max_latency: 30, // 225ms so master can sleep too.
+        max_latency: 300, // 2250ms
         supervision_timeout: Duration::from_secs(10),
         ..Default::default()
     }
@@ -272,7 +272,7 @@ fn default_central_subrate_params(handle: ConnHandle) -> LeSubrateRequestParams 
         handle,
         subrate_min: 1,
         subrate_max: 1,
-        max_latency: 10,
+        max_latency: 300, // 2250ms
         continuation_number: 0,
         supervision_timeout: ::bt_hci::param::Duration::from_secs(10),
     }
@@ -308,9 +308,9 @@ fn sleep_central_conn_param() -> RequestedConnParams {
 fn sleep_central_subrate_params(handle: ConnHandle) -> LeSubrateRequestParams {
     LeSubrateRequestParams {
         handle,
-        subrate_min: 30, // -> 225ms interval for master
-        subrate_max: 30,
-        max_latency: 15,        // -> 3.375s sleep for peripheral
+        subrate_min: 60, // 450ms interval -> 457.5ms key press latency
+        subrate_max: 60,
+        max_latency: 7, // 3,6s sleep for peripheral
         continuation_number: 2, // -> assure low latency reset of subrate factor.
         supervision_timeout: ::bt_hci::param::Duration::from_secs(8),
     }
@@ -554,10 +554,8 @@ async fn follow_sleep_state<
         #[cfg(feature = "subrating")]
         {
             let params = if sleeping {
-                info!("entering sleep mode subrating");
                 sleep_central_subrate_params(conn.handle())
             } else {
-                info!("resetting sleep mode subrating");
                 default_central_subrate_params(conn.handle())
             };
 

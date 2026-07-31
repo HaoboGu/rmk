@@ -693,7 +693,7 @@ pub(crate) async fn set_conn_params<
         &RequestedConnParams {
             min_connection_interval: Duration::from_micros(7500),
             max_connection_interval: Duration::from_micros(7500),
-            max_latency: 30,
+            max_latency: 300, // let central sleep and save power
             min_event_length: Duration::from_secs(0),
             max_event_length: Duration::from_secs(0),
             supervision_timeout: Duration::from_secs(10),
