@@ -8,7 +8,7 @@ use rmk_types::battery::BatteryStatus;
 use trouble_host::prelude::*;
 
 use super::ble_server::Server;
-use crate::ble::SLEEPING_STATE;
+use crate::ble::sleep::SLEEPING_STATE;
 use crate::core_traits::Runnable;
 use crate::event::{BatteryStatusEvent, SubscribableEvent};
 use crate::keyboard::LAST_KEY_TIMESTAMP;

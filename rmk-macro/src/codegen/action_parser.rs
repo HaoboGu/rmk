@@ -113,25 +113,34 @@ pub(crate) fn expand_profile(profile: &MorseProfile) -> proc_macro2::TokenStream
         quote! { ::core::option::Option::None }
     };
 
-    let hold_timeout_ms = match &profile.hold_timeout_ms {
-        Some(t) => {
-            let timeout = *t as u16;
-            quote! { ::core::option::Option::Some(#timeout) }
-        }
-        None => quote! { ::core::option::Option::None },
-    };
-
-    let gap_timeout_ms = match &profile.gap_timeout_ms {
-        Some(t) => {
-            let timeout = *t as u16;
-            quote! { ::core::option::Option::Some(#timeout) }
-        }
-        None => quote! { ::core::option::Option::None },
-    };
+    let hold_timeout_ms = expand_timeout("hold_timeout", &profile.hold_timeout_ms, 13);
+    let gap_timeout_ms = expand_timeout("gap_timeout", &profile.gap_timeout_ms, 13);
+    let quick_tap_timeout_ms =
+        expand_timeout("quick_tap_timeout", &profile.quick_tap_timeout_ms, 13);
 
     quote! {
         rmk::types::morse::MorseProfile::new(#unilateral_tap, #mode, #hold_timeout_ms, #gap_timeout_ms)
             .with_enable_flow_tap(#enable_flow_tap)
+            .with_quick_tap_timeout_ms(#quick_tap_timeout_ms)
+    }
+}
+
+/// Expands an optional timeout in ms to `Option<u16>` tokens, failing the build
+/// when the value exceeds the packed bit-field capacity.
+fn expand_timeout(field: &str, value: &Option<u64>, bits: u8) -> proc_macro2::TokenStream {
+    let max_ms = (1u64 << bits) - 1;
+    match value {
+        Some(t) => {
+            if *t > max_ms {
+                panic!(
+                    "\n\u{274c} keyboard.toml: behavior.morse.{} = {}ms exceeds the maximum of {}ms ({}-bit field).",
+                    field, t, max_ms, bits
+                );
+            }
+            let timeout = *t as u16;
+            quote! { ::core::option::Option::Some(#timeout) }
+        }
+        None => quote! { ::core::option::Option::None },
     }
 }
 
@@ -606,6 +615,7 @@ mod tests {
             normal_mode: Some(true),
             hold_timeout_ms: Some(250),
             gap_timeout_ms: Some(250),
+            quick_tap_timeout_ms: None,
         }
     }
 
@@ -628,6 +638,62 @@ mod tests {
         let inherit = expand_profile(&profile(None)).to_string();
         assert!(inherit.contains("with_enable_flow_tap"));
         assert!(inherit.contains("Option :: None"));
+    }
+
+    #[test]
+    fn expand_profile_emits_quick_tap_timeout() {
+        let explicit = expand_profile(&MorseProfile {
+            quick_tap_timeout_ms: Some(200),
+            ..profile(None)
+        })
+        .to_string();
+        assert!(explicit.contains("with_quick_tap_timeout_ms"));
+        assert!(explicit.contains("Option :: Some (200u16)"));
+
+        let inherit = expand_profile(&profile(None)).to_string();
+        assert!(inherit.contains("with_quick_tap_timeout_ms"));
+        assert!(inherit.contains("Option :: None"));
+    }
+
+    #[test]
+    fn expand_profile_accepts_max_timeouts() {
+        let out = expand_profile(&MorseProfile {
+            hold_timeout_ms: Some(8191),
+            gap_timeout_ms: Some(8191),
+            quick_tap_timeout_ms: Some(8191),
+            ..profile(None)
+        })
+        .to_string();
+        assert!(out.contains("8191u16"));
+    }
+
+    #[test]
+    #[should_panic(expected = "behavior.morse.hold_timeout = 8192ms exceeds the maximum of 8191ms")]
+    fn expand_profile_rejects_hold_timeout_over_max() {
+        let _ = expand_profile(&MorseProfile {
+            hold_timeout_ms: Some(8192),
+            ..profile(None)
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "behavior.morse.gap_timeout = 8192ms exceeds the maximum of 8191ms")]
+    fn expand_profile_rejects_gap_timeout_over_max() {
+        let _ = expand_profile(&MorseProfile {
+            gap_timeout_ms: Some(8192),
+            ..profile(None)
+        });
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "behavior.morse.quick_tap_timeout = 8192ms exceeds the maximum of 8191ms"
+    )]
+    fn expand_profile_rejects_quick_tap_timeout_over_max() {
+        let _ = expand_profile(&MorseProfile {
+            quick_tap_timeout_ms: Some(8192),
+            ..profile(None)
+        });
     }
 
     #[test]

@@ -118,7 +118,7 @@ mod tests {
         use crate::protocol::rmk::test_utils::{assert_max_size_bound, round_trip};
 
         /// Largest-encoded `KeyAction` variant: `TapHold` wraps two multi-field
-        /// `Action`s and a `MorseProfile(u32)`, many times the size of
+        /// `Action`s and a `MorseProfile(u64)`, many times the size of
         /// `KeyAction::No`. Using it in max-capacity bulk tests makes
         /// `assert_max_size_bound` exercise both the per-element and the
         /// length-prefix dimensions of the bound.

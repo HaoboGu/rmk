@@ -106,7 +106,7 @@ The first time, you need to flash the bootloader first, then RMK.
 **Via debug probe (probe-rs):**
 ```shell
 # in the bootymcbootface directory
-cargo build --relese
+cargo build --release
 # RP2040
 probe-rs run --chip RP2040 target/thumbv6m-none-eabi/release/bootymcbootface
 # nRF52840
@@ -233,7 +233,7 @@ This feature currently only works for split keyboards that use UART (serial) as 
 
 ```toml title="Cargo.toml"
 [dependencies]
-rmk = { features = [ "dfu_rp", "split", "dfu_split"] } # or dfu_nrf instead of dfu_rp
+rmk = { features = [ "dfu_rp", "split", "dfu_split"] }
 ```
 
 `dfu_split` requires `dfu` (implied by `dfu_rp` / `dfu_nrf`) and `split`.
@@ -253,7 +253,7 @@ own DFU flash partition, verifies the CRC, and resets into the new image.
 
 ### Embedded firmware path
 
-In order to embed the peripherals firmware into the centrals firmware, we need to tell the central during compilation where the binary of the peripheral is. 
+In order to embed the peripheral's firmware into the central's firmware, we need to tell the central during compilation where the binary of the peripheral is.
 Note that this must be a .bin-file. You can create one using `cargo make bin`, see also the Makefile.toml in the examples.
 
 ::: tip
@@ -267,13 +267,13 @@ import { Tab, Tabs, Rust, Toml } from '@theme'
 <Tabs>
 <Tab label={<Toml />}>
 
-Add a firmware field with the path to the peripherals firmware binary in the peripheral's section. This is a relative path starting from where the Cargo.toml is. 
+Add a firmware field with the path to the peripheral's firmware binary in the peripheral's section. This is a relative path starting from where the `Cargo.toml` is.
 
 ```toml title="keyboard.toml"
 [[split.peripheral]]
 rows     = 2
 cols     = 1
-firmware = "./peripheral.bin" 
+firmware = "./peripheral.bin"
 update_policy = "MatchHash" # optional
 # update_policy = "force" to force a peripheral update every start of central
 ```
@@ -296,7 +296,7 @@ rmk::dfu::set_firmware_update_data(0, PERIPHERAL_FW, rmk::crc32::crc32(PERIPHERA
 
 //...
 
-// in the call to run_peripheral_manaager, set an update policy
+// in the call to run_peripheral_manager, set an update policy
 // use UpdatePolicy::Force to force the peripheral update at every start of central
 run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver, rmk::split::central::UpdatePolicy::MatchHash
         ),
@@ -309,13 +309,13 @@ When the `set_firmware_update_data()` is not called, the central relies on passt
 </Tab>
 </Tabs>
 
-After flashing the central, it will ask the peripheral for its firmware checksum, the peripheral answers and if the checksum does not match with the checksum of the embedded peripheral firmware in the central, it will start flashing the embedded peripheral firmware onto the peripheral. The blink codes of the peripherals DFU LED (see above) are the same like during a normal DFU update. Additionally the centrals DFU LED will start blinking when sending the firmware to the peripheral. When UpdatePolicy::Force is given, the central skips this check and sends the firmware regardless of the checksum. 
-Likewise the peripheral will tell the central it’s firmware checksum proactively at every boot. So the firmware is still updated if the peripheral booted after the central. To avoid infinite loops of flashing and rebooting even when UpdatePolicy::Force is set, the central will not flash the firmware when the CRC is matching.
+After flashing the central, it will ask the peripheral for its firmware checksum, the peripheral answers and if the checksum does not match with the checksum of the embedded peripheral firmware in the central, it will start flashing the embedded peripheral firmware onto the peripheral. The blink codes of the peripheral's DFU LED (see above) are the same like during a normal DFU update. Additionally the central's DFU LED will start blinking when sending the firmware to the peripheral. When `UpdatePolicy::Force` is given, the central skips this check and sends the firmware regardless of the checksum.
+Likewise the peripheral will tell the central its firmware checksum proactively at every boot. So the firmware is still updated if the peripheral booted after the central. To avoid infinite loops of flashing and rebooting even when `UpdatePolicy::Force` is set, the central will not flash the firmware when the CRC is matching.
 
 ### Passthrough path
 
 The passthrough pass works identically to the normal DFU flash (see above) — just select a
-different alternate setting (`-a`). Up do four peripherals are supported.
+different alternate setting (`-a`). Up to four peripherals are supported.
 
 ```shell
 # Flash peripheral 0
@@ -373,9 +373,9 @@ rmk::dfu::init_flash(
 // mark the firmware as booted otherwise the bootloader thinks it didn't and will revert to the old firmware
 rmk::dfu::mark_booted();
 
-// you can also set a DFU LED for the perpheral, it flashes during updates
+// you can also set a DFU LED for the peripheral, it flashes during updates
 let mut dfu_led_processor = DfuLedProcessor::new(Output::new(p.PIN_25, Level::Low), false);
-// if used, run the procesor in run_all:
+// if used, run the processor in run_all:
 join(
     run_all!(matrix, dfu_led_processor, watchdog_runner),
     run_rmk_split_peripheral(uart_instance),
@@ -383,7 +383,7 @@ join(
 .await;
 ```
 
-Without `mark_booted()` embassy-boot will revert the update at next reboot, because it thinks the new firmware did not boot. (visible as three short flashes of the DFU LED when using bootymcbootface).
+Without `mark_booted()` embassy-boot will revert the update at next reboot, because it thinks the new firmware did not boot. (Visible as three short flashes of the DFU LED when using bootymcbootface.)
 
 ### Troubleshooting
 

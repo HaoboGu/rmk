@@ -106,8 +106,9 @@ pub(crate) async fn process_vial<'a>(
                 LittleEndian::write_u16(&mut report.input_data[8..10], 0x13);
                 LittleEndian::write_u16(&mut report.input_data[10..12], 0x16);
                 LittleEndian::write_u16(&mut report.input_data[12..14], 0x17);
-                LittleEndian::write_u16(&mut report.input_data[14..16], 0x1A);
-                LittleEndian::write_u16(&mut report.input_data[16..18], 0x1B);
+                LittleEndian::write_u16(&mut report.input_data[14..16], 0x19);
+                LittleEndian::write_u16(&mut report.input_data[16..18], 0x1A);
+                LittleEndian::write_u16(&mut report.input_data[18..20], 0x1B);
             }
         }
         VialCommand::GetBehaviorSetting => {
@@ -153,6 +154,10 @@ pub(crate) async fn process_vial<'a>(
                     } else {
                         report.input_data[1] = 0
                     }
+                }
+                SettingKey::QuickTapTerm => {
+                    let quick_tap_term = ctx.morse_default_profile().quick_tap_timeout_ms().unwrap_or(0);
+                    LittleEndian::write_u16(&mut report.input_data[1..3], quick_tap_term);
                 }
                 SettingKey::UnilateralTap => {
                     let unilateral_tap = ctx.morse_default_profile().unilateral_tap().unwrap_or(false);
@@ -230,6 +235,13 @@ pub(crate) async fn process_vial<'a>(
                         }
                     };
                     ctx.set_morse_default_profile(old.with_mode(new_mode)).await;
+                }
+                SettingKey::QuickTapTerm => {
+                    let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
+                    let new_profile = ctx
+                        .morse_default_profile()
+                        .with_quick_tap_timeout_ms(Some(timeout_time));
+                    ctx.set_morse_default_profile(new_profile).await;
                 }
                 SettingKey::UnilateralTap => {
                     let new_profile = ctx

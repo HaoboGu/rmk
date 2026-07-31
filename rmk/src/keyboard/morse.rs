@@ -73,6 +73,24 @@ impl<'a> Keyboard<'a> {
                     // The current key is already in the buffer, update its state
                     match k.state {
                         KeyState::Released(pattern) | KeyState::EarlyFired(pattern) => {
+                            // `k.press_time` holds the *release* time while in Released/EarlyFired,
+                            // so the subtraction below measures "time since last release".
+                            if !pattern.is_empty()
+                                && pattern.is_all_taps()
+                                && let Some(window) = Self::quick_tap_window(self.keymap, key_action)
+                                && event_time.saturating_duration_since(k.press_time) <= window
+                            {
+                                let tap_action = Self::action_from_pattern(self.keymap, key_action, TAP);
+                                if tap_action != Action::No {
+                                    debug!("Quick-tap fire: {:?}", tap_action);
+                                    k.state = KeyState::ProcessedButReleaseNotReportedYet(tap_action);
+                                    k.press_time = event_time;
+                                    k.timeout_time = timeout_time;
+                                    self.process_key_action_normal(tap_action, event).await;
+                                    return;
+                                }
+                            }
+
                             k.state = KeyState::Pressed(pattern);
                             k.press_time = event_time;
                             k.timeout_time = timeout_time;
@@ -131,7 +149,30 @@ impl<'a> Keyboard<'a> {
                         };
 
                         let final_action = Self::try_predict_final_action(self.keymap, &k.action, pattern);
-                        if let Some(action) = final_action {
+
+                        if !hold
+                            && pattern.is_all_taps()
+                            && let Some(action) = final_action
+                            && action != Action::No
+                            && let Some(window) = Self::quick_tap_window(self.keymap, &k.action)
+                        {
+                            let stashed_action = k.action;
+                            debug!("Stash for quick-tap, fire {:?} immediately", action);
+                            let mut press_event = event;
+                            press_event.pressed = true;
+                            self.process_key_action_tap(action, press_event).await;
+                            let gap = Self::morse_timeout(self.keymap, &stashed_action, false);
+                            let keep_alive = gap.max(window);
+                            if let Some(k) = self.held_buffer.find_pos_mut(event.pos) {
+                                k.state = KeyState::EarlyFired(pattern);
+                                k.press_time = released_time;
+                                k.timeout_time = released_time + keep_alive;
+                            }
+                            self.held_buffer.keys.sort_unstable_by_key(|k| k.timeout_time);
+                            if !self.has_unresolved_morse_key() {
+                                self.fire_held_non_morse_keys().await;
+                            }
+                        } else if let Some(action) = final_action {
                             debug!("released prediction {:?} -> {:?}", pattern, action);
                             // Reached the longest configured morse pattern, trigger the corresponding action immediately
                             self.held_buffer.remove(event.pos); // Remove the key from the held buffer, is like setting to an idle state
@@ -256,6 +297,18 @@ impl<'a> Keyboard<'a> {
                 .unwrap_or(Action::No),
             _ => Action::No,
         }
+    }
+
+    pub fn quick_tap_window(keymap: &KeyMap, key_action: &KeyAction) -> Option<Duration> {
+        let per_key = match key_action {
+            KeyAction::TapHold(_, _, profile) => profile.quick_tap_timeout_ms(),
+            KeyAction::Morse(idx) => keymap
+                .get_morse(*idx as usize)
+                .and_then(|m| m.profile.quick_tap_timeout_ms()),
+            _ => None,
+        };
+        let timeout = per_key.or_else(|| keymap.morse_default_profile().quick_tap_timeout_ms());
+        timeout.filter(|&t| t > 0).map(|t| Duration::from_millis(t as u64))
     }
 
     pub fn morse_timeout(keymap: &KeyMap, key_action: &KeyAction, hold_timeout_needed: bool) -> Duration {

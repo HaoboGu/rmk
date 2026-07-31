@@ -1,5 +1,4 @@
 use core::cell::RefCell;
-use core::sync::atomic::Ordering;
 
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy, LeSetScanParams};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
@@ -10,10 +9,10 @@ use embassy_time::{Duration, Timer, with_timeout};
 use heapless::VecView;
 use trouble_host::prelude::*;
 
-use crate::SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS;
-use crate::ble::{SLEEPING_STATE, update_ble_phy, update_conn_params};
+use crate::ble::sleep::report_activity;
+use crate::ble::{update_ble_phy, update_conn_params};
 use crate::channel::FLASH_CHANNEL;
-use crate::event::{PeripheralConnectedEvent, SleepStateEvent, publish_event};
+use crate::event::{EventSubscriber, PeripheralConnectedEvent, SleepStateEvent, SubscribableEvent, publish_event};
 #[cfg(feature = "storage")]
 use crate::split::ble::PeerAddress;
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
@@ -27,13 +26,6 @@ pub(crate) static PERIPHERAL_FOUND: Signal<crate::RawMutex, (u8, BdAddr)> = Sign
 static START_SCANNING: Signal<crate::RawMutex, ()> = Signal::new();
 static STOP_SCANNING: Signal<crate::RawMutex, ()> = Signal::new();
 static SCANNING_MUTEX: Mutex<crate::RawMutex, ()> = Mutex::new(());
-
-/// Sleep management signal for BLE Split Central
-///
-/// This signal serves dual purposes for sleep management:
-/// - `signal(true)`: Indicates central has entered sleep mode
-/// - `signal(false)`: Indicates activity detected, wake up or reset sleep timer
-pub(crate) static CENTRAL_SLEEP: Signal<crate::RawMutex, bool> = Signal::new();
 
 /// Gatt service used in split central to send split message to peripheral
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
@@ -195,7 +187,7 @@ pub(crate) async fn run_ble_peripheral_manager<
 
         let mut central = stack.central();
         let config = ConnectConfig {
-            connect_params: defaul_central_conn_param(),
+            connect_params: default_central_conn_param(),
             scan_config: ScanConfig {
                 filter_accept_list: &[address],
                 active: false,
@@ -261,13 +253,39 @@ pub(crate) async fn run_ble_peripheral_manager<
     }
 }
 
-fn defaul_central_conn_param() -> RequestedConnParams {
+fn default_central_conn_param() -> RequestedConnParams {
     RequestedConnParams {
         min_connection_interval: Duration::from_micros(7500),
         max_connection_interval: Duration::from_micros(7500),
         max_latency: 10, // 75ms
         supervision_timeout: Duration::from_secs(10),
         ..Default::default()
+    }
+}
+
+/// Parameters for the central -> peripheral link while the central sleeps.
+///
+/// With a host connected, the central's radio is busy serving the host link
+/// anyway, so keep a short interval — the first key after wake-up arrives
+/// quickly, and the peripheral still saves power through its latency. With no
+/// host, a long interval also cuts the central-side radio wakeups.
+fn sleep_central_conn_param() -> RequestedConnParams {
+    if crate::state::active_transport().is_some() {
+        RequestedConnParams {
+            min_connection_interval: Duration::from_millis(20),
+            max_connection_interval: Duration::from_millis(20),
+            max_latency: 200, // 4s
+            supervision_timeout: Duration::from_secs(9),
+            ..Default::default()
+        }
+    } else {
+        RequestedConnParams {
+            min_connection_interval: Duration::from_millis(200),
+            max_connection_interval: Duration::from_millis(200),
+            max_latency: 25, // 5s
+            supervision_timeout: Duration::from_secs(11),
+            ..Default::default()
+        }
     }
 }
 
@@ -291,12 +309,12 @@ async fn run_central_manager_task<
     update_ble_phy(stack, conn, PhyKind::Le2M).await;
 
     info!("Updating connection parameters for peripheral");
-    update_conn_params(stack, conn, &defaul_central_conn_param()).await;
+    update_conn_params(stack, conn, &default_central_conn_param()).await;
 
     match select3(
         ble_central_task(&client, conn),
         run_peripheral_manager::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, &client),
-        sleep_manager_task(stack, conn),
+        follow_sleep_state(stack, conn),
     )
     .await
     {
@@ -413,10 +431,10 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> Sp
         let message = postcard::from_bytes(data.as_ref()).map_err(|_| SplitDriverError::DeserializeError)?;
         info!("Received split message: {:?}", message);
 
-        // Update last activity time when receiving key events from peripheral
+        // Key events from the peripheral count as activity for sleep management
         if matches!(message, SplitMessage::Key(_) | SplitMessage::Pointing(_)) {
             debug!("Activity {:?} detected from peripheral", &message);
-            update_activity_time();
+            report_activity();
         }
 
         Ok(message)
@@ -464,9 +482,11 @@ pub(crate) async fn wait_for_stack_started() {
     }
 }
 
-/// Sleep manager task for connection between split central and peripheral
-/// Handles sleep timeout and connection parameter adjustments using event-driven approach
-async fn sleep_manager_task<
+/// Keep one peripheral link's connection parameters in sync with the keyboard's
+/// sleep state, published as [`SleepStateEvent`] by `crate::ble::sleep`. Runs
+/// for as long as the link is up, so every link ends up with the same
+/// parameters.
+async fn follow_sleep_state<
     'b,
     's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
@@ -475,78 +495,30 @@ async fn sleep_manager_task<
     stack: &'b Stack<'s, C, P>,
     conn: &Connection<'b, P>,
 ) -> Result<(), BleHostError<C::Error>> {
-    // Skip sleep management if timeout is 0 (disabled)
-    if SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS == 0 {
-        info!("Sleep management disabled (timeout = 0)");
-        core::future::pending::<()>().await;
-        return Ok(());
-    }
+    let mut sleep_events = SleepStateEvent::subscriber();
 
-    info!(
-        "Sleep manager started with {}s timeout",
-        SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS
-    );
+    // A peripheral coming up is activity in its own right: it needs the fast
+    // parameters for service discovery, and waking the whole keyboard keeps
+    // every link on the same state.
+    report_activity();
 
+    // What this link's controller last accepted. `run_central_manager_task` just
+    // applied the default (awake) parameters; tracking the applied value retries
+    // a rejected update on the next state change instead of leaving the link at
+    // the wrong interval until it reconnects.
+    let mut applied = false;
     loop {
-        if !SLEEPING_STATE.load(Ordering::Acquire) {
-            // Wait for timeout or activity (false signal means activity/wakeup)
-            match select(
-                Timer::after_secs(SPLIT_CENTRAL_SLEEP_TIMEOUT_SECONDS.into()),
-                CENTRAL_SLEEP.wait(),
-            )
-            .await
-            {
-                Either::First(_) => {
-                    // Timeout: enter sleep mode
-                }
-                Either::Second(signal_value) => {
-                    // Received signal - if false, it means activity detected
-                    if !signal_value {
-                        debug!("Activity detected, resetting sleep timeout");
-                        continue;
-                    }
-                    // True, enter sleep mode
-                }
-            }
-
-            // Timeout or received true from CENTRAL_SLEEP signal, enter sleep mode
-            info!("Entering sleep mode");
-
-            // `conn` is the split central -> peripheral BLE link. While the
-            // central is sleeping, use a longer interval to reduce central-side
-            // radio wakeups; normal params are restored on activity.
-            let conn_params = RequestedConnParams {
-                min_connection_interval: Duration::from_millis(200),
-                max_connection_interval: Duration::from_millis(200),
-                max_latency: 25, // 5s
-                supervision_timeout: Duration::from_secs(11),
-                ..Default::default()
-            };
-
-            // Update connection parameters
-            update_conn_params(stack, conn, &conn_params).await;
-            SLEEPING_STATE.store(true, Ordering::Release);
-
-            publish_event(SleepStateEvent::new(true));
+        let sleeping = sleep_events.next_event().await.0;
+        if sleeping == applied {
+            continue;
+        }
+        let params = if sleeping {
+            sleep_central_conn_param()
         } else {
-            // Wait for activity to wake up (false signal means activity/wakeup)
-            let signal_value = CENTRAL_SLEEP.wait().await;
-            if !signal_value {
-                info!("Waking up from sleep mode due to activity");
-                SLEEPING_STATE.store(false, Ordering::Release);
-
-                publish_event(SleepStateEvent::new(false));
-
-                // Restore normal connection parameters
-                update_conn_params(stack, conn, &defaul_central_conn_param()).await;
-            }
+            default_central_conn_param()
+        };
+        if update_conn_params(stack, conn, &params).await {
+            applied = sleeping;
         }
     }
-}
-
-/// Update the activity time to indicate user activity
-/// This function triggers activity wakeup signal for sleep management
-pub(crate) fn update_activity_time() {
-    CENTRAL_SLEEP.signal(false);
-    debug!("Activity detected, signaling wakeup");
 }

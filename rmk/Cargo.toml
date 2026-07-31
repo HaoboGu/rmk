@@ -59,7 +59,7 @@ display-interface-i2c = { version = "0.5", optional = true }
 
 # Optional dependencies
 # BLE dependencies
-trouble-host = { git = "https://github.com/embassy-rs/trouble", rev = "18df47dcf9907eb810ecbf9c613af3694d75f520", features = [
+trouble-host = { git = "https://github.com/embassy-rs/trouble", rev = "088e09c451177d5db50cf3e58c68d05512265ba0", features = [
     "gatt",
     "scan",
     "derive",

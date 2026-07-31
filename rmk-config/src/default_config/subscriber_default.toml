@@ -48,6 +48,11 @@ events = [
     # ble/battery_service.rs: BatteryStatusEvent::subscriber()
     # processor/builtin/battery_led.rs: subscribe = [BatteryStatusEvent] (user-optional but _ble-gated)
     { name = "battery_status", count = 2 },
+    # ble/mod.rs: KeyboardEvent/PointingEvent wake subscribers, created when
+    # advertising times out. Without a reserved slot they panic on boards whose
+    # permanent subscribers already fill the base count.
+    { name = "keyboard" },
+    { name = "pointing" },
 ]
 
 # --- Split-gated internal subscribers ---
@@ -82,4 +87,7 @@ events = [
     # split/driver.rs: ClearPeerEvent::subscriber() (cfg _ble)
     # Covers up to 2 peripherals; for 3+ peripherals override subs in keyboard.toml
     { name = "clear_peer", count = 2 },
+    # split/ble/central.rs: SleepStateEvent::subscriber() per connected link
+    # Covers up to 2 peripherals; for 3+ peripherals override subs in keyboard.toml
+    { name = "sleep_state", count = 2 },
 ]

@@ -70,11 +70,11 @@ assign distinct ids to avoid the central treating them as the same device:
 
 ```toml
 # Central side sensor
-[[split.central.input_device.pmw3610]]
+[[split.central.input_device.pmw33xx]]
 id = 0
 
 # Peripheral side sensor
-[[split.peripheral.input_device.pmw3610]]
+[[split.peripheral.input_device.pmw33xx]]
 id = 1
 ```
 
@@ -147,10 +147,10 @@ bind_interrupts!(struct Irqs {
 
     // Create the sensor device
     // for PMW3360
-    const POINTING_DEV_ID: u8 = 0 // this ID can be anything form 0-255. Just make sure you don't use the same number twice for different sensors to avoid confusion.
-    let mut PointingDevice::<Pmw33xx<_, _, _, Pmw3360Spec>>::new(POINTING_DEV_ID, spi_bus, cs, Some(motion), sensor_config);
+    const POINTING_DEV_ID: u8 = 0; // this ID can be anything from 0-255. Just make sure you don't use the same number twice for different sensors to avoid confusion.
+    let mut pmw33xx_device = PointingDevice::<Pmw33xx<_, _, _, Pmw3360Spec>>::new(POINTING_DEV_ID, spi_bus, cs, Some(motion), sensor_config);
     // for PMW3389
-    let mut PointingDevice::<Pmw33xx<_, _, _, Pmw3389Spec>>::new(POINTING_DEV_ID, spi_bus, cs, Some(motion), sensor_config);
+    let mut pmw33xx_device = PointingDevice::<Pmw33xx<_, _, _, Pmw3389Spec>>::new(POINTING_DEV_ID, spi_bus, cs, Some(motion), sensor_config);
 
 // There are several other initializers available to set polling and report rate.
 // For example if you have an SROM for the sensor, you can upload it at startup using this:
@@ -158,12 +158,14 @@ bind_interrupts!(struct Irqs {
 //     POINTING_DEV_ID,
 //     spi_bus,
 //     cs,
-//     Some(motion)
+//     Some(motion),
 //     sensor_config,
 //     500, // poll interval
 //     125, // report_hz
 //     crate::pmw3360srom::PMW3360_SROM, // &[u8] in static memory (const)
 // );
+
+run_all!(matrix, pmw33xx_device),
 ```
 
 And define a `PointingProcessor` and add it to the `run_all!` macro to process the events.
@@ -179,7 +181,7 @@ This should be added to the `central.rs`-File even if the sensor is on split per
 
     let pmw3360_proc_config = PointingProcessorConfig {
 		// device_id: 0, // Match the id set on the PointingDevice (default 255 to match all devices)
-        // invert_x: true, // invert axis if neccesary
+        // invert_x: true, // invert axis if necessary
         // invert_y: true,
         // swap_y: true,
         ..Default::default()
