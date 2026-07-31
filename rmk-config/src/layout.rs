@@ -257,21 +257,20 @@ impl KeyboardTomlConfig {
                 // Append the text before the '@'
                 next_keys.push_str(&current_keys[last_index..start_index]);
 
-                // Check if it's a valid alias start (@ followed by a non whitespace)
-                if let Some(first_char) = current_keys.as_bytes().get(start_index + 1) {
-                    if !first_char.is_ascii_whitespace() {
-                        // Find the end of the alias identifier
-                        let mut end_index = start_index + 2;
-                        while let Some(c) = current_keys.as_bytes().get(end_index) {
-                            if c.is_ascii_whitespace() {
-                                break;
-                            } else {
-                                end_index += 1;
-                            }
-                        }
+                // Check if it's a valid alias start (@ followed by a non-whitespace character).
+                // Work with `str`/`char` instead of bytes so non-ASCII alias names stay on UTF-8
+                // character boundaries.
+                let alias_start = start_index + '@'.len_utf8();
+                if let Some(first_char) = current_keys[alias_start..].chars().next() {
+                    if !first_char.is_whitespace() {
+                        // Find the end of the alias identifier.
+                        let alias_len = current_keys[alias_start..]
+                            .find(char::is_whitespace)
+                            .unwrap_or(current_keys.len() - alias_start);
+                        let end_index = alias_start + alias_len;
 
                         // Extract the alias key (except the starting '@')
-                        let alias_key = &current_keys[start_index + 1..end_index];
+                        let alias_key = &current_keys[alias_start..end_index];
 
                         // Look up and replace
                         match aliases.get(alias_key) {
@@ -285,12 +284,12 @@ impl KeyboardTomlConfig {
                     } else {
                         // Not a valid alias start, treat '@' literally
                         next_keys.push('@');
-                        last_index = start_index + 1;
+                        last_index = alias_start;
                     }
                 } else {
                     // '@' was the last character, treat it literally
                     next_keys.push('@');
-                    last_index = start_index + 1;
+                    last_index = alias_start;
                     break; // No more characters after '@'
                 }
             }
@@ -412,6 +411,41 @@ impl KeyboardTomlConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_unicode_alias_resolution() {
+        let aliases = HashMap::from([
+            ("ö".to_string(), "Kc0".to_string()),
+            ("ő".to_string(), "LeftBracket".to_string()),
+        ]);
+
+        assert_eq!(
+            KeyboardTomlConfig::alias_resolver("@ö @ő", &aliases),
+            Ok("Kc0 LeftBracket".to_string())
+        );
+    }
+
+    #[test]
+    fn test_unicode_alias_expands_action_and_recurses() {
+        let aliases = HashMap::from([
+            ("é".to_string(), "WM(Semicolon, RAlt)".to_string()),
+            ("magyar".to_string(), "@é".to_string()),
+        ]);
+        let layer_names = HashMap::new();
+
+        assert_eq!(
+            KeyboardTomlConfig::keymap_parser("@magyar", &aliases, &layer_names),
+            Ok(vec!["WM(Semicolon, RAlt)".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_undefined_unicode_alias_returns_error() {
+        assert_eq!(
+            KeyboardTomlConfig::alias_resolver("@不存在", &HashMap::new()),
+            Err("Undefined alias: 不存在".to_string())
+        );
+    }
 
     #[test]
     fn test_no_action_parsing() {
