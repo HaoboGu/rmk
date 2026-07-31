@@ -1,20 +1,22 @@
-//! Runtime-free Rynk host protocol client.
+//! Rynk host protocol client.
 //!
 //! A session is a [`Client`] plus a [`Driver`], created by
 //! [`RynkDevice::connect`] — the one entry point, implemented per transport
 //! over a byte link's read/write halves. The [`Client`] carries the
 //! protocol surface — typed requests and the topic stream, both `&self` so
 //! they run full-duplex; the [`Driver`] pumps bytes both ways and returns
-//! when the link dies. This crate does not depend on an async runtime, and
-//! without default features it is `no_std` and allocation-free (frames live
-//! in buffers sized by the firmware's `rynk_buffer_size`).
+//! when the link dies. Requests are bounded by an `embassy-time` deadline —
+//! the final binary picks the time driver — and without default features the
+//! crate is `no_std` and allocation-free (frames live in buffers sized by the
+//! firmware's `rynk_buffer_size`).
 //!
 //! ## Driving a session
 //!
 //! Run [`Driver::run`] in the same `select` as everything that awaits on the
 //! [`Client`]. There is no in-band death signal: when the driver returns, the
 //! `select` exits and drops the session, cancelling any parked typed request
-//! or [`next_topic`](Client::next_topic) call.
+//! or [`next_topic`](Client::next_topic) call. A typed request also gives up
+//! on its own deadline (see [`Client::set_timeout`]); a topic wait does not.
 //!
 //! ```no_run
 //! # async fn run<D: rynk::RynkDevice>(device: D) -> Result<(), Box<dyn std::error::Error>> {
@@ -62,8 +64,8 @@
 //!
 //! - **Writes deliver without flush** — the driver never calls
 //!   [`flush`](io::Write::flush). A successful `write` MUST commit the returned
-//!   bytes; on a lossy medium (e.g. BLE) use acknowledged writes, since a lost
-//!   chunk desyncs the firmware's reassembler with no mid-frame resync.
+//!   bytes; a chunk lost anyway costs the whole exchange, recovered by COBS
+//!   resync at the next delimiter plus the request deadline.
 //! - `read` may return arbitrary chunk boundaries; the driver reassembles
 //!   frames. `Ok(0)` means the link is gone and surfaces as
 //!   [`RynkHostError::Disconnected`] from [`Driver::run`].

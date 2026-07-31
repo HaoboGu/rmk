@@ -21,18 +21,20 @@
 //! ## Session lifecycle
 //!
 //! [`Driver::run`] returns when the link dies. There is no in-band death
-//! signal: a call waiting on a dead session never finishes on its own. So run
-//! the driver in the same `select` as everything that awaits on the
-//! [`Client`] — see the crate docs for how to set this up.
+//! signal: a parked call only ends on its own deadline (see
+//! [`Client::set_timeout`]), and [`Client::next_topic`] has no deadline at
+//! all. So run the driver in the same `select` as everything that awaits on
+//! the [`Client`] — see the crate docs for how to set this up.
 
 #[cfg(feature = "alloc")]
 use alloc::{string::String, vec, vec::Vec};
-use core::sync::atomic::{AtomicU8, Ordering};
+use core::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 
 use embassy_futures::select::{Either, select};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::{Channel, TrySendError};
 use embassy_sync::signal::Signal;
+use embassy_time::{Duration, with_timeout};
 use embedded_io_async::{Error as _, ErrorKind, Read, Write};
 use rmk_types::protocol::rynk::command::Endpoint;
 use rmk_types::protocol::rynk::{
@@ -60,6 +62,8 @@ const TOPIC_QUEUE_CAPACITY: usize = 8;
 pub enum RynkHostError {
     #[error("transport disconnected")]
     Disconnected,
+    #[error("no reply within the request deadline")]
+    Timeout,
     #[error("io error: {0:?}")]
     Io(ErrorKind),
     /// A transport step (GATT attach, port open, …) failed. The detail string
@@ -113,6 +117,7 @@ impl From<RynkHostError> for wasm_bindgen::JsValue {
     fn from(e: RynkHostError) -> Self {
         let kind = match &e {
             RynkHostError::Disconnected => "Disconnected",
+            RynkHostError::Timeout => "Timeout",
             RynkHostError::Io(_) | RynkHostError::Transport(..) => "TransportError",
             RynkHostError::DeviceNotFound(_) => "DeviceNotFound",
             RynkHostError::Rejected(_) => "Rejected",
@@ -137,6 +142,9 @@ impl From<RynkHostError> for wasm_bindgen::JsValue {
 pub(crate) const MAX_IN_FLIGHT: usize = 4;
 #[cfg(not(feature = "alloc"))]
 pub(crate) const MAX_IN_FLIGHT: usize = 1;
+
+/// Default per-request deadline; [`Client::set_timeout`] overrides it.
+const DEFAULT_TIMEOUT_MS: u32 = 3_000;
 
 /// One in-flight request: the SEQ it waits for (0 means the slot is free;
 /// real SEQs cycle `1..=255`) and the signal its reply arrives on.
@@ -181,6 +189,8 @@ pub struct Client {
     topics: Channel<CS, TopicEvent, TOPIC_QUEUE_CAPACITY>,
     /// Request SEQ, cycling through `1..=255`.
     next_seq: AtomicU8,
+    /// Per-request deadline, milliseconds.
+    timeout_ms: AtomicU32,
     /// Capability snapshot from the connect handshake;
     /// [`RynkDevice::connect`](crate::RynkDevice::connect) fills it in before
     /// the client is shared.
@@ -202,8 +212,14 @@ impl Client {
             free,
             topics: Channel::new(),
             next_seq: AtomicU8::new(1),
+            timeout_ms: AtomicU32::new(DEFAULT_TIMEOUT_MS),
             capabilities: DeviceCapabilities::default(),
         }
+    }
+
+    /// Override the session's per-request deadline (default 3 s).
+    pub fn set_timeout(&self, ms: u32) {
+        self.timeout_ms.store(ms, Ordering::Relaxed);
     }
 
     /// Receive the next topic push. Topics the driver did not recognize were
@@ -215,42 +231,53 @@ impl Client {
         self.topics.receive().await
     }
 
-    /// One typed request/response round trip for endpoint `E`.
-    ///
-    /// No built-in timeout (this crate has no async runtime): a silent peer
-    /// or a dead link keeps this pending until the surrounding `select`
-    /// cancels it; callers that need a deadline use their runtime's timeout.
-    /// Dropping the call is safe: [`SlotGuard`] frees the slot and the late
-    /// reply is dropped as unmatched.
+    /// One typed request/response round trip for endpoint `E`, bounded by the
+    /// session deadline (see [`set_timeout`](Self::set_timeout)).
     pub(crate) async fn request<E: Endpoint>(&self, req: &E::Request) -> Result<E::Response, RynkHostError> {
+        let ms = self.timeout_ms.load(Ordering::Relaxed);
+        self.request_within::<E>(req, Duration::from_millis(ms as u64)).await
+    }
+
+    /// [`request`](Self::request) with an explicit deadline, for calls that
+    /// legitimately run long (a flash wipe). Timing out drops the exchange:
+    /// [`SlotGuard`] frees the slot and the late reply is dropped as unmatched.
+    pub(crate) async fn request_within<E: Endpoint>(
+        &self,
+        req: &E::Request,
+        timeout: Duration,
+    ) -> Result<E::Response, RynkHostError> {
         let cmd = E::CMD;
-        let idx = self.free.receive().await;
-        let _guard = SlotGuard { client: self, idx };
-        let slot = &self.slots[idx];
-        let seq = self.alloc_seq();
-        // Claim the SEQ before the frame can reach the wire, so the reply
-        // always finds its slot; `reset` clears anything a previous request
-        // left behind.
-        slot.resp.reset();
-        slot.seq.store(seq, Ordering::Release);
-        self.send_frame(cmd, seq, req).await?;
-        let bytes = slot.resp.wait().await;
-        // The Deframer never yields a frame shorter than the header, so this
-        // slice cannot panic.
-        let header = RynkHeader::parse(bytes[..RYNK_HEADER_SIZE].try_into().unwrap());
-        if header.cmd != cmd {
-            return Err(RynkHostError::CmdMismatch {
-                sent: cmd,
-                got: header.cmd,
-            });
-        }
-        // Trailing bytes mean the firmware sent a different type than we
-        // expect; reject instead of silently accepting a prefix.
-        match postcard::take_from_bytes::<Result<E::Response, RynkError>>(&bytes[RYNK_HEADER_SIZE..]) {
-            Err(source) => Err(RynkHostError::Deserialize { cmd, source }),
-            Ok((_, rest)) if !rest.is_empty() => Err(RynkHostError::TrailingBytes { cmd }),
-            Ok((env, _)) => env.map_err(RynkHostError::Rejected),
-        }
+        with_timeout(timeout, async {
+            let idx = self.free.receive().await;
+            let _guard = SlotGuard { client: self, idx };
+            let slot = &self.slots[idx];
+            let seq = self.alloc_seq();
+            // Claim the SEQ before the frame can reach the wire, so the reply
+            // always finds its slot; `reset` clears anything a previous request
+            // left behind.
+            slot.resp.reset();
+            slot.seq.store(seq, Ordering::Release);
+            self.send_frame(cmd, seq, req).await?;
+            let bytes = slot.resp.wait().await;
+            // The Deframer never yields a frame shorter than the header, so this
+            // slice cannot panic.
+            let header = RynkHeader::parse(bytes[..RYNK_HEADER_SIZE].try_into().unwrap());
+            if header.cmd != cmd {
+                return Err(RynkHostError::CmdMismatch {
+                    sent: cmd,
+                    got: header.cmd,
+                });
+            }
+            // Trailing bytes mean the firmware sent a different type than we
+            // expect; reject instead of silently accepting a prefix.
+            match postcard::take_from_bytes::<Result<E::Response, RynkError>>(&bytes[RYNK_HEADER_SIZE..]) {
+                Err(source) => Err(RynkHostError::Deserialize { cmd, source }),
+                Ok((_, rest)) if !rest.is_empty() => Err(RynkHostError::TrailingBytes { cmd }),
+                Ok((env, _)) => env.map_err(RynkHostError::Rejected),
+            }
+        })
+        .await
+        .map_err(|_| RynkHostError::Timeout)?
     }
 
     /// Send one request without waiting for a reply — for commands whose

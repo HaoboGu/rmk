@@ -78,6 +78,8 @@ impl Write for BleWriter {
     /// One GATT write per call, capped to the characteristic; `write_all` loops the
     /// rest. Write-without-response: the LE link layer still delivers reliably, and
     /// skipping the ATT ack saves a full connection-interval round trip per chunk.
+    /// The residual loss case (local queue overflow) is caught by the client's
+    /// request deadline and COBS resync.
     async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         if buf.is_empty() {
             return Ok(0);

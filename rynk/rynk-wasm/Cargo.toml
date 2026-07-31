@@ -22,3 +22,9 @@ js-sys = "0.3"
 console_error_panic_hook = "0.1"
 console_log = "1"
 log = "0.4"
+
+# Only the wasm build needs a time driver. Declaring it unconditionally would
+# collide with the mock driver `rynk-serial`'s tests pull in, since a native
+# `cargo test --workspace` unifies both onto one `embassy-time`.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+embassy-time = { version = "0.5", features = ["wasm", "generic-queue-128"] }

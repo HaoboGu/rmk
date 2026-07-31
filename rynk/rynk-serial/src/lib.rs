@@ -174,8 +174,8 @@ mod discovery_tests {
 #[cfg(all(test, unix))]
 mod tests {
     use std::os::fd::AsRawFd;
-    use std::time::Duration;
 
+    use embassy_time::{Duration, MockDriver};
     use rynk::io::{Read as _, Write as _};
     use rynk::rmk_types::protocol::rynk::{
         Cmd, Deframer, DeviceCapabilities, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, encode_frame,
@@ -298,9 +298,24 @@ mod tests {
 
     #[tokio::test]
     async fn connect_times_out_on_silent_peer() {
-        // A silent peer must remain pending; callers own the timeout.
+        // A silent peer fails the handshake on the client's own deadline. The
+        // mock clock only moves when this test moves it, so step it forward
+        // between polls until the deadline is crossed.
         let (_peer, ours) = pty_pair();
-        let timed_out = tokio::time::timeout(Duration::from_secs(1), PtyDevice(ours).connect()).await;
-        assert!(timed_out.is_err(), "connect must not resolve against a silent peer");
+        let tick = async {
+            loop {
+                tokio::task::yield_now().await;
+                MockDriver::get().advance(Duration::from_millis(500));
+            }
+        };
+        tokio::select! {
+            result = PtyDevice(ours).connect() => {
+                assert!(
+                    matches!(result, Err(RynkHostError::Timeout)),
+                    "a silent peer must fail the handshake with Timeout"
+                );
+            }
+            _ = tick => unreachable!("the ticker loops forever"),
+        }
     }
 }

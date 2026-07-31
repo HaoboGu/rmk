@@ -8,6 +8,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 #[cfg(feature = "alloc")]
 use embassy_futures::join::join_array;
+use embassy_time::Duration;
 #[cfg(feature = "alloc")]
 use postcard::experimental::serialized_size;
 use rmk_types::action::{EncoderAction, KeyAction};
@@ -94,7 +95,9 @@ impl Client {
         if !self.capabilities.storage_enabled {
             return Err(RynkHostError::Unsupported(Cmd::StorageReset, "storage not enabled"));
         }
-        self.request::<command::StorageReset>(&mode).await
+        // A full flash wipe outlives the default deadline.
+        self.request_within::<command::StorageReset>(&mode, Duration::from_secs(30))
+            .await
     }
 
     /// Read the current lock state. Unlike [`unlock_poll`](Self::unlock_poll),

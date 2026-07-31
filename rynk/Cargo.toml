@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-description = "Runtime-free host-side Rynk protocol client"
+description = "Host-side Rynk protocol client"
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
@@ -17,6 +17,9 @@ rmk-types = { path = "../rmk-types", default-features = false, features = ["rynk
 embedded-io-async.workspace = true
 embassy-sync.workspace = true
 embassy-futures = "0.1"
+# No time-driver feature here: the final binary picks one (std app:
+# `embassy-time/std`, wasm: `embassy-time/wasm`, dongle: its HAL's driver).
+embassy-time = "0.5"
 postcard = { version = "1.1", default-features = false }
 serde.workspace = true
 thiserror = { version = "2.0", default-features = false }

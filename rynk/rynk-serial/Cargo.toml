@@ -18,6 +18,7 @@ tokio = { version = "1.47", default-features = false, features = ["io-util"] }
 [dev-dependencies]
 serde.workspace = true
 tokio = { version = "1.47", features = ["macros", "rt-multi-thread", "time"] }
+embassy-time = { version = "0.5", features = ["mock-driver", "generic-queue-128"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 libc = "0.2"

@@ -41,8 +41,8 @@ pub trait RynkDevice: Sized {
     /// over the normal pumps — topics arriving meanwhile queue up for
     /// `next_topic` as usual.
     ///
-    /// Runtime-free, so no handshake timeout: a silent peer hangs here. Callers
-    /// that need a bound wrap this in their runtime's timeout.
+    /// A silent peer fails the handshake with `Timeout` after the client's
+    /// default request deadline.
     async fn connect(self) -> Result<(Client, Driver<Self::Read, Self::Write>), RynkHostError> {
         let (reader, writer) = self.open().await?;
         let mut client = Client::new();
