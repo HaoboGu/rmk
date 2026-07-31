@@ -658,8 +658,39 @@ mod one_shot_test {
         };
     }
 
-    // TODO: test_osm_quick_release_rolling removed — OSM + morse/tap-hold interaction
-    // has a known bug where the OSM deadline loop times out before the tap resolves.
+    // NOTE: test_osm_quick_release_rolling is intentionally omitted. With a
+    // tap-hold key the OSM modifier is cleared before the buffered morse tap
+    // resolves, so the tapped key is emitted without the modifier. That is a
+    // separate OSM + morse/tap-hold timing issue (not a timeout bug).
+
+    /// Regression test: a non-consuming event arriving during the OSM release
+    /// timeout must NOT cancel that timeout. Previously the single
+    /// `select(timeout, next_event)` gave up the timeout on the first event,
+    /// leaving the OSM stuck in `Single` forever. Here an OSL press interrupts
+    /// the wait; after the timeout elapses the OSM must have auto-released, so
+    /// the later layer-1 key is sent WITHOUT the one-shot modifier.
+    #[test]
+    fn test_osm_timeout_not_cancelled_by_non_consuming_event() {
+        key_sequence_test! {
+            keyboard: create_test_keyboard_with_behavior_config(BehaviorConfig {
+                one_shot: OneShotConfig {
+                    timeout: Duration::from_millis(100),
+                },
+                ..BehaviorConfig::default()
+            }),
+            sequence: [
+                [0, 0, true, 10],   // Press OSM LShift
+                [0, 0, false, 10],  // Release OSM LShift -> Single, start timeout
+                [0, 1, true, 10],   // Press OSL(1): non-consuming event during timeout
+                [0, 2, true, 200],  // After timeout elapses, press layer-1 key C
+                [0, 2, false, 10],  // Release C
+            ],
+            expected_reports: [
+                [0, [kc_to_u8!(C), 0, 0, 0, 0, 0]], // C WITHOUT LShift (OSM timed out)
+                [0, [0, 0, 0, 0, 0, 0]],            // All released
+            ]
+        };
+    }
 
     #[test]
     fn test_osm_quick_release_combined_modifiers() {
