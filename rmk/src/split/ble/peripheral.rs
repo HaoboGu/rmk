@@ -7,20 +7,20 @@ use trouble_host::prelude::*;
 
 #[cfg(feature = "storage")]
 use super::PeerAddress;
+use super::{GattSplitMessage, SplitMessage};
 use crate::event::{CentralConnectedEvent, KeyboardEvent, SubscribableEvent, publish_event};
 use crate::split::driver::{SplitDriverError, SplitReader, SplitWriter};
 use crate::split::peripheral::SplitPeripheral;
-use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
 use crate::state::update_status;
 
 /// Gatt service used in split peripheral to send split message to central
 #[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
 pub(crate) struct SplitBleService {
     #[characteristic(uuid = "0e6313e3-bd0b-45c2-8d2e-37a2e8128bc3", read, notify, indicate)]
-    pub(crate) message_to_central: [u8; SPLIT_MESSAGE_MAX_SIZE],
+    pub(crate) message_to_central: GattSplitMessage,
 
     #[characteristic(uuid = "4b3514fb-cae4-4d38-a097-3a2a3d1c3b9c", write_without_response, read, notify)]
-    pub(crate) message_to_peripheral: [u8; SPLIT_MESSAGE_MAX_SIZE],
+    pub(crate) message_to_peripheral: GattSplitMessage,
 }
 
 /// Gatt server in split peripheral
@@ -31,16 +31,16 @@ pub(crate) struct BleSplitPeripheralServer {
 
 /// BLE driver for split peripheral
 pub(crate) struct BleSplitPeripheralDriver<'stack, 'server, 'c, P: PacketPool> {
-    message_to_peripheral: Characteristic<[u8; SPLIT_MESSAGE_MAX_SIZE]>,
-    message_to_central: Characteristic<[u8; SPLIT_MESSAGE_MAX_SIZE]>,
+    message_to_peripheral: Characteristic<GattSplitMessage>,
+    message_to_central: Characteristic<GattSplitMessage>,
     conn: &'c GattConnection<'stack, 'server, P>,
 }
 
 impl<'stack, 'server, 'c, P: PacketPool> BleSplitPeripheralDriver<'stack, 'server, 'c, P> {
     pub(crate) fn new(server: &'server BleSplitPeripheralServer, conn: &'c GattConnection<'stack, 'server, P>) -> Self {
         Self {
-            message_to_central: server.service.message_to_central,
-            message_to_peripheral: server.service.message_to_peripheral,
+            message_to_central: server.service.message_to_central.clone(),
+            message_to_peripheral: server.service.message_to_peripheral.clone(),
             conn,
         }
     }
@@ -109,20 +109,16 @@ impl<'stack, 'server, 'c, P: PacketPool> SplitReader for BleSplitPeripheralDrive
 
 impl<'stack, 'server, 'c, P: PacketPool> SplitWriter for BleSplitPeripheralDriver<'stack, 'server, 'c, P> {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError> {
-        let mut buf = [0_u8; SPLIT_MESSAGE_MAX_SIZE];
-        postcard::to_slice(message, &mut buf).map_err(|e| {
-            error!("Postcard serialize split message error: {}", e);
-            SplitDriverError::SerializeError
-        })?;
+        let gatt_msg = GattSplitMessage::try_from(message)?;
         info!("Writing split message to central: {:?}", message);
         self.message_to_central
-            .notify(self.conn, &buf, true)
+            .notify(self.conn, &gatt_msg, true)
             .await
             .map_err(|e| {
                 error!("BLE notify error: {:?}", e);
                 SplitDriverError::BleError(1)
             })?;
-        Ok(buf.len())
+        Ok(gatt_msg.len)
     }
 }
 

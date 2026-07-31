@@ -9,6 +9,7 @@ use embassy_time::{Duration, Timer, with_timeout};
 use heapless::VecView;
 use trouble_host::prelude::*;
 
+use super::GattSplitMessage;
 use crate::ble::sleep::report_activity;
 use crate::ble::{update_ble_phy, update_conn_params};
 use crate::channel::FLASH_CHANNEL;
@@ -364,7 +365,7 @@ async fn run_peripheral_manager<
     info!("Services found");
     if let Some(service) = services.first() {
         let message_to_central = client
-            .characteristic_by_uuid::<[u8; SPLIT_MESSAGE_MAX_SIZE]>(
+            .characteristic_by_uuid::<GattSplitMessage>(
                 service,
                 // uuid: 0e6313e3-bd0b-45c2-8d2e-37a2e8128bc3
                 &Uuid::Uuid128([
@@ -375,7 +376,7 @@ async fn run_peripheral_manager<
             .await?;
         info!("Message to central found");
         let message_to_peripheral = client
-            .characteristic_by_uuid::<[u8; SPLIT_MESSAGE_MAX_SIZE]>(
+            .characteristic_by_uuid::<GattSplitMessage>(
                 service,
                 // uuid: 4b3514fb-cae4-4d38-a097-3a2a3d1c3b9c
                 &Uuid::Uuid128([
@@ -404,7 +405,7 @@ pub(crate) struct BleSplitCentralDriver<'a, 'b, 'c, C: Controller + ControllerCm
     // Listener for split message from peripheral
     listener: NotificationListener<'b, 512>,
     // Characteristic to send split message to peripheral
-    message_to_peripheral: Characteristic<[u8; SPLIT_MESSAGE_MAX_SIZE]>,
+    message_to_peripheral: Characteristic<GattSplitMessage>,
     // Client
     client: &'c GattClient<'a, C, P, 10>,
 }
@@ -412,7 +413,7 @@ pub(crate) struct BleSplitCentralDriver<'a, 'b, 'c, C: Controller + ControllerCm
 impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> BleSplitCentralDriver<'a, 'b, 'c, C, P> {
     pub(crate) fn new(
         listener: NotificationListener<'b, 512>,
-        message_to_peripheral: Characteristic<[u8; SPLIT_MESSAGE_MAX_SIZE]>,
+        message_to_peripheral: Characteristic<GattSplitMessage>,
         client: &'c GattClient<'a, C, P, 10>,
     ) -> Self {
         Self {
@@ -445,27 +446,22 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> Sp
     for BleSplitCentralDriver<'a, 'b, 'c, C, P>
 {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError> {
-        let mut buf = [0_u8; SPLIT_MESSAGE_MAX_SIZE];
-        match postcard::to_slice(&message, &mut buf) {
-            Ok(_bytes) => {
-                if let Err(e) = self
-                    .client
-                    .write_characteristic_without_response(&self.message_to_peripheral, &buf)
-                    .await
-                {
-                    if let BleHostError::BleHost(Error::NotFound) = e {
-                        error!("Peripheral disconnected");
-                        return Err(SplitDriverError::Disconnected);
-                    }
-                    #[cfg(feature = "defmt")]
-                    let e = defmt::Debug2Format(&e);
-                    error!("BLE message_to_peripheral_write error: {:?}", e);
-                }
+        let gatt_msg = GattSplitMessage::try_from(message)?;
+        if let Err(e) = self
+            .client
+            .write_characteristic_without_response(&self.message_to_peripheral, gatt_msg.as_gatt())
+            .await
+        {
+            if let BleHostError::BleHost(Error::NotFound) = e {
+                error!("Peripheral disconnected");
+                return Err(SplitDriverError::Disconnected);
             }
-            Err(e) => error!("Postcard serialize split message error: {}", e),
-        };
+            #[cfg(feature = "defmt")]
+            let e = defmt::Debug2Format(&e);
+            error!("BLE message_to_peripheral_write error: {:?}", e);
+        }
 
-        Ok(SPLIT_MESSAGE_MAX_SIZE)
+        Ok(gatt_msg.len)
     }
 }
 
