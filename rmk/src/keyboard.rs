@@ -362,7 +362,7 @@ impl<'a> Keyboard<'a> {
         #[cfg(feature = "passkey_entry")]
         self.passkey_entry_state.check_mode_transition();
 
-        #[cfg(feature = "host_security")]
+        #[cfg(feature = "host_lock")]
         self.keymap.update_matrix_state(&event);
 
         // Report activity for sleep management
@@ -2045,22 +2045,13 @@ mod test {
     use crate::test_support::test_block_on as block_on;
     use crate::{a, k, layer, mo, th, thp};
 
-    // Init logger for tests
-    #[ctor::ctor(unsafe)]
-    fn init_log() {
-        let _ = env_logger::builder()
-            .filter_level(log::LevelFilter::Debug)
-            .is_test(true)
-            .try_init();
-    }
-
     #[rustfmt::skip]
     pub const fn get_keymap() -> [[[KeyAction; 14]; 5]; 2] {
         [
             layer!([
                 [k!(Grave), k!(Kc1), k!(Kc2), k!(Kc3), k!(Kc4), k!(Kc5), k!(Kc6), k!(Kc7), k!(Kc8), k!(Kc9), k!(Kc0), k!(Minus), k!(Equal), k!(Backspace)],
                 [k!(Tab), k!(Q), k!(W), k!(E), k!(R), k!(T), k!(Y), k!(U), k!(I), k!(O), k!(P), k!(LeftBracket), k!(RightBracket), k!(Backslash)],
-                [k!(Escape), thp!(A, LShift, MorseProfile::new(Some(true), Some(MorseMode::PermissiveHold),None,None)), th!(S, LGui), k!(D), k!(F), k!(G), k!(H), k!(J), k!(K), k!(L), k!(Semicolon), k!(Quote), a!(No), k!(Enter)],
+                [k!(Escape), thp!(A, LShift, 0), th!(S, LGui), k!(D), k!(F), k!(G), k!(H), k!(J), k!(K), k!(L), k!(Semicolon), k!(Quote), a!(No), k!(Enter)],
                 [k!(LShift), k!(Z), k!(X), k!(C), k!(V), k!(B), k!(N), k!(M), k!(Comma), k!(Dot), k!(Slash), a!(No), a!(No), k!(RShift)],
                 [k!(LCtrl), k!(LGui), k!(LAlt), a!(No), a!(No), k!(Space), a!(No), a!(No), a!(No), mo!(1), k!(RAlt), a!(No), k!(RGui), k!(RCtrl)]
             ]),
@@ -2074,7 +2065,17 @@ mod test {
         ]
     }
 
-    fn create_test_keyboard_with_config(config: BehaviorConfig) -> Keyboard<'static> {
+    fn create_test_keyboard_with_config(mut config: BehaviorConfig) -> Keyboard<'static> {
+        // `get_keymap`'s tap-hold at (row 2, col 1) references profile index 0.
+        // Populate it unless the caller supplied its own table.
+        if config.morse.profiles.is_empty() {
+            let _ = config.morse.profiles.push(MorseProfile::new(
+                Some(true),
+                Some(MorseMode::PermissiveHold),
+                None,
+                None,
+            ));
+        }
         // Box::leak is acceptable in tests: nextest runs each #[test] in its own process,
         // so the leaked memory is reclaimed when the process exits.
         let behavior_config: &'static mut BehaviorConfig = Box::leak(Box::new(config));

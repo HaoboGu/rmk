@@ -3,8 +3,6 @@ set -euo pipefail
 # shellcheck source=_lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-mkdir -p "$target_root"
-
 # Emit "--- <cmd> ..." tuples for rmk (every feature set) plus the other
 # workspace crates. Tokens are literal or feature lists with no whitespace,
 # so relying on word-splitting at the call site is safe.

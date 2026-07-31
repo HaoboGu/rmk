@@ -6,8 +6,8 @@ use rmk_types::morse::{Morse, MorseMode, MorseProfile};
 
 use crate::keyboard::combo::Combo;
 use crate::{
-    AUTO_MOUSE_LAYER_MAX_NUM, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MOUSE_KEY_INTERVAL,
-    MOUSE_WHEEL_INTERVAL,
+    AUTO_MOUSE_LAYER_MAX_NUM, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MORSE_PROFILE_MAX_NUM,
+    MOUSE_KEY_INTERVAL, MOUSE_WHEEL_INTERVAL,
 };
 
 /// Config for configurable action behavior
@@ -128,6 +128,11 @@ pub struct MorsesConfig {
     pub prior_idle_time: Duration, //used only when flow tap is enabled
     pub default_profile: MorseProfile,
 
+    /// Named morse profiles (`[behavior.morse.profiles]`), indexed by
+    /// `KeyAction::TapHold(_, _, idx)`. A missing index resolves to the
+    /// default profile.
+    pub profiles: Vec<MorseProfile, MORSE_PROFILE_MAX_NUM>,
+
     pub morses: Vec<Morse, MORSE_MAX_NUM>,
 }
 
@@ -137,6 +142,7 @@ impl Default for MorsesConfig {
             enable_flow_tap: false,
             prior_idle_time: Duration::from_millis(120),
             default_profile: MorseProfile::new(Some(false), Some(MorseMode::Normal), Some(250u16), Some(250u16)),
+            profiles: Vec::new(),
             morses: Vec::new(),
         }
     }

@@ -56,17 +56,17 @@ RMK provides several options that you can use to reduce the binary size:
 
 2. You can also fully remove `defmt` by removing `defmt` feature from `rmk` crate and similar feature gates from all other dependencies.
 
-3. If you don't need vial support, you can also disable the `vial` feature by disabling default features of `rmk` crate.
+3. If you don't need on-the-fly configuration, you can disable the host configurator feature by disabling default features of the `rmk` crate.
 
 ```toml
-# Default features `defmt`, `vial`, and `storage` are disabled
+# The default features `defmt`, `storage`, `vial`, `host_lock`, and `watchdog` are all disabled
 rmk = { version = "...", default-features = false }
 ```
 
-If you're using `keyboard.toml`, you'll also need to disable storage, defmt, and vial in the toml config:
+If you're using `keyboard.toml`, you'll also need to disable storage, defmt, and the host protocol in the toml config:
 
 ```toml
-# Disable storage, defmt and vial in keyboard.toml
+# Disable storage, defmt and the host protocol in keyboard.toml
 [storage]
 enabled = false
 
@@ -74,7 +74,9 @@ enabled = false
 defmt_log = false
 
 [host]
+# With no host feature enabled, both must be false (they must match the Cargo features)
 vial_enabled = false
+rynk_enabled = false
 ```
 
 ## For Rust code users
@@ -127,12 +129,12 @@ In this case, you have to implement an empty defmt logger.
 
 ```
 
-### Totally remove storage and vial support
+### Totally remove storage and host configurator support
 
-You can disable `storage` and `vial` feature in `Cargo.toml`:
+You can disable the `storage` and host protocol (`vial`, or `rynk` if you enabled it) features in `Cargo.toml`:
 
 ```toml
-# Default features `defmt`, `vial`, and `storage` are disabled
+# The default features `defmt`, `storage`, `vial`, `host_lock`, and `watchdog` are all disabled
 rmk = { version = "...", default-features = false }
 ```
 

@@ -35,6 +35,7 @@ pub struct BuildConstants {
     pub combo_max_length: usize,
     pub fork_max_num: usize,
     pub morse_max_num: usize,
+    pub morse_profile_max_num: usize,
     pub max_patterns_per_key: usize,
     pub macro_space_size: usize,
     pub debounce_time: u16,
@@ -46,9 +47,10 @@ pub struct BuildConstants {
     pub split_peripherals_num: usize,
     pub ble_profiles_num: usize,
     pub split_central_sleep_timeout_seconds: u32,
-    pub protocol_max_bulk_size: usize,
     pub protocol_macro_chunk_size: usize,
     pub auto_mouse_layer_max_num: usize,
+    /// Rynk RX/TX buffer size (bytes).
+    pub rynk_buffer_size: usize,
     pub events: Vec<EventChannel>,
     pub passkey: Option<Passkey>,
 }
@@ -149,14 +151,6 @@ impl crate::KeyboardTomlConfig {
                 protocol_limits::MAX_MACRO_DATA_SIZE
             ));
         }
-        if rmk.protocol_max_bulk_size > protocol_limits::MAX_BULK_SIZE {
-            return Err(format!(
-                "protocol_max_bulk_size ({}) exceeds protocol ceiling MAX_BULK_SIZE ({})",
-                rmk.protocol_max_bulk_size,
-                protocol_limits::MAX_BULK_SIZE
-            ));
-        }
-
         let auto_mouse_layer_max_num = rmk
             .auto_mouse_layer_max_num
             .unwrap_or(crate::resolved::behavior::DEFAULT_AUTO_MOUSE_LAYER_MAX_NUM);
@@ -178,11 +172,19 @@ impl crate::KeyboardTomlConfig {
             }
         }
 
+        // Host capability fields are u8/u16 on the wire; check the values no deserializer bound
+        // covers (morse_max_num and split_peripherals_num can also be auto-raised past 255).
+        validate_u8_capability("morse_max_num", rmk.morse_max_num)?;
+        validate_u8_capability("split_peripherals_num", split_peripherals_num)?;
+        validate_u8_capability("ble_profiles_num", rmk.ble_profiles_num)?;
+        validate_u16_capability("macro_space_size", rmk.macro_space_size)?;
+        validate_u16_capability("rynk_buffer_size", rmk.rynk_buffer_size)?;
         Ok(BuildConstants {
             combo_max_num: rmk.combo_max_num,
             combo_max_length: rmk.combo_max_length,
             fork_max_num: rmk.fork_max_num,
             morse_max_num: rmk.morse_max_num,
+            morse_profile_max_num: rmk.morse_profile_max_num,
             max_patterns_per_key: rmk.max_patterns_per_key,
             macro_space_size: rmk.macro_space_size,
             debounce_time: rmk.debounce_time,
@@ -194,13 +196,31 @@ impl crate::KeyboardTomlConfig {
             split_peripherals_num,
             ble_profiles_num: rmk.ble_profiles_num,
             split_central_sleep_timeout_seconds: rmk.split_central_sleep_timeout_seconds,
-            protocol_max_bulk_size: rmk.protocol_max_bulk_size,
             protocol_macro_chunk_size: rmk.protocol_macro_chunk_size,
             auto_mouse_layer_max_num,
+            rynk_buffer_size: rmk.rynk_buffer_size,
             events,
             passkey,
         })
     }
+}
+
+fn validate_u8_capability(name: &str, value: usize) -> Result<(), String> {
+    if value > u8::MAX as usize {
+        return Err(format!(
+            "{name} ({value}) exceeds the u8 host capability field (max 255)"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_u16_capability(name: &str, value: usize) -> Result<(), String> {
+    if value > u16::MAX as usize {
+        return Err(format!(
+            "{name} ({value}) exceeds the u16 host capability field (max 65535)"
+        ));
+    }
+    Ok(())
 }
 
 /// Bump event subscriber counts based on feature flags declared in `subscriber_default.toml`.
@@ -241,8 +261,22 @@ fn resolve_passkey_enabled(ble: &crate::BleConfig) -> Result<Passkey, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{BuildConstants, resolve_passkey_enabled};
-    use crate::{BleConfig, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS, MIN_PASSKEY_ENTRY_TIMEOUT_SECS};
+    use super::{BuildConstants, resolve_passkey_enabled, validate_u8_capability, validate_u16_capability};
+    use crate::{BleConfig, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS, KeyboardTomlConfig, MIN_PASSKEY_ENTRY_TIMEOUT_SECS};
+
+    #[test]
+    fn reserves_led_subscribers_for_display_split_and_dual_rynk_sessions() {
+        let config: KeyboardTomlConfig = toml::from_str("").unwrap();
+        let constants = config.build_constants(&["display", "split", "rynk", "_ble"]).unwrap();
+        let led_indicator = constants
+            .events
+            .iter()
+            .find(|event| event.name == "led_indicator")
+            .unwrap();
+
+        // Three indicator processors, the display, two split peripherals, and USB/BLE Rynk sessions.
+        assert_eq!(led_indicator.subs, 8);
+    }
 
     #[test]
     fn validates_passkey_timeout() {
@@ -327,5 +361,20 @@ mod tests {
                 "{event} needs a wake subscriber slot under _ble"
             );
         }
+    }
+
+    #[test]
+    fn validates_capability_wire_widths() {
+        assert!(validate_u8_capability("ble_profiles_num", 255).is_ok());
+        assert_eq!(
+            validate_u8_capability("ble_profiles_num", 256),
+            Err("ble_profiles_num (256) exceeds the u8 host capability field (max 255)".to_string())
+        );
+
+        assert!(validate_u16_capability("macro_space_size", 65535).is_ok());
+        assert_eq!(
+            validate_u16_capability("macro_space_size", 65536),
+            Err("macro_space_size (65536) exceeds the u16 host capability field (max 65535)".to_string())
+        );
     }
 }

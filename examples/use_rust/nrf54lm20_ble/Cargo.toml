@@ -10,8 +10,14 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = ["async_matrix", "nrf54lm20_ble"] }
-# nrf-sdc = { git = "https://github.com/alexmoon/nrf-sdc", rev = "abe49d22ebfc85fae134eb082fbfddf752016a55", default-features = false, features = [
+rmk = { path = "../../../rmk", default-features = false, features = [
+    "rynk",
+    "async_matrix",
+    "nrf54lm20_ble",
+    "storage",
+    "defmt",
+    "watchdog",
+] }
 nrf-sdc = { git = "https://github.com/haobogu/nrf-sdc", rev = "73ad22d57f39b5b109a665fe6f55c5ed61294ff2", default-features = false, features = [
     "defmt",
     "peripheral",
@@ -72,3 +78,13 @@ debug = true
 opt-level = "z"
 overflow-checks = false
 lto = "fat"
+
+[patch.crates-io]
+embassy-nrf = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
+embassy-usb = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
+embassy-hal-internal = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }
+embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy", rev = "1e291ec17780b1e73630de7fe38c0ab33d8292bc" }

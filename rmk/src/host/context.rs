@@ -1,22 +1,12 @@
-//! Shared façade for host-facing services (Vial today, rmk_protocol next).
-//!
-//! Bundles every keymap mutation with its flash persistence so callers don't
-//! repeat `keymap.X(); FLASH_CHANNEL.send(FlashOperationMessage::Y).await`
-//! by hand, and exposes synchronous reads of live keyboard state (LED,
-//! battery, connection, active layer) that are otherwise scattered across
-//! module-private statics.
-//!
-//! The context does not subscribe to events — the underlying statics it
-//! reads from are kept in sync by the relevant event handlers
-//! (`BatteryProcessor::commit`, `state.rs::update_status`,
-//! `keyboard::run_led_reader`).
+//! Shared context for the Vial and Rynk host services.
 
 use embassy_time::Duration;
 use rmk_types::action::{EncoderAction, KeyAction};
 #[cfg(feature = "_ble")]
 use rmk_types::battery::BatteryStatus;
 use rmk_types::combo::Combo as ComboConfig;
-use rmk_types::connection::ConnectionStatus;
+use rmk_types::connection::{ConnectionStatus, ConnectionType};
+use rmk_types::fork::Fork;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::morse::{Morse, MorseProfile};
 
@@ -26,21 +16,19 @@ use crate::keymap::KeyMap;
 #[cfg(feature = "storage")]
 use crate::{channel::FLASH_CHANNEL, storage::FlashOperationMessage};
 
-/// Façade shared between Vial and rmk_protocol host services.
-///
-/// `keymap` is intentionally `pub`: callers like `VialLock` that only need a
-/// raw `&KeyMap` keep their existing parameter and read it through
-/// `ctx.keymap` at the construction site.
-pub struct KeyboardContext<'a> {
+/// Context shared between Vial and Rynk host services.
+pub(crate) struct KeyboardContext<'a> {
     pub keymap: &'a KeyMap<'a>,
+    pub(crate) layout_blob: &'static [u8],
 }
 
 impl<'a> KeyboardContext<'a> {
     pub fn new(keymap: &'a KeyMap<'a>) -> Self {
-        Self { keymap }
+        Self {
+            keymap,
+            layout_blob: &[],
+        }
     }
-
-    // ── Keymap operations ────────────────────────────────────────────────
 
     pub fn get_action(&self, layer: u8, row: u8, col: u8) -> KeyAction {
         self.keymap
@@ -54,6 +42,11 @@ impl<'a> KeyboardContext<'a> {
     /// `(rows, cols, num_layers)`.
     pub fn keymap_dimensions(&self) -> (usize, usize, usize) {
         self.keymap.get_keymap_config()
+    }
+
+    /// The opaque, compressed physical-layout blob served by `GetLayout`.
+    pub fn layout_blob(&self) -> &'static [u8] {
+        self.layout_blob
     }
 
     pub async fn set_action(&self, layer: u8, row: u8, col: u8, action: KeyAction) {
@@ -81,7 +74,11 @@ impl<'a> KeyboardContext<'a> {
         self.keymap.set_action_by_flat_index(index, action);
         #[cfg(feature = "storage")]
         {
-            let (row, col, layer) = position_from_flat_index(index, rows, cols);
+            let layer_size = rows * cols;
+            let layer = index / layer_size;
+            let layer_offset = index % layer_size;
+            let row = layer_offset / cols;
+            let col = layer_offset % cols;
             if FLASH_CHANNEL
                 .try_send(FlashOperationMessage::KeymapKey {
                     layer: layer as u8,
@@ -101,14 +98,23 @@ impl<'a> KeyboardContext<'a> {
         let _ = (rows, cols);
     }
 
-    // ── Encoders ─────────────────────────────────────────────────────────
-
     pub fn get_encoder(&self, layer: u8, idx: u8) -> Option<EncoderAction> {
         self.keymap.get_encoder_action(layer as usize, idx as usize)
     }
 
-    pub async fn set_encoder_clockwise(&self, layer: u8, idx: u8, action: KeyAction) {
-        let updated = self.keymap.set_encoder_clockwise(layer as usize, idx as usize, action);
+    /// Number of encoders per layer.
+    pub fn num_encoders(&self) -> usize {
+        self.keymap.num_encoders()
+    }
+
+    /// Write one encoder direction and persist the updated pair.
+    pub async fn set_encoder_direction(&self, layer: u8, idx: u8, clockwise: bool, action: KeyAction) {
+        let updated = if clockwise {
+            self.keymap.set_encoder_clockwise(layer as usize, idx as usize, action)
+        } else {
+            self.keymap
+                .set_encoder_counter_clockwise(layer as usize, idx as usize, action)
+        };
         #[cfg(feature = "storage")]
         if let Some(encoder) = updated {
             FLASH_CHANNEL
@@ -123,25 +129,19 @@ impl<'a> KeyboardContext<'a> {
         let _ = updated;
     }
 
-    pub async fn set_encoder_counter_clockwise(&self, layer: u8, idx: u8, action: KeyAction) {
-        let updated = self
-            .keymap
-            .set_encoder_counter_clockwise(layer as usize, idx as usize, action);
+    /// Write both encoder directions in one synchronous RAM update, then persist
+    /// once.
+    pub async fn set_encoder(&self, layer: u8, idx: u8, action: EncoderAction) {
+        let written = self.keymap.set_encoder(layer as usize, idx as usize, action);
         #[cfg(feature = "storage")]
-        if let Some(encoder) = updated {
+        if written {
             FLASH_CHANNEL
-                .send(FlashOperationMessage::Encoder {
-                    idx,
-                    layer,
-                    action: encoder,
-                })
+                .send(FlashOperationMessage::Encoder { idx, layer, action })
                 .await;
         }
         #[cfg(not(feature = "storage"))]
-        let _ = updated;
+        let _ = written;
     }
-
-    // ── Macros ───────────────────────────────────────────────────────────
 
     pub fn read_macro_buffer(&self, offset: usize, target: &mut [u8]) {
         self.keymap.read_macro_buffer(offset, target);
@@ -162,15 +162,14 @@ impl<'a> KeyboardContext<'a> {
         self.keymap.reset_macro_buffer();
     }
 
-    // ── Combos ───────────────────────────────────────────────────────────
-
     pub fn with_combos<R>(&self, f: impl FnOnce(&[Option<Combo>]) -> R) -> R {
         self.keymap.with_combos(f)
     }
 
     /// Replace the combo at `idx` with `config` (or remove it if `config` is
     /// empty) and persist. No-op if `idx` is out of range.
-    pub async fn set_combo(&self, idx: u8, config: ComboConfig) {
+    /// Returns `false` when `idx` is out of range (no slot written).
+    pub async fn set_combo(&self, idx: u8, config: ComboConfig) -> bool {
         let valid = self.keymap.with_combos_mut(|combos| {
             if (idx as usize) >= combos.len() {
                 return false;
@@ -183,15 +182,14 @@ impl<'a> KeyboardContext<'a> {
             true
         });
         if !valid {
-            return;
+            return false;
         }
         #[cfg(feature = "storage")]
         FLASH_CHANNEL.send(FlashOperationMessage::Combo { idx, config }).await;
         #[cfg(not(feature = "storage"))]
         let _ = config;
+        true
     }
-
-    // ── Morses (Vial: tap-dance) ─────────────────────────────────────────
 
     pub fn get_morse(&self, idx: u8) -> Option<Morse> {
         self.keymap.get_morse(idx as usize)
@@ -219,8 +217,6 @@ impl<'a> KeyboardContext<'a> {
         }
     }
 
-    // ── Behavior settings (read) ─────────────────────────────────────────
-
     pub fn combo_timeout(&self) -> Duration {
         self.keymap.combo_timeout()
     }
@@ -244,8 +240,6 @@ impl<'a> KeyboardContext<'a> {
     pub fn morse_prior_idle_time(&self) -> Duration {
         self.keymap.morse_prior_idle_time()
     }
-
-    // ── Behavior settings (write+persist) ────────────────────────────────
 
     pub async fn set_combo_timeout(&self, ms: u16) {
         self.keymap.set_combo_timeout(Duration::from_millis(ms as u64));
@@ -285,8 +279,6 @@ impl<'a> KeyboardContext<'a> {
         FLASH_CHANNEL.send(FlashOperationMessage::PriorIdleTime(ms)).await;
     }
 
-    // ── Layout / reset ───────────────────────────────────────────────────
-
     pub async fn set_layout_options(&self, opts: u32) {
         #[cfg(feature = "storage")]
         FLASH_CHANNEL.send(FlashOperationMessage::LayoutOptions(opts)).await;
@@ -298,8 +290,6 @@ impl<'a> KeyboardContext<'a> {
         #[cfg(feature = "storage")]
         FLASH_CHANNEL.send(FlashOperationMessage::Reset).await;
     }
-
-    // ── Live state ───────────────────────────────────────────────────────
 
     pub fn led_indicator(&self) -> LedIndicator {
         crate::keyboard::current_led_indicator()
@@ -322,21 +312,42 @@ impl<'a> KeyboardContext<'a> {
         self.keymap.get_default_layer()
     }
 
-    // ── Matrix state (host_security) ─────────────────────────────────────
+    pub async fn set_default_layer(&self, layer: u8) {
+        self.keymap.set_default_layer(layer);
+        #[cfg(feature = "storage")]
+        FLASH_CHANNEL.send(FlashOperationMessage::DefaultLayer(layer)).await;
+    }
 
-    #[cfg(feature = "host_security")]
+    /// Tiebreaker connection currently chosen as preferred — independent
+    /// of which transport is actively routable.
+    pub fn preferred_connection(&self) -> ConnectionType {
+        crate::state::current_connection_status().preferred
+    }
+
+    pub fn get_fork(&self, idx: u8) -> Option<Fork> {
+        self.keymap.with_forks(|forks| forks.get(idx as usize).copied())
+    }
+
+    /// Replace the fork at `idx` with `fork` and persist.
+    /// Returns `false` when `idx` is out of range (no slot written).
+    pub async fn set_fork(&self, idx: u8, fork: Fork) -> bool {
+        let valid = self.keymap.with_forks_mut(|forks| {
+            if let Some(slot) = forks.get_mut(idx as usize) {
+                *slot = fork;
+                true
+            } else {
+                false
+            }
+        });
+        #[cfg(feature = "storage")]
+        if valid {
+            FLASH_CHANNEL.send(FlashOperationMessage::Fork { idx, fork }).await;
+        }
+        valid
+    }
+
+    #[cfg(feature = "host_lock")]
     pub fn read_matrix_state(&self, target: &mut [u8]) {
         self.keymap.read_matrix_state(target);
     }
-}
-
-/// Map a flat keymap index back to `(row, col, layer)`.
-///
-/// Layout: `index = layer * (rows * cols) + row * cols + col`.
-fn position_from_flat_index(index: usize, rows: usize, cols: usize) -> (usize, usize, usize) {
-    let layer = index / (cols * rows);
-    let layer_offset = index % (cols * rows);
-    let row = layer_offset / cols;
-    let col = layer_offset % cols;
-    (row, col, layer)
 }

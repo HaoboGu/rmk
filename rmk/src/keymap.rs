@@ -16,7 +16,7 @@ use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_ev
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::combo::Combo;
 use crate::keyboard_macros::MacroOperation;
-#[cfg(feature = "host_security")]
+#[cfg(feature = "host_lock")]
 use crate::matrix::MatrixState;
 
 pub(crate) const HOLD_BUFFER_SIZE: usize = 16;
@@ -103,11 +103,9 @@ struct KeyMapInner<'a> {
     /// Mouse button state
     mouse_buttons: u8,
     /// Matrix state for vial lock
-    #[cfg(feature = "host_security")]
+    #[cfg(feature = "host_lock")]
     matrix_state: MatrixState,
 }
-
-// ── Flat indexing helpers ──────────────────────────────────────────────
 
 impl KeyMapInner<'_> {
     #[inline]
@@ -131,8 +129,6 @@ impl KeyMapInner<'_> {
     }
 }
 
-// ── KeyMapInner methods (all take &mut self or &self) ─────────────────
-
 impl KeyMapInner<'_> {
     fn get_keymap_config(&self) -> (usize, usize, usize) {
         (self.row, self.col, self.num_layer)
@@ -150,7 +146,14 @@ impl KeyMapInner<'_> {
             );
             return;
         }
+        let before = self.get_activated_layer();
         self.behavior.default_layer = layer_num;
+        let after = self.get_activated_layer();
+        // With no layer key held, the activated layer follows the default; a
+        // held layer masks the change and observers see nothing.
+        if before != after {
+            publish_event(LayerChangeEvent::new(after));
+        }
     }
 
     fn get_action_at(&self, pos: KeyboardEventPos, layer_num: usize) -> KeyAction {
@@ -330,7 +333,7 @@ impl KeyMapInner<'_> {
     }
 }
 
-// ── Public KeyMap API (interior borrow hidden) ────────────────────────
+// Keep `inner` borrows inside sync methods so no borrow crosses an await.
 
 impl<'a> KeyMap<'a> {
     /// Flatten [`KeymapData`] and build the `KeyMap`.
@@ -367,7 +370,7 @@ impl<'a> KeyMap<'a> {
                 behavior,
                 hand,
                 mouse_buttons: 0,
-                #[cfg(feature = "host_security")]
+                #[cfg(feature = "host_lock")]
                 matrix_state: MatrixState::new(ROW, COL),
             }),
         }
@@ -425,8 +428,6 @@ impl<'a> KeyMap<'a> {
         Self::build(data, behavior, positional_config)
     }
 
-    // ── Action resolution ──
-
     pub(crate) fn get_action_with_layer_cache(&self, event: KeyboardEvent) -> KeyAction {
         self.inner.borrow_mut().get_action_with_layer_cache(event)
     }
@@ -455,8 +456,6 @@ impl<'a> KeyMap<'a> {
     pub(crate) fn set_action_at(&self, pos: KeyboardEventPos, layer: usize, action: KeyAction) {
         self.inner.borrow_mut().set_action_at(pos, layer, action);
     }
-
-    // ── Layers ──
 
     pub(crate) fn activate_layer(&self, layer_num: u8) {
         self.inner.borrow_mut().activate_layer(layer_num);
@@ -537,8 +536,6 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow_mut().update_fn_layer_state();
     }
 
-    // ── Config ──
-
     pub(crate) fn get_keymap_config(&self) -> (usize, usize, usize) {
         self.inner.borrow().get_keymap_config()
     }
@@ -552,8 +549,6 @@ impl<'a> KeyMap<'a> {
             Hand::Unknown
         }
     }
-
-    // ── Behavior getters (borrow scoped inside each method) ──
 
     pub(crate) fn combo_timeout(&self) -> Duration {
         self.inner.borrow().behavior.combo.timeout
@@ -591,6 +586,20 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().behavior.morse.default_profile
     }
 
+    /// Resolve a per-key morse profile by its table index: the table entry if
+    /// present, otherwise the user-configured default profile. Fields left
+    /// `None` by the resolved profile are still filled in per-field by the
+    /// callers (default profile, then hardcoded fallbacks).
+    pub(crate) fn morse_profile(&self, idx: u8) -> MorseProfile {
+        let inner = self.inner.borrow();
+        let morse = &inner.behavior.morse;
+        morse
+            .profiles
+            .get(idx as usize)
+            .copied()
+            .unwrap_or(morse.default_profile)
+    }
+
     pub(crate) fn mouse_key_config(&self) -> MouseKeyConfig {
         self.inner.borrow().behavior.mouse_key
     }
@@ -602,8 +611,6 @@ impl<'a> KeyMap<'a> {
     pub(crate) fn morses_len(&self) -> usize {
         self.inner.borrow().behavior.morse.morses.len()
     }
-
-    // ── Behavior setters ──
 
     pub(crate) fn set_combo_timeout(&self, timeout: Duration) {
         self.inner.borrow_mut().behavior.combo.timeout = timeout;
@@ -629,8 +636,6 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow_mut().behavior.morse.prior_idle_time = time;
     }
 
-    // ── Per-element morse ──
-
     pub(crate) fn get_morse(&self, idx: usize) -> Option<Morse> {
         self.inner.borrow().behavior.morse.morses.get(idx).cloned()
     }
@@ -639,11 +644,14 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow_mut().behavior.morse.morses.get_mut(idx).map(f)
     }
 
-    // ── Collection closures ──
-
     pub(crate) fn with_forks<R>(&self, f: impl FnOnce(&[Fork]) -> R) -> R {
         let inner = self.inner.borrow();
         f(&inner.behavior.fork.forks)
+    }
+
+    pub(crate) fn with_forks_mut<R>(&self, f: impl FnOnce(&mut [Fork]) -> R) -> R {
+        let mut inner = self.inner.borrow_mut();
+        f(&mut inner.behavior.fork.forks)
     }
 
     pub(crate) fn with_combos<R>(&self, f: impl FnOnce(&[Option<Combo>]) -> R) -> R {
@@ -655,8 +663,6 @@ impl<'a> KeyMap<'a> {
         let mut inner = self.inner.borrow_mut();
         f(&mut inner.behavior.combo.combos)
     }
-
-    // ── Macros ──
 
     pub(crate) fn get_macro_sequence_start(&self, idx: u8) -> Option<usize> {
         MacroOperation::get_macro_sequence_start(&self.inner.borrow().behavior.keyboard_macros.macro_sequences, idx)
@@ -670,8 +676,6 @@ impl<'a> KeyMap<'a> {
         )
     }
 
-    // ── Mouse ──
-
     pub(crate) fn mouse_buttons(&self) -> u8 {
         self.inner.borrow().mouse_buttons
     }
@@ -679,8 +683,6 @@ impl<'a> KeyMap<'a> {
     pub(crate) fn set_mouse_buttons(&self, buttons: u8) {
         self.inner.borrow_mut().mouse_buttons = buttons;
     }
-
-    // ── Bulk flat access (for Vial DynamicKeymapGetBuffer/SetBuffer) ──
 
     pub(crate) fn get_action_by_flat_index(&self, index: usize) -> KeyAction {
         let inner = self.inner.borrow();
@@ -698,7 +700,9 @@ impl<'a> KeyMap<'a> {
         }
     }
 
-    // ── Encoder access (for Vial GetEncoder/SetEncoder) ──
+    pub(crate) fn num_encoders(&self) -> usize {
+        self.inner.borrow().num_encoder
+    }
 
     pub(crate) fn get_encoder_action(&self, layer: usize, id: usize) -> Option<EncoderAction> {
         let inner = self.inner.borrow();
@@ -737,7 +741,19 @@ impl<'a> KeyMap<'a> {
         None
     }
 
-    // ── Macro buffer (for Vial DynamicKeymapMacroGetBuffer/SetBuffer) ──
+    /// Write both directions of an encoder under one borrow. Returns `false`
+    /// if the slot is out of range.
+    pub(crate) fn set_encoder(&self, layer: usize, id: usize, action: EncoderAction) -> bool {
+        let mut inner = self.inner.borrow_mut();
+        let idx = inner.encoder_index(layer, id);
+        if let Some(encoders) = &mut inner.encoders
+            && let Some(slot) = encoders.get_mut(idx)
+        {
+            *slot = action;
+            return true;
+        }
+        false
+    }
 
     pub(crate) fn read_macro_buffer(&self, offset: usize, target: &mut [u8]) {
         let inner = self.inner.borrow();
@@ -765,19 +781,17 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().behavior.keyboard_macros.macro_sequences
     }
 
-    // ── Matrix state (host_security) ──
-
-    #[cfg(feature = "host_security")]
+    #[cfg(feature = "host_lock")]
     pub(crate) fn update_matrix_state(&self, event: &KeyboardEvent) {
         self.inner.borrow_mut().matrix_state.update(event);
     }
 
-    #[cfg(feature = "host_security")]
+    #[cfg(feature = "host_lock")]
     pub(crate) fn read_matrix_state(&self, target: &mut [u8]) {
         self.inner.borrow().matrix_state.read_all(target);
     }
 
-    #[cfg(feature = "host_security")]
+    #[cfg(feature = "host_lock")]
     pub(crate) fn read_matrix_key(&self, row: u8, col: u8) -> bool {
         self.inner.borrow().matrix_state.read(row, col)
     }

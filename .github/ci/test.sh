@@ -5,7 +5,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 export CARGO_NET_OFFLINE=false
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$target_root/test}"
-mkdir -p "$CARGO_TARGET_DIR"
 
 # Each crate is its own cargo workspace in this repo, so nextest's default
 # `<workspace>/.config/nextest.toml` lookup would miss our shared config at
@@ -16,12 +15,11 @@ nx=(nextest run --config-file "$nextest_cfg" --profile ci)
 log_section "Running tests"
 cargo +stable "${nx[@]}" --manifest-path rmk-config/Cargo.toml
 cargo +stable "${nx[@]}" --manifest-path rmk-types/Cargo.toml
-# Exercise the rmk_protocol module (gated behind `rmk_protocol`) so the wire-format
-# snapshot tests under rmk-types/src/protocol/rmk/snapshots/ run in CI. `host`
-# enables rmk_protocol + bulk + _ble + split, covering every snapshot.
+# Exercise the rynk protocol module (gated behind `rynk`).
 cargo +stable "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features host
-cargo +stable "${nx[@]}" --manifest-path rmk-macro/Cargo.toml
-for feats in "${RMK_FEATURESETS[@]}"; do
+cargo +stable "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features steno
+cargo +stable "${nx[@]}" --manifest-path rmk-macro/Cargo.toml --features _simulator
+for feats in "${RMK_TEST_FEATURESETS[@]}"; do
     if [[ -z "$feats" ]]; then
         cargo +stable "${nx[@]}" --manifest-path rmk/Cargo.toml --no-default-features
     else

@@ -156,13 +156,13 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
             // Modifier tap-hold.
             let keycode = KeyCode::Hid((via_keycode as u8).into());
             let modifier = ModifierCombination::from_packed_bits(((via_keycode >> 8) & 0b11111) as u8);
-            KeyAction::TapHold(Action::Key(keycode), Action::Modifier(modifier), Default::default())
+            KeyAction::TapHold(Action::Key(keycode), Action::Modifier(modifier), u8::MAX)
         }
         0x4000..=0x4FFF => {
             // Layer tap-hold.
             let layer = (via_keycode >> 8) & 0xF;
             let keycode = KeyCode::Hid((via_keycode as u8).into());
-            KeyAction::TapHold(Action::Key(keycode), Action::LayerOn(layer as u8), Default::default())
+            KeyAction::TapHold(Action::Key(keycode), Action::LayerOn(layer as u8), u8::MAX)
         }
         0x5000..=0x51FF => {
             let layer = (via_keycode >> 5) & 0xF;
@@ -243,38 +243,38 @@ pub(crate) fn from_via_keycode(via_keycode: u16) -> KeyAction {
         0x7C18 => KeyAction::TapHold(
             Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
             Action::Modifier(ModifierCombination::LCTRL),
-            Default::default(),
+            u8::MAX,
         ),
         0x7C19 => KeyAction::TapHold(
             Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
             Action::Modifier(ModifierCombination::RCTRL),
-            Default::default(),
+            u8::MAX,
         ),
         0x7C1A => KeyAction::TapHold(
             Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
             Action::Modifier(ModifierCombination::LSHIFT),
-            Default::default(),
+            u8::MAX,
         ),
         0x7C1B => KeyAction::TapHold(
             Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
             Action::Modifier(ModifierCombination::RSHIFT),
-            Default::default(),
+            u8::MAX,
         ),
         0x7C1C => KeyAction::TapHold(
             Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
             Action::Modifier(ModifierCombination::LALT),
-            Default::default(),
+            u8::MAX,
         ),
         0x7C1D => KeyAction::TapHold(
             Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
             Action::Modifier(ModifierCombination::RALT),
-            Default::default(),
+            u8::MAX,
         ),
         // RS Enter (SC_SENT): decode only. Re-encodes as the equivalent RShift mod-tap (0x3228).
         0x7C1E => KeyAction::TapHold(
             Action::Key(KeyCode::Hid(HidKeyCode::Enter)),
             Action::Modifier(ModifierCombination::RSHIFT),
-            Default::default(),
+            u8::MAX,
         ),
         0x7C02..=0x7C5F => {
             // TODO: Reset/Haptic/Auto shift(AS)/Dynamic macro
@@ -427,22 +427,14 @@ mod test {
         // LT0(A) -> LayerTapHold(A, 0)
         let via_keycode = 0x4004;
         assert_eq!(
-            KeyAction::TapHold(
-                Action::Key(KeyCode::Hid(HidKeyCode::A)),
-                Action::LayerOn(0),
-                Default::default()
-            ),
+            KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::A)), Action::LayerOn(0), u8::MAX),
             from_via_keycode(via_keycode)
         );
 
         // LT3(A) -> LayerTapHold(A, 3)
         let via_keycode = 0x4304;
         assert_eq!(
-            KeyAction::TapHold(
-                Action::Key(KeyCode::Hid(HidKeyCode::A)),
-                Action::LayerOn(3),
-                Default::default()
-            ),
+            KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::A)), Action::LayerOn(3), u8::MAX),
             from_via_keycode(via_keycode)
         );
 
@@ -452,7 +444,7 @@ mod test {
             KeyAction::TapHold(
                 Action::Key(KeyCode::Hid(HidKeyCode::A)),
                 Action::Modifier(ModifierCombination::new_from(false, false, true, true, false)),
-                Default::default(),
+                u8::MAX,
             ), //hrm
             from_via_keycode(via_keycode)
         );
@@ -463,7 +455,7 @@ mod test {
             KeyAction::TapHold(
                 Action::Key(KeyCode::Hid(HidKeyCode::B)),
                 Action::Modifier(ModifierCombination::new_from(true, true, true, false, true)),
-                Default::default(),
+                u8::MAX,
             ),
             from_via_keycode(via_keycode)
         );
@@ -474,7 +466,7 @@ mod test {
             KeyAction::TapHold(
                 Action::Key(KeyCode::Hid(HidKeyCode::A)),
                 Action::Modifier(ModifierCombination::new_from(false, true, true, true, true)),
-                Default::default(),
+                u8::MAX,
             ), //hrm
             from_via_keycode(via_keycode)
         );
@@ -485,7 +477,7 @@ mod test {
             KeyAction::TapHold(
                 Action::Key(KeyCode::Hid(HidKeyCode::B)),
                 Action::Modifier(ModifierCombination::new_from(false, false, true, true, true)),
-                Default::default(),
+                u8::MAX,
             ),
             from_via_keycode(via_keycode)
         );
@@ -534,7 +526,7 @@ mod test {
             KeyAction::TapHold(
                 Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
                 Action::Modifier(ModifierCombination::LCTRL),
-                Default::default(),
+                u8::MAX,
             ),
             from_via_keycode(via_keycode)
         );
@@ -545,7 +537,7 @@ mod test {
             KeyAction::TapHold(
                 Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
                 Action::Modifier(ModifierCombination::RCTRL),
-                Default::default(),
+                u8::MAX,
             ),
             from_via_keycode(via_keycode)
         );
@@ -556,7 +548,7 @@ mod test {
             KeyAction::TapHold(
                 Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
                 Action::Modifier(ModifierCombination::LSHIFT),
-                Default::default(),
+                u8::MAX,
             ),
             from_via_keycode(via_keycode)
         );
@@ -567,7 +559,7 @@ mod test {
             KeyAction::TapHold(
                 Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
                 Action::Modifier(ModifierCombination::RSHIFT),
-                Default::default(),
+                u8::MAX,
             ),
             from_via_keycode(via_keycode)
         );
@@ -578,7 +570,7 @@ mod test {
             KeyAction::TapHold(
                 Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
                 Action::Modifier(ModifierCombination::LALT),
-                Default::default(),
+                u8::MAX,
             ),
             from_via_keycode(via_keycode)
         );
@@ -589,7 +581,7 @@ mod test {
             KeyAction::TapHold(
                 Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
                 Action::Modifier(ModifierCombination::RALT),
-                Default::default(),
+                u8::MAX,
             ),
             from_via_keycode(via_keycode)
         );
@@ -600,7 +592,7 @@ mod test {
             KeyAction::TapHold(
                 Action::Key(KeyCode::Hid(HidKeyCode::Enter)),
                 Action::Modifier(ModifierCombination::RSHIFT),
-                Default::default(),
+                u8::MAX,
             ),
             from_via_keycode(via_keycode)
         );
@@ -701,26 +693,18 @@ mod test {
         assert_eq!(0xF04, to_via_keycode(a));
 
         // LT0(A) -> LayerTapHold(A, 0)
-        let a = KeyAction::TapHold(
-            Action::Key(KeyCode::Hid(HidKeyCode::A)),
-            Action::LayerOn(0),
-            Default::default(),
-        );
+        let a = KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::A)), Action::LayerOn(0), u8::MAX);
         assert_eq!(0x4004, to_via_keycode(a));
 
         // LT3(A) -> LayerTapHold(A, 3)
-        let a = KeyAction::TapHold(
-            Action::Key(KeyCode::Hid(HidKeyCode::A)),
-            Action::LayerOn(3),
-            Default::default(),
-        );
+        let a = KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::A)), Action::LayerOn(3), u8::MAX);
         assert_eq!(0x4304, to_via_keycode(a));
 
         // LSA_T(A) ->
         let a = KeyAction::TapHold(
             Action::Key(KeyCode::Hid(HidKeyCode::A)),
             Action::Modifier(ModifierCombination::new_from(false, false, true, true, false)),
-            Default::default(),
+            u8::MAX,
         );
         assert_eq!(0x2604, to_via_keycode(a));
 
@@ -728,7 +712,7 @@ mod test {
         let a = KeyAction::TapHold(
             Action::Key(KeyCode::Hid(HidKeyCode::A)),
             Action::Modifier(ModifierCombination::new_from(true, true, true, false, true)),
-            Default::default(),
+            u8::MAX,
         );
         assert_eq!(0x3D04, to_via_keycode(a));
 
@@ -736,7 +720,7 @@ mod test {
         let a = KeyAction::TapHold(
             Action::Key(KeyCode::Hid(HidKeyCode::A)),
             Action::Modifier(ModifierCombination::new_from(false, true, true, true, true)),
-            Default::default(),
+            u8::MAX,
         );
         assert_eq!(0x2F04, to_via_keycode(a));
 
@@ -744,7 +728,7 @@ mod test {
         let a = KeyAction::TapHold(
             Action::Key(KeyCode::Hid(HidKeyCode::A)),
             Action::Modifier(ModifierCombination::new_from(false, false, true, true, true)),
-            Default::default(),
+            u8::MAX,
         );
         assert_eq!(0x2704, to_via_keycode(a));
 
@@ -775,7 +759,7 @@ mod test {
         let a = KeyAction::TapHold(
             Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
             Action::Modifier(ModifierCombination::LCTRL),
-            Default::default(),
+            u8::MAX,
         );
         assert_eq!(0x7C18, to_via_keycode(a));
 
@@ -783,7 +767,7 @@ mod test {
         let a = KeyAction::TapHold(
             Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
             Action::Modifier(ModifierCombination::RCTRL),
-            Default::default(),
+            u8::MAX,
         );
         assert_eq!(0x7C19, to_via_keycode(a));
 
@@ -791,7 +775,7 @@ mod test {
         let a = KeyAction::TapHold(
             Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
             Action::Modifier(ModifierCombination::LSHIFT),
-            Default::default(),
+            u8::MAX,
         );
         assert_eq!(0x7C1A, to_via_keycode(a));
 
@@ -799,7 +783,7 @@ mod test {
         let a = KeyAction::TapHold(
             Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
             Action::Modifier(ModifierCombination::RSHIFT),
-            Default::default(),
+            u8::MAX,
         );
         assert_eq!(0x7C1B, to_via_keycode(a));
 
@@ -807,7 +791,7 @@ mod test {
         let a = KeyAction::TapHold(
             Action::KeyWithModifier(HidKeyCode::Kc9, ModifierCombination::LSHIFT),
             Action::Modifier(ModifierCombination::LALT),
-            Default::default(),
+            u8::MAX,
         );
         assert_eq!(0x7C1C, to_via_keycode(a));
 
@@ -815,7 +799,7 @@ mod test {
         let a = KeyAction::TapHold(
             Action::KeyWithModifier(HidKeyCode::Kc0, ModifierCombination::LSHIFT),
             Action::Modifier(ModifierCombination::RALT),
-            Default::default(),
+            u8::MAX,
         );
         assert_eq!(0x7C1D, to_via_keycode(a));
 
@@ -823,7 +807,7 @@ mod test {
         let a = KeyAction::TapHold(
             Action::Key(KeyCode::Hid(HidKeyCode::Enter)),
             Action::Modifier(ModifierCombination::RSHIFT),
-            Default::default(),
+            u8::MAX,
         );
         assert_eq!(0x3228, to_via_keycode(a));
 

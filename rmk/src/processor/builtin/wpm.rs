@@ -1,10 +1,22 @@
 //! WPM (Words Per Minute) processor for RMK
+use core::sync::atomic::{AtomicU16, Ordering};
+
 use rmk_macro::processor;
 
 use crate::event::{KeyboardEvent, WpmUpdateEvent, publish_event};
 
 const CHARS_PER_WORD: u8 = 5;
 const SAMPLES: u8 = 5;
+
+/// Latest WPM, written alongside every `WpmUpdateEvent` publish so host
+/// services can read the current value synchronously without subscribing.
+static CURRENT_WPM: AtomicU16 = AtomicU16::new(0);
+
+/// Current typing speed in words per minute. Returns `0` when no
+/// `WpmProcessor` is running.
+pub(crate) fn current_wpm() -> u16 {
+    CURRENT_WPM.load(Ordering::Relaxed)
+}
 
 /// Processor to estimate typing speed in words per minute (WPM)
 #[processor(subscribe = [KeyboardEvent], poll_interval = 1000)]
@@ -49,6 +61,7 @@ impl WpmProcessor {
 
         if avg_wpm != self.wpm {
             self.wpm = avg_wpm;
+            CURRENT_WPM.store(self.wpm, Ordering::Relaxed);
             publish_event(WpmUpdateEvent::new(self.wpm));
         }
 

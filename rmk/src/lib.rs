@@ -14,12 +14,25 @@
 // suppress them crate-wide rather than littering individual BLE structs.
 #![allow(clippy::needless_borrows_for_generic_args)]
 #![allow(clippy::needless_update)]
-// Enable std for espidf and test
-#![cfg_attr(not(test), no_std)]
+// Enable std for espidf and test. The `std` feature is test-only, and
+// `test_support` needs std in the build the integration tests link against —
+// that one is not `cfg(test)`, since `tests/` is a separate target.
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 
 // Mutual exclusivity guard
-#[cfg(all(feature = "rmk_protocol", feature = "vial"))]
-compile_error!("features `rmk_protocol` and `vial` are mutually exclusive");
+#[cfg(all(feature = "rynk", feature = "vial"))]
+compile_error!("features `rynk` and `vial` are mutually exclusive");
+
+// `host` needs a concrete configurator protocol to expose `HostService`.
+#[cfg(all(feature = "host", not(any(feature = "rynk", feature = "vial"))))]
+compile_error!("feature `host` requires enabling either `rynk` or `vial`");
+
+#[cfg(all(feature = "usb_log", feature = "_usb_high_speed"))]
+compile_error!(
+    "`usb_log` is not supported on high-speed USB chips yet: embassy-usb-logger \
+     only handles 64-byte packets, which high-speed bulk endpoints can't use. \
+     Use `defmt` logging on these chips."
+);
 
 // Re-export self as ::rmk for macro-generated code to work both inside and outside the crate
 extern crate self as rmk;
@@ -94,12 +107,12 @@ pub mod usb;
 #[cfg(feature = "watchdog")]
 pub mod watchdog;
 
-// Test-only helper that drives `embassy-time/mock-driver` from the
-// `#[cfg(test)]` modules under `src/`. Mirrors the same helper at
-// `tests/common/test_block_on.rs` (which is invisible to lib unit tests
-// because integration tests are a separate compilation target).
-#[cfg(test)]
-pub(crate) mod test_support;
+// Test-only helpers for `#[cfg(test)]` modules under `src/` and for the
+// simulator harness in `tests/integration/simulator`; never part of a firmware
+// build.
+#[cfg(any(test, feature = "std"))]
+#[doc(hidden)]
+pub mod test_support;
 
 pub async fn initialize_keymap<
     'a,

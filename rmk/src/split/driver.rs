@@ -1,10 +1,20 @@
 //! The abstracted driver layer of the split keyboard.
 //!
+use core::cell::Cell;
+
 use embassy_futures::select::{Either, select};
+use embassy_sync::blocking_mutex::Mutex as BlockingMutex;
 use futures::FutureExt;
+use rmk_types::battery::BatteryStatus;
+#[cfg(feature = "rynk")]
+use rmk_types::protocol::rynk::PeripheralStatus;
 
 use super::SplitMessage;
-use crate::event::{KeyboardEvent, KeyboardEventPos, SubscribableEvent, publish_event, publish_event_async};
+#[cfg(feature = "_ble")]
+use crate::event::{BatteryStatusEvent, PeripheralBatteryEvent};
+use crate::event::{
+    KeyboardEvent, KeyboardEventPos, PeripheralConnectedEvent, SubscribableEvent, publish_event, publish_event_async,
+};
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -25,6 +35,71 @@ pub(crate) trait SplitReader {
 /// Split message writer to other split devices
 pub(crate) trait SplitWriter {
     async fn write(&mut self, message: &SplitMessage) -> Result<usize, SplitDriverError>;
+}
+
+/// Live per-peripheral status. Latched here in the transport-agnostic split
+/// layer so host services can read a current snapshot at any time, even when
+/// no host session was active when the change happened. Wired peripherals
+/// never report a battery, so theirs stays `Unavailable`.
+#[derive(Copy, Clone, PartialEq, Eq)]
+struct PeripheralSlot {
+    connected: bool,
+    battery: BatteryStatus,
+}
+
+static PERIPHERAL_SLOTS: BlockingMutex<crate::RawMutex, Cell<[PeripheralSlot; crate::SPLIT_PERIPHERALS_NUM]>> =
+    BlockingMutex::new(Cell::new(
+        [PeripheralSlot {
+            connected: false,
+            battery: BatteryStatus::Unavailable,
+        }; crate::SPLIT_PERIPHERALS_NUM],
+    ));
+
+/// Read-modify-write peripheral `id`'s slot. Returns `false` when `id` is out
+/// of range or the slot didn't change, so callers skip publishing.
+fn update_slot(id: usize, f: impl FnOnce(&mut PeripheralSlot)) -> bool {
+    PERIPHERAL_SLOTS.lock(|slots| {
+        let mut all = slots.get();
+        let Some(slot) = all.get_mut(id) else {
+            return false;
+        };
+        let prev = *slot;
+        f(slot);
+        if *slot == prev {
+            return false;
+        }
+        slots.set(all);
+        true
+    })
+}
+
+/// Latch peripheral `id`'s connected state and broadcast the change.
+pub(crate) fn set_peripheral_connected(id: usize, connected: bool) {
+    if update_slot(id, |s| s.connected = connected) {
+        publish_event(PeripheralConnectedEvent { id, connected });
+    }
+}
+
+/// Latch peripheral `id`'s battery status and broadcast the change.
+#[cfg(feature = "_ble")]
+pub(crate) fn set_peripheral_battery(id: usize, battery: BatteryStatus) {
+    if update_slot(id, |s| s.battery = battery) {
+        publish_event(PeripheralBatteryEvent {
+            id,
+            state: BatteryStatusEvent(battery),
+        });
+    }
+}
+
+/// Latest snapshot for peripheral `id`, or `None` when `id` is out of range.
+#[cfg(feature = "rynk")]
+pub(crate) fn current_peripheral_status(id: usize) -> Option<PeripheralStatus> {
+    PERIPHERAL_SLOTS.lock(|slots| {
+        slots.get().get(id).map(|s| PeripheralStatus {
+            connected: s.connected,
+            battery: s.battery,
+        })
+    })
 }
 
 /// PeripheralManager runs in central.
@@ -199,9 +274,7 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             // Non-key events are drop-on-full to keep the split read loop responsive.
             SplitMessage::Pointing(e) => publish_event(e),
             #[cfg(feature = "_ble")]
-            SplitMessage::BatteryStatus(state) => {
-                publish_event(crate::event::PeripheralBatteryEvent { id: self.id, state })
-            }
+            SplitMessage::BatteryStatus(state) => set_peripheral_battery(self.id, state.0),
             #[cfg(feature = "dfu_split")]
             SplitMessage::FirmwareHashResponse(hash) => {
                 info!("dfu_split: stale hash response ({:#x}) in event loop", hash);

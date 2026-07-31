@@ -7,11 +7,13 @@ pub(crate) mod feature;
 pub(crate) mod import;
 pub(crate) mod input_device;
 pub(crate) mod keyboard_config;
-pub(crate) mod layout;
+pub(crate) mod keymap;
 pub(crate) mod matrix;
 pub(crate) mod orchestrator;
 pub(crate) mod override_helper;
 pub(crate) mod registered_processor;
+#[cfg(feature = "_simulator")]
+pub(crate) mod simulator;
 pub(crate) mod split;
 pub(crate) mod watchdog;
 

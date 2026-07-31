@@ -12,10 +12,10 @@ use trouble_host::prelude::*;
 use crate::ble::sleep::report_activity;
 use crate::ble::{update_ble_phy, update_conn_params};
 use crate::channel::FLASH_CHANNEL;
-use crate::event::{EventSubscriber, PeripheralConnectedEvent, SleepStateEvent, SubscribableEvent, publish_event};
+use crate::event::{EventSubscriber, SleepStateEvent, SubscribableEvent};
 #[cfg(feature = "storage")]
 use crate::split::ble::PeerAddress;
-use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter};
+use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter, set_peripheral_connected};
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
 use crate::storage::FlashOperationMessage;
 
@@ -198,10 +198,7 @@ pub(crate) async fn run_ble_peripheral_manager<
         };
         wait_for_stack_started().await;
 
-        publish_event(PeripheralConnectedEvent {
-            id: peri_id,
-            connected: false,
-        });
+        set_peripheral_connected(peri_id, false);
 
         // Connect to peripheral
         match with_timeout(Duration::from_secs(15), async {
@@ -222,10 +219,7 @@ pub(crate) async fn run_ble_peripheral_manager<
             Ok(Ok(conn)) => {
                 info!("Connected to peripheral {}", peri_id);
 
-                publish_event(PeripheralConnectedEvent {
-                    id: peri_id,
-                    connected: true,
-                });
+                set_peripheral_connected(peri_id, true);
 
                 if let Err(e) =
                     run_central_manager_task::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(peri_id, stack, &conn).await

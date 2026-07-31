@@ -2,15 +2,11 @@
 
 RMK v0.8 is a major release with lots of updates and improvements. The key changes in v0.8 include:
 
-- **Dependency upgrades**: Updated many dependencies to their latest versions, including `esp-hal`
-  v1.0, `trouble-host` v0.5, and others.
+- **Dependency upgrades**: Updated many dependencies to their latest versions, including `esp-hal` v1.0, `trouble-host` v0.5, and others.
 
-- **Tap-hold system refactoring**: Introduced the new `Morse` operation — a superset of tap-hold and
-  tap-dance functionalities.
+- **Tap-hold system refactoring**: Introduced the new `Morse` operation — a superset of tap-hold and tap-dance functionalities.
 
-- **Simplified matrix configuration**: Replaced `input/output_pins` with `row/col_pins` in
-  `keyboard.toml` and removed the `col2row` feature from `Cargo.toml`, making matrix setup more
-  intuitive.
+- **Simplified matrix configuration**: Replaced `input/output_pins` with `row/col_pins` in `keyboard.toml` and removed the `col2row` feature from `Cargo.toml`, making matrix setup more intuitive.
 
 - **Dongle support**: Reintroduced dongle support for split keyboards.
 
@@ -20,8 +16,7 @@ RMK v0.8 is a major release with lots of updates and improvements. The key chang
 
 ### Update RMK and embassy-\* dependencies
 
-First, update the `rmk` version to v0.8 and adjust its feature flag. Update versions of embassy-\*
-dependencies and HALs as well:
+First, update the `rmk` version to v0.8 and adjust its feature flag. Update versions of embassy-\* dependencies and HALs as well:
 
 ```diff
 # Update the following dependencies in your `Cargo.toml`.
@@ -111,8 +106,7 @@ For RP2040 wired split, rename "rp2040_bl" feature to "rp2040", remove "rp2040_p
 
 ### ESP32 specific update
 
-For ESP32, update all esp-\* dependencies to latest, add vial feature gate to `rmk` if you need vial
-support
+For ESP32, update all esp-\* dependencies to latest, add vial feature gate to `rmk` if you need vial support
 
 ```diff
 rmk = { version = "0.8", default-features = false, features = [
@@ -178,8 +172,7 @@ The main update of `keyboard.toml` is in the `[matrix]` section:
 
 Due to `Morse` update, `[behavior]` section is needed to be updated as well.
 
-The options are also updated, please refer to
-[Morse Configuration](../configuration/behavior#morse-and-tapdance) for details
+The options are also updated, please refer to [Morse Configuration](../configuration/behavior#morse-and-tapdance) for details
 
 ```diff
 [behavior]
@@ -194,14 +187,11 @@ For other configuration updates, please refer to [Configuration](../configuratio
 
 ## Dongle support
 
-Dongle support is back! Checkout
-[config example](https://github.com/HaoboGu/rmk/tree/main/examples/use_config/nrf52840_ble_split_dongle)
-and
-[Rust example](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/nrf52840_ble_split_dongle)
-for more details.
+Dongle support is back! Checkout [config example](https://github.com/HaoboGu/rmk/tree/main/examples/use_config/nrf52840_ble_split_dongle) and [Rust example](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/nrf52840_ble_split_dongle) for more details.
 
-::: info For Rust code users, you need to add a `keyboard.toml` with following content to your
-project to specify the number of peripherals:
+::: info 
+
+For Rust code users, you need to add a `keyboard.toml` with following content to your project to specify the number of peripherals:
 
 ```toml title="keyboard.toml"
 [rmk]

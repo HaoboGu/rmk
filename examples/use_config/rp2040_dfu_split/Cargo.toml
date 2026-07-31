@@ -11,10 +11,10 @@ embassy-rp = { version = "0.10", features = ["rp2040", "defmt", "time-driver", "
 embassy-executor = { version = "0.10", features = ["defmt", "platform-cortex-m", "executor-thread"] }
 cortex-m-rt = { version = "0.7.5", features = ["set-vtor"] }
 static_cell = "2"
-portable-atomic = { version = "1.11", features = ["critical-section"] }
-defmt = "1.0"
-defmt-rtt = "1.0"
-panic-probe = { version = "1.0", features = ["print-defmt"] }
+portable-atomic = { version = "1", features = ["critical-section"] }
+defmt = "1"
+defmt-rtt = "1"
+panic-probe = { version = "1", features = ["print-defmt"] }
 
 [build-dependencies]
 const-gen = "1.6"

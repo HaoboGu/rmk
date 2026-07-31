@@ -1,0 +1,94 @@
+# Status and connection reads. These are the endpoints a host polls to render
+# the keyboard's live state, so each is checked against state the timeline set.
+features = ["rynk"]
+
+[layout]
+rows = 1
+cols = 3
+map = """
+(0,0)  (0,1)  (0,2)
+"""
+
+[[keymap.layer]]
+keys = "A  MO(1)  No"
+
+[[keymap.layer]]
+keys = "B  _  No"
+
+# `GetMatrixState` and `ClearBleProfile` are gated unconditionally.
+[host]
+unlock_keys = [[0, 2]]
+
+[[test]]
+name = "current_layer_follows_a_held_layer_key"
+steps = [
+  { rynk = { cmd = "GetCurrentLayer", reply = 0 } },
+  { press = [0, 1] },
+  { rynk = { cmd = "GetCurrentLayer", reply = 1 } },
+  { release = [0, 1] },
+  { rynk = { cmd = "GetCurrentLayer", reply = 0 } },
+]
+
+[[test]]
+name = "matrix_state_reports_the_held_keys"
+steps = [
+  { press = [0, 2] },
+  { rynk = { cmd = "UnlockPoll", reply = { locked = false, unlocking = false, remaining_keys = 0, key_positions = [[0, 2]] } } },
+  { rynk = { cmd = "GetMatrixState", reply = { pressed_bitmap = [4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } } },
+  { release = [0, 2] },
+  { rynk = { cmd = "GetMatrixState", reply = { pressed_bitmap = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } } },
+]
+
+[[test]]
+name = "idle_status_reads_are_served"
+steps = [
+  { rynk = { cmd = "GetWpm", reply = 0 } },
+  { rynk = { cmd = "GetSleepState", reply = false } },
+  { rynk = { cmd = "GetLedIndicator", reply = { num_lock = false, caps_lock = false, scroll_lock = false, compose = false, kana = false } } },
+]
+
+[[test]]
+name = "connection_reads_agree_with_each_other"
+steps = [
+  { rynk = { cmd = "GetConnectionType", reply = "Usb" } },
+  { rynk = { cmd = "GetConnectionStatus", reply = { usb = "Configured", ble = { profile = 0, state = "Inactive" }, preferred = "Usb" } } },
+]
+
+[[test]]
+name = "ble_status_mirrors_the_connection_status"
+features = ["_ble"]
+steps = [
+  { rynk = { cmd = "GetBleStatus", reply = { profile = 0, state = "Inactive" } } },
+  { rynk = { cmd = "GetBatteryStatus", reply = "Unavailable" } },
+]
+
+# Slot bounds come from `num_ble_profiles`; a slot past it is refused rather
+# than queued.
+[[test]]
+name = "ble_profile_switch_checks_the_slot"
+features = ["_ble"]
+steps = [
+  { rynk = { cmd = "SwitchBleProfile", payload = 0 } },
+  { rynk = { cmd = "SwitchBleProfile", payload = 9, error = "Invalid" } },
+]
+
+[[test]]
+name = "clearing_a_ble_profile_needs_an_unlock"
+features = ["_ble"]
+steps = [
+  { rynk = { cmd = "ClearBleProfile", payload = 0, error = "Locked" } },
+  { press = [0, 2] },
+  { rynk = { cmd = "UnlockPoll", reply = { locked = false, unlocking = false, remaining_keys = 0, key_positions = [[0, 2]] } } },
+  { release = [0, 2] },
+  { rynk = { cmd = "ClearBleProfile", payload = 0 } },
+]
+
+# A declared slot always has a snapshot; before the peripheral reports in it
+# reads as disconnected. A slot the board does not have is refused instead.
+[[test]]
+name = "peripheral_status_reads_disconnected_before_the_peripheral_reports"
+features = ["split"]
+steps = [
+  { rynk = { cmd = "GetPeripheralStatus", payload = 0, reply = { connected = false, battery = "Unavailable" } } },
+  { rynk = { cmd = "GetPeripheralStatus", payload = 9, error = "Invalid" } },
+]

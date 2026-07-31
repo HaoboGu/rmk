@@ -3,10 +3,10 @@
 //! Leaf types are re-exported directly from the TOML configuration types
 //! Only types with genuine structural transformation are defined here.
 
-// Re-export leaf types from TOML config (now properly named and `pub`)
 pub use crate::board::{BoardConfig, UniBodyConfig};
 pub use crate::chip::{ChipModel, ChipSeries};
 pub use crate::communication::{CommunicationConfig, UsbInfo};
+use crate::validate_unlock_keys;
 pub use crate::{
     BleConfig, ChipConfig, CommunicationProtocol, DependencyConfig, DisplayConfig, DisplayDriver, EncoderConfig,
     EncoderResolution, I2cConfig, InputDeviceConfig, Iqs5xxConfig, Iqs5xxI2cConfig, JoystickConfig, KeyInfo,
@@ -78,6 +78,9 @@ impl crate::KeyboardTomlConfig {
                     );
                 }
 
+                let unlock_keys = d.unlock_keys.clone().unwrap_or_default();
+                validate_unlock_keys("[dfu]", &unlock_keys, self.layout.as_ref())?;
+
                 if all_set {
                     (
                         Some(DfuConfig {
@@ -87,7 +90,7 @@ impl crate::KeyboardTomlConfig {
                             dfu_size: d.dfu_size.unwrap(),
                             page_size: d.page_size.unwrap_or(4096),
                             led: d.led.clone().map(|pin| PinConfig { pin, low_active: false }),
-                            unlock_keys: d.unlock_keys.clone().unwrap_or_default(),
+                            unlock_keys,
                         }),
                         false,
                     )
@@ -109,7 +112,7 @@ impl crate::KeyboardTomlConfig {
                             dfu_size: active_size + page_size,
                             page_size,
                             led: d.led.clone().map(|pin| PinConfig { pin, low_active: false }),
-                            unlock_keys: d.unlock_keys.clone().unwrap_or_default(),
+                            unlock_keys,
                         }),
                         true,
                     )

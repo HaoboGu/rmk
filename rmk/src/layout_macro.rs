@@ -159,25 +159,23 @@ macro_rules! lt {
                 $crate::types::keycode::HidKeyCode::$k,
             )),
             $crate::types::action::Action::LayerOn($x),
-            $crate::types::morse::MorseProfile::const_default(),
+            ::core::primitive::u8::MAX,
         )
     };
 }
 
 /// Create a layer-tap action with custom timing profile.
 ///
-/// Same as `lt!` but allows specifying custom tap/hold timing configuration
-/// through a `MorseProfile`.
+/// Same as `lt!` but references a morse profile by its table index.
 ///
 /// # Parameters
 /// - `$x`: Layer number to activate when held
 /// - `$k`: HID keycode to send when tapped
-/// - `$p`: Custom `MorseProfile` for timing configuration
+/// - `$p`: Morse profile index (`u8`, into `MorsesConfig::profiles`); an index with no entry falls back to the default profile
 ///
 /// # Example
 /// ```ignore
-/// let profile = MorseProfile::new(Some(true), None, Some(200), Some(300));
-/// ltp!(1, Space, profile)  // Layer-tap with custom timing
+/// ltp!(1, Space, 0)  // layer-tap using morse profile 0
 /// ```
 #[macro_export]
 macro_rules! ltp {
@@ -218,7 +216,7 @@ macro_rules! mt {
                 $crate::types::keycode::HidKeyCode::$k,
             )),
             $crate::types::action::Action::Modifier($m),
-            $crate::types::morse::MorseProfile::const_default(),
+            ::core::primitive::u8::MAX,
         )
     };
 }
@@ -230,12 +228,11 @@ macro_rules! mt {
 /// # Parameters
 /// - `$k`: HID keycode to send when tapped
 /// - `$m`: `ModifierCombination` to apply when held
-/// - `$p`: Custom `MorseProfile` for timing configuration
+/// - `$p`: Morse profile index (`u8`, into `MorsesConfig::profiles`); an index with no entry falls back to the default profile
 ///
 /// # Example
 /// ```ignore
-/// let profile = MorseProfile::new(Some(false), None, Some(180), None);
-/// mtp!(A, ModifierCombination::LCTRL, profile)
+/// mtp!(A, ModifierCombination::LCTRL, 0)  // held modifier uses morse profile 0
 /// ```
 #[macro_export]
 macro_rules! mtp {
@@ -277,7 +274,7 @@ macro_rules! th {
             $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
                 $crate::types::keycode::HidKeyCode::$h,
             )),
-            $crate::types::morse::MorseProfile::const_default(),
+            ::core::primitive::u8::MAX,
         )
     };
 }
@@ -289,12 +286,11 @@ macro_rules! th {
 /// # Parameters
 /// - `$t`: HID keycode to send when tapped
 /// - `$h`: HID keycode to send when held
-/// - `$p`: Custom `MorseProfile` for timing configuration
+/// - `$p`: Morse profile index (`u8`, into `MorsesConfig::profiles`); an index with no entry falls back to the default profile
 ///
 /// # Example
 /// ```ignore
-/// let profile = MorseProfile::new(None, Some(MorseMode::PermissiveHold), Some(200), None);
-/// thp!(Space, Backspace, profile)
+/// thp!(Space, Backspace, 0)  // tap-hold using morse profile 0
 /// ```
 #[macro_export]
 macro_rules! thp {
@@ -395,7 +391,7 @@ macro_rules! tt {
         $crate::types::action::KeyAction::TapHold(
             $crate::types::action::Action::LayerToggle($x),
             $crate::types::action::Action::LayerOn($x),
-            $crate::types::morse::MorseProfile::const_default(),
+            ::core::primitive::u8::MAX,
         )
     };
 }
@@ -406,7 +402,7 @@ macro_rules! tt {
 ///
 /// # Parameters
 /// - `$x`: Layer number (0-255)
-/// - `$p`: Custom `MorseProfile` for timing configuration
+/// - `$p`: Morse profile index (`u8`, into `MorsesConfig::profiles`); an index with no entry falls back to the default profile
 #[macro_export]
 macro_rules! ttp {
     ($x: literal, $p: expr) => {

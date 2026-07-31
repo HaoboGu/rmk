@@ -1,0 +1,24 @@
+# Layer switching: LM release ordering and PDF default-layer selection, on the
+# shared split board's PDF/LM zone: PDF(1)@(0,10), A@(0,11) (layer 1: B),
+# LM(1, LShift)@(0,12).
+
+keyboard = "boards/split.toml"
+
+[[test]]
+name = "lm_release"
+steps = [
+  { press = [0, 12] },  # LM(1, LShift): layer 1 + LShift
+  { delay = 100 },
+  { tap = { pos = [0, 11], duration = 100 } },
+  { release = [0, 12] },
+]
+expect = [["LShift"], ["LShift", "B"], ["LShift"], []]
+
+[[test]]
+name = "pdf_sets_default_layer"
+steps = [
+  { tap = { pos = [0, 11], duration = 10 } },
+  { tap = { pos = [0, 10], duration = 10 } },
+  { tap = { pos = [0, 11], duration = 10 } },
+]
+expect = [["A"], [], ["B"], []]

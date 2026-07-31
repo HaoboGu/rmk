@@ -212,7 +212,7 @@ fn strip_call(s: &str) -> &str {
 /// tap/hold slots of `MT`/`TH`/`LT`. Composite forms (`MT`/`TH`/`LT`/`TT`/`TD`)
 /// and `Transparent` are *not* handled here — they only exist at the top level
 /// and are dispatched by [`parse_key`].
-fn parse_action(key: &str) -> TokenStream2 {
+pub(crate) fn parse_action(key: &str) -> TokenStream2 {
     let lower = key.to_lowercase();
 
     if lower == "no" {
@@ -451,16 +451,43 @@ pub(crate) fn parse_key(
     }
 }
 
-/// Expand the optional trailing morse profile argument of a tap-hold action,
-/// falling back to the const default when omitted.
+/// Named profiles sorted by name, giving each a stable index into the runtime
+/// morse profile table: a name at sorted position `i` is table index `i`.
+pub(crate) fn sorted_profile_names(
+    profiles: &Option<HashMap<String, MorseProfile>>,
+) -> Vec<String> {
+    match profiles {
+        Some(p) => {
+            let mut names: Vec<String> = p.keys().cloned().collect();
+            names.sort();
+            names
+        }
+        None => Vec::new(),
+    }
+}
+
+/// Expand the optional trailing profile argument of a tap-hold action into its
+/// morse profile table index. When omitted, emit `u8::MAX`: an index with no
+/// table entry falls back to the default profile at runtime (the table
+/// capacity is validated to be ≤ 255, so `u8::MAX` is always vacant).
 fn morse_profile(
     profile_name: Option<&String>,
     profiles: &Option<HashMap<String, MorseProfile>>,
 ) -> TokenStream2 {
-    match profile_name {
-        Some(name) => expand_profile_name(name, profiles),
-        None => quote! { ::rmk::types::morse::MorseProfile::const_default() },
-    }
+    let Some(name) = profile_name else {
+        return quote! { ::core::primitive::u8::MAX };
+    };
+    let idx = match sorted_profile_names(profiles)
+        .iter()
+        .position(|n| n == name)
+    {
+        Some(pos) => pos as u8,
+        None => panic!(
+            "\n\u{274c} `{:?}` profile name is not found in behavior.morse.profiles",
+            name
+        ),
+    };
+    quote! { #idx }
 }
 
 /// Parse the single layer-index argument of a call-form layer action, e.g. `MO(1)`.
@@ -469,11 +496,27 @@ fn parse_layer(key: &str) -> u8 {
 }
 
 pub(crate) fn get_key_with_alias(key: String) -> Ident {
-    let key = match KEYCODE_ALIAS.get(key.to_lowercase().as_str()) {
-        Some(k) => *k,
-        None => key.as_str(),
-    };
-    format_ident!("{}", key)
+    format_ident!("{}", resolve_alias(&key))
+}
+
+/// The `HidKeyCode` variant a key string names, or `None` when it names a richer
+/// action such as `WM(A, LCtrl)` or `PDF(1)`.
+///
+/// Callers that can only carry an 8-bit keycode — a macro's compact
+/// `Tap`/`Press`/`Release` operations — use this to tell the two apart;
+/// [`parse_action`] handles both but yields the wider `Action`.
+pub(crate) fn as_hid_keycode(key: &str) -> Option<Ident> {
+    let key = resolve_alias(key);
+    rmk_types::keycode::HidKeyCode::VARIANTS
+        .contains(&key)
+        .then(|| format_ident!("{key}"))
+}
+
+fn resolve_alias(key: &str) -> &str {
+    match KEYCODE_ALIAS.get(key.to_lowercase().as_str()) {
+        Some(resolved) => resolved,
+        None => key,
+    }
 }
 
 #[cfg(test)]

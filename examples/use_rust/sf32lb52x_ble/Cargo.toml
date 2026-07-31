@@ -53,7 +53,7 @@ embassy-executor = { version = "0.10", features = [
 ] }
 embassy-futures = { version = "0.1" }
 embassy-sync = { version = "0.8" }
-cortex-m-rt = { version = "0.7.3", features = ["set-sp", "set-vtor"] }
+cortex-m-rt = { version = "0.7.5", features = ["set-sp", "set-vtor"] }
 portable-atomic = { version = "1" }
 defmt = "1"
 defmt-rtt = "1"

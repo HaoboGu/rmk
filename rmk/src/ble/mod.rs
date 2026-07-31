@@ -13,6 +13,8 @@ use trouble_host::prelude::*;
 use crate::ble::battery_service::BleBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
 use crate::ble::device_info::{PnPID, VidSource};
+#[cfg(feature = "host")]
+use crate::ble::host::{HOST_WRITE_BUFFER_SIZE, HostGattHandler, HostWriteOutcome};
 use crate::ble::led::BleLedReader;
 #[cfg(feature = "passkey_entry")]
 use crate::ble::passkey::{PasskeyInputState, next_gatt_event};
@@ -28,6 +30,8 @@ use crate::state::set_ble_state;
 pub(crate) mod battery_service;
 pub(crate) mod ble_server;
 pub(crate) mod device_info;
+#[cfg(feature = "host")]
+pub(crate) mod host;
 pub(crate) mod led;
 #[cfg(feature = "_nrf_ble")]
 pub(crate) mod nrf;
@@ -56,8 +60,7 @@ pub async fn build_ble_stack<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P
 /// BLE transport runnable. Owns the trouble-host server and profile manager;
 /// `run` joins the background `ble_task` runner with the advertise→connect→serve
 /// loop and runs forever.
-//
-pub struct BleTransport<'b, 's, C>
+pub struct BleTransport<'a, 'b, 's, C>
 where
     's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
@@ -67,9 +70,14 @@ where
     profile_manager: ProfileManager<'b, 's, C, DefaultPacketPool>,
     product_name: &'static str,
     config: BleBatteryConfig<'b>,
+    #[cfg(feature = "host")]
+    host_service: Option<&'a crate::host::HostService<'a>>,
+    // Keeps `'a` in the type's parameter list across all feature configurations.
+    #[cfg(not(feature = "host"))]
+    _phantom: core::marker::PhantomData<&'a ()>,
 }
 
-impl<'b, 's, C> BleTransport<'b, 's, C>
+impl<'a, 'b, 's, C> BleTransport<'a, 'b, 's, C>
 where
     's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
@@ -124,11 +132,24 @@ where
             profile_manager,
             product_name: rmk_config.device_config.product_name,
             config: rmk_config.ble_battery_config,
+            #[cfg(feature = "host")]
+            host_service: None,
+            #[cfg(not(feature = "host"))]
+            _phantom: core::marker::PhantomData,
         }
+    }
+
+    /// Attach the host-protocol service (Vial or Rynk, picked at compile
+    /// time by feature). See
+    /// [`UsbTransport::with_host_service`](crate::usb::UsbTransport::with_host_service).
+    #[cfg(feature = "host")]
+    pub fn with_host_service(mut self, service: &'a crate::host::HostService<'a>) -> Self {
+        self.host_service = Some(service);
+        self
     }
 }
 
-impl<'b, 's, C> Runnable for BleTransport<'b, 's, C>
+impl<'a, 'b, 's, C> Runnable for BleTransport<'a, 'b, 's, C>
 where
     's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
@@ -172,6 +193,8 @@ where
                                 #[cfg(feature = "storage")]
                                 active_bond_info,
                                 &self.config,
+                                #[cfg(feature = "host")]
+                                self.host_service,
                             ),
                             profile_manager.update_profile(),
                         )
@@ -264,18 +287,15 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let output_keyboard = server.hid_service.output_keyboard;
     let hid_control_point = server.hid_service.hid_control_point;
     let input_keyboard = server.hid_service.input_keyboard;
-    #[cfg(feature = "host")]
-    let (output_host, input_host, host_control_point) = (
-        server.host_service.output_data,
-        server.host_service.input_data,
-        server.host_service.hid_control_point,
-    );
     let mouse = server.hid_service.mouse_report;
     let media = server.hid_service.media_report;
     let system_control = server.hid_service.system_report;
 
     #[cfg(feature = "passkey_entry")]
     let mut passkey_state = PasskeyInputState::new();
+
+    #[cfg(feature = "host")]
+    let mut host_gatt_handler = HostGattHandler::new(server);
 
     loop {
         #[cfg(feature = "passkey_entry")]
@@ -338,13 +358,14 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                         }
                     }
                     GattEvent::Write(event) => {
-                        #[cfg(feature = "host")]
-                        let host_control_point_match = event.handle() == host_control_point.handle;
-                        #[cfg(not(feature = "host"))]
-                        let host_control_point_match = false;
+                        let encrypted = conn.raw().security_level()?.encrypted();
 
                         // trouble-host 0.7 exposes written bytes via a closure; copy them out
                         // once so the dispatch below (which awaits) can use them freely.
+                        // Sized for the active host protocol's largest BLE write.
+                        #[cfg(feature = "host")]
+                        let mut data_buf = [0u8; HOST_WRITE_BUFFER_SIZE];
+                        #[cfg(not(feature = "host"))]
                         let mut data_buf = [0u8; 32];
                         let data_len = event.with_data(|_, data| {
                             let n = data.len().min(data_buf.len());
@@ -352,6 +373,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             data.len()
                         });
                         let data = &data_buf[..data_len.min(data_buf.len())];
+                        let mut control_point_write = false;
 
                         if event.handle() == output_keyboard.handle {
                             if data_len == 1 {
@@ -368,7 +390,23 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                             || event.handle() == level.cccd_handle.expect("No CCCD for battery level")
                         {
                             cccd_updated = true;
-                        } else if event.handle() == hid_control_point.handle || host_control_point_match {
+                        } else if event.handle() == hid_control_point.handle {
+                            control_point_write = true;
+                        } else {
+                            #[cfg(feature = "host")]
+                            match host_gatt_handler.handle_write(event.handle(), data, encrypted).await {
+                                HostWriteOutcome::Handled => {}
+                                HostWriteOutcome::CccdUpdated => cccd_updated = true,
+                                HostWriteOutcome::ControlPoint => control_point_write = true,
+                                HostWriteOutcome::Unhandled => {
+                                    debug!("Write GATT Event to Unknown: {:?}", event.handle())
+                                }
+                            }
+                            #[cfg(not(feature = "host"))]
+                            debug!("Write GATT Event to Unknown: {:?}", event.handle());
+                        }
+
+                        if control_point_write {
                             info!("Write GATT Event to Control Point: {:?}", event.handle());
                             // Forward an HID Control Point write to sleep management.
                             // HID Class spec opcodes for the HID Control Point characteristic:
@@ -381,25 +419,9 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
                                     _ => {}
                                 }
                             }
-                        } else {
-                            #[cfg(feature = "host")]
-                            if event.handle() == output_host.handle {
-                                debug!("Got host packet: {:?}", data);
-                                if data_len == 32 {
-                                    crate::channel::enqueue_host_request(ConnectionType::Ble, data_buf).await;
-                                } else {
-                                    warn!("Wrong host packet data: {:?}", data);
-                                }
-                            } else if event.handle() == input_host.cccd_handle.expect("No CCCD for input host") {
-                                cccd_updated = true;
-                            } else {
-                                debug!("Write GATT Event to Unknown: {:?}", event.handle());
-                            }
-                            #[cfg(not(feature = "host"))]
-                            debug!("Write GATT Event to Unknown: {:?}", event.handle());
                         }
 
-                        if conn.raw().security_level()?.encrypted() {
+                        if encrypted {
                             None
                         } else {
                             Some(AttErrorCode::INSUFFICIENT_ENCRYPTION)
@@ -634,6 +656,7 @@ pub(crate) async fn set_conn_params<
 async fn run_ble_keyboard<
     'a,
     'b,
+    #[cfg(feature = "host")] 'r,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 >(
     server: &'b Server<'_>,
@@ -641,6 +664,7 @@ async fn run_ble_keyboard<
     stack: &Stack<'_, C, DefaultPacketPool>,
     #[cfg(feature = "storage")] active_bond_info: Option<crate::ble::profile::ProfileInfo>,
     config: &BleBatteryConfig<'a>,
+    #[cfg(feature = "host")] host_service: Option<&'r crate::host::HostService<'r>>,
 ) {
     let mut ble_hid_server = BleHidServer::new(server, conn);
     let mut ble_led_reader = BleLedReader;
@@ -690,7 +714,17 @@ async fn run_ble_keyboard<
     let led_task = run_led_reader(&mut ble_led_reader, ConnectionType::Ble);
 
     #[cfg(feature = "host")]
-    let host_task = crate::host::ble::run_ble_host(server.host_service.input_data, conn);
+    let host_task = async {
+        if let Some(service) = host_service {
+            // Restart after a session-fatal TX error so Rynk survives the rest
+            // of the connection.
+            loop {
+                HostGattHandler::run(server, conn, service).await;
+            }
+        } else {
+            core::future::pending::<()>().await;
+        }
+    };
     #[cfg(not(feature = "host"))]
     let host_task = core::future::pending::<()>();
 

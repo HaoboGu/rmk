@@ -3,9 +3,6 @@
 // Define default whitespace handling (space, tab, newline, carriage return)
 WHITESPACE = _{ " " | "\t" | "\n" | "\r" }
 
-// Optional comments
-COMMENT = _{ "//" ~ (!"\n" ~ ANY)* } 
-
 // --- Helper Rules ---
 
 strict_identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
@@ -63,6 +60,9 @@ osm_action = { ^"OSM" ~ "(" ~ modifier_combination ~ ")" }
 // Rule 4.1: DF(n) - Switch Default Layer
 df_action = { ^"DF" ~ "(" ~ layer_reference ~ ")" }
 
+// Rule 4.1b: PDF(n) - Switch Default Layer persistently (saved to storage)
+pdf_action = { ^"PDF" ~ "(" ~ layer_reference ~ ")" }
+
 // Rule 4.2: MO(n) - Momentary Layer Activate
 mo_action = { ^"MO" ~ "(" ~ layer_reference ~ ")" }
 
@@ -86,7 +86,7 @@ to_action = { ^"TO" ~ "(" ~ layer_reference ~ ")" }
 
 // Grouping for Layer Actions
 layer_action = _{
-    df_action | mo_action | lm_action | lt_action |
+    df_action | pdf_action | mo_action | lm_action | lt_action |
     osl_action | tt_action | tg_action | to_action
 }
 
@@ -97,8 +97,8 @@ layer_action = _{
 // accepted as a slot argument.
 nestable_action = _{
     wm_action | mod_action | osm_action | shifted_action | trigger_macro_action |
-    df_action | mo_action | lm_action | osl_action | tg_action | to_action |
-    keycode_name
+    df_action | pdf_action | mo_action | lm_action | osl_action | tg_action | to_action |
+    stn_action | keycode_name
 }
 
 // Rule 5: MT(key, modifier) - Modifier Tap-Hold
@@ -116,28 +116,44 @@ morse_action = { (^"TD" | ^"MORSE") ~ "(" ~ number ~ ")" }
 // Rule 9: Macro(n) - Trigger Macro
 trigger_macro_action = { ^"MACRO" ~ "(" ~ number ~ ")" }
 
+// Rule 10: STN(key) - Plover HID steno key, named by its position in the chart
+stn_action = { ^"STN" ~ "(" ~ keycode_name ~ ")" }
+
 // --- Top Level Rules ---
 
 // A single key action entry in the map
 // Order is important: more specific function-like rules first, then aliases/specials, then simple keycodes.
 key_action = _{ // Consume surrounding whitespace/comments implicitly
-    wm_action | mod_action | osm_action | layer_action | mt_action | th_action | shifted_action | morse_action | trigger_macro_action | no_action | transparent_action | simple_keycode
+    wm_action | mod_action | osm_action | layer_action | mt_action | th_action | shifted_action | morse_action | trigger_macro_action | stn_action | no_action | transparent_action | simple_keycode
 }
 
 // The entire key map string: Start, zero or more key actions, End.
 key_map = { SOI ~ key_action* ~ EOI }
 
-// ============================================================================
-// rules for matrix_map parsing
+// `[layout].map`: newline is significant, so spacing is parsed explicitly.
 
 left_hand = { ^"L" | ^"LH" | ^"Left" }
 right_hand = { ^"R" | ^"RH" | ^"Right" }
 bilateral_hand = { "*" | ^"Bilateral" }
 hand = _{ left_hand | right_hand | bilateral_hand }
 
-// Define the key_info structure, capturing row and col numbers, and optionally some extra key information
-keypos_info = { "(" ~ number ~ "," ~ number ~ ("," ~ hand)? ~ ")" }
+// Layout-map tokens (positions, shapes, gaps).
+unit = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }                 // non-negative float, for [n]
+signed_unit = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }   // may be negative, for [y=n]
+shape_name = @{ (ASCII_ALPHANUMERIC | "_" | ".")+ }              // stock (2u/1.5u) or custom (iso_enter)
+shape_ref = ${ "@" ~ shape_name }                                // @name into [layout.shapes]
+hws = _{ " " | "\t" }                                            // spaces/tabs between tokens (silent)
+newline = @{ "\r"? ~ "\n" }                                      // significant row break
+spacer = ${ "[" ~ hws? ~ unit ~ hws? ~ "]" }                     // gap
+vertical = ${ "[" ~ hws? ~ "y" ~ hws? ~ "=" ~ hws? ~ signed_unit ~ hws? ~ "]" } // extra y for next row
+// Rotation applies until the next [r=...]; only [r=0] may omit a pivot.
+rotation = ${ "[" ~ hws? ~ "r" ~ hws? ~ "=" ~ hws? ~ signed_unit ~ (hws? ~ "@" ~ hws? ~ "(" ~ hws? ~ signed_unit ~ hws? ~ "," ~ hws? ~ signed_unit ~ hws? ~ ")")? ~ hws? ~ "]" }
 
-// The main rule: Start, zero or more key_info or whitespace occurrences, End.
-// This ensures the entire string consists *only* of valid key_info tuples and whitespace.
-matrix_map = { SOI ~ (keypos_info | WHITESPACE)* ~ EOI }
+// A key: (row, col[, hand][, @shape]). `hws?` between fields so `(0, 1)` parses too.
+keypos_info = ${ "(" ~ hws? ~ number ~ hws? ~ "," ~ hws? ~ number ~ (hws? ~ "," ~ hws? ~ hand)? ~ (hws? ~ "," ~ hws? ~ shape_ref)? ~ hws? ~ ")" }
+// An encoder: (e, id). A fixed 1u knob — no shape, so no `@shape`.
+encoder_info = ${ "(" ~ hws? ~ "e" ~ hws? ~ "," ~ hws? ~ number ~ hws? ~ ")" }
+
+// The whole string: significant newlines, explicit hws. Order matters:
+// vertical/rotation before spacer (all start `[`), encoder before keypos (both start `(`).
+layout_map = ${ SOI ~ (hws | newline | vertical | rotation | spacer | encoder_info | keypos_info)* ~ EOI }

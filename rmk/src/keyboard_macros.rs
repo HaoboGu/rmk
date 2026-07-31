@@ -24,7 +24,7 @@ pub enum MacroOperation {
     Press(HidKeyCode),
     /// 0x01 03 + 1 byte keycode
     Release(HidKeyCode),
-    /// 0x01 04 + 2 byte for the delay in ms
+    /// 0x01 04 + 2 byte for the delay in ms, Vial-packed (so at most 65024 ms)
     Delay(u16),
     /// Anything not covered above (and starting at
     /// 0x30 (= b'0'), is the 1 byte ascii character.
@@ -245,9 +245,11 @@ fn serialize(macro_operation: &MacroOperation) -> heapless::Vec<u8, 4> {
             result
         }
         MacroOperation::Delay(duration) => {
+            // Vial packs the delay into two 1-based bytes so the payload never contains
+            // 0x00; this is the exact inverse of the decode in `get_next_macro_operation`.
             let mut result = heapless::Vec::from_slice(&[0x01, 0x04]).unwrap();
             result
-                .extend_from_slice(&duration.to_be_bytes())
+                .extend_from_slice(&[(duration % 255) as u8 + 1, (duration / 255).min(254) as u8 + 1])
                 .expect("impossible error");
             result
         }
@@ -540,9 +542,8 @@ mod test {
         assert!(matches!(op, MacroOperation::ReleaseAction(Action::User(0))));
     }
 
-    // Serializing the decoded actions reproduces the exact wire bytes, including the
-    // 0x7E00 -> `7E FF` zero-byte escape. (Delay is excluded here: its serializer uses a
-    // different, pre-existing encoding than the parser.)
+    // Serializing the decoded operations reproduces M0's exact wire bytes, including the
+    // 0x7E00 -> `7E FF` zero-byte escape and the Vial-packed delay.
     #[cfg(feature = "vial")]
     #[test]
     fn test_serialize_extended_macro_keycodes() {
@@ -550,12 +551,29 @@ mod test {
 
         let sequences = [heapless::Vec::from_slice(&[
             MacroOperation::TapAction(Action::User(0)),
+            MacroOperation::Delay(100),
             MacroOperation::TapAction(Action::PersistentDefaultLayer(0)),
         ])
         .expect("too many elements")];
         let binary = define_macro_sequences(&sequences);
-        let expected = [0x01, 0x05, 0x7E, 0xFF, 0x01, 0x05, 0xE0, 0x52, 0x00];
+        let expected = [
+            0x01, 0x05, 0x7E, 0xFF, 0x01, 0x04, 0x65, 0x01, 0x01, 0x05, 0xE0, 0x52, 0x00,
+        ];
         assert_eq!(&binary[..expected.len()], &expected);
+    }
+
+    // A delay round-trips through the packed encoding at both ends of its range.
+    #[test]
+    fn test_delay_round_trips_through_the_packed_encoding() {
+        for ms in [0, 1, 50, 254, 255, 1000, 65024] {
+            let sequences = [heapless::Vec::from_slice(&[MacroOperation::Delay(ms)]).expect("too many elements")];
+            let binary = define_macro_sequences(&sequences);
+            let (op, _) = MacroOperation::get_next_macro_operation(&binary, 0, 0);
+            assert!(
+                matches!(op, MacroOperation::Delay(d) if d == ms),
+                "{ms}ms did not round-trip"
+            );
+        }
     }
 
     // A buffer that ends in the middle of an EXT command must terminate safely, without

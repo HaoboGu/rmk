@@ -1,0 +1,94 @@
+# Combos whose members are morse keys, resolved in PermissiveHold mode.
+#
+# One of four `morse_combo_*` files — Normal, PermissiveHold, HoldOnOtherPress
+# and HRM. They share the combo table and the timeline names below, so
+# `nextest run two_key_misses_window` prints one row of the matrix: the same
+# input under every mode.
+#
+# The fixture is the shared split board's home row: A@(1,0),
+# MT(B, LShift)@(1,1), MT(C, LGui)@(1,7) and LT(1, D)@(1,8), backed on layer 1
+# by Kp1..Kp4.
+
+keyboard = "boards/split.toml"
+
+[behavior.morse]
+unilateral_tap = false
+permissive_hold = true
+
+[behavior.combo]
+timeout = "50ms"
+combos = [
+  { actions = ["MT(B, LShift)", "MT(C, LGui)"], output = "X" },
+  { actions = ["A", "MT(B, LShift)"], output = "Y" },
+  { actions = ["MT(B, LShift)", "MT(C, LGui)", "LT(1, D)"], output = "Z" },
+]
+
+[[test]]
+name = "two_key_in_window_both_held"
+steps = [
+  { delay = 20 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 20 },
+  { press = [1, 7] },    # Press MT(C, LGui) — combo fires
+  { delay = 20 },
+  { release = [1, 1] },  # Release B
+  { release = [1, 7] },  # Release C
+]
+expect = [["X"], []]
+
+[[test]]
+name = "two_key_misses_window"
+steps = [
+  { delay = 20 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 60 },
+  { tap = { pos = [1, 7], duration = 10 } },
+  { delay = 300 },
+  { release = [1, 1] },  # Release B
+]
+expect = [["LShift"], ["LShift", "C"], ["LShift"], []]
+
+[[test]]
+name = "two_key_misses_window_both_held"
+steps = [
+  { delay = 20 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 60 },
+  { press = [1, 7] },    # Press MT(C, LGui) — combo window expired
+  { delay = 20 },
+  { release = [1, 1] },  # Release B
+  { release = [1, 7] },  # Release C
+]
+expect = [["B"], [], ["C"], []]
+
+[[test]]
+name = "three_key_in_window"
+steps = [
+  { delay = 20 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 20 },
+  { press = [1, 8] },    # Press LT(1, D)
+  { delay = 20 },
+  { press = [1, 7] },    # Press MT(C, LGui) — 3-key combo fires
+  { delay = 20 },
+  { release = [1, 1] },  # Release B
+  { release = [1, 7] },  # Release C
+  { release = [1, 8] },  # Release D
+]
+expect = [["Z"], []]
+
+[[test]]
+name = "three_key_misses_window_rolled_release"
+steps = [
+  { delay = 20 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 20 },
+  { press = [1, 8] },    # Press LT(1, D)
+  { delay = 60 },
+  { press = [1, 7] },    # Press MT(C, LGui)
+  { delay = 20 },
+  { release = [1, 1] },  # Release B
+  { release = [1, 7] },  # Release C — LT(1, D) is holding, so C comes from layer 1
+  { release = [1, 8] },  # Release D
+]
+expect = [["B"], [], ["Kp3"], []]

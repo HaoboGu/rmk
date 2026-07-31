@@ -1,0 +1,36 @@
+# Macro buffer endpoints. A read always returns a whole `MACRO_DATA_SIZE` chunk
+# zero-filled past the end, so length is never an end-of-macro signal.
+features = ["rynk"]
+
+[layout]
+rows = 1
+cols = 1
+map = """
+(0,0)
+"""
+
+[[keymap.layer]]
+keys = "MACRO(0)"
+
+[[test]]
+name = "macro_write_changes_the_macro_key"
+steps = [
+  # 0x01 0x01 <kc> taps a key; 0x00 ends the macro.
+  { rynk = { cmd = "SetMacro", payload = { offset = 0, data = { data = [1, 1, 4, 0] } } } },
+  { tap = { pos = [0, 0], duration = 10 } },
+]
+expect = [["A"], []]
+
+[[test]]
+name = "macro_read_returns_a_zero_filled_chunk"
+steps = [
+  { rynk = { cmd = "SetMacro", payload = { offset = 0, data = { data = [1, 1, 4, 0] } } } },
+  { rynk = { cmd = "GetMacro", payload = { offset = 0 }, reply = { data = [1, 1, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } } },
+]
+
+[[test]]
+name = "macro_read_past_the_written_bytes_is_all_zero"
+steps = [
+  { rynk = { cmd = "SetMacro", payload = { offset = 0, data = { data = [1, 1, 4, 0] } } } },
+  { rynk = { cmd = "GetMacro", payload = { offset = 64 }, reply = { data = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } } },
+]

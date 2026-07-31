@@ -1,0 +1,380 @@
+# Tap-dance style morse keys.
+#
+# The fixture is the shared split board's tap-dance cells — TD(0)@(1,2),
+# TD(1)@(3,8), TD(2)@(3,11) — plus a plain A@(1,0) and E@(1,4) as the normal
+# keys rolled against them. The HoldOnOtherPress default profile drives them;
+# tests that need another shape replace the morse table through a
+# `behavior.morse` delta. A delta with fewer morses than the board has
+# TD cells leaves the extra cells inert, and no test presses them.
+#
+# Every test runs with `unilateral_tap = false`, where hand assignment is never
+# consulted.
+
+keyboard = "boards/split.toml"
+
+[behavior.morse]
+unilateral_tap = false
+hold_on_other_press = true
+
+[[behavior.morse.morses]]
+tap = "A"
+hold = "B"
+hold_after_tap = "C"
+double_tap = "D"
+
+[[behavior.morse.morses]]
+tap = "X"
+hold = "Y"
+hold_after_tap = "Z"
+double_tap = "Space"
+
+[[behavior.morse.morses]]
+tap = "Kp1"
+hold = "LShift"
+hold_after_tap = "Kp2"
+double_tap = "LGui"
+
+[[test]]
+name = "hold"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 2], duration = 300 } },
+]
+expect = [["B"], []]
+
+[[test]]
+name = "hold_after_tap"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 2], duration = 240 } },
+  { delay = 240 },
+  { tap = { pos = [1, 2], duration = 300 } },
+]
+expect = [["C"], []]
+
+[[test]]
+name = "double_tap"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 2], duration = 200 } },
+  { delay = 200 },
+  { tap = { pos = [1, 2], duration = 200 } },
+]
+expect = [["D"], []]
+
+[[test]]
+name = "tap_on_other_press"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [3, 8], duration = 10 } },
+  { tap = { pos = [1, 0], duration = 10 } },
+]
+expect = [["X"], [], ["A"], []]
+
+[[test]]
+name = "hold_on_other_press"
+steps = [
+  { delay = 150 },
+  { press = [3, 8] },  # Press TD(1)
+  { tap = { pos = [1, 0], duration = 10 } },
+  { release = [3, 8] },
+]
+expect = [["Y"], ["Y", "A"], ["Y"], []]
+
+[[test]]
+name = "hold_after_tap_on_other_press"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [3, 8], duration = 100 } },
+  { delay = 100 },
+  { press = [3, 8] },  # Press TD(1)
+  { tap = { pos = [1, 0], duration = 10 } },
+  { release = [3, 8] },
+]
+expect = [["Z"], ["Z", "A"], ["Z"], []]
+
+[[test]]
+name = "multiple_tap"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 2], duration = 10 } },
+  { delay = 260 },
+  { tap = { pos = [1, 2], duration = 10 } },
+  { delay = 260 },
+  { tap = { pos = [3, 8], duration = 10 } },
+]
+expect = [["A"], [], ["A"], [], ["X"], []]
+
+[[test]]
+name = "tap_after_double_tap"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 2], duration = 10 } },
+  { delay = 150 },
+  { tap = { pos = [1, 2], duration = 10 } },
+  { delay = 260 },
+  { tap = { pos = [1, 2], duration = 10 } },
+]
+expect = [["D"], [], ["A"], []]
+
+[[test]]
+name = "rolling"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 2], duration = 10 } },
+  { delay = 150 },
+  { press = [1, 2] },  # Press TD(0)
+  { press = [3, 8] },  # Press TD(1) -> Trigger hold-after-tap of TD(0)
+  { delay = 100 },
+  { release = [1, 2] },
+  { release = [3, 8] },
+]
+expect = [["C"], [], ["X"], []]
+
+[[test]]
+name = "rolling_2"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 2], duration = 10 } },
+  { delay = 150 },
+  { press = [1, 2] },    # Press TD(0)
+  { delay = 260 },
+  { press = [3, 8] },    # Press TD(1) -> TD(0) timeout
+  { delay = 260 },
+  { release = [1, 2] },  # Release TD(0) -> TD(1) timeout
+  { release = [3, 8] },
+]
+expect = [["C"], ["C", "Y"], ["Y"], []]
+
+[[test]]
+name = "rolling_3"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 2], duration = 10 } },
+  { delay = 150 },
+  { press = [1, 2] },    # Press TD(0)
+  { delay = 260 },
+  { tap = { pos = [3, 8], duration = 260 } },
+  { delay = 260 },
+  { release = [1, 2] },  # Release TD(0) -> release "C"
+]
+expect = [["C"], ["C", "Y"], ["C"], []]
+
+[[test]]
+name = "multiple_tap_dance_keys"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 2], duration = 10 } },
+  { delay = 150 },
+  { press = [1, 2] },  # Press TD(0)
+  { tap = { pos = [3, 8], duration = 10 } },
+  { delay = 100 },
+  { release = [1, 2] },
+]
+expect = [["C"], [], ["X"], []]
+
+[[test]]
+name = "multiple_tap_dance_keys_2"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 2], duration = 10 } },
+  { delay = 150 },
+  { press = [1, 2] },    # Press TD(0)
+  { tap = { pos = [3, 8], duration = 10 } },
+  { delay = 300 },
+  { release = [1, 2] },  # Release TD(0) -> TD(1) Timeout!
+]
+expect = [["C"], ["C", "X"], ["C"], []]
+
+[[test]]
+name = "multiple_tap_dance_keys_3"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 2], duration = 10 } },
+  { delay = 150 },
+  { press = [1, 2] },  # Press TD(0)
+  { tap = { pos = [3, 8], duration = 310 } },
+  { release = [1, 2] },
+]
+expect = [["C"], ["C", "Y"], ["C"], []]
+
+# The early-fire fixture: TD(0) at (1,2) has tap == hold_after_tap == Enter and
+# no double_tap, so the tap fires immediately on release while hold_after_tap
+# still works on re-press. TD(1) at (3,8) is the same shape around E.
+[[test]]
+name = "early_fire_no_double_press_on_next_key"
+behavior.morse = { morses = [
+  { tap = "Enter", hold = "B", hold_after_tap = "Enter" },
+  { tap = "E", hold = "LShift", hold_after_tap = "E" },
+] }
+steps = [
+  { tap = { pos = [1, 2], duration = 50 } },
+  { delay = 50 },
+  { tap = { pos = [1, 0], duration = 10 } },
+  { delay = 50 },
+  { tap = { pos = [1, 0], duration = 300 } },
+]
+expect = [["Enter"], [], ["A"], [], ["A"], []]
+
+# Re-pressing an early-fired key and holding it resolves as hold-after-tap.
+[[test]]
+name = "early_fire_then_hold_after_tap"
+behavior.morse = { morses = [
+  { tap = "Enter", hold = "B", hold_after_tap = "Enter" },
+  { tap = "E", hold = "LShift", hold_after_tap = "E" },
+] }
+steps = [
+  { tap = { pos = [1, 2], duration = 50 } },
+  { delay = 50 },
+  { tap = { pos = [1, 2], duration = 300 } },
+]
+expect = [["Enter"], [], ["Enter"], []]
+
+# After early fire, re-pressing and releasing again produces a second tap.
+[[test]]
+name = "early_fire_then_fire_on_second_tap_with_no_double_tap_config"
+behavior.morse = { morses = [
+  { tap = "Enter", hold = "B", hold_after_tap = "Enter" },
+  { tap = "E", hold = "LShift", hold_after_tap = "E" },
+] }
+steps = [
+  { tap = { pos = [3, 8], duration = 20 } },
+  { delay = 20 },
+  { tap = { pos = [3, 8], duration = 20 } },
+  { delay = 20 },
+  { tap = { pos = [1, 0], duration = 20 } },
+]
+expect = [["E"], [], ["E"], [], ["A"], []]
+
+# Regression for permissive hold key ordering: press TD(0), press E, release
+# TD(0) first. The morse key must resolve as tap (A) before the buffered E
+# fires — not E then A.
+[[test]]
+name = "permissive_hold_morse_released_first_key_order"
+behavior.morse = {
+  hold_on_other_press = false,
+  permissive_hold = true,
+  morses = [{ tap = "A", hold = "B", hold_after_tap = "C", double_tap = "D" }]
+}
+steps = [
+  { press = [1, 2] },    # Press TD(0) morse key
+  { press = [1, 4] },    # Press E (buffered due to permissive hold)
+  { release = [1, 2] },  # Release TD(0) — morse key released first
+  { delay = 300 },
+  { release = [1, 4] },  # Release E after gap timeout
+]
+expect = [["A"], [], ["E"], []]
+
+# Permissive hold: releasing the normal key first resolves the morse key as
+# hold (B).
+[[test]]
+name = "permissive_hold_normal_released_first"
+behavior.morse = {
+  hold_on_other_press = false,
+  permissive_hold = true,
+  morses = [{ tap = "A", hold = "B", hold_after_tap = "C", double_tap = "D" }]
+}
+steps = [
+  { press = [1, 2] },  # Press TD(0) morse key
+  { tap = { pos = [1, 4], duration = 10 } },
+  { release = [1, 2] },
+]
+expect = [["B"], ["B", "E"], ["B"], []]
+
+# Regression for timeout cleanup: when one morse key times out, buffered normal
+# keys must still wait behind any other unresolved morse key.
+#
+# TD(2) at (3,11) is a hold-only morse whose hold pattern continues into a
+# longer hold ("1" -> B, "11" -> C), so reaching the hold timeout does not
+# resolve it.
+[[test]]
+name = "timeout_does_not_flush_normal_keys_before_released_morse"
+behavior.morse = {
+  hold_on_other_press = false,
+  permissive_hold = true,
+  enable_flow_tap = false,
+  morses = [
+    { tap = "A", hold = "B", hold_after_tap = "C", double_tap = "D" },
+    { tap = "X", hold = "Y", hold_after_tap = "Z", double_tap = "Space" },
+    { morse_actions = [{ pattern = "1", action = "B" }, { pattern = "11", action = "C" }] },
+  ]
+}
+steps = [
+  { press = [1, 2] },
+  { press = [1, 4] },
+  { press = [3, 8] },
+  { release = [1, 2] },
+  { delay = 300 },
+  { release = [3, 8] },
+  { release = [1, 4] },
+]
+expect = [["Y"], ["Y", "A"], ["Y"], ["Y", "E"], ["E"], []]
+
+# Regression for timeout cleanup: a morse key that reached hold timeout can
+# still be unresolved if a longer hold pattern exists.
+[[test]]
+name = "timeout_does_not_flush_normal_keys_before_holding_morse"
+behavior.morse = {
+  hold_on_other_press = false,
+  permissive_hold = true,
+  enable_flow_tap = false,
+  morses = [
+    { tap = "A", hold = "B", hold_after_tap = "C", double_tap = "D" },
+    { tap = "X", hold = "Y", hold_after_tap = "Z", double_tap = "Space" },
+    { morse_actions = [{ pattern = "1", action = "B" }, { pattern = "11", action = "C" }] },
+  ]
+}
+steps = [
+  { press = [3, 11] },
+  { press = [1, 4] },
+  { delay = 300 },
+  { release = [3, 11] },
+  { delay = 300 },
+  { release = [1, 4] },
+]
+expect = [["B"], [], ["E"], []]
+
+# Regression: rapid repeat tapping a FlowTap+EarlyFire key must not jam the key.
+#
+# TD(0) has tap == hold_after_tap == Backspace and no double_tap, so
+# `can_fire_early()` returns true for TAP. The first quick tap fires
+# immediately and leaves the key `EarlyFired` in the held buffer; a second tap
+# within `prior_idle_time` triggers `FlowTap`, which must drop that stale entry
+# before pushing its own or the release report is skipped and the key jams.
+[[test]]
+name = "flow_tap_after_early_fire_does_not_jam"
+behavior.morse = {
+  enable_flow_tap = true,
+  prior_idle_time = "120ms",
+  morses = [{ tap = "Backspace", hold = "RShift", hold_after_tap = "Backspace" }]
+}
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 2], duration = 30 } },
+  { delay = 50 },
+  { tap = { pos = [1, 2], duration = 30 } },
+  { delay = 300 },
+  { tap = { pos = [1, 0], duration = 10 } },
+]
+expect = [["Backspace"], [], ["Backspace"], [], ["A"], []]
+
+# Regression: a tap resolved by flow-tap must still allow a hold-after-tap
+# continuation, so press-and-hold after that tap repeats the tap action
+# (Backspace) instead of resolving as a fresh hold (RShift). Flow-tapped taps
+# leave the same `EarlyFired` breadcrumb the early-fire path does.
+[[test]]
+name = "flow_tapped_tap_then_hold_after_tap"
+behavior.morse = {
+  enable_flow_tap = true,
+  prior_idle_time = "120ms",
+  morses = [{ tap = "Backspace", hold = "RShift", hold_after_tap = "Backspace" }]
+}
+steps = [
+  { delay = 200 },
+  { tap = { pos = [1, 0], duration = 30 } },
+  { delay = 50 },
+  { tap = { pos = [1, 2], duration = 30 } },
+  { delay = 150 },
+  { tap = { pos = [1, 2], duration = 400 } },
+]
+expect = [["A"], [], ["Backspace"], [], ["Backspace"], []]

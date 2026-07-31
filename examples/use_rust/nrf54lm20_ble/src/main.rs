@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 
-mod vial;
 #[macro_use]
 mod macros;
 mod keymap;
@@ -21,7 +20,7 @@ use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use panic_probe as _;
 use rmk::ble::{BleTransport, build_ble_stack};
-use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
+use rmk::config::{BehaviorConfig, DeviceConfig, LockConfig, PositionalConfig, RmkConfig, StorageConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
@@ -30,7 +29,6 @@ use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::usb::UsbTransport;
 use rmk::{DefaultPacketPool, HostResources, KeymapData, PacketPool, initialize_keymap_and_storage, run_all};
 use static_cell::StaticCell;
-use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
 type RandomSource = cracen::Cracen<'static, Blocking>;
 
@@ -52,11 +50,10 @@ async fn mpsl_task(mpsl: &'static MultiprotocolServiceLayer<'static>) -> ! {
 const SDC_MEM_SIZE: usize = 5788;
 const FLASH_START_ADDR: usize = 0x120000;
 const FLASH_SECTORS: u8 = 6;
+const RYNK_UNLOCK_KEYS: &[(u8, u8)] = &[(0, 0), (0, 1)];
 
 const L2CAP_TXQ: u8 = 4;
 const L2CAP_RXQ: u8 = 4;
-
-const UNLOCK_KEYS: &[(u8, u8)] = &[(0, 0), (0, 1)];
 
 fn build_sdc<'d, const N: usize>(
     p: nrf_sdc::Peripherals<'d>,
@@ -67,9 +64,9 @@ fn build_sdc<'d, const N: usize>(
     sdc::Builder::new()?
         .support_adv()
         .support_peripheral()
-        // .support_dle_peripheral()
-        // .support_phy_update_peripheral()
-        // .support_le_2m_phy()
+        .support_dle_peripheral()
+        .support_phy_update_peripheral()
+        .support_le_2m_phy()
         .peripheral_count(1)?
         .buffer_cfg(
             DefaultPacketPool::MTU as u16,
@@ -186,7 +183,6 @@ async fn main(spawner: Spawner) {
         product_name: "RMK nRF54LM20A",
         ..DeviceConfig::default()
     };
-    let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, UNLOCK_KEYS);
     let storage_config = StorageConfig {
         start_addr: FLASH_START_ADDR,
         num_sectors: FLASH_SECTORS,
@@ -194,7 +190,11 @@ async fn main(spawner: Spawner) {
     };
     let rmk_config = RmkConfig {
         device_config: keyboard_device_config,
-        vial_config,
+        lock_config: LockConfig {
+            unlock_keys: RYNK_UNLOCK_KEYS,
+            insecure: false,
+            write_requires_unlock: false,
+        },
         storage_config,
         ..Default::default()
     };
@@ -218,21 +218,13 @@ async fn main(spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, true);
     let mut keyboard = Keyboard::new(&keymap);
-    let host_ctx = rmk::host::KeyboardContext::new(&keymap);
-    let mut host_service = HostService::new(&host_ctx, &rmk_config);
+    let host_service = HostService::new(&keymap, &rmk_config);
 
-    let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config);
-    let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
+    let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
+    let mut ble_transport = BleTransport::new(&stack, rmk_config)
+        .await
+        .with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();
 
-    run_all!(
-        matrix,
-        storage,
-        usb_transport,
-        ble_transport,
-        wpm_processor,
-        keyboard,
-        host_service
-    )
-    .await;
+    run_all!(matrix, storage, usb_transport, ble_transport, wpm_processor, keyboard).await;
 }

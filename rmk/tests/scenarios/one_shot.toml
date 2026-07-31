@@ -1,0 +1,243 @@
+# One-shot modifiers (OSM) and one-shot layers (OSL).
+#
+# The fixture is row 0, cols 0-5 of the shared split board:
+#   Layer 0: OSM(LShift)          OSL(1)  A  TH(B, C)  OSM(LCtrl)  WM(B, LGui)
+#   Layer 1: OSM(LShift | LCtrl)  No      C  D         E           F
+#
+# Tests inherit the one-shot defaults (timeout 1000ms, activate_on_keypress and
+# quick_release both false) unless they carry a `behavior.one_shot*` delta.
+
+keyboard = "boards/split.toml"
+
+# A pressed after the one-shot timeout expires gets no modifier.
+[[test]]
+name = "osm_timeout"
+behavior.one_shot = { timeout = "100ms" }
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { delay = 150 },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [
+  ["A"],  # A without LShift (timeout)
+  [],
+]
+
+# Holding OSM keeps the modifier active until the OSM key itself is released.
+[[test]]
+name = "osm_held_behavior"
+steps = [
+  { press = [0, 0] },    # Press OSM(LShift)
+  { tap = { pos = [0, 2], duration = 10 } },
+  { release = [0, 0] },  # Release OSM(LShift)
+]
+expect = [
+  ["LShift", "A"],
+  ["LShift"],  # Still holding LShift
+  [],
+]
+
+# Only the first key after the OSM gets the modifier.
+[[test]]
+name = "osm_multiple_keys"
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 2], duration = 10 } },
+  { tap = { pos = [0, 3], duration = 10 } },
+]
+expect = [
+  ["LShift", "A"],
+  [],
+  ["B"],  # B without LShift
+  [],
+]
+
+# OSM released while the tap-hold key is still down: the tap still carries it.
+[[test]]
+name = "osm_rolling_with_tap_hold"
+steps = [
+  { press = [0, 0] },    # Press OSM(LShift)
+  { press = [0, 3] },    # Press TH(B, C)
+  { release = [0, 0] },  # Release OSM(LShift)
+  { release = [0, 3] },  # Release TH(B, C)
+]
+expect = [["LShift", "B"], []]
+
+# Two OSMs stack onto the same next key.
+[[test]]
+name = "osm_combined_modifiers"
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 4], duration = 10 } },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [["LShift", "LCtrl", "A"], []]
+
+# Pending OSMs merge with the modifier a WM key carries on its own.
+[[test]]
+name = "osm_multiple_osm_with_wm"
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 4], duration = 10 } },
+  { tap = { pos = [0, 5], duration = 10 } },
+]
+expect = [["LShift", "LCtrl", "LGui", "B"], []]
+
+# activate_on_keypress: the modifier is reported as soon as the OSM is pressed.
+[[test]]
+name = "osm_activate_on_keypress"
+behavior.one_shot_modifiers = { activate_on_keypress = true }
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [
+  ["LShift"],  # LShift is sent from the start
+  ["LShift", "A"],
+  [],
+]
+
+# activate_on_keypress with two OSMs: each one is reported as it is pressed.
+[[test]]
+name = "osm_combined_modifiers_with_activate_on_keypress"
+behavior.one_shot_modifiers = { activate_on_keypress = true }
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 4], duration = 10 } },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [
+  ["LShift"],           # LShift is sent first
+  ["LShift", "LCtrl"],  # LCtrl is added
+  ["LShift", "LCtrl", "A"],
+  [],
+]
+
+# Holding OSL keeps layer 1 active for keys pressed underneath it.
+[[test]]
+name = "osl_held_behavior"
+steps = [
+  { press = [0, 1] },    # Press OSL(1)
+  { tap = { pos = [0, 2], duration = 10 } },
+  { release = [0, 1] },  # Release OSL(1)
+]
+expect = [
+  ["C"],  # C from layer 1
+  [],
+]
+
+# After the one-shot timeout the key resolves on layer 0 again.
+[[test]]
+name = "osl_timeout"
+behavior.one_shot = { timeout = "100ms" }
+steps = [
+  { tap = { pos = [0, 1], duration = 10 } },
+  { delay = 150 },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [
+  ["A"],  # A from layer 0 (timeout)
+  [],
+]
+
+# Only the first key after the OSL sees layer 1.
+[[test]]
+name = "osl_multiple_keys"
+steps = [
+  { tap = { pos = [0, 1], duration = 10 } },
+  { tap = { pos = [0, 2], duration = 10 } },
+  { tap = { pos = [0, 3], duration = 10 } },
+]
+expect = [["C"], [], ["B"], []]
+
+# OSM consumed by the OSL keypress, so the layer-1 key arrives unshifted.
+[[test]]
+name = "osm_then_osl"
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 1], duration = 10 } },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [["C"], []]
+
+# OSL first, so (0,0) resolves to layer 1's OSM(LShift | LCtrl); the layer is
+# spent by then, so the next key comes from layer 0.
+[[test]]
+name = "osl_then_osm"
+steps = [
+  { tap = { pos = [0, 1], duration = 10 } },
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [["LShift", "LCtrl", "A"], []]
+
+# Both the OSM and the OSL expire before the next key.
+[[test]]
+name = "osm_and_osl_timeout"
+behavior.one_shot = { timeout = "100ms" }
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 1], duration = 10 } },
+  { delay = 200 },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [
+  ["A"],  # A from layer 0 (both timed out)
+  [],
+]
+
+# Quick-release mode (quick_release = true): the modifier drops on key PRESS,
+# so each key report is followed by an unmodified one.
+#
+# `test_osm_quick_release_rolling` was dropped before this port: OSM combined
+# with a morse/tap-hold key has a known bug where the OSM deadline loop times
+# out before the tap resolves.
+[[test]]
+name = "osm_quick_release_multiple_keys"
+behavior.one_shot_modifiers = { quick_release = true }
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 2], duration = 10 } },
+  { tap = { pos = [0, 3], duration = 10 } },
+]
+expect = [["LShift", "A"], ["A"], [], ["B"], []]
+
+[[test]]
+name = "osm_quick_release_combined_modifiers"
+behavior.one_shot_modifiers = { quick_release = true }
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 4], duration = 10 } },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [["LShift", "LCtrl", "A"], ["A"], []]
+
+# WM keeps its own LGui after the one-shot modifiers are released.
+[[test]]
+name = "osm_quick_release_with_wm"
+behavior.one_shot_modifiers = { quick_release = true }
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 4], duration = 10 } },
+  { tap = { pos = [0, 5], duration = 10 } },
+]
+expect = [["LShift", "LCtrl", "LGui", "B"], ["LGui", "B"], []]
+
+[[test]]
+name = "osm_quick_release_activate_on_keypress"
+behavior.one_shot_modifiers = { activate_on_keypress = true, quick_release = true }
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [["LShift"], ["LShift", "A"], ["A"], []]
+
+[[test]]
+name = "osm_quick_release_combined_activate_on_keypress"
+behavior.one_shot_modifiers = { activate_on_keypress = true, quick_release = true }
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 4], duration = 10 } },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [["LShift"], ["LShift", "LCtrl"], ["LShift", "LCtrl", "A"], ["A"], []]

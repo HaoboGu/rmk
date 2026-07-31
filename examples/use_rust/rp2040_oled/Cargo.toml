@@ -10,7 +10,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = ["host", "log", "rp2040", "storage", "usb_log", "vial", "vial_lock", "sh1106"], version = "0.8.2", default-features = false }
+rmk = { path = "../../../rmk", features = ["host", "log", "rp2040", "storage", "usb_log", "vial", "host_lock", "sh1106"], default-features = false }
 oled_async = { version = "0.2.1", features = ["i2c"] }
 display-interface-i2c = "0.5"
 embedded-graphics = "0.8"

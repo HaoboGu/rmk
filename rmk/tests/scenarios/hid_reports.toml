@@ -1,0 +1,36 @@
+# Consumer, system-control and mouse keys each report on their own HID page
+# rather than in the keyboard report, and each sends an all-released report on
+# key up. Three keys, three pages — this file carries its own keyboard instead
+# of the shared board because none of these keys is a fixture anyone else needs.
+
+[layout]
+rows = 1
+cols = 3
+map = "(0,0)  (0,1)  (0,2)"
+
+[[keymap.layer]]
+keys = "AudioVolUp  SystemSleep  MouseRight"
+
+[[test]]
+name = "consumer_key_reports_on_the_consumer_page"
+steps = [
+  { press = [0, 0] },
+  { release = [0, 0] },
+]
+expect = [{ consumer = ["AudioVolUp"] }, { consumer = [] }]
+
+[[test]]
+name = "system_key_reports_on_the_system_control_page"
+steps = [
+  { press = [0, 1] },
+  { release = [0, 1] },
+]
+expect = [{ system = ["SystemSleep"] }, { system = [] }]
+
+[[test]]
+name = "mouse_key_reports_a_movement_delta"
+steps = [
+  { press = [0, 2] },
+  { release = [0, 2] },
+]
+expect = [{ mouse = { x = 5 } }, { mouse = { } }]

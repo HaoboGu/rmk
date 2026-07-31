@@ -225,6 +225,18 @@ impl crate::KeyboardTomlConfig {
             }
         });
 
+        // Named profiles are interned into the fixed-capacity morse profile
+        // table; overflowing it would silently drop profiles at runtime.
+        if let Some(m) = &morse
+            && m.profiles.len() > self.rmk.morse_profile_max_num
+        {
+            return Err(format!(
+                "behavior.morse.profiles defines {} profiles, but `[rmk] morse_profile_max_num` is {}. Raise it in keyboard.toml",
+                m.profiles.len(),
+                self.rmk.morse_profile_max_num
+            ));
+        }
+
         let auto_mouse_layer = toml_behavior
             .auto_mouse_layer
             .unwrap_or_default()
@@ -291,12 +303,13 @@ mod tests {
 [layout]
 rows = 1
 cols = 1
+map = "(0,0)"
+
+[keymap]
 layers = 1
-keymap = [
-  [
-    ["A"],
-  ],
-]
+
+[[keymap.layer]]
+keys = "A"
 
 [behavior.morse]
 enable_flow_tap = true
@@ -325,5 +338,47 @@ hold_timeout = "200ms"
         assert_eq!(morse.profiles["flow_on"].enable_flow_tap, Some(true));
         assert_eq!(morse.profiles["flow_off"].enable_flow_tap, Some(false));
         assert_eq!(morse.profiles["inherit"].enable_flow_tap, None);
+    }
+
+    #[test]
+    fn morse_profiles_overflowing_morse_profile_max_num_is_an_error() {
+        let toml = r#"
+[rmk]
+morse_profile_max_num = 1
+
+[layout]
+rows = 1
+cols = 1
+map = "(0,0)"
+
+[keymap]
+layers = 1
+
+[[keymap.layer]]
+keys = "A"
+
+[behavior.morse.profiles.p1]
+hold_timeout = "200ms"
+
+[behavior.morse.profiles.p2]
+hold_timeout = "300ms"
+"#;
+
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "rmk-config-profile-overflow-{}-{}.toml",
+            std::process::id(),
+            unique
+        ));
+
+        fs::write(&path, toml).unwrap();
+        let config = KeyboardTomlConfig::new_from_toml_path_with_event_defaults(&path);
+        let _ = fs::remove_file(&path);
+
+        let err = match config.behavior() {
+            Ok(_) => panic!("expected the profile-overflow error"),
+            Err(e) => e,
+        };
+        assert!(err.contains("morse_profile_max_num"), "unexpected error: {err}");
     }
 }
