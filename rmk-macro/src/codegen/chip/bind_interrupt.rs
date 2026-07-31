@@ -7,23 +7,44 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::resolved::Hardware;
 use rmk_config::resolved::hardware::{BoardConfig, InputDeviceConfig, UniBodyConfig};
-use syn::ItemMod;
+use syn::{ItemFn, ItemMod};
 
 use crate::codegen::display::expand_display_interrupt;
 use crate::codegen::feature::{get_rmk_features, is_feature_enabled};
 use crate::codegen::input_device::iqs5xx::expand_iqs5xx_interrupts;
+use crate::codegen::override_helper::{Overwritten, find_overwritten};
+
+/// Does this function override the generated `bind_interrupts!` boilerplate?
+///
+/// Two markers are accepted:
+/// - `#[Override(bind_interrupt)]` / `#[Overwritten(bind_interrupt)]` (the form the stm32h7
+///   example documents), selected through the shared override matcher so inert attributes and
+///   `cfg` gating behave like every other override;
+/// - the legacy bare `#[bind_interrupt]` attribute (the original syntax), matched exactly as
+///   before for backward compatibility: it must be the function's only attribute.
+fn is_bind_interrupt_override(item_fn: &ItemFn) -> bool {
+    let current = matches!(
+        find_overwritten(item_fn),
+        Some(Ok(Overwritten::BindInterrupt))
+    );
+    let legacy = item_fn.attrs.len() == 1
+        && item_fn.attrs[0]
+            .meta
+            .path()
+            .get_ident()
+            .is_some_and(|i| i == "bind_interrupt");
+    current || legacy
+}
 
 /// Expand `bind_interrupt!` stuffs, and other code before `main` function
 pub(crate) fn expand_bind_interrupt(hardware: &Hardware, item_mod: &ItemMod) -> TokenStream2 {
-    // If there is a function with `#[Overwritten(bind_interrupt)]`, override it
+    // If there is a function marked as the bind_interrupt override, use its body
     if let Some((_, items)) = &item_mod.content {
         items
             .iter()
             .find_map(|item| {
                 if let syn::Item::Fn(item_fn) = &item
-                    && item_fn.attrs.len() == 1
-                    && let Some(i) = item_fn.attrs[0].meta.path().get_ident()
-                    && i == "bind_interrupt"
+                    && is_bind_interrupt_override(item_fn)
                 {
                     let content = &item_fn.block.stmts;
                     return Some(quote! {
@@ -375,5 +396,64 @@ fn get_pin_num_stm32(gpio_name: &str) -> Option<String> {
         None
     } else {
         Some(gpio_name[2..].to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_fn(src: &str) -> ItemFn {
+        syn::parse_str(src).expect("test fn should parse")
+    }
+
+    // Selection regression tests (#967 review): validation accepting a marker
+    // is meaningless if selection doesn't recognize the same marker.
+
+    #[test]
+    fn documented_override_form_is_selected() {
+        // The form the stm32h7 example documents. It used to pass validation
+        // but never get selected, silently dropping the custom binding.
+        assert!(is_bind_interrupt_override(&parse_fn(
+            "#[Override(bind_interrupt)]\nfn bind_interrupt() {}"
+        )));
+    }
+
+    #[test]
+    fn overwritten_spelling_is_selected() {
+        assert!(is_bind_interrupt_override(&parse_fn(
+            "#[Overwritten(bind_interrupt)]\nfn bind_interrupt() {}"
+        )));
+    }
+
+    #[test]
+    fn legacy_bare_marker_is_still_selected() {
+        // The original syntax; kept working for existing user code.
+        assert!(is_bind_interrupt_override(&parse_fn(
+            "#[bind_interrupt]\nfn bind_interrupt() {}"
+        )));
+    }
+
+    #[test]
+    fn doc_comment_does_not_disable_documented_form() {
+        assert!(is_bind_interrupt_override(&parse_fn(
+            "/// custom irq binding\n#[Override(bind_interrupt)]\nfn bind_interrupt() {}"
+        )));
+    }
+
+    #[test]
+    fn cfg_gated_override_is_not_selected() {
+        // Same `cfg` semantics as every other override: the macro cannot
+        // evaluate `cfg`, so the function is left unselected.
+        assert!(!is_bind_interrupt_override(&parse_fn(
+            "#[cfg(feature = \"x\")]\n#[Override(bind_interrupt)]\nfn bind_interrupt() {}"
+        )));
+    }
+
+    #[test]
+    fn other_override_marker_is_not_selected() {
+        assert!(!is_bind_interrupt_override(&parse_fn(
+            "#[Override(entry)]\nfn run() {}"
+        )));
     }
 }

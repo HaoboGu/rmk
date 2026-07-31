@@ -9,9 +9,9 @@ pub enum Overwritten {
     ChipConfig,
     ChipInit,
     Entry,
-    /// Accepted so `#[Override(bind_interrupt)]` (used in existing examples)
-    /// passes validation; the bind_interrupt override itself is matched
-    /// separately in `bind_interrupt.rs`.
+    /// `#[Override(bind_interrupt)]` — the form the stm32h7 example documents. Selected by
+    /// `bind_interrupt.rs` through this shared matcher; the legacy bare `#[bind_interrupt]`
+    /// marker is also still accepted there for backward compatibility.
     BindInterrupt,
 }
 
@@ -104,7 +104,8 @@ mod tests {
 
     #[test]
     fn bind_interrupt_passes_validation() {
-        // Used by existing examples; consumed separately in bind_interrupt.rs.
+        // The form the stm32h7 example documents; selection lives in
+        // bind_interrupt.rs and is covered by that module's tests.
         let res = find_overwritten(&parse_fn("#[Override(bind_interrupt)]\nfn f() {}"));
         assert!(matches!(res, Some(Ok(Overwritten::BindInterrupt))));
     }

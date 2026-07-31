@@ -16,11 +16,15 @@ mod my_keyboard {
     use rmk::usb::UsbTransport;
     use static_cell::StaticCell;
 
-    // If you want customize interrupte binding , use `#[Override(bind_interrupt)]` to override default interrupt binding
+    // If you want customize interrupte binding , use `#[Override(bind_interrupt)]` to override default interrupt binding.
+    // The override replaces the whole generated `bind_interrupts!` block, so it has to bind
+    // everything this configuration needs (here: USB, plus the EXTI lines used by `async_matrix`).
     #[Override(bind_interrupt)]
     fn bind_interrupt() {
-        bind_interrupts!(struct Irqs {
-            OTG_HS => InterruptHandler<USB_OTG_HS>;
+        embassy_stm32::bind_interrupts!(struct Irqs {
+            OTG_HS => embassy_stm32::usb::InterruptHandler<embassy_stm32::peripherals::USB_OTG_HS>;
+            EXTI9_5 => embassy_stm32::exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI9_5>;
+            EXTI15_10 => embassy_stm32::exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI15_10>;
         });
     }
 
