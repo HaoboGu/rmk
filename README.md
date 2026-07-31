@@ -6,7 +6,7 @@
   </a>
 
   <p align="center">
-  A feature-rich keyboard firmware written in Rust.
+  A modern, easy-to-use, and feature-rich keyboard firmware written in Rust.
   <br />
   <br />
   <a href="https://crates.io/crates/rmk"><img src="https://img.shields.io/crates/v/rmk"></a>
