@@ -7,7 +7,7 @@ description = "Rynk host support compiled to a wasm package: typed `rynk` Client
 license = "MIT OR Apache-2.0"
 repository.workspace = true
 
-# Built by `wasm-pack build --target web`. 
+# Built by `wasm-pack build --target web`; unit tests run with `wasm-pack test --node`.
 # Native checks compile an empty crate because `src/lib.rs` is wasm32-gated.
 [lib]
 crate-type = ["cdylib"]
@@ -22,3 +22,6 @@ js-sys = "0.3"
 console_error_panic_hook = "0.1"
 console_log = "1"
 log = "0.4"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
