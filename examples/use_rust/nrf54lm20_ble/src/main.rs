@@ -94,6 +94,8 @@ async fn main(spawner: Spawner) {
     nrf_config.hfclk_source = HfclkSource::ExternalXtal;
     nrf_config.lfclk_source = LfclkSource::ExternalXtal;
     let p = embassy_nrf::init(nrf_config);
+    // Off at reset; enabling it makes compute-bound code such as LESC pairing ~3x faster.
+    pac::ICACHE.enable().write(|w| w.set_enable(true));
     info!("nRF initialized");
 
     let mpsl_p = mpsl::Peripherals::new(
