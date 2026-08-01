@@ -19,7 +19,9 @@ pub(crate) mod dfu;
 pub(crate) mod display;
 pub(crate) mod host;
 pub(crate) mod keycode_alias;
-pub(crate) mod layout;
+pub(crate) mod keymap;
+pub mod layout;
+pub use layout::{STOCK_WIDTHS, layout_blob_from_toml, layout_info_from_toml};
 pub(crate) mod light;
 pub(crate) mod storage;
 
@@ -27,7 +29,7 @@ pub(crate) mod storage;
 ///
 /// These define the maximum values any firmware may use for protocol
 /// Vec capacities (`COMBO_SIZE`, `MORSE_SIZE`, etc.). The host tool compiles
-/// against these as upper bounds. Any firmware with `rmk_protocol` enabled
+/// against these as upper bounds. Any firmware with `rynk` enabled
 /// must satisfy `value <= ceiling` at compile time.
 ///
 /// Constant names mirror the generated constants with a `MAX_` prefix:
@@ -39,12 +41,41 @@ pub mod protocol_limits {
     pub const MAX_MORSE_SIZE: usize = 32;
     /// Max bytes per macro data chunk — ceiling for `MACRO_DATA_SIZE`
     pub const MAX_MACRO_DATA_SIZE: usize = 256;
-    /// Max items per bulk transfer message — ceiling for `BULK_SIZE`
-    pub const MAX_BULK_SIZE: usize = 16;
+    /// Max key positions in an unlock challenge.
+    pub const MAX_UNLOCK_KEYS_SIZE: usize = 4;
+}
+
+pub(crate) fn validate_unlock_keys(
+    section: &str,
+    unlock_keys: &[[u8; 2]],
+    layout: Option<&LayoutTomlConfig>,
+) -> Result<(), String> {
+    if unlock_keys.len() > protocol_limits::MAX_UNLOCK_KEYS_SIZE {
+        return Err(format!(
+            "{section}.unlock_keys has {} entries, the max is {}",
+            unlock_keys.len(),
+            protocol_limits::MAX_UNLOCK_KEYS_SIZE
+        ));
+    }
+
+    if let Some(layout) = layout {
+        for key in unlock_keys {
+            let (row, col) = (key[0], key[1]);
+            if row >= layout.rows || col >= layout.cols {
+                return Err(format!(
+                    "{section}.unlock_keys position ({row}, {col}) is outside the {}x{} matrix",
+                    layout.rows, layout.cols
+                ));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Configurations for RMK keyboard.
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[allow(unused)]
 pub struct KeyboardTomlConfig {
     /// Basic keyboard info
@@ -53,10 +84,10 @@ pub struct KeyboardTomlConfig {
     matrix: Option<MatrixConfig>,
     // Aliases for key maps
     aliases: Option<HashMap<String, String>>,
-    // Layers of key maps
-    layer: Option<Vec<LayerTomlConfig>>,
-    /// Layout config.
-    /// For split keyboard, the total row/col should be defined in this section
+    /// Keymap config: layer count and the per-layer key actions (`[[keymap.layer]]`).
+    keymap: Option<KeymapTomlConfig>,
+    /// Layout config: the physical key arrangement (`map`) plus the rendered layout.
+    /// For split keyboards, the total row/col is defined in this section.
     layout: Option<LayoutTomlConfig>,
     /// Behavior config
     behavior: Option<BehaviorConfig>,
@@ -135,7 +166,10 @@ impl KeyboardTomlConfig {
         // This allows user's keyboard.toml to omit [event] section.
         let user_config = Self::parse_from_toml_path(path, None);
 
-        let default_config_str = user_config.get_chip_model().unwrap().get_default_config_str().unwrap();
+        let default_config_str = user_config
+            .get_chip_model()
+            .and_then(|chip| chip.get_default_config_str())
+            .unwrap_or_else(|e| panic!("❌ keyboard.toml error: {e}"));
 
         // Second pass: load with all three config sources
         // Config priority (later sources override earlier ones):
@@ -220,11 +254,6 @@ impl KeyboardTomlConfig {
     }
 }
 
-/// Small fallback capacity for users who configure Sticky Keys directly in Rust.
-///
-/// TOML configurations derive their required capacity from the number of named
-/// profiles, while `[rmk] sticky_key_profile_max_num` remains an explicit
-/// override (including `0` to opt out).
 const DEFAULT_STICKY_KEY_PROFILE_MAX_NUM: usize = 4;
 
 /// Keyboard constants configuration for performance and hardware limits
@@ -253,10 +282,11 @@ pub(crate) struct RmkConstantsConfig {
     #[serde_inline_default(8)]
     #[serde(deserialize_with = "check_morse_max_num")]
     pub morse_max_num: usize,
+    /// Capacity of the morse profile table (named profiles in `[behavior.morse.profiles]`)
+    #[serde_inline_default(16)]
+    #[serde(deserialize_with = "check_morse_profile_max_num")]
+    pub morse_profile_max_num: usize,
     /// Capacity of the named Sticky Key profile table (maximum 255).
-    ///
-    /// When omitted, this is derived from the configured profile count with a
-    /// small fallback for Rust-only configurations.
     #[serde(default, deserialize_with = "check_sticky_key_profile_max_num")]
     pub sticky_key_profile_max_num: Option<usize>,
     /// Maximum number of patterns a morse key can handle
@@ -284,13 +314,9 @@ pub(crate) struct RmkConstantsConfig {
     /// The number of available BLE profiles
     #[serde_inline_default(3)]
     pub ble_profiles_num: usize,
-    /// BLE Split Central sleep timeout in minutes (0 = disabled)
+    /// BLE Split Central sleep timeout in seconds (0 = disabled)
     #[serde_inline_default(0)]
     pub split_central_sleep_timeout_seconds: u32,
-    /// Maximum number of key actions in a bulk keymap transfer (protocol).
-    /// Smaller values reduce firmware RAM usage but require more round-trips.
-    #[serde_inline_default(8)]
-    pub protocol_max_bulk_size: usize,
     /// Maximum macro data chunk size for protocol transfers (bytes).
     /// Smaller values reduce firmware RAM usage but require more round-trips.
     #[serde_inline_default(64)]
@@ -298,6 +324,10 @@ pub(crate) struct RmkConstantsConfig {
     /// Maximum number of auto mouse layer entries; auto-derived from `[[behavior.auto_mouse_layer]]` if unset.
     #[serde(default)]
     pub auto_mouse_layer_max_num: Option<usize>,
+    /// Exact RAM of each Rynk RX/TX frame buffer (bytes), payload capacity and bulk counts derive from it.
+    /// Default 488 fills exactly two BLE notifications.
+    #[serde_inline_default(488)]
+    pub rynk_buffer_size: usize,
 }
 
 fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
@@ -305,8 +335,10 @@ where
     D: de::Deserializer<'de>,
 {
     let value = Deserialize::deserialize(deserializer)?;
-    if value > 256 {
-        panic!("❌ Parse `keyboard.toml` error: combo_max_num must be between 0 and 256, got {value}");
+    if value > u8::MAX as usize {
+        return Err(de::Error::custom(format!(
+            "combo_max_num must be between 0 and 255, got {value}"
+        )));
     }
     Ok(value)
 }
@@ -316,8 +348,24 @@ where
     D: de::Deserializer<'de>,
 {
     let value = Deserialize::deserialize(deserializer)?;
-    if value > 256 {
-        panic!("❌ Parse `keyboard.toml` error: morse_max_num must be between 0 and 256, got {value}");
+    if value > u8::MAX as usize {
+        return Err(de::Error::custom(format!(
+            "morse_max_num must be between 0 and 255, got {value}"
+        )));
+    }
+    Ok(value)
+}
+
+/// The profile index is a `u8` in `KeyAction::TapHold` and an index with no
+/// table entry means "use the default profile", so the table may never cover
+/// the full `u8` range: capacity ≤ 255 keeps at least one index always vacant.
+fn check_morse_profile_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let value = Deserialize::deserialize(deserializer)?;
+    if value > 255 {
+        panic!("❌ Parse `keyboard.toml` error: morse_profile_max_num must be between 0 and 255, got {value}");
     }
     Ok(value)
 }
@@ -327,11 +375,11 @@ where
     D: de::Deserializer<'de>,
 {
     let value = Option::<usize>::deserialize(deserializer)?;
-    if value.is_some_and(|value| value > 255) {
-        panic!(
-            "❌ Parse `keyboard.toml` error: sticky_key_profile_max_num must be between 0 and 255, got {}",
+    if value.is_some_and(|value| value > u8::MAX as usize) {
+        return Err(de::Error::custom(format!(
+            "sticky_key_profile_max_num must be between 0 and 255, got {}",
             value.unwrap()
-        );
+        )));
     }
     Ok(value)
 }
@@ -342,7 +390,9 @@ where
 {
     let value = Deserialize::deserialize(deserializer)?;
     if !(4..=65536).contains(&value) {
-        panic!("❌ Parse `keyboard.toml` error: max_patterns_per_key must be between 4 and 65536, got {value}");
+        return Err(de::Error::custom(format!(
+            "max_patterns_per_key must be between 4 and 65536, got {value}"
+        )));
     }
     Ok(value)
 }
@@ -352,8 +402,10 @@ where
     D: de::Deserializer<'de>,
 {
     let value = Deserialize::deserialize(deserializer)?;
-    if value > 256 {
-        panic!("❌ Parse `keyboard.toml` error: fork_max_num must be between 0 and 256, got {value}");
+    if value > u8::MAX as usize {
+        return Err(de::Error::custom(format!(
+            "fork_max_num must be between 0 and 255, got {value}"
+        )));
     }
     Ok(value)
 }
@@ -368,6 +420,7 @@ impl Default for RmkConstantsConfig {
             combo_max_length: 4,
             fork_max_num: 8,
             morse_max_num: 8,
+            morse_profile_max_num: 16,
             sticky_key_profile_max_num: None,
             max_patterns_per_key: 8,
             macro_space_size: 256,
@@ -378,9 +431,9 @@ impl Default for RmkConstantsConfig {
             split_peripherals_num: 0,
             ble_profiles_num: 3,
             split_central_sleep_timeout_seconds: 0,
-            protocol_max_bulk_size: 8,
             protocol_macro_chunk_size: 64,
             auto_mouse_layer_max_num: None,
+            rynk_buffer_size: 488,
         }
     }
 }
@@ -465,19 +518,64 @@ define_event_config!(
     action,
 );
 
-/// Configurations for keyboard layout
+/// The `[layout]` section: the physical key arrangement plus the rendered layout.
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[allow(unused)]
 pub(crate) struct LayoutTomlConfig {
     pub rows: u8,
     pub cols: u8,
-    pub layers: u8,
-    pub keymap: Option<Vec<Vec<Vec<String>>>>, // Will be deprecated in the future
-    pub matrix_map: Option<String>,            // Temporarily allow both matrix_map and keymap to be set
-    pub encoder_map: Option<Vec<Vec<[String; 2]>>>, // Will be deprecated together with keymap
+    /// The physical arrangement: an ordered map of `(row,col)` positions with
+    /// optional hand, shape (`@2u`), gaps (`[1.5]`), row-steps (`[y=]`), and
+    /// encoders (`(e,0)`). Its order also defines the order of `[[keymap.layer]]`.
+    pub map: Option<String>,
+    // Rendered-layout fields.
+    pub default_variant: Option<String>,
+    pub shapes: Option<HashMap<String, ShapeToml>>,
+    pub variant: Option<Vec<VariantToml>>,
+}
+
+/// A named shape from `[layout.shapes]`. Every field optional; widths/
+/// heights default to 1u, nudges/rotation to 0, and `w2/h2/x2/y2` are an
+/// optional second rectangle for L-shaped caps.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ShapeToml {
+    pub w: Option<f32>,
+    pub h: Option<f32>,
+    pub x: Option<f32>,
+    pub y: Option<f32>,
+    pub r: Option<f32>,
+    pub w2: Option<f32>,
+    pub h2: Option<f32>,
+    pub x2: Option<f32>,
+    pub y2: Option<f32>,
+}
+
+/// One `[[layout.variant]]` render overlay: reshape some keys, hide others.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct VariantToml {
+    pub name: String,
+    pub shapes: Option<HashMap<String, String>>,
+    pub hidden: Option<Vec<String>>,
+}
+
+/// The `[keymap]` section: layer count plus the per-layer key actions.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[allow(unused)]
+pub(crate) struct KeymapTomlConfig {
+    /// Total layer count. Optional — defaults to the number of `[[keymap.layer]]`
+    /// blocks; set it larger to reserve extra empty layers (e.g. for Vial/Rynk).
+    pub layers: Option<u8>,
+    /// Per-layer key actions: `[[keymap.layer]]`.
+    #[serde(default)]
+    pub layer: Vec<LayerTomlConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[allow(unused)]
 pub(crate) struct LayerTomlConfig {
     pub name: Option<String>,
@@ -487,6 +585,7 @@ pub(crate) struct LayerTomlConfig {
 
 /// Configurations for keyboard info
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct KeyboardInfo {
     /// Keyboard name
     pub name: String,
@@ -517,7 +616,16 @@ pub enum MatrixType {
     DirectPin,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum DebouncerType {
+    #[default]
+    Default,
+    Fast,
+}
+
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MatrixConfig {
     #[serde(default)]
     pub matrix_type: MatrixType,
@@ -528,7 +636,8 @@ pub struct MatrixConfig {
     pub direct_pin_low_active: bool,
     #[serde(default = "default_false")]
     pub row2col: bool,
-    pub debouncer: Option<String>,
+    #[serde(default)]
+    pub debouncer: DebouncerType,
     pub bootmagic: Option<(u8, u8)>,
 }
 
@@ -598,6 +707,15 @@ pub const DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS: u32 = 120;
 /// Minimum passkey entry timeout in seconds.
 pub const MIN_PASSKEY_ENTRY_TIMEOUT_SECS: u32 = 30;
 
+/// nRF52840 DCDC REG0 output voltage
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+pub enum DcdcReg0Voltage {
+    #[serde(rename = "3V3")]
+    V3_3,
+    #[serde(rename = "1V8")]
+    V1_8,
+}
+
 /// Config for chip-specific settings
 #[derive(Clone, Default, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -607,8 +725,7 @@ pub struct ChipConfig {
     /// DCDC regulator 1 enabled (for nrf52840, nrf52833)
     pub dcdc_reg1: Option<bool>,
     /// DCDC regulator 0 voltage (for nrf52840)
-    /// Values: "3V3" or "1V8"
-    pub dcdc_reg0_voltage: Option<String>,
+    pub dcdc_reg0_voltage: Option<DcdcReg0Voltage>,
 }
 
 /// Config for lights
@@ -643,10 +760,9 @@ impl Default for DependencyConfig {
     }
 }
 
-/// Configurations for keyboard layout
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct LayoutConfig {
+/// Intermediate resolved keymap grid (rows/cols/layers + per-layer actions).
+/// Built once by `get_keymap_config` and unpacked into `Keymap`; never (de)serialized.
+pub(crate) struct KeymapConfig {
     pub rows: u8,
     pub cols: u8,
     pub layers: u8,
@@ -665,6 +781,8 @@ pub struct KeyInfo {
 #[serde(deny_unknown_fields)]
 pub(crate) struct BehaviorConfig {
     pub tri_layer: Option<TriLayerConfig>,
+    pub one_shot: Option<OneShotConfig>,
+    pub one_shot_modifiers: Option<OneShotModifiersConfig>,
     pub combo: Option<CombosConfig>,
     #[serde(alias = "macro")]
     pub macros: Option<MacrosConfig>,
@@ -672,6 +790,28 @@ pub(crate) struct BehaviorConfig {
     pub morse: Option<MorsesConfig>,
     pub sticky_key: Option<StickyKeyConfig>,
     pub auto_mouse_layer: Option<Vec<AutoMouseLayerConfig>>,
+}
+
+/// Default Sticky Key settings and named profile overrides.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StickyKeyConfig {
+    pub timeout: Option<DurationMillis>,
+    pub activate_on_keypress: Option<bool>,
+    pub max_repeat: Option<u16>,
+    pub release_mode: Option<String>,
+    #[serde(default)]
+    pub profiles: HashMap<String, StickyKeyProfile>,
+}
+
+/// Per-profile Sticky Key overrides.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StickyKeyProfile {
+    pub timeout: Option<DurationMillis>,
+    pub activate_on_keypress: Option<bool>,
+    pub max_repeat: Option<u16>,
+    pub release_mode: Option<String>,
 }
 
 /// Configurations for auto mouse layer
@@ -707,6 +847,7 @@ pub(crate) struct AutoMouseLayerConfig {
 /// Per Key configurations profiles for morse, tap-hold, etc.
 /// overrides the defaults given in TapHoldConfig
 #[derive(Clone, Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct MorseProfile {
     pub enable_flow_tap: Option<bool>,
 
@@ -737,31 +878,19 @@ pub(crate) struct TriLayerConfig {
     pub adjust: u8,
 }
 
-/// Configurations for sticky key
-#[derive(Clone, Debug, Default, Deserialize)]
+/// Configurations for oneshot modifiers/layers
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct StickyKeyConfig {
-    /// Timeout before an unused sticky key auto-releases (e.g., "1000ms", "1s"). Default 1s.
+pub(crate) struct OneShotConfig {
     pub timeout: Option<DurationMillis>,
-    /// Pure-modifier sticky keys only: activate on the next key press instead of release. Default false.
-    pub activate_on_keypress: Option<bool>,
-    /// Max number of held keys the sticky modifier applies to; 0 = unlimited. Default 0.
-    pub max_repeat: Option<u16>,
-    /// `|`-separated release triggers, e.g. "other_key_press | layer_exit".
-    pub release_mode: Option<String>,
-    /// Named profiles overriding this default configuration.
-    #[serde(default)]
-    pub profiles: HashMap<String, StickyKeyProfile>,
 }
 
-/// Per-profile Sticky Key overrides. Omitted fields inherit the default table.
-#[derive(Clone, Debug, Default, Deserialize)]
+/// Configurations for oneshot modifiers
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct StickyKeyProfile {
-    pub timeout: Option<DurationMillis>,
+pub struct OneShotModifiersConfig {
     pub activate_on_keypress: Option<bool>,
-    pub max_repeat: Option<u16>,
-    pub release_mode: Option<String>,
+    pub quick_release: Option<bool>,
 }
 
 /// Configurations for combos
@@ -776,6 +905,7 @@ pub(crate) struct CombosConfig {
 
 /// Configurations for combo
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ComboConfig {
     pub actions: Vec<String>,
     pub output: String,
@@ -791,6 +921,7 @@ pub(crate) struct MacrosConfig {
 
 /// Configurations for macro
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct MacroConfig {
     pub operations: Vec<MacroOperation>,
 }
@@ -885,18 +1016,29 @@ pub(crate) struct MorseActionPair {
     pub action: String,  // "B"
 }
 
+/// Split connection transport
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum SplitConnection {
+    #[default]
+    Ble,
+    Serial,
+}
+
 /// Configurations for split keyboards
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SplitConfig {
-    pub connection: String,
+    pub connection: SplitConnection,
     pub central: SplitBoardConfig,
     pub peripheral: Vec<SplitBoardConfig>,
 }
 
 /// Configurations for each split board
 ///
-/// Either ble_addr or serial must be set, but not both.
+/// The transport field must match `split.connection`: `serial` is required for
+/// serial splits and forbidden for BLE splits; `ble_addr` is optional for BLE
+/// splits (dongle setups omit it) and forbidden for serial splits.
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SplitBoardConfig {
@@ -938,6 +1080,7 @@ pub struct SplitBoardConfig {
 
 /// Serial port config
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SerialConfig {
     pub instance: String,
     pub tx_pin: String,
@@ -987,20 +1130,32 @@ pub(crate) struct HostConfig {
     /// Whether Vial is enabled
     #[serde_inline_default(true)]
     pub vial_enabled: bool,
-    /// Unlock keys for Vial (optional)
-    pub unlock_keys: Option<Vec<[u8; 2]>>,
-    /// Start Vial unlocked, bypassing the unlock-key combo (default: false).
-    /// Only has effect with the `vial_lock` feature.
+    /// Whether the RMK-native Rynk protocol is enabled. Mutually exclusive
+    /// with `vial_enabled` (the underlying Cargo features conflict).
     #[serde_inline_default(false)]
-    pub vial_insecure: bool,
+    pub rynk_enabled: bool,
+    /// Physical keys (row, col) held simultaneously to unlock (optional).
+    /// Shared by the Vial lock and the Rynk lock gate.
+    pub unlock_keys: Option<Vec<[u8; 2]>>,
+    /// Start (and stay) unlocked, bypassing the unlock-key combo (default:
+    /// false). Renamed from `vial_insecure`; the old name still parses.
+    #[serde(alias = "vial_insecure")]
+    #[serde_inline_default(false)]
+    pub insecure: bool,
+    /// Move the Rynk config-write tier (`SetKeyAction`, `SetMacro`, …) into the
+    /// locked set, so writes also require unlock (default: false).
+    #[serde_inline_default(false)]
+    pub write_requires_unlock: bool,
 }
 
 impl Default for HostConfig {
     fn default() -> Self {
         Self {
             vial_enabled: true,
+            rynk_enabled: false,
             unlock_keys: None,
-            vial_insecure: false,
+            insecure: false,
+            write_requires_unlock: false,
         }
     }
 }
@@ -1167,10 +1322,12 @@ pub struct EncoderConfig {
     // Phase is the working mode of the rotary encoders.
     // Available mode:
     // - default: resolution = 1
+    // - e8h7: phase table tuned for E8H7 encoders
     // - resolution: customized resolution, the resolution value and reverse should be specified
     //   A typical [EC11 encoder](https://tech.alpsalpine.com/cms.media/product_catalog_ec_01_ec11e_en_611f078659.pdf)'s resolution is 2
     //   In resolution mode, you can also specify the number of detent and pulses, the resolution will be calculated by `pulse * 4 / detent`
-    pub phase: Option<String>,
+    #[serde(default)]
+    pub phase: EncoderPhase,
     // Resolution
     pub resolution: Option<EncoderResolution>,
     // The number of detent
@@ -1185,6 +1342,16 @@ pub struct EncoderConfig {
     // Debounce interval in milliseconds. Suppresses spurious events from mechanical contact bounce.
     // Defaults to 0 (disabled) if not specified.
     pub debounce_ms: Option<u16>,
+}
+
+/// Rotary encoder phase (decoding) mode
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum EncoderPhase {
+    #[default]
+    Default,
+    E8h7,
+    Resolution,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1216,6 +1383,7 @@ pub enum CommunicationProtocol {
 
 /// SPI config
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SpiConfig {
     pub instance: String,
     pub sck: String,
@@ -1229,6 +1397,7 @@ pub struct SpiConfig {
 
 /// I2C config
 #[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct I2cConfig {
     pub instance: String,
     pub sda: String,
@@ -1356,6 +1525,32 @@ channel_size = 32
         assert_eq!(config.event.modifier.channel_size, 8);
         assert_eq!(config.event.modifier.subs, 2);
         assert_eq!(config.event.layer_change.subs, 1);
+    }
+
+    #[test]
+    fn rmk_count_limits_fit_u8_capability_fields() {
+        let ok: KeyboardTomlConfig = toml::from_str(
+            r#"
+[rmk]
+combo_max_num = 255
+morse_max_num = 255
+fork_max_num = 255
+"#,
+        )
+        .unwrap();
+        assert_eq!(ok.rmk.combo_max_num, 255);
+        assert_eq!(ok.rmk.morse_max_num, 255);
+        assert_eq!(ok.rmk.fork_max_num, 255);
+
+        for (field, message) in [
+            ("combo_max_num", "combo_max_num must be between 0 and 255"),
+            ("morse_max_num", "morse_max_num must be between 0 and 255"),
+            ("fork_max_num", "fork_max_num must be between 0 and 255"),
+        ] {
+            let toml = format!("[rmk]\n{field} = 256\n");
+            let err = toml::from_str::<KeyboardTomlConfig>(&toml).unwrap_err();
+            assert!(err.to_string().contains(message), "{err}");
+        }
     }
 
     #[test]

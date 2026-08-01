@@ -1,0 +1,41 @@
+# Passkey entry consumes recognized keys; the simulator's final guard rejects
+# leaked HID reports. Row 4 contains digits 1-6, Escape, and Enter.
+
+features = ["passkey_entry"]
+keyboard = "boards/split.toml"
+
+[[test]]
+name = "six_digits_then_enter_submits_the_passkey"
+steps = [
+  { passkey = "begin" },
+  { tap = { pos = [4, 0], duration = 50 } },
+  { delay = 50 },
+  { tap = { pos = [4, 1], duration = 50 } },
+  { delay = 50 },
+  { tap = { pos = [4, 2], duration = 50 } },
+  { delay = 50 },
+  { tap = { pos = [4, 3], duration = 50 } },
+  { delay = 50 },
+  { tap = { pos = [4, 4], duration = 50 } },
+  { delay = 50 },
+  { tap = { pos = [4, 5], duration = 50 } },
+  { delay = 50 },
+  { tap = { pos = [4, 7], duration = 50 } },
+  { delay = 300 },
+  { passkey = "end" },
+]
+expect = [{ passkey = 123456 }]
+
+[[test]]
+name = "escape_cancels_the_passkey"
+steps = [
+  { passkey = "begin" },
+  { tap = { pos = [4, 0], duration = 50 } },
+  { delay = 50 },
+  { tap = { pos = [4, 1], duration = 50 } },
+  { delay = 50 },
+  { tap = { pos = [4, 6], duration = 50 } },
+  { delay = 300 },
+  { passkey = "end" },
+]
+expect = [{ passkey = "cancelled" }]

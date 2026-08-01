@@ -1,0 +1,161 @@
+# Canonical Sticky Key forms. OSM/OSL compatibility is covered by one_shot.toml.
+#
+# Layer 0:
+#   SK(LShift) SK(Tab,[LAlt],@short) SK(MO(1)) A
+#   SK(LCtrl,@double) SK(B,[LGui],@repeat) SK(LAlt,@short) SK(LGui,@short) MO(2) MO(1)
+# Layers 1/2 leave the behavior keys transparent; col 3 is B/C respectively.
+
+[layout]
+rows = 1
+cols = 10
+map = "(0,0) (0,1) (0,2) (0,3) (0,4) (0,5) (0,6) (0,7) (0,8) (0,9)"
+
+[keymap]
+layers = 3
+
+[[keymap.layer]]
+keys = "SK(LShift) SK(Tab, [LAlt], @short) SK(MO(1)) A SK(LCtrl, @double) SK(B, [LGui], @repeat) SK(LAlt, @short) SK(LGui, @short) MO(2) MO(1)"
+
+[[keymap.layer]]
+keys = "Trns Trns Trns B Trns Trns Trns Trns Trns Trns"
+
+[[keymap.layer]]
+keys = "Trns Trns Trns C Trns Trns Trns Trns Trns Trns"
+
+[behavior.sticky_key]
+release_mode = "other_key_press"
+
+[behavior.sticky_key.profiles.short]
+timeout = "100ms"
+release_mode = "layer_enter | layer_exit"
+
+[behavior.sticky_key.profiles.double]
+timeout = "100ms"
+release_mode = "double_tap"
+
+[behavior.sticky_key.profiles.repeat]
+max_repeat = 2
+
+[[test]]
+name = "canonical_modifier_uses_press_policy"
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 3], duration = 10 } },
+]
+expect = [["LShift", "A"], ["A"], []]
+
+[[test]]
+name = "canonical_layer_applies_to_one_key"
+steps = [
+  { tap = { pos = [0, 2], duration = 10 } },
+  { tap = { pos = [0, 3], duration = 10 } },
+  { tap = { pos = [0, 3], duration = 10 } },
+]
+expect = [["B"], [], ["A"], []]
+
+[[test]]
+name = "later_same_target_mo_prevents_sticky_cleanup_from_releasing_its_layer"
+steps = [
+  { tap = { pos = [0, 2], duration = 10 } },
+  { press = [0, 9] },
+  { tap = { pos = [0, 3], duration = 10 } },
+  { release = [0, 9] },
+  { tap = { pos = [0, 3], duration = 10 } },
+]
+expect = [["B"], [], ["A"], []]
+
+[[test]]
+name = "tap_key_holds_modifiers_until_profile_timeout"
+steps = [
+  { tap = { pos = [0, 1], duration = 10 } },
+  { delay = 150 },
+]
+expect = [["LAlt", "Tab"], ["LAlt"], []]
+
+[[test]]
+name = "canonical_modifier_and_layer_latches_coexist"
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 2], duration = 10 } },
+  { tap = { pos = [0, 3], duration = 10 } },
+]
+expect = [["LShift", "B"], ["B"], []]
+
+[[test]]
+name = "tap_key_replaces_layer_and_releases_owned_layer"
+steps = [
+  { tap = { pos = [0, 2], duration = 10 } },
+  { tap = { pos = [0, 1], duration = 10 } },
+  { delay = 150 },
+  { tap = { pos = [0, 3], duration = 10 } },
+]
+expect = [["LAlt", "Tab"], ["LAlt"], [], ["A"], []]
+
+[[test]]
+name = "tap_key_replaces_pending_modifier"
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 1], duration = 10 } },
+  { delay = 150 },
+]
+expect = [["LAlt", "Tab"], ["LAlt"], []]
+
+[[test]]
+name = "max_repeat_deactivates_tap_key_on_third_press"
+steps = [
+  { tap = { pos = [0, 5], duration = 10 } },
+  { tap = { pos = [0, 5], duration = 10 } },
+  { tap = { pos = [0, 5], duration = 10 } },
+  { tap = { pos = [0, 3], duration = 10 } },
+]
+expect = [["LGui", "B"], ["LGui"], ["LGui", "B"], ["LGui"], [], ["A"], []]
+
+[[test]]
+name = "double_tap_cancels_modifier_before_next_key"
+steps = [
+  { tap = { pos = [0, 4], duration = 10 } },
+  { tap = { pos = [0, 4], duration = 10 } },
+  { tap = { pos = [0, 3], duration = 10 } },
+]
+expect = [["A"], []]
+
+[[test]]
+name = "timeout_is_deferred_while_sticky_modifier_is_held"
+steps = [
+  { press = [0, 4] },
+  { delay = 150 },
+  { tap = { pos = [0, 3], duration = 10 } },
+  { release = [0, 4] },
+]
+expect = [["LCtrl", "A"], ["LCtrl"], []]
+
+[[test]]
+name = "layer_enter_profile_releases_modifier"
+steps = [
+  { tap = { pos = [0, 6], duration = 10 } },
+  { press = [0, 8] },
+  { tap = { pos = [0, 3], duration = 10 } },
+  { release = [0, 8] },
+]
+expect = [["C"], []]
+
+[[test]]
+name = "layer_exit_profile_releases_modifier"
+steps = [
+  { press = [0, 8] },
+  { tap = { pos = [0, 7], duration = 10 } },
+  { release = [0, 8] },
+  { tap = { pos = [0, 3], duration = 10 } },
+]
+expect = [["A"], []]
+
+[[test]]
+name = "sticky_layer_does_not_claim_preexisting_layer_ownership"
+steps = [
+  { press = [0, 9] },
+  { tap = { pos = [0, 2], duration = 10 } },
+  { tap = { pos = [0, 3], duration = 10 } },
+  { release = [0, 9] },
+  { tap = { pos = [0, 3], duration = 10 } },
+]
+expect = [["B"], [], ["A"], []]

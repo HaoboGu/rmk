@@ -22,8 +22,6 @@ pub use key_action::KeyAction;
 pub use keyboard::KeyboardAction;
 pub use light::LightAction;
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::keycode::{HidKeyCode, KeyCode, SpecialKey};
@@ -32,16 +30,14 @@ use crate::modifier::ModifierCombination;
 use crate::steno::StenoKey;
 
 /// Effect produced by a sticky-key action.
-///
-/// Each variant carries only the data that is meaningful for that effect, so
-/// invalid combinations cannot be constructed.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum StickyKeyEffect {
-    /// Apply modifiers to the next key (the legacy OSM behavior).
+    /// Apply modifiers to the next key.
     Modifier(ModifierCombination),
-    /// Activate a layer for the next key (the legacy OSL behavior).
+    /// Activate a layer for the next key.
     Layer(u8),
     /// Tap a HID key while retaining modifiers between repetitions.
     TapKey {
@@ -53,18 +49,20 @@ pub enum StickyKeyEffect {
 /// Parameters for a sticky-key action.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct StickyKeyAction {
     pub effect: StickyKeyEffect,
-    /// Profile-table index. `u8::MAX` selects the default Sticky Key profile.
+    /// Profile-table index. `u8::MAX` selects the default sticky-key profile.
     pub profile: u8,
 }
 
 /// A single basic action that a keyboard can execute.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "rmk_protocol", derive(Schema))]
 #[non_exhaustive]
+#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub enum Action {
     /// Default action, no action.
     No,
@@ -114,10 +112,12 @@ pub enum Action {
     /// sent to the host as a vendor HID report.
     #[cfg(feature = "steno")]
     Steno(StenoKey),
+    /// Reserved so later variants keep identical postcard discriminants when
+    /// the `steno` feature is disabled.
+    #[cfg(not(feature = "steno"))]
+    #[doc(hidden)]
+    ReservedSteno,
     /// Configurable sticky modifier, layer, or tap-key behavior.
-    ///
-    /// This variant is appended after the pre-existing action variants to
-    /// preserve their serialized discriminants.
     StickyKey(StickyKeyAction),
 }
 
@@ -126,7 +126,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn sticky_key_action_profile_round_trips() {
+    fn sticky_key_round_trips_with_a_stable_wire_slot() {
         let action = Action::StickyKey(StickyKeyAction {
             effect: StickyKeyEffect::TapKey {
                 key: HidKeyCode::Tab,
@@ -136,21 +136,7 @@ mod tests {
         });
         let mut bytes = [0; 32];
         let encoded = postcard::to_slice(&action, &mut bytes).unwrap();
-        let decoded: Action = postcard::from_bytes(encoded).unwrap();
-
-        assert_eq!(decoded, action);
-    }
-
-    #[test]
-    fn existing_action_discriminants_remain_stable() {
-        fn discriminant(action: Action) -> u8 {
-            let mut bytes = [0; 32];
-            postcard::to_slice(&action, &mut bytes).unwrap()[0]
-        }
-
-        assert_eq!(discriminant(Action::No), 0);
-        assert_eq!(discriminant(Action::OneShotLayer(1)), 13);
-        assert_eq!(discriminant(Action::OneShotModifier(ModifierCombination::LSHIFT)), 14);
-        assert_eq!(discriminant(Action::PersistentDefaultLayer(1)), 20);
+        assert_eq!(encoded[0], 22);
+        assert_eq!(postcard::from_bytes::<Action>(encoded).unwrap(), action);
     }
 }

@@ -1,0 +1,568 @@
+# Home row mods (HRM).
+#
+# For HRM, `enable_flow_tap` and `unilateral_tap` are enabled and
+# `prior_idle_time` is considered.
+#
+# The morse fixture is the shared split board's home row, split across the
+# halves so the hands differ: A@(1,0) and MT(B, LShift)@(1,1) on the left,
+# MT(C, LGui)@(1,7), LT(1, D)@(1,8) and MT(E, LAlt)@(1,9) on the right, backed
+# on layer 1 by Kp1..Kp5.
+#
+# HRM keys as combo members live in `morse_combo_hrm.toml`.
+
+keyboard = "boards/split.toml"
+
+[behavior.morse]
+enable_flow_tap = true
+prior_idle_time = "120ms"
+unilateral_tap = true
+permissive_hold = true
+
+[[test]]
+name = "mt_1"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { tap = { pos = [1, 0], duration = 10 } },
+  { release = [1, 1] },
+]
+expect = [["B"], ["B", "A"], ["B"], []]
+
+[[test]]
+name = "mt_1_1"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { tap = { pos = [1, 8], duration = 10 } },
+  { release = [1, 1] },
+]
+expect = [["LShift"], ["LShift", "D"], ["LShift"], []]
+
+[[test]]
+name = "mt_2"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { press = [1, 0] },  # Press A -> unilateral tap
+  { release = [1, 1] },
+  { release = [1, 0] },
+]
+expect = [["B"], ["B", "A"], ["A"], []]
+
+[[test]]
+name = "mt_2_1"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { press = [1, 8] },  # Press LT(1, D)
+  { release = [1, 1] },
+  { release = [1, 8] },
+]
+expect = [["B"], [], ["D"], []]
+
+[[test]]
+name = "mt_2_2"
+steps = [
+  { delay = 150 },
+  { press = [1, 7] },  # Press MT(C, LGui)
+  { press = [1, 8] },  # Press LT(1, D)
+  { release = [1, 7] },
+  { release = [1, 8] },
+]
+expect = [["C"], [], ["D"], []]
+
+[[test]]
+name = "mt_timeout_1"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { tap = { pos = [1, 0], duration = 260 } },
+  { release = [1, 1] },
+]
+expect = [["LShift"], ["LShift", "A"], ["LShift"], []]
+
+[[test]]
+name = "mt_timeout_1_1"
+steps = [
+  { delay = 150 },
+  { press = [1, 7] },  # Press MT(C, LGui)
+  { tap = { pos = [1, 8], duration = 260 } },
+  { release = [1, 7] },
+]
+expect = [["LGui"], []]
+
+[[test]]
+name = "mt_timeout_2"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { press = [1, 0] },    # Press A
+  { delay = 260 },
+  { release = [1, 1] },  # Release MT after timeout
+  { release = [1, 0] },
+]
+expect = [["LShift"], ["LShift", "A"], ["A"], []]
+
+[[test]]
+name = "mt_timeout_2_1"
+steps = [
+  { delay = 150 },
+  { press = [1, 7] },  # Press MT(C, LGui)
+  { press = [1, 8] },  # Press LT(1, D)
+  { delay = 260 },
+  { release = [1, 7] },
+  { release = [1, 8] },
+]
+expect = [["LGui"], []]
+
+[[test]]
+name = "mt_timeout_3"
+steps = [
+  { delay = 150 },
+  { press = [1, 0] },  # Press A
+  { press = [1, 1] },  # Press MT(B, LShift) -> flow tap
+  { delay = 260 },
+  { release = [1, 0] },
+  { release = [1, 1] },
+]
+expect = [["A"], ["A", "B"], ["B"], []]
+
+[[test]]
+name = "mt_timeout_4"
+steps = [
+  { delay = 150 },
+  { press = [1, 0] },  # Press A
+  { tap = { pos = [1, 1], duration = 260 } },
+  { release = [1, 0] },
+]
+expect = [["A"], ["A", "B"], ["A"], []]
+
+[[test]]
+name = "mt_timeout_5"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 0], duration = 10 } },
+  { tap = { pos = [1, 1], duration = 260 } },
+]
+expect = [["A"], [], ["B"], []]
+
+[[test]]
+name = "mt_timeout_8"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { tap = { pos = [1, 0], duration = 10 } },
+  { delay = 260 },
+  { release = [1, 1] },
+]
+expect = [["B"], ["B", "A"], ["B"], []]
+
+[[test]]
+name = "mt_timeout_8_1"
+steps = [
+  { delay = 150 },
+  { press = [1, 7] },  # Press MT(C, LGui)
+  { tap = { pos = [1, 0], duration = 10 } },
+  { delay = 260 },
+  { release = [1, 7] },
+]
+expect = [["LGui"], ["LGui", "A"], ["LGui"], []]
+
+[[test]]
+name = "mt_timeout_9"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { delay = 260 },
+  { tap = { pos = [1, 0], duration = 10 } },
+  { release = [1, 1] },
+]
+expect = [["LShift"], ["LShift", "A"], ["LShift"], []]
+
+[[test]]
+name = "mt_timeout_10"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { delay = 260 },
+  { press = [1, 0] },  # Press A after timeout
+  { release = [1, 1] },
+  { release = [1, 0] },
+]
+expect = [["LShift"], ["LShift", "A"], ["A"], []]
+
+[[test]]
+name = "lt_1"
+steps = [
+  { delay = 150 },
+  { press = [1, 8] },  # Press LT(1, D)
+  { tap = { pos = [1, 0], duration = 10 } },
+  { release = [1, 8] },
+]
+expect = [["Kp1"], []]
+
+[[test]]
+name = "lt_2"
+steps = [
+  { delay = 150 },
+  { press = [1, 8] },  # Press LT(1, D)
+  { press = [1, 0] },  # Press A
+  { release = [1, 8] },
+  { release = [1, 0] },
+]
+expect = [["D"], ["D", "A"], ["A"], []]
+
+[[test]]
+name = "lt_timeout_1"
+steps = [
+  { delay = 150 },
+  { press = [1, 8] },  # Press LT(1, D)
+  { tap = { pos = [1, 0], duration = 260 } },
+  { release = [1, 8] },
+]
+expect = [["Kp1"], []]
+
+[[test]]
+name = "lt_timeout_2"
+steps = [
+  { delay = 150 },
+  { press = [1, 8] },    # Press LT(1, D)
+  { press = [1, 0] },    # Press A
+  { delay = 260 },
+  { release = [1, 8] },  # Release LT after timeout -> Kp1 on layer 1
+  { release = [1, 0] },
+]
+expect = [["Kp1"], []]
+
+[[test]]
+name = "lt_timeout_3"
+steps = [
+  { delay = 150 },
+  { press = [1, 0] },  # Press A
+  { press = [1, 8] },  # Press LT(1, D) -> flow tap
+  { delay = 260 },
+  { release = [1, 0] },
+  { release = [1, 8] },
+]
+expect = [["A"], ["A", "D"], ["D"], []]
+
+[[test]]
+name = "lt_timeout_4"
+steps = [
+  { delay = 150 },
+  { press = [1, 0] },  # Press A
+  { tap = { pos = [1, 8], duration = 260 } },
+  { release = [1, 0] },
+]
+expect = [["A"], ["A", "D"], ["A"], []]
+
+[[test]]
+name = "lt_timeout_5"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 0], duration = 10 } },
+  { tap = { pos = [1, 8], duration = 260 } },
+]
+expect = [["A"], [], ["D"], []]
+
+[[test]]
+name = "lt_timeout_5_1"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 0], duration = 200 } },
+  { tap = { pos = [1, 8], duration = 260 } },
+]
+expect = [["A"], []]
+
+[[test]]
+name = "lt_timeout_6"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 8], duration = 270 } },
+  { tap = { pos = [1, 0], duration = 10 } },
+]
+expect = [["A"], []]
+
+[[test]]
+name = "lt_timeout_9"
+steps = [
+  { delay = 150 },
+  { press = [1, 8] },  # Press LT(1, D)
+  { delay = 260 },
+  { tap = { pos = [1, 0], duration = 10 } },
+  { release = [1, 8] },
+]
+expect = [["Kp1"], []]
+
+[[test]]
+name = "lt_timeout_10"
+steps = [
+  { delay = 150 },
+  { press = [1, 8] },  # Press LT(1, D)
+  { delay = 260 },
+  { press = [1, 0] },  # Press A -> Kp1 on layer 1
+  { release = [1, 8] },
+  { release = [1, 0] },
+]
+expect = [["Kp1"], []]
+[[test]]
+name = "multi_tap"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 0], duration = 120 } },
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { delay = 60 },
+  { press = [1, 7] },  # Press MT(C, LGui)
+  { delay = 60 },
+  { release = [1, 1] },
+  { delay = 60 },
+  { release = [1, 7] },
+]
+expect = [["A"], [], ["B"], [], ["C"], []]
+
+[[test]]
+name = "multi_tap_2"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 0], duration = 10 } },
+  { press = [1, 1] },  # Press MT(B, LShift) -> flow tap
+  { delay = 200 },
+  { press = [1, 7] },  # Press MT(C, LGui)
+  { delay = 60 },
+  { release = [1, 1] },
+  { delay = 60 },
+  { release = [1, 7] },
+]
+expect = [["A"], [], ["B"], [], ["C"], []]
+
+[[test]]
+name = "layer_tap"
+steps = [
+  { delay = 150 },
+  { press = [1, 8] },  # Press LT(1, D)
+  { tap = { pos = [1, 1], duration = 100 } },
+  { release = [1, 8] },
+  { tap = { pos = [1, 0], duration = 10 } },
+  { press = [1, 8] },  # Press LT(1, D) -> flow tap after A
+  { delay = 50 },
+  { tap = { pos = [1, 1], duration = 100 } },
+  { release = [1, 8] },
+]
+expect = [["Kp2"], [], ["A"], [], ["D"], ["D", "B"], ["D"], []]
+
+[[test]]
+name = "timeout_and_release_with_other_morse_key"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { delay = 200 },
+  { tap = { pos = [1, 7], duration = 100 } },
+  { delay = 100 },
+  { release = [1, 1] },
+]
+expect = [["LShift"], ["LShift", "C"], ["LShift"], []]
+
+[[test]]
+name = "rolling_release_order"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 30 },
+  { press = [1, 7] },    # Press MT(C, LGui)
+  { delay = 30 },
+  { press = [1, 0] },    # Press A
+  { delay = 50 },
+  { release = [1, 1] },  # Released B resolves as tap first
+  { delay = 100 },
+  { release = [1, 7] },
+  { delay = 100 },
+  { release = [1, 0] },
+]
+expect = [["B"], ["B", "A"], ["A"], ["C", "A"], ["A"], []]
+
+[[test]]
+name = "rolling_release_order_2"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 30 },
+  { press = [1, 7] },    # Press MT(C, LGui)
+  { delay = 30 },
+  { press = [1, 0] },    # Press A
+  { delay = 100 },
+  { release = [1, 7] },  # Release C -> permissive hold of MT(B, LShift)
+  { delay = 50 },
+  { release = [1, 1] },
+  { delay = 100 },
+  { release = [1, 0] },
+]
+expect = [["LShift"], ["LShift", "C"], ["LShift", "C", "A"], ["LShift", "A"], ["A"], []]
+
+[[test]]
+name = "rolling_release_order_3"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 30 },
+  { press = [1, 7] },    # Press MT(C, LGui)
+  { delay = 30 },
+  { press = [1, 0] },    # Press A
+  { delay = 100 },
+  { release = [1, 7] },  # Release C -> permissive hold of MT(B, LShift)
+  { delay = 100 },
+  { release = [1, 0] },  # Release A
+  { delay = 50 },
+  { release = [1, 1] },  # Release B
+]
+expect = [["LShift"], ["LShift", "C"], ["LShift", "C", "A"], ["LShift", "A"], ["LShift"], []]
+
+[[test]]
+name = "multiple_permissive_hold"
+steps = [
+  { delay = 150 },
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { delay = 30 },
+  { press = [1, 7] },  # Press MT(C, LGui)
+  { delay = 30 },
+  { tap = { pos = [1, 0], duration = 100 } },
+  { delay = 50 },
+  { release = [1, 1] },
+  { delay = 100 },
+  { release = [1, 7] },
+]
+expect = [["B"], ["LGui", "B"], ["LGui", "B", "A"], ["LGui", "B"], ["LGui"], []]
+
+[[test]]
+name = "complex_rolling"
+steps = [
+  { delay = 160 },
+  { press = [1, 0] },    # Press A
+  { press = [1, 1] },    # Press MT(B, LShift) -> flow tap
+  { release = [1, 0] },  # Release A
+  { delay = 30 },
+  { press = [1, 8] },    # Press LT(1, D) -> flow tap
+  { delay = 30 },
+  { press = [1, 7] },    # Press MT(C, LGui) -> flow tap
+  { delay = 100 },
+  { release = [1, 8] },  # Release D
+  { delay = 50 },
+  { release = [1, 1] },  # Release B
+  { release = [1, 7] },  # Release C
+]
+expect = [["A"], ["A", "B"], ["B"], ["D", "B"], ["D", "B", "C"], ["B", "C"], ["C"], []]
+
+[[test]]
+name = "flow_tap"
+steps = [
+  { delay = 150 },
+  { tap = { pos = [1, 0], duration = 30 } },
+  { delay = 20 },
+  { press = [1, 1] },  # Press MT(B, LShift) -> flow tap
+  { press = [1, 7] },  # Press MT(C, LGui) -> flow tap
+  { delay = 40 },
+  { release = [1, 1] },
+  { release = [1, 7] },
+]
+expect = [["A"], [], ["B"], ["B", "C"], ["C"], []]
+
+# Ref: https://github.com/HaoboGu/rmk/pull/496
+[[test]]
+name = "previous_rolling_keypress"
+steps = [
+  { delay = 150 },
+  { press = [1, 0] },    # Press A
+  { delay = 150 },
+  { press = [1, 8] },    # Press LT(1, D)
+  { delay = 30 },
+  { release = [1, 0] },  # Release A
+  { delay = 150 },
+  { tap = { pos = [1, 1], duration = 40 } },
+  { release = [1, 8] },
+]
+expect = [["A"], [], ["Kp2"], []]
+
+[[test]]
+name = "multi_hold_cross_hand"
+steps = [
+  { delay = 150 },
+  { press = [1, 7] },  # Press MT(C, LGui)
+  { delay = 150 },
+  { press = [1, 8] },  # Press LT(1, D)
+  { tap = { pos = [1, 0], duration = 10 } },
+  { delay = 40 },
+  { release = [1, 7] },
+  { release = [1, 8] },
+]
+expect = [["LGui"], ["LGui", "Kp1"], ["LGui"], []]
+
+[[test]]
+name = "flow_tap_misorder"
+steps = [
+  { delay = 150 },
+  { press = [1, 7] },  # Press MT(C, LGui)
+  { delay = 120 },
+  { press = [1, 8] },  # Press LT(1, D)
+  { release = [1, 7] },
+  { press = [1, 9] },  # Press MT(E, LAlt) -> flow tap
+  { release = [1, 8] },
+  { release = [1, 9] },
+]
+expect = [["C"], [], ["D"], ["D", "E"], ["E"], []]
+
+[[test]]
+name = "mt_lt_combination"
+steps = [
+  { delay = 130 },
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { delay = 130 },
+  { press = [1, 8] },  # Press LT(1, D)
+  { delay = 130 },
+  { tap = { pos = [1, 0], duration = 130 } },
+  { delay = 200 },
+  { release = [1, 8] },
+  { release = [1, 1] },
+]
+expect = [["LShift"], ["LShift", "Kp1"], ["LShift"], []]
+
+[[test]]
+name = "lt_opposite_hand_roll_permissive_hold"
+steps = [
+  { delay = 130 },
+  { press = [1, 8] },  # Press LT(1, D)
+  { delay = 20 },
+  { press = [1, 0] },  # Press Kp1 on layer 1
+  { delay = 20 },
+  { press = [1, 1] },  # Press Kp2 on layer 1
+  { delay = 20 },
+  { release = [1, 0] },
+  { delay = 20 },
+  { release = [1, 1] },
+  { release = [1, 8] },
+]
+expect = [["Kp1"], [], ["Kp2"], []]
+
+[[test]]
+name = "lt_opposite_hand_roll_permissive_hold_early_modifier_release"
+steps = [
+  { delay = 130 },
+  { press = [1, 8] },    # Press LT(1, D)
+  { delay = 20 },
+  { press = [1, 0] },    # Press Kp1 on layer 1
+  { delay = 20 },
+  { press = [1, 1] },    # Press Kp2 on layer 1
+  { delay = 20 },
+  { release = [1, 0] },
+  { release = [1, 8] },  # Release LT before the second key
+  { delay = 20 },
+  { release = [1, 1] },  # Release B
+]
+expect = [["Kp1"], [], ["B"], []]
+[[test]]
+name = "normal_mode_same_hand_roll_order"
+behavior.morse = { enable_flow_tap = false, permissive_hold = false, normal_mode = true }
+steps = [
+  { press = [1, 1] },  # Press MT(B, LShift) — HRM, Left hand
+  { tap = { pos = [1, 0], duration = 10 } },
+  { release = [1, 1] },
+]
+expect = [["B"], ["B", "A"], ["B"], []]

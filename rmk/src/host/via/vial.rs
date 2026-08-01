@@ -13,7 +13,7 @@ use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 pub(crate) async fn process_vial<'a>(
     report: &mut ViaReport,
     vial_config: &VialConfig<'a>,
-    #[cfg(feature = "vial_lock")] locker: &mut super::vial_lock::VialLock<'_>,
+    #[cfg(feature = "host_lock")] locker: &crate::host::lock::HostLock<'_>,
     ctx: &KeyboardContext<'_>,
 ) {
     // report.output_data[0] == 0xFE -> vial commands
@@ -51,7 +51,7 @@ pub(crate) async fn process_vial<'a>(
         VialCommand::GetUnlockStatus => {
             // Reset all data to 0xFF(it's required!)
             report.input_data.fill(0xFF);
-            #[cfg(feature = "vial_lock")]
+            #[cfg(feature = "host_lock")]
             {
                 // Unlocked
                 report.input_data[0] = locker.is_unlocked() as u8;
@@ -63,7 +63,7 @@ pub(crate) async fn process_vial<'a>(
                     report.input_data[3 + idx * 2] = *col;
                 }
             }
-            #[cfg(not(feature = "vial_lock"))]
+            #[cfg(not(feature = "host_lock"))]
             {
                 // Unlocked
                 report.input_data[0] = 1;
@@ -73,26 +73,26 @@ pub(crate) async fn process_vial<'a>(
             }
         }
         VialCommand::UnlockStart => {
-            #[cfg(feature = "vial_lock")]
+            #[cfg(feature = "host_lock")]
             locker.unlocking();
-            #[cfg(not(feature = "vial_lock"))]
+            #[cfg(not(feature = "host_lock"))]
             error!("Vial lock feature is not enabled");
         }
         VialCommand::UnlockPoll => {
-            #[cfg(feature = "vial_lock")]
+            #[cfg(feature = "host_lock")]
             {
                 locker.unlocking();
                 report.input_data[0] = locker.is_unlocked() as u8;
                 report.input_data[1] = locker.is_unlocking() as u8;
                 report.input_data[2] = locker.check_unlock();
             }
-            #[cfg(not(feature = "vial_lock"))]
+            #[cfg(not(feature = "host_lock"))]
             error!("Vial lock feature is not enabled");
         }
         VialCommand::Lock => {
-            #[cfg(feature = "vial_lock")]
+            #[cfg(feature = "host_lock")]
             locker.lock();
-            #[cfg(not(feature = "vial_lock"))]
+            #[cfg(not(feature = "host_lock"))]
             error!("Vial lock feature is not enabled");
         }
         VialCommand::BehaviorSettingQuery => {
@@ -126,8 +126,8 @@ pub(crate) async fn process_vial<'a>(
                     LittleEndian::write_u16(&mut report.input_data[1..3], tapping_term);
                 }
                 SettingKey::OneShotTimeout => {
-                    let sticky_key_timeout = ctx.sticky_key_timeout().as_millis() as u16;
-                    LittleEndian::write_u16(&mut report.input_data[1..3], sticky_key_timeout);
+                    let one_shot_timeout = ctx.one_shot_timeout().as_millis() as u16;
+                    LittleEndian::write_u16(&mut report.input_data[1..3], one_shot_timeout);
                 }
                 SettingKey::TapInterval => {
                     let tap_interval = ctx.tap_interval();
@@ -188,7 +188,7 @@ pub(crate) async fn process_vial<'a>(
                 }
                 SettingKey::OneShotTimeout => {
                     let timeout_time = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
-                    ctx.set_sticky_key_timeout(timeout_time).await;
+                    ctx.set_one_shot_timeout(timeout_time).await;
                 }
                 SettingKey::TapInterval => {
                     let tap_interval = u16::from_le_bytes([report.output_data[4], report.output_data[5]]);
@@ -417,13 +417,8 @@ pub(crate) async fn process_vial<'a>(
             );
             let keycode = BigEndian::read_u16(&report.output_data[5..7]);
             let action = from_via_keycode(keycode);
-            if clockwise == 1 {
-                info!("Setting clockwise action: {:?}", action);
-                ctx.set_encoder_clockwise(layer, index, action).await;
-            } else {
-                info!("Setting counter-clockwise action: {:?}", action);
-                ctx.set_encoder_counter_clockwise(layer, index, action).await;
-            }
+            info!("Setting encoder action (clockwise: {}): {:?}", clockwise, action);
+            ctx.set_encoder_direction(layer, index, clockwise == 1, action).await;
         }
         _ => (),
     }

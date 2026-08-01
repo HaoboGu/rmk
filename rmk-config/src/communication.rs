@@ -76,8 +76,22 @@ impl CommunicationConfig {
 impl KeyboardTomlConfig {
     pub(crate) fn get_communication_config(&self) -> Result<CommunicationConfig, String> {
         let usb_enabled = self.keyboard.clone().unwrap_or_default().usb_enable.unwrap_or(false);
-        let chip = self.get_chip_model().unwrap();
-        let usb_info = if usb_enabled { get_usb_info(&chip.chip) } else { None };
+        let chip = self.get_chip_model()?;
+        // Distinguish "USB not enabled" from "chip unknown to the USB map":
+        // silently dropping USB here would misreport the user's config as the cause.
+        let usb_info = if usb_enabled {
+            match get_usb_info(&chip.chip) {
+                Some(info) => Some(info),
+                None => {
+                    return Err(format!(
+                        "`usb_enable = true`, but chip \"{}\" has no USB mapping in RMK — set `usb_enable = false` in [keyboard], or report the missing chip at https://github.com/HaoboGu/rmk/issues",
+                        chip.chip
+                    ));
+                }
+            }
+        } else {
+            None
+        };
         let ble_config = self.ble.clone();
 
         match (usb_info, ble_config) {
@@ -89,14 +103,11 @@ impl KeyboardTomlConfig {
                     Ok(CommunicationConfig::Both(usb_info, ble_config))
                 }
             }
-            (None, Some(c)) => {
-                if !c.enabled {
-                    Err("You must enable at least one of usb or ble".to_string())
-                } else {
-                    Ok(CommunicationConfig::Ble(c))
-                }
-            }
-            _ => Err("You must enable at least one of usb or ble".to_string()),
+            (None, Some(c)) if c.enabled => Ok(CommunicationConfig::Ble(c)),
+            _ => Err(
+                "keyboard.toml: no transport is enabled — set `usb_enable = true` in [keyboard], or `enabled = true` in [ble]"
+                    .to_string(),
+            ),
         }
     }
 }

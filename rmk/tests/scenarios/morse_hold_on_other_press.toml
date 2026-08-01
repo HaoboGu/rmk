@@ -1,0 +1,297 @@
+# Tap-hold in HoldOnOtherPress mode.
+#
+# The morse fixture is the shared split board's home row: A@(1,0),
+# MT(B, LShift)@(1,1), MT(C, LGui)@(1,7), LT(1, D)@(1,8), backed on layer 1 by
+# Kp1, Kp2, Kp3, Kp4. The per-key profile tests use the board's profile cells
+# instead: TD(0)@(1,2), LT(1, D, p0)@(3,5), MT(B, LShift, p0)@(3,6),
+# MT(B, LShift, p1)@(3,7) (layer 1: Kp1) and A@(3,2).
+
+keyboard = "boards/split.toml"
+
+[behavior.morse]
+unilateral_tap = false
+hold_on_other_press = true
+
+[[test]]
+name = "mt_1"
+steps = [
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { tap = { pos = [1, 0], duration = 10 } },
+  { release = [1, 1] },
+]
+expect = [["LShift"], ["LShift", "A"], ["LShift"], []]
+
+[[test]]
+name = "mt_2"
+steps = [
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { press = [1, 0] },  # Press A -> hold on other press
+  { release = [1, 1] },
+  { release = [1, 0] },
+]
+expect = [["LShift"], ["LShift", "A"], ["A"], []]
+
+[[test]]
+name = "mt_4"
+steps = [
+  { press = [1, 0] },  # Press A
+  { tap = { pos = [1, 1], duration = 10 } },
+  { release = [1, 0] },
+]
+expect = [["A"], ["A", "B"], ["A"], []]
+
+[[test]]
+name = "mt_timeout_3"
+steps = [
+  { press = [1, 0] },    # Press A
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 260 },
+  { release = [1, 0] },  # Release A
+  { release = [1, 1] },
+]
+expect = [["A"], ["LShift", "A"], ["LShift"], []]
+
+[[test]]
+name = "lt_2"
+steps = [
+  { press = [1, 8] },  # Press LT(1, D)
+  { press = [1, 0] },  # Press A -> hold on other press: Kp1 on layer 1
+  { release = [1, 8] },
+  { release = [1, 0] },
+]
+expect = [["Kp1"], []]
+
+[[test]]
+name = "lt_4"
+steps = [
+  { press = [1, 0] },  # Press A
+  { tap = { pos = [1, 8], duration = 10 } },
+  { release = [1, 0] },
+]
+expect = [["A"], ["A", "D"], ["A"], []]
+
+[[test]]
+name = "lt_timeout_6"
+steps = [
+  { tap = { pos = [1, 8], duration = 270 } },
+  { tap = { pos = [1, 0], duration = 10 } },
+]
+expect = [["A"], []]
+
+[[test]]
+name = "lt_timeout_9"
+steps = [
+  { press = [1, 8] },  # Press LT(1, D)
+  { delay = 260 },
+  { tap = { pos = [1, 0], duration = 10 } },
+  { release = [1, 8] },
+]
+expect = [["Kp1"], []]
+[[test]]
+name = "multi_tap"
+steps = [
+  { tap = { pos = [1, 0], duration = 100 } },
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { delay = 60 },
+  { press = [1, 7] },  # Press MT(C, LGui) -> hold on other press
+  { delay = 60 },
+  { release = [1, 1] },
+  { delay = 60 },
+  { release = [1, 7] },
+]
+expect = [["A"], [], ["LShift"], [], ["C"], []]
+
+[[test]]
+name = "layer_tap"
+steps = [
+  { press = [1, 8] },  # Press LT(1, D)
+  { tap = { pos = [1, 1], duration = 100 } },
+  { release = [1, 8] },
+  { tap = { pos = [1, 0], duration = 10 } },
+  { press = [1, 8] },  # Press LT(1, D)
+  { tap = { pos = [1, 1], duration = 100 } },
+  { release = [1, 8] },
+]
+expect = [["Kp2"], [], ["A"], [], ["Kp2"], []]
+
+[[test]]
+name = "timeout_and_release_with_other_morse_key"
+steps = [
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { delay = 200 },
+  { tap = { pos = [1, 7], duration = 100 } },
+  { delay = 100 },
+  { release = [1, 1] },
+]
+expect = [["LShift"], ["LShift", "C"], ["LShift"], []]
+
+[[test]]
+name = "rolling_release_order"
+steps = [
+  { press = [1, 1] },  # Press MT(B, LShift)
+  { delay = 30 },
+  { press = [1, 7] },  # Press MT(C, LGui)
+  { delay = 30 },
+  { press = [1, 0] },  # Press A -> triggers both MTs
+  { delay = 50 },
+  { release = [1, 1] },
+  { delay = 100 },
+  { release = [1, 7] },
+  { delay = 100 },
+  { release = [1, 0] },
+]
+expect = [["LShift"], ["LShift", "LGui"], ["LShift", "LGui", "A"], ["LGui", "A"], ["A"], []]
+
+[[test]]
+name = "rolling_release_order_3"
+steps = [
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 30 },
+  { press = [1, 7] },    # Press MT(C, LGui)
+  { delay = 30 },
+  { press = [1, 0] },    # Press A -> triggers both MTs
+  { delay = 100 },
+  { release = [1, 7] },  # Release C
+  { delay = 100 },
+  { release = [1, 0] },  # Release A
+  { delay = 50 },
+  { release = [1, 1] },  # Release B
+]
+expect = [["LShift"], ["LShift", "LGui"], ["LShift", "LGui", "A"], ["LShift", "A"], ["LShift"], []]
+
+[[test]]
+name = "multiple_mt_triggered"
+steps = [
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 30 },
+  { press = [1, 7] },    # Press MT(C, LGui)
+  { delay = 30 },
+  { tap = { pos = [1, 0], duration = 100 } },
+  { delay = 50 },
+  { release = [1, 1] },  # Release B
+  { delay = 100 },
+  { release = [1, 7] },  # Release C
+]
+expect = [["LShift"], ["LShift", "LGui"], ["LShift", "LGui", "A"], ["LShift", "LGui"], ["LGui"], []]
+
+[[test]]
+name = "complex_rolling"
+steps = [
+  { delay = 30 },
+  { press = [1, 0] },    # Press A
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { release = [1, 0] },  # Release A
+  { delay = 30 },
+  { press = [1, 8] },    # Press LT(1, D)
+  { delay = 30 },
+  { press = [1, 7] },    # Press MT(C, LGui) -> Kp3 on layer 1
+  { delay = 100 },
+  { release = [1, 8] },  # Release D
+  { delay = 50 },
+  { release = [1, 1] },  # Release B
+  { release = [1, 7] },  # Release C
+]
+expect = [["A"], [], ["LShift"], ["LShift", "Kp3"], ["Kp3"], []]
+
+# The per-key profile's `enable_flow_tap` wins over the global setting, both
+# for a tap-hold key in the keymap and for a morse key (the two below).
+[[test]]
+name = "profile_flow_tap_true_overrides_global_false"
+behavior.morse = {
+  enable_flow_tap = false,
+  prior_idle_time = "120ms",
+  profiles = {
+    p0 = {
+      unilateral_tap = false,
+      hold_on_other_press = true,
+      hold_timeout = "250ms",
+      gap_timeout = "250ms",
+      enable_flow_tap = true
+    }
+  }
+}
+steps = [
+  { delay = 30 },
+  { tap = { pos = [1, 0], duration = 30 } },
+  { delay = 20 },
+  { press = [3, 6] },  # Press MT(B, LShift) with flow tap enabled by p0
+  { tap = { pos = [1, 0], duration = 10 } },
+  { release = [3, 6] },
+]
+expect = [["A"], [], ["B"], ["B", "A"], ["B"], []]
+
+[[test]]
+name = "morse_profile_flow_tap_false_overrides_global_true"
+behavior.morse = {
+  enable_flow_tap = true,
+  prior_idle_time = "120ms",
+  profiles = {
+    p0 = {
+      unilateral_tap = false,
+      hold_on_other_press = true,
+      hold_timeout = "250ms",
+      gap_timeout = "250ms",
+      enable_flow_tap = false
+    }
+  },
+  morses = [{ profile = "p0", tap = "B", hold = "LShift" }]
+}
+steps = [
+  { delay = 30 },
+  { tap = { pos = [1, 0], duration = 30 } },
+  { delay = 20 },
+  { press = [1, 2] },  # Press TD(0) with flow tap disabled by p0
+  { tap = { pos = [1, 0], duration = 10 } },
+  { release = [1, 2] },
+]
+expect = [["A"], [], ["LShift"], ["LShift", "A"], ["LShift"], []]
+
+# The held LT(1, D) changes the layer under the next key, so its flow-tap
+# decision must be re-taken against the key it actually resolves to.
+[[test]]
+name = "flow_tap_rechecks_current_key_after_held_key_changes_layer"
+behavior.morse = {
+  enable_flow_tap = false,
+  prior_idle_time = "120ms",
+  profiles = {
+    p0 = {
+      unilateral_tap = false,
+      hold_on_other_press = true,
+      hold_timeout = "250ms",
+      gap_timeout = "250ms",
+      enable_flow_tap = false
+    },
+    p1 = {
+      unilateral_tap = false,
+      hold_on_other_press = true,
+      hold_timeout = "250ms",
+      gap_timeout = "250ms",
+      enable_flow_tap = true
+    }
+  }
+}
+steps = [
+  { delay = 30 },
+  { tap = { pos = [3, 2], duration = 30 } },
+  { delay = 20 },
+  { press = [3, 5] },  # Press LT(1, D), flow tap disabled by p0
+  { tap = { pos = [3, 7], duration = 10 } },
+  { release = [3, 5] },
+]
+expect = [["A"], [], ["Kp1"], []]
+
+# Ref: https://github.com/HaoboGu/rmk/pull/496
+[[test]]
+name = "previous_rolling_keypress"
+steps = [
+  { delay = 30 },
+  { press = [1, 0] },    # Press A
+  { delay = 20 },
+  { press = [1, 8] },    # Press LT(1, D)
+  { delay = 30 },
+  { release = [1, 0] },  # Release A
+  { delay = 20 },
+  { tap = { pos = [1, 1], duration = 40 } },
+  { release = [1, 8] },
+]
+expect = [["A"], [], ["Kp2"], []]

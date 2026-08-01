@@ -1,0 +1,102 @@
+# Session and identity endpoints. `GetVersion` and `GetCapabilities` are what a
+# host reads before anything else, so their payloads are pinned exactly.
+features = ["rynk"]
+
+[layout]
+rows = 1
+cols = 2
+map = """
+(0,0)  (0,1)
+"""
+
+[[keymap.layer]]
+keys = "A  No"
+
+# `BootloaderJump` and `StorageReset` are gated unconditionally, so the file
+# carries a challenge the scenarios can complete.
+[host]
+unlock_keys = [[0, 1]]
+
+[[test]]
+name = "version_is_the_frozen_handshake"
+steps = [
+  { rynk = { cmd = "GetVersion", reply = { major = 0, minor = 1 } } },
+]
+
+# Layout counts come from the live keymap; the rest are compile-time constants
+# and protocol limits. Pinned because every host sizes its transfers from them.
+[[test]]
+name = "capabilities_report_the_live_board"
+features = ["storage", "_ble", "split"]
+steps = [
+  { rynk = { cmd = "GetCapabilities", reply = {
+    num_layers = 1, num_rows = 1, num_cols = 2, num_encoders = 0,
+    max_combos = 8, max_combo_keys = 4, macro_space_size = 256,
+    max_morse = 8, max_patterns_per_key = 8, max_forks = 8,
+    storage_enabled = true, lighting_enabled = false,
+    is_split = true, num_split_peripherals = 1,
+    ble_enabled = true, num_ble_profiles = 3,
+    max_payload_size = 482, max_bulk_keys = 34, max_bulk_items = 5,
+    macro_chunk_size = 64, bulk_transfer_supported = true,
+  } } },
+]
+
+# `rmk_version` and `serial_number` carry the crate version, so a release bump
+# lands here. Updating the two literals is the whole fix.
+[[test]]
+name = "device_info_reports_the_identity"
+steps = [
+  { rynk = { cmd = "GetDeviceInfo", reply = { rmk_version = { major = 0, minor = 8, patch = 2 }, vendor_id = 19531, product_id = 17987, manufacturer = "RMK", product_name = "RMK Keyboard", serial_number = "rmk:0.8.2" } } },
+]
+
+[[test]]
+name = "layout_blob_pages_from_an_offset"
+steps = [
+  # The blob is rmk-config's compressed layout format, not rynk's; if its
+  # encoding changes, regenerate with
+  #   cargo expand --test integration | grep -A1 '.layout_blob('
+  { rynk = { cmd = "GetLayout", payload = 0, reply = { total_len = 42, bytes = [109, 200, 171, 13, 0, 32, 12, 69, 209, 87, 12, 99, 49, 11, 9, 160, 144, 224, 59, 90, 71, 107, 250, 145, 189, 201, 49, 23, 212, 215, 62, 243, 223, 215, 96, 141, 192, 201, 35, 64, 170, 175] } } },
+  # Past the end clamps to an empty page rather than erroring, which is how a
+  # host knows it has read the whole blob.
+  { rynk = { cmd = "GetLayout", payload = 42, reply = { total_len = 42, bytes = [] } } },
+  { rynk = { cmd = "GetLayout", payload = 999, reply = { total_len = 42, bytes = [] } } },
+]
+
+# Both reset paths are fire-and-forget on hardware but still answer here, so the
+# reply proves the handler ran rather than the frame being dropped.
+[[test]]
+name = "reboot_is_answered"
+steps = [
+  { rynk = { cmd = "Reboot" } },
+]
+
+[[test]]
+name = "bootloader_jump_needs_an_unlock"
+steps = [
+  { rynk = { cmd = "BootloaderJump", error = "Locked" } },
+  { press = [0, 1] },
+  { rynk = { cmd = "UnlockPoll", reply = { locked = false, unlocking = false, remaining_keys = 0, key_positions = [[0, 1]] } } },
+  { release = [0, 1] },
+  { rynk = { cmd = "BootloaderJump" } },
+]
+
+[[test]]
+name = "storage_reset_clears_the_whole_store"
+features = ["storage"]
+steps = [
+  { press = [0, 1] },
+  { rynk = { cmd = "UnlockPoll", reply = { locked = false, unlocking = false, remaining_keys = 0, key_positions = [[0, 1]] } } },
+  { release = [0, 1] },
+  { rynk = { cmd = "StorageReset", payload = "Full" } },
+]
+
+# Only the full reset is implemented; the partial one must say so rather than
+# silently doing nothing.
+[[test]]
+name = "layout_only_reset_is_unimplemented"
+steps = [
+  { press = [0, 1] },
+  { rynk = { cmd = "UnlockPoll", reply = { locked = false, unlocking = false, remaining_keys = 0, key_positions = [[0, 1]] } } },
+  { release = [0, 1] },
+  { rynk = { cmd = "StorageReset", payload = "LayoutOnly", error = "Unimplemented" } },
+]

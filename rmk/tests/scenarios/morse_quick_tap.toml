@@ -1,0 +1,193 @@
+# `quick_tap_timeout` — re-pressing a morse key within that window of its last
+# release fires the tap action immediately on press, so holding the key down
+# auto-repeats the tap instead of resolving to the hold action.
+#
+# The fixture is the shared split board's TD(0)@(1,2), whose morse table each
+# test replaces with the shape it needs, plus MT(B, LShift, p0)@(3,6) for the
+# mod-tap cases and a plain E@(1,4) as the intervening key. The board's `p0`
+# profile is empty, so a test that names it states the whole profile.
+#
+# Timings are spelled out throughout: every case is about where a press lands
+# relative to the quick-tap window, the 250 ms hold timeout, and the 250 ms gap.
+
+keyboard = "boards/split.toml"
+
+[behavior.morse]
+unilateral_tap = false
+enable_flow_tap = false
+hold_on_other_press = true
+hold_timeout = "250ms"
+gap_timeout = "250ms"
+
+# A double_tap continuation keeps the first release from resolving, so the key
+# waits in `Released(TAP)` and the re-press takes the quick-tap path from there.
+[[test]]
+name = "held_re_press_inside_window_fires_tap"
+behavior.morse = { quick_tap_timeout = "200ms", morses = [
+  { tap = "A", hold = "B", double_tap = "D" },
+] }
+steps = [
+  { tap = { pos = [1, 2], duration = 50 } },
+  { delay = 100 },       # re-press 100ms after release, inside the 200ms window
+  { press = [1, 2] },
+  { delay = 400 },       # held past the hold timeout
+  { release = [1, 2] },
+]
+expect = [["A"], []]
+
+# Control for the case above: the same input with the re-press moved past both
+# the quick-tap window and the gap timeout starts a fresh morse sequence, so
+# holding it resolves to the hold action.
+[[test]]
+name = "held_re_press_outside_window_fires_hold"
+behavior.morse = { quick_tap_timeout = "200ms", morses = [
+  { tap = "A", hold = "B", double_tap = "D" },
+] }
+steps = [
+  { tap = { pos = [1, 2], duration = 50 } },
+  { delay = 300 },       # past both the 200ms window and the 250ms gap
+  { press = [1, 2] },
+  { delay = 400 },
+  { release = [1, 2] },
+]
+expect = [["A"], [], ["B"], []]
+
+# Control for the feature as a whole: with `quick_tap_timeout` unset, the held
+# re-press must still resolve through the normal morse path to hold-after-tap.
+[[test]]
+name = "quick_tap_unset_keeps_hold_after_tap"
+behavior.morse = { morses = [
+  { tap = "A", hold = "B", hold_after_tap = "C", double_tap = "D" },
+] }
+steps = [
+  { tap = { pos = [1, 2], duration = 50 } },
+  { delay = 100 },
+  { press = [1, 2] },
+  { delay = 400 },
+  { release = [1, 2] },
+]
+expect = [["C"], []]
+
+# A mod-tap has no continuations, so its first release fires the tap and stashes
+# the key; the held re-press must then send the tap key rather than the modifier.
+[[test]]
+name = "mod_tap_re_press_fires_tap_not_modifier"
+behavior.morse = { profiles = { p0 = { quick_tap_timeout = "180ms" } } }
+steps = [
+  { tap = { pos = [3, 6], duration = 50 } },
+  { delay = 80 },
+  { press = [3, 6] },
+  { delay = 400 },
+  { release = [3, 6] },
+]
+expect = [["B"], [], ["B"], []]
+
+# A per-morse profile that sets the other timeouts but omits `quick_tap_timeout`
+# still picks the window up from the global default.
+[[test]]
+name = "quick_tap_falls_back_to_global_default"
+behavior.morse = {
+  quick_tap_timeout = "200ms",
+  profiles = { p0 = { unilateral_tap = false, hold_on_other_press = true, hold_timeout = "250ms", gap_timeout = "250ms" } },
+  morses = [{ profile = "p0", tap = "A", hold = "B", double_tap = "D" }]
+}
+steps = [
+  { tap = { pos = [1, 2], duration = 50 } },
+  { delay = 100 },
+  { press = [1, 2] },
+  { delay = 400 },
+  { release = [1, 2] },
+]
+expect = [["A"], []]
+
+# With the global default unset, the window comes from the morse's own profile.
+[[test]]
+name = "quick_tap_uses_per_morse_profile"
+behavior.morse = {
+  profiles = { p0 = { quick_tap_timeout = "150ms" } },
+  morses = [{ profile = "p0", tap = "A", hold = "B", double_tap = "D" }]
+}
+steps = [
+  { tap = { pos = [1, 2], duration = 50 } },
+  { delay = 80 },        # inside the profile's 150ms window
+  { press = [1, 2] },
+  { delay = 400 },
+  { release = [1, 2] },
+]
+expect = [["A"], []]
+
+# tap == hold_after_tap, so the first release fires the tap early and the key
+# waits in `EarlyFired` — reached here through `can_fire_early` rather than
+# through the stash. `can_fire_early` requires the hold continuation to carry the
+# tap's own action, so quick-tap and the normal path necessarily agree on the
+# keycode; what this pins is that they don't both fire it, and that the key does
+# not jam. `quick_tap_after_stashed_tap_fires_tap` is what proves quick-tap fires
+# at all from `EarlyFired`.
+[[test]]
+name = "early_fired_re_press_fires_tap_once"
+behavior.morse = { quick_tap_timeout = "200ms", morses = [
+  { tap = "Enter", hold = "B", hold_after_tap = "Enter" },
+] }
+steps = [
+  { tap = { pos = [1, 2], duration = 50 } },
+  { delay = 80 },
+  { press = [1, 2] },
+  { delay = 400 },
+  { release = [1, 2] },
+]
+expect = [["Enter"], [], ["Enter"], []]
+
+# tap and hold only: the first release predicts its final action, so it fires the
+# tap and stashes the key, and the held re-press fires the tap again — the hold
+# action never appears.
+[[test]]
+name = "quick_tap_after_stashed_tap_fires_tap"
+behavior.morse = { quick_tap_timeout = "200ms", morses = [{ tap = "A", hold = "B" }] }
+steps = [
+  { tap = { pos = [1, 2], duration = 50 } },
+  { delay = 100 },
+  { press = [1, 2] },
+  { delay = 400 },
+  { release = [1, 2] },
+]
+expect = [["A"], [], ["A"], []]
+
+# The quick-tap window is only honoured while the stashed entry survives: an
+# intervening key discards it, so a re-press still inside the window starts a
+# fresh sequence and holding it resolves to the hold action.
+[[test]]
+name = "intervening_key_drops_stash_so_hold_resolves"
+behavior.morse = { quick_tap_timeout = "200ms", morses = [{ tap = "A", hold = "B" }] }
+steps = [
+  { tap = { pos = [1, 2], duration = 50 } },
+  { delay = 50 },
+  { tap = { pos = [1, 4], duration = 50 } },   # E discards the stashed entry
+  { delay = 80 },                              # re-press 180ms after release, still inside the window
+  { press = [1, 2] },
+  { delay = 400 },
+  { release = [1, 2] },
+]
+expect = [["A"], [], ["E"], [], ["B"], []]
+
+# The press path requires an all-taps pattern. This morse's hold continues into
+# a longer hold ("1" -> B, "11" -> C), so the first held release leaves it in
+# `Released(HOLD)` and the re-press inside the window must not quick-tap.
+[[test]]
+name = "quick_tap_skips_hold_pattern"
+behavior.morse = { quick_tap_timeout = "200ms", morses = [
+  { morse_actions = [
+    { pattern = "0", action = "A" },
+    { pattern = "1", action = "B" },
+    { pattern = "11", action = "C" },
+  ] },
+] }
+steps = [
+  { press = [1, 2] },
+  { delay = 400 },
+  { release = [1, 2] },  # held past the hold timeout -> Released(HOLD)
+  { delay = 100 },
+  { press = [1, 2] },    # inside the window, but the pattern is HOLD
+  { delay = 400 },
+  { release = [1, 2] },  # resolves "11" -> C
+]
+expect = [["C"], []]

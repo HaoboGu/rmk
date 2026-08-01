@@ -321,15 +321,6 @@ impl<
 #[cfg(test)]
 mod test {
     use super::*;
-    // Init logger for tests
-
-    #[ctor::ctor(unsafe)]
-    fn init_log() {
-        let _ = env_logger::builder()
-            .filter_level(log::LevelFilter::Debug)
-            .is_test(true)
-            .try_init();
-    }
 
     #[test]
     fn test_resolutin_phase() {

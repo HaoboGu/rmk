@@ -10,9 +10,13 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", features = [
+rmk = { path = "../../../rmk", default-features = false, features = [
+    "defmt",
     "dfu_nrf",
     "nrf52840_ble",
+    "storage",
+    "vial",
+    "watchdog",
     # "dfu_lock"
 ] }
 embassy-time = { version = "0.5", features = ["tick-hz-32_768", "defmt"] }
@@ -36,7 +40,7 @@ nrf-mpsl = { git = "https://github.com/alexmoon/nrf-sdc", rev = "abe49d22ebfc85f
     "defmt",
     "nrf52840",
 ] }
-bt-hci = { version = "0.8", features = ["defmt"] }
+bt-hci = { version = "0.9", features = ["defmt"] }
 embassy-executor = { version = "0.10", features = [
     "defmt",
     "platform-cortex-m",

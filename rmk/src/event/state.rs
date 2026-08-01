@@ -20,17 +20,12 @@ impl LayerChangeEvent {
 
 impl_payload_wrapper!(LayerChangeEvent, u8);
 
-/// The direction of a layer state transition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum LayerTransition {
     Enter,
     Exit,
 }
 
-/// Causal order for layer transitions produced outside the keyboard task.
-///
-/// Timer ticks cannot order two transitions that happen within the same tick,
-/// so Sticky Key lifecycles compare this generation instead of timestamps.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct LayerTransitionGeneration(u64);
 
@@ -41,19 +36,6 @@ impl LayerTransitionGeneration {
         LAYER_TRANSITION_GENERATION.lock(|generation| Self(generation.get()))
     }
 
-    fn next() -> Self {
-        LAYER_TRANSITION_GENERATION.lock(|generation| {
-            let next = generation.get().wrapping_add(1);
-            generation.set(next);
-            Self(next)
-        })
-    }
-
-    /// Return whether `self` is causally newer than `baseline`.
-    ///
-    /// Half-range wrapping order is unambiguous as long as fewer than 2^63
-    /// external transitions can remain queued, which is guaranteed by the
-    /// bounded event channel.
     pub(crate) const fn is_after(self, baseline: Self) -> bool {
         let distance = self.0.wrapping_sub(baseline.0);
         distance != 0 && distance <= (u64::MAX / 2)
@@ -65,48 +47,26 @@ impl LayerTransitionGeneration {
     }
 }
 
-/// A layer transition produced outside the main keyboard action loop.
 #[event(channel_size = crate::LAYER_TRANSITION_EVENT_CHANNEL_SIZE, pubs = crate::LAYER_TRANSITION_EVENT_PUB_SIZE, subs = crate::LAYER_TRANSITION_EVENT_SUB_SIZE)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct LayerTransitionEvent {
-    /// Layer whose boolean state changed.
     pub(crate) layer: u8,
     pub(crate) transition: LayerTransition,
-    /// Causal generation assigned when the layer state was changed.
     pub(crate) generation: LayerTransitionGeneration,
 }
 
 impl LayerTransitionEvent {
     pub(crate) fn new(layer: u8, transition: LayerTransition) -> Self {
+        let generation = LAYER_TRANSITION_GENERATION.lock(|generation| {
+            let next = generation.get().wrapping_add(1);
+            generation.set(next);
+            LayerTransitionGeneration(next)
+        });
         Self {
             layer,
             transition,
-            generation: LayerTransitionGeneration::next(),
+            generation,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::LayerTransitionGeneration;
-
-    #[test]
-    fn layer_transition_generation_orders_equal_tick_events() {
-        let before = LayerTransitionGeneration::from_raw(10);
-        let after = LayerTransitionGeneration::from_raw(11);
-
-        assert!(after.is_after(before));
-        assert!(!before.is_after(before));
-        assert!(!before.is_after(after));
-    }
-
-    #[test]
-    fn layer_transition_generation_has_defined_wrapping_order() {
-        let before_wrap = LayerTransitionGeneration::from_raw(u64::MAX);
-        let after_wrap = LayerTransitionGeneration::from_raw(0);
-
-        assert!(after_wrap.is_after(before_wrap));
-        assert!(!before_wrap.is_after(after_wrap));
     }
 }
 
@@ -151,3 +111,27 @@ impl SleepStateEvent {
 }
 
 impl_payload_wrapper!(SleepStateEvent, bool);
+
+#[cfg(test)]
+mod tests {
+    use super::LayerTransitionGeneration;
+
+    #[test]
+    fn layer_transition_generation_orders_equal_tick_events() {
+        let before = LayerTransitionGeneration::from_raw(10);
+        let after = LayerTransitionGeneration::from_raw(11);
+
+        assert!(after.is_after(before));
+        assert!(!before.is_after(before));
+        assert!(!before.is_after(after));
+    }
+
+    #[test]
+    fn layer_transition_generation_has_defined_wrapping_order() {
+        let before_wrap = LayerTransitionGeneration::from_raw(u64::MAX);
+        let after_wrap = LayerTransitionGeneration::from_raw(0);
+
+        assert!(after_wrap.is_after(before_wrap));
+        assert!(!before_wrap.is_after(after_wrap));
+    }
+}

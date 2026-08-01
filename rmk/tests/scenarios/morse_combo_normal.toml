@@ -1,0 +1,39 @@
+# Combos whose members are morse keys, resolved in the default Normal mode.
+#
+# One of four `morse_combo_*` files — see `morse_combo_permissive_hold.toml`
+# for the shared fixture and timeline names. No mode flags are set, so the
+# defaults apply: Normal mode, 250 ms hold/gap timeouts.
+
+keyboard = "boards/split.toml"
+
+[behavior.combo]
+timeout = "50ms"
+combos = [
+  { actions = ["MT(B, LShift)", "MT(C, LGui)"], output = "X" },
+  { actions = ["A", "MT(B, LShift)"], output = "Y" },
+  { actions = ["MT(B, LShift)", "MT(C, LGui)", "LT(1, D)"], output = "Z" },
+]
+
+[[test]]
+name = "two_key_in_window"
+steps = [
+  { delay = 20 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 20 },
+  { tap = { pos = [1, 7], duration = 10 } },
+  { delay = 300 },
+  { release = [1, 1] },  # Release B
+]
+expect = [["X"], []]
+
+[[test]]
+name = "two_key_misses_window"
+steps = [
+  { delay = 20 },
+  { press = [1, 1] },    # Press MT(B, LShift)
+  { delay = 60 },
+  { tap = { pos = [1, 7], duration = 10 } },
+  { delay = 300 },
+  { release = [1, 1] },  # Release B — Normal mode resolves it only on release
+]
+expect = [["C"], [], ["LShift"], []]

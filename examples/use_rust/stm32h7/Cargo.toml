@@ -10,7 +10,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk" }
+rmk = { path = "../../../rmk", default-features = false, features = ["defmt", "storage", "vial", "watchdog"] }
 cortex-m = { version = "0.7.7", features = ['critical-section-single-core'] }
 cortex-m-rt = "0.7.5"
 embassy-time = { version = "0.5", features = ["tick-hz-32_768", "defmt"] }
@@ -29,7 +29,7 @@ static_cell = "2"
 defmt = "1"
 defmt-rtt = "1"
 # panic-probe = { version = "1", features = ["print-defmt"] }
-panic-halt = "1.0"
+panic-halt = "1"
 
 [build-dependencies]
 xz2 = "0.1.7"

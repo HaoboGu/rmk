@@ -7,18 +7,12 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 
 use bitfield_struct::bitfield;
 use postcard::experimental::max_size::MaxSize;
-#[cfg(feature = "rmk_protocol")]
-use postcard_schema::{
-    Schema,
-    schema::{DataModelType, NamedType},
-};
-use serde::{Deserialize, Serialize};
 
 use crate::keycode::HidKeyCode;
 
 /// The bit representation of the modifier combination.
 #[bitfield(u8, order = Lsb, debug = false)]
-#[derive(Serialize, Deserialize, MaxSize, Eq, PartialEq)]
+#[derive(MaxSize, Eq, PartialEq)]
 pub struct ModifierCombination {
     #[bits(1)]
     pub left_ctrl: bool,
@@ -51,13 +45,17 @@ crate::impl_debug_list!(ModifierCombination, |self| [
 .into_iter()
 .filter_map(|(state, label)| state.then_some(label)));
 
-#[cfg(feature = "rmk_protocol")]
-impl Schema for ModifierCombination {
-    const SCHEMA: &'static NamedType = &NamedType {
-        name: "ModifierCombination",
-        ty: &DataModelType::U8,
-    };
-}
+// u8 on the wire (postcard); named bools on serde-wasm-bindgen / serde_json (TS).
+crate::bitfield_named_serde!(ModifierCombination, "ModifierCombination", {
+    left_ctrl = with_left_ctrl,
+    left_shift = with_left_shift,
+    left_alt = with_left_alt,
+    left_gui = with_left_gui,
+    right_ctrl = with_right_ctrl,
+    right_shift = with_right_shift,
+    right_alt = with_right_alt,
+    right_gui = with_right_gui,
+});
 
 impl BitOr for ModifierCombination {
     type Output = Self;

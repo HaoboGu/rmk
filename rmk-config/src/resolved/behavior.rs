@@ -1,43 +1,28 @@
 use std::collections::HashMap;
 
-use bitfield_struct::bitfield;
-
-pub struct StickyKeyConfig {
-    pub timeout_ms: Option<u64>,
-    pub activate_on_keypress: Option<bool>,
-    pub max_repeat: Option<u16>,
-    pub release_mode: Option<StickyKeyReleaseMode>,
-    pub profiles: HashMap<String, StickyKeyProfile>,
-}
-
-#[bitfield(u8, order = Lsb, debug = false)]
-#[derive(Debug, PartialEq, Eq)]
-pub struct StickyKeyReleaseMode {
-    pub other_key_press: bool,
-    pub other_key_release: bool,
-    pub layer_enter: bool,
-    pub layer_exit: bool,
-    pub double_tap: bool,
-    #[bits(3)]
-    __: u8,
-}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StickyKeyReleaseMode(u8);
 
 impl StickyKeyReleaseMode {
-    pub const OTHER_KEY_PRESS: Self = Self::new().with_other_key_press(true);
-    pub const OTHER_KEY_RELEASE: Self = Self::new().with_other_key_release(true);
-    pub const LAYER_ENTER: Self = Self::new().with_layer_enter(true);
-    pub const LAYER_EXIT: Self = Self::new().with_layer_exit(true);
-    pub const DOUBLE_TAP: Self = Self::new().with_double_tap(true);
+    pub const OTHER_KEY_PRESS: Self = Self(1 << 0);
+    pub const OTHER_KEY_RELEASE: Self = Self(1 << 1);
+    pub const LAYER_ENTER: Self = Self(1 << 2);
+    pub const LAYER_EXIT: Self = Self(1 << 3);
+    pub const DOUBLE_TAP: Self = Self(1 << 4);
+
+    pub const fn into_bits(self) -> u8 {
+        self.0
+    }
 
     pub fn parse(value: &str) -> Result<Self, String> {
-        let mut result = Self::default();
+        let mut bits = 0;
         for part in value.split('|').map(str::trim).filter(|part| !part.is_empty()) {
-            result = match part {
-                "other_key_press" => result.with_other_key_press(true),
-                "other_key_release" => result.with_other_key_release(true),
-                "layer_enter" => result.with_layer_enter(true),
-                "layer_exit" => result.with_layer_exit(true),
-                "double_tap" => result.with_double_tap(true),
+            bits |= match part {
+                "other_key_press" => Self::OTHER_KEY_PRESS.0,
+                "other_key_release" => Self::OTHER_KEY_RELEASE.0,
+                "layer_enter" => Self::LAYER_ENTER.0,
+                "layer_exit" => Self::LAYER_EXIT.0,
+                "double_tap" => Self::DOUBLE_TAP.0,
                 _ => {
                     return Err(format!(
                         "unknown Sticky Key release_mode `{part}`; expected other_key_press, other_key_release, layer_enter, layer_exit, or double_tap"
@@ -45,11 +30,19 @@ impl StickyKeyReleaseMode {
                 }
             };
         }
-        if result.into_bits() == 0 {
+        if bits == 0 {
             return Err("Sticky Key release_mode must contain at least one trigger".to_string());
         }
-        Ok(result)
+        Ok(Self(bits))
     }
+}
+
+pub struct StickyKeyConfig {
+    pub timeout_ms: Option<u64>,
+    pub activate_on_keypress: Option<bool>,
+    pub max_repeat: Option<u16>,
+    pub release_mode: Option<StickyKeyReleaseMode>,
+    pub profiles: HashMap<String, StickyKeyProfile>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -63,6 +56,8 @@ pub struct StickyKeyProfile {
 /// Resolved behavioral configuration.
 pub struct Behavior {
     pub tri_layer: Option<[u8; 3]>,
+    pub one_shot_timeout_ms: Option<u64>,
+    pub one_shot_modifiers: Option<OneShot>,
     pub combos: Option<Combos>,
     pub macros: Option<Macros>,
     pub forks: Option<Forks>,
@@ -89,6 +84,11 @@ pub const DEFAULT_AUTO_MOUSE_LAYER_THRESHOLD: u16 = 1;
 
 /// Fallback for `auto_mouse_layer_max_num` when no `keyboard.toml` is loaded.
 pub const DEFAULT_AUTO_MOUSE_LAYER_MAX_NUM: usize = 2;
+
+pub struct OneShot {
+    pub activate_on_keypress: Option<bool>,
+    pub quick_release: Option<bool>,
+}
 
 pub struct Combos {
     pub combos: Vec<Combo>,
@@ -176,6 +176,13 @@ impl crate::KeyboardTomlConfig {
         let toml_behavior = self.get_behavior_config()?;
 
         let tri_layer = toml_behavior.tri_layer.map(|t| [t.upper, t.lower, t.adjust]);
+
+        let one_shot_timeout_ms = toml_behavior.one_shot.and_then(|o| o.timeout.map(|t| t.0));
+
+        let one_shot_modifiers = toml_behavior.one_shot_modifiers.map(|o| OneShot {
+            activate_on_keypress: o.activate_on_keypress,
+            quick_release: o.quick_release,
+        });
 
         let combos = toml_behavior.combo.map(|c| Combos {
             combos: c
@@ -272,36 +279,51 @@ impl crate::KeyboardTomlConfig {
             }
         });
 
-        let sticky_key = toml_behavior.sticky_key.map(|s| {
-            let parse_profile = |p: crate::StickyKeyProfile| -> Result<StickyKeyProfile, String> {
-                Ok(StickyKeyProfile {
-                    timeout_ms: p.timeout.map(|t| t.0),
-                    activate_on_keypress: p.activate_on_keypress,
-                    max_repeat: p.max_repeat,
-                    release_mode: p.release_mode
+        // Named profiles are interned into the fixed-capacity morse profile
+        // table; overflowing it would silently drop profiles at runtime.
+        if let Some(m) = &morse
+            && m.profiles.len() > self.rmk.morse_profile_max_num
+        {
+            return Err(format!(
+                "behavior.morse.profiles defines {} profiles, but `[rmk] morse_profile_max_num` is {}. Raise it in keyboard.toml",
+                m.profiles.len(),
+                self.rmk.morse_profile_max_num
+            ));
+        }
+
+        let sticky_key = toml_behavior
+            .sticky_key
+            .map(|sticky| -> Result<StickyKeyConfig, String> {
+                let parse_profile = |profile: crate::StickyKeyProfile| -> Result<StickyKeyProfile, String> {
+                    Ok(StickyKeyProfile {
+                        timeout_ms: profile.timeout.map(|timeout| timeout.0),
+                        activate_on_keypress: profile.activate_on_keypress,
+                        max_repeat: profile.max_repeat,
+                        release_mode: profile
+                            .release_mode
+                            .as_deref()
+                            .map(StickyKeyReleaseMode::parse)
+                            .transpose()?,
+                    })
+                };
+                let profiles = sticky
+                    .profiles
+                    .into_iter()
+                    .map(|(name, profile)| parse_profile(profile).map(|profile| (name, profile)))
+                    .collect::<Result<HashMap<_, _>, _>>()?;
+                Ok(StickyKeyConfig {
+                    timeout_ms: sticky.timeout.map(|timeout| timeout.0),
+                    activate_on_keypress: sticky.activate_on_keypress,
+                    max_repeat: sticky.max_repeat,
+                    release_mode: sticky
+                        .release_mode
                         .as_deref()
                         .map(StickyKeyReleaseMode::parse)
                         .transpose()?,
+                    profiles,
                 })
-            };
-            let sticky_key_profile_max_num = self.sticky_key_profile_capacity();
-            if s.profiles.len() > sticky_key_profile_max_num {
-                return Err(format!(
-                    "behavior.sticky_key.profiles defines {} profiles, but `[rmk] sticky_key_profile_max_num` is {}. Raise it in keyboard.toml",
-                    s.profiles.len(), sticky_key_profile_max_num
-                ));
-            }
-            let profiles = s.profiles.into_iter()
-                .map(|(name, profile)| parse_profile(profile).map(|profile| (name, profile)))
-                .collect::<Result<HashMap<_, _>, _>>()?;
-            Ok(StickyKeyConfig {
-                timeout_ms: s.timeout.as_ref().map(|t| t.0),
-                activate_on_keypress: s.activate_on_keypress,
-                max_repeat: s.max_repeat,
-                release_mode: s.release_mode.as_deref().map(StickyKeyReleaseMode::parse).transpose()?,
-                profiles,
             })
-        }).transpose()?;
+            .transpose()?;
 
         let auto_mouse_layer = toml_behavior
             .auto_mouse_layer
@@ -320,6 +342,8 @@ impl crate::KeyboardTomlConfig {
 
         Ok(Behavior {
             tri_layer,
+            one_shot_timeout_ms,
+            one_shot_modifiers,
             combos,
             macros,
             forks,
@@ -369,12 +393,13 @@ mod tests {
 [layout]
 rows = 1
 cols = 1
+map = "(0,0)"
+
+[keymap]
 layers = 1
-keymap = [
-  [
-    ["A"],
-  ],
-]
+
+[[keymap.layer]]
+keys = "A"
 
 [behavior.morse]
 enable_flow_tap = true
@@ -406,29 +431,32 @@ hold_timeout = "200ms"
     }
 
     #[test]
-    fn sticky_key_profiles_and_release_modes_are_resolved() {
+    fn morse_profiles_overflowing_morse_profile_max_num_is_an_error() {
         let toml = r#"
+[rmk]
+morse_profile_max_num = 1
+
 [layout]
 rows = 1
 cols = 1
+map = "(0,0)"
+
+[keymap]
 layers = 1
-keymap = [
-  [
-    ["A"],
-  ],
-]
 
-[behavior.sticky_key]
-release_mode = "other_key_release | layer_exit | double_tap"
+[[keymap.layer]]
+keys = "A"
 
-[behavior.sticky_key.profiles.alt_tab]
-timeout = "5s"
-release_mode = "other_key_press | layer_enter"
+[behavior.morse.profiles.p1]
+hold_timeout = "200ms"
+
+[behavior.morse.profiles.p2]
+hold_timeout = "300ms"
 "#;
 
         let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "rmk-config-sticky-layer-change-{}-{}.toml",
+            "rmk-config-profile-overflow-{}-{}.toml",
             std::process::id(),
             unique
         ));
@@ -437,25 +465,40 @@ release_mode = "other_key_press | layer_enter"
         let config = KeyboardTomlConfig::new_from_toml_path_with_event_defaults(&path);
         let _ = fs::remove_file(&path);
 
-        let sticky_key = config.behavior().unwrap().sticky_key.unwrap();
+        let err = match config.behavior() {
+            Ok(_) => panic!("expected the profile-overflow error"),
+            Err(e) => e,
+        };
+        assert!(err.contains("morse_profile_max_num"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn sticky_profiles_and_release_modes_resolve() {
+        let config: KeyboardTomlConfig = toml::from_str(
+            r#"
+[behavior.sticky_key]
+release_mode = "other_key_release | layer_exit | double_tap"
+
+[behavior.sticky_key.profiles.alt_tab]
+timeout = "5s"
+release_mode = "other_key_press | layer_enter"
+"#,
+        )
+        .unwrap();
+
+        let sticky = config.behavior().unwrap().sticky_key.unwrap();
+        assert_eq!(sticky.timeout_ms, None);
         assert_eq!(
-            sticky_key.release_mode,
-            Some(
-                StickyKeyReleaseMode::new()
-                    .with_other_key_release(true)
-                    .with_layer_exit(true)
-                    .with_double_tap(true)
-            )
+            sticky.release_mode.unwrap().into_bits(),
+            StickyKeyReleaseMode::OTHER_KEY_RELEASE.into_bits()
+                | StickyKeyReleaseMode::LAYER_EXIT.into_bits()
+                | StickyKeyReleaseMode::DOUBLE_TAP.into_bits()
         );
-        let alt_tab = &sticky_key.profiles["alt_tab"];
+        let alt_tab = &sticky.profiles["alt_tab"];
         assert_eq!(alt_tab.timeout_ms, Some(5000));
         assert_eq!(
-            alt_tab.release_mode,
-            Some(
-                StickyKeyReleaseMode::new()
-                    .with_other_key_press(true)
-                    .with_layer_enter(true)
-            )
+            alt_tab.release_mode.unwrap().into_bits(),
+            StickyKeyReleaseMode::OTHER_KEY_PRESS.into_bits() | StickyKeyReleaseMode::LAYER_ENTER.into_bits()
         );
     }
 }

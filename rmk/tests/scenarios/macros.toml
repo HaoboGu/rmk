@@ -1,0 +1,139 @@
+# Keyboard macros.
+#
+# On the shared split board MACRO(0) sits at (0,6) and MACRO(1) at (0,7); each
+# test brings its own macro set via `behavior.macro` and drives macro 0.
+#
+# The file stem is `macros`, not `macro`, because the generated module name
+# cannot be a Rust keyword.
+
+keyboard = "boards/split.toml"
+
+[[test]]
+name = "macro_text"
+behavior.macro = { macros = [{ operations = [{ operation = "text", text = "AbCd123456" }] }] }
+steps = [
+  { tap = { pos = [0, 6], duration = 100 } },
+]
+expect = [
+  ["LShift"],       # Press shift
+  ["LShift", "A"],  # Press A + shift
+  ["LShift"],       # Release A
+  [],               # Release shift
+  ["B"],
+  [],
+  ["LShift"],
+  ["LShift", "C"],
+  ["LShift"],
+  [],
+  ["D"],
+  [],
+  ["Kc1"],
+  [],
+  ["Kc2"],
+  [],
+  ["Kc3"],
+  [],
+  ["Kc4"],
+  [],
+  ["Kc5"],
+  [],
+  ["Kc6"],
+  [],
+  # The extended-macro text decode emits a final all-up report (#989).
+  [],
+]
+
+[[test]]
+name = "macro_multiple_operations"
+behavior.macro = { macros = [
+  { operations = [
+    { operation = "down", keycode = "LShift" },
+    { operation = "tap", keycode = "A" },
+    { operation = "up", keycode = "LShift" },
+    { operation = "tap", keycode = "B" },
+  ] },
+] }
+steps = [
+  { tap = { pos = [0, 6], duration = 100 } },
+]
+expect = [
+  ["LShift"],       # Press shift
+  ["LShift", "A"],  # Press shift + A
+  ["LShift"],       # Release A
+  [],               # Release shift
+  ["B"],
+  [],
+]
+
+[[test]]
+name = "macro_with_delay"
+behavior.macro = { macros = [
+  { operations = [
+    { operation = "tap", keycode = "A" },
+    { operation = "delay", duration = "50ms" },
+    { operation = "tap", keycode = "B" },
+  ] },
+] }
+steps = [
+  { tap = { pos = [0, 6], duration = 100 } },
+]
+expect = [
+  ["A"],  # Press A
+  [],     # Release A
+  ["B"],  # Press B, 50ms later
+  [],     # Release B
+]
+
+# An operation whose key is a richer action than a plain keycode is serialized as
+# Vial's extended keycode and routed through the shared action path, so the
+# modifier applies exactly as it would from a physical key.
+[[test]]
+name = "macro_taps_a_key_with_modifier"
+behavior.macro = { macros = [{ operations = [{ operation = "tap", keycode = "WM(A, LCtrl)" }] }] }
+features = ["vial"]
+steps = [
+  { tap = { pos = [0, 6], duration = 100 } },
+]
+expect = [["LCtrl", "A"], []]
+
+# A macro cannot trigger another macro: that would re-enter the trigger queue and
+# could loop forever. Macro 0 tries to trigger macro 1, then taps A — the nested
+# trigger is dropped, so only A is emitted and the rest of macro 0 still runs.
+[[test]]
+name = "macro_cannot_trigger_macro"
+behavior.macro = { macros = [
+  { operations = [
+    { operation = "tap", keycode = "MACRO(1)" },
+    { operation = "tap", keycode = "A" },
+  ] },
+  { operations = [{ operation = "tap", keycode = "B" }] },
+] }
+features = ["vial"]
+steps = [
+  { tap = { pos = [0, 6], duration = 100 } },
+]
+expect = [
+  ["A"],  # A only; macro 1 never ran
+  [],
+]
+
+# Macros fire on key press (matching QMK/ZMK), not release: the macro reports
+# arrive while the macro key is still held, so they precede the W tapped under
+# it. Firing on release would put W first.
+[[test]]
+name = "macro_triggers_on_press"
+behavior.macro = { macros = [
+  { operations = [{ operation = "down", keycode = "A" }, { operation = "up", keycode = "A" }] },
+] }
+steps = [
+  { press = [0, 6] },  # Press macro 0 and keep holding
+  { tap = { pos = [1, 3], duration = 10 } },
+  { delay = 100 },
+  { release = [0, 6] },
+]
+expect = [
+  ["A"],  # A down — emitted on press
+  [],     # A up
+  ["W"],
+  [],
+]

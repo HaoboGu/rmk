@@ -25,7 +25,7 @@
 ## 特性
 
 - **MCU支持丰富**：基于 [embassy](https://github.com/embassy-rs/embassy)，RMK 支持非常多的MCU系列，例如 stm32/nrf/rp2040/esp32等。
-- **实时键位编辑**：RMK 默认支持 Vial 进行实时键位编辑，即时生效。您甚至可以通过 BLE 使用 Vial 来编辑键位。
+- **实时键位编辑**：RMK 通过默认启用的 [Vial](https://get.vial.today) 或可选的原生协议 [Rynk](https://rmk.rs/docs/features/rynk) 支持实时键位编辑，即时生效。您甚至可以通过 BLE 无线编辑键位。
 - **高级键盘功能**：RMK 默认提供许多高级键盘功能，如层切换、媒体控制、系统控制、鼠标控制等。
 - **无线支持**：RMK 支持 BLE 无线连接，包括自动重连和多设备支持，已经在 nrf52840, esp32 和 Pi Pico W 上进行了测试。
 - **易于配置**：RMK提供了一个非常简单的配置键盘的方法，你只需要一个`keyboard.toml`文件，就可以构建起你的键盘固件（不需要写任何Rust代码）！当然，对于 Rust 开发者来说，你仍然可以使用代码方式来使用 RMK 从而获得更大的灵活性。

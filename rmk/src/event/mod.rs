@@ -52,7 +52,7 @@ mod dfu;
 mod input;
 #[cfg(feature = "split")]
 mod split;
-mod state;
+pub(crate) mod state;
 
 pub use action::ActionEvent;
 pub use battery::{BatteryAdcEvent, BatteryStatusEvent, ChargingStateEvent};
@@ -63,12 +63,11 @@ pub use input::{
     Axis, AxisEvent, AxisValType, KeyPos, KeyboardEvent, KeyboardEventPos, ModifierEvent, PointingEvent,
     PointingProcessorEvent, PointingSetCpiEvent, RotaryEncoderPos,
 };
-#[cfg(feature = "split")]
-pub use split::{CentralConnectedEvent, PeripheralConnectedEvent};
 #[cfg(all(feature = "split", feature = "_ble"))]
-pub use split::{ClearPeerEvent, PeripheralBatteryEvent};
+pub use split::ClearPeerEvent;
+#[cfg(feature = "split")]
+pub use split::{CentralConnectedEvent, PeripheralBatteryEvent, PeripheralConnectedEvent};
 pub use state::{LayerChangeEvent, LedIndicatorEvent, SleepStateEvent, WpmUpdateEvent};
-pub(crate) use state::{LayerTransition, LayerTransitionEvent, LayerTransitionGeneration};
 
 /// Trait for event publishers
 pub trait EventPublisher {

@@ -21,6 +21,7 @@ events = [
     { name = "sleep_state" },
     { name = "layer_change" },
     { name = "battery_status" },
+    { name = "led_indicator" },
 ]
 
 [[subscriber]]
@@ -36,8 +37,8 @@ events = [
     # split/driver.rs: each PeripheralManager subscribes when display is enabled
     # (gated on #[cfg(feature = "display")] in driver.rs)
     # Covers up to 2 peripherals; for 3+ peripherals override subs in keyboard.toml
-    { name = "wpm_update" },
-    { name = "sleep_state" },
+    { name = "wpm_update", count = 2 },
+    { name = "sleep_state", count = 2 },
 ]
 
 # --- BLE-gated internal subscribers ---
@@ -55,6 +56,32 @@ events = [
     { name = "pointing" },
 ]
 
+# Rynk sessions subscribe to these topics; USB+BLE boards need two slots.
+
+[[subscriber]]
+features = ["rynk"]
+events = [
+    { name = "layer_change" },
+    { name = "wpm_update" },
+    { name = "connection_status_change" },
+    { name = "sleep_state" },
+    { name = "led_indicator" },
+]
+
+[[subscriber]]
+features = ["rynk", "_ble"]
+events = [
+    # battery_status is only subscribed under `_ble`; needs one slot per
+    # concurrent session (USB + BLE = 2).
+    { name = "battery_status", count = 2 },
+    # Second session slot for the always-on topics on dual-transport boards.
+    { name = "layer_change" },
+    { name = "wpm_update" },
+    { name = "connection_status_change" },
+    { name = "sleep_state" },
+    { name = "led_indicator" },
+]
+
 # --- Split-gated internal subscribers ---
 
 [[subscriber]]
@@ -65,7 +92,8 @@ events = [
     # split/peripheral.rs: PointingEvent::subscriber()
     { name = "pointing" },
     # split/driver.rs: LedIndicatorEvent::subscriber()
-    { name = "led_indicator" },
+    # Covers up to 2 peripherals; for 3+ peripherals override subs in keyboard.toml
+    { name = "led_indicator", count = 2 },
     # split/driver.rs: LayerChangeEvent::subscriber()
     { name = "layer_change" },
     # split/driver.rs: ConnectionStatusChangeEvent::subscriber()

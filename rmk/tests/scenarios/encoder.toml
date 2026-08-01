@@ -1,0 +1,31 @@
+# Rotary encoder scenarios.
+#
+# The shared split board declares two encoders and maps them on layers 0 and 1:
+# arrows/scroll on the base layer, page/line jumps on layer 1, nothing on layers
+# 2-3. `MO(1)` at (3,0) is what switches layers under a turn.
+#
+# Each detent is a press plus a release, so every turn asserts two reports.
+
+keyboard = "boards/split.toml"
+
+[[test]]
+name = "turns_send_the_base_layer_actions"
+steps = [
+  { rotary_cw = 0 },
+  { rotary_ccw = 0 },
+  { rotary_cw = 1 },
+  { rotary_ccw = 1 },
+]
+expect = [["Right"], [], ["Left"], [], ["Down"], [], ["Up"], []]
+
+[[test]]
+name = "turns_follow_the_held_layer"
+steps = [
+  { press = [3, 0] },
+  { rotary_cw = 0 },
+  { rotary_ccw = 1 },
+  { release = [3, 0] },
+  # Back on the base layer the same knob scrubs again.
+  { rotary_cw = 0 },
+]
+expect = [["PageDown"], [], ["Home"], [], ["Right"], []]

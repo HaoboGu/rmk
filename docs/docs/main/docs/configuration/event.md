@@ -55,7 +55,6 @@ peripheral_battery.subs = 4
 | `pointing`                 | `PointingEvent`               | channel_size=8         |
 | **State Events**           |                               |                        |
 | `layer_change`             | `LayerChangeEvent`            | subs=4                 |
-| `layer_transition`         | Internal layer transition     | channel_size=2; `channel_size` and `subs` must be at least 1 because the keyboard consumes it. `pubs` must be at least 1 when auto-mouse layers are configured. |
 | `wpm_update`               | `WpmUpdateEvent`              |                        |
 | `led_indicator`            | `LedIndicatorEvent`           |                        |
 | `sleep_state`              | `SleepStateEvent`             |                        |

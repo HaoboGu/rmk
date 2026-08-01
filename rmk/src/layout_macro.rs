@@ -159,25 +159,23 @@ macro_rules! lt {
                 $crate::types::keycode::HidKeyCode::$k,
             )),
             $crate::types::action::Action::LayerOn($x),
-            $crate::types::morse::MorseProfile::const_default(),
+            ::core::primitive::u8::MAX,
         )
     };
 }
 
 /// Create a layer-tap action with custom timing profile.
 ///
-/// Same as `lt!` but allows specifying custom tap/hold timing configuration
-/// through a `MorseProfile`.
+/// Same as `lt!` but references a morse profile by its table index.
 ///
 /// # Parameters
 /// - `$x`: Layer number to activate when held
 /// - `$k`: HID keycode to send when tapped
-/// - `$p`: Custom `MorseProfile` for timing configuration
+/// - `$p`: Morse profile index (`u8`, into `MorsesConfig::profiles`); an index with no entry falls back to the default profile
 ///
 /// # Example
 /// ```ignore
-/// let profile = MorseProfile::new(Some(true), None, Some(200), Some(300));
-/// ltp!(1, Space, profile)  // Layer-tap with custom timing
+/// ltp!(1, Space, 0)  // layer-tap using morse profile 0
 /// ```
 #[macro_export]
 macro_rules! ltp {
@@ -218,7 +216,7 @@ macro_rules! mt {
                 $crate::types::keycode::HidKeyCode::$k,
             )),
             $crate::types::action::Action::Modifier($m),
-            $crate::types::morse::MorseProfile::const_default(),
+            ::core::primitive::u8::MAX,
         )
     };
 }
@@ -230,12 +228,11 @@ macro_rules! mt {
 /// # Parameters
 /// - `$k`: HID keycode to send when tapped
 /// - `$m`: `ModifierCombination` to apply when held
-/// - `$p`: Custom `MorseProfile` for timing configuration
+/// - `$p`: Morse profile index (`u8`, into `MorsesConfig::profiles`); an index with no entry falls back to the default profile
 ///
 /// # Example
 /// ```ignore
-/// let profile = MorseProfile::new(Some(false), None, Some(180), None);
-/// mtp!(A, ModifierCombination::LCTRL, profile)
+/// mtp!(A, ModifierCombination::LCTRL, 0)  // held modifier uses morse profile 0
 /// ```
 #[macro_export]
 macro_rules! mtp {
@@ -277,7 +274,7 @@ macro_rules! th {
             $crate::types::action::Action::Key($crate::types::keycode::KeyCode::Hid(
                 $crate::types::keycode::HidKeyCode::$h,
             )),
-            $crate::types::morse::MorseProfile::const_default(),
+            ::core::primitive::u8::MAX,
         )
     };
 }
@@ -289,12 +286,11 @@ macro_rules! th {
 /// # Parameters
 /// - `$t`: HID keycode to send when tapped
 /// - `$h`: HID keycode to send when held
-/// - `$p`: Custom `MorseProfile` for timing configuration
+/// - `$p`: Morse profile index (`u8`, into `MorsesConfig::profiles`); an index with no entry falls back to the default profile
 ///
 /// # Example
 /// ```ignore
-/// let profile = MorseProfile::new(None, Some(MorseMode::PermissiveHold), Some(200), None);
-/// thp!(Space, Backspace, profile)
+/// thp!(Space, Backspace, 0)  // tap-hold using morse profile 0
 /// ```
 #[macro_export]
 macro_rules! thp {
@@ -311,111 +307,47 @@ macro_rules! thp {
     };
 }
 
-/// Create a StickyKey tap-key action (alt-tab shape).
+/// Create a one-shot layer action.
+///
+/// This macro creates a key that activates a layer for the next keypress only.
+/// After the next key is pressed, the layer automatically deactivates.
 ///
 /// # Parameters
-/// - `$key`: HID keycode identifier (e.g., `Tab`, `A`)
-/// - `$keep`: `ModifierCombination` held between presses
+/// - `$x`: Layer number (0-255)
 ///
 /// # Example
 /// ```ignore
-/// sk!(Tab, ModifierCombination::LALT)  // SK(Tab, [LAlt])
+/// osl!(1)  // Next key will be from layer 1, then return to current layer
+/// osl!(2)  // Next key will be from layer 2, then return to current layer
 /// ```
 #[macro_export]
-macro_rules! sk {
-    ($key:ident, $keep:expr) => {
-        $crate::sk!($key, $keep, ::core::primitive::u8::MAX)
-    };
-    ($key:ident, $keep:expr, $profile:expr) => {
-        $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
-            $crate::types::action::StickyKeyAction {
-                effect: $crate::types::action::StickyKeyEffect::TapKey {
-                    key: $crate::types::keycode::HidKeyCode::$key,
-                    modifiers: $keep,
-                },
-                profile: $profile,
-            },
-        ))
+macro_rules! osl {
+    ($x: literal) => {
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::OneShotLayer($x))
     };
 }
 
-/// Create a StickyKey pure-modifier action (one-shot modifier shape).
+/// Create a one-shot modifier action.
+///
+/// This macro creates a key that applies modifiers for the next keypress only.
+/// They automatically deactivate if:
+/// - other key that sends keyboard report is pressed,
+/// - timeout has passed before next key is triggered.
 ///
 /// # Parameters
 /// - `$m`: `ModifierCombination` to apply for the next keypress
 ///
 /// # Example
 /// ```ignore
-/// sk_mod!(ModifierCombination::LSHIFT)  // SK(LShift)
-/// ```
-#[macro_export]
-macro_rules! sk_mod {
-    ($m:expr) => {
-        $crate::sk_mod!($m, ::core::primitive::u8::MAX)
-    };
-    ($m:expr, $profile:expr) => {
-        $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
-            $crate::types::action::StickyKeyAction {
-                effect: $crate::types::action::StickyKeyEffect::Modifier($m),
-                profile: $profile,
-            },
-        ))
-    };
-}
-
-/// Create a StickyKey layer action (one-shot layer shape).
-///
-/// # Parameters
-/// - `$n`: Layer number (0-255)
-///
-/// # Example
-/// ```ignore
-/// sk_layer!(1)  // SK(MO(1))
-/// ```
-#[macro_export]
-macro_rules! sk_layer {
-    ($n:literal) => {
-        $crate::sk_layer!($n, ::core::primitive::u8::MAX)
-    };
-    ($n:literal, $profile:expr) => {
-        $crate::types::action::KeyAction::Single($crate::types::action::Action::StickyKey(
-            $crate::types::action::StickyKeyAction {
-                effect: $crate::types::action::StickyKeyEffect::Layer($n),
-                profile: $profile,
-            },
-        ))
-    };
-}
-
-/// Create a one-shot modifier action (alias for `sk_mod!`).
-///
-/// # Example
-/// ```ignore
-/// osm!(ModifierCombination::LSHIFT)  // equivalent to sk_mod!(ModifierCombination::LSHIFT)
+/// // Next key will be shifted
+/// osm!(ModifierCombination::LSHIFT)
+/// // Next key will have both Shift and Ctrl applied
+/// osm!(ModifierCombination::LSHIFT | ModifierCombination::LCTRL)
 /// ```
 #[macro_export]
 macro_rules! osm {
-    ($m:expr) => {
-        $crate::sk_mod!($m)
-    };
-    ($m:expr, $profile:expr) => {
-        $crate::sk_mod!($m, $profile)
-    };
-}
-
-/// Create a one-shot layer action (alias for `sk_layer!`).
-///
-/// # Example
-/// ```ignore
-/// osl!(1)  // equivalent to sk_layer!(1)
-/// ```
-#[macro_export]
-macro_rules! osl {
-    ($n:literal) => {
-        $crate::sk_layer!($n)
-    };
-    ($n:literal, $profile:expr) => {
-        $crate::sk_layer!($n, $profile)
+    ($m: expr) => {
+        $crate::types::action::KeyAction::Single($crate::types::action::Action::OneShotModifier($m))
     };
 }
 
@@ -459,7 +391,7 @@ macro_rules! tt {
         $crate::types::action::KeyAction::TapHold(
             $crate::types::action::Action::LayerToggle($x),
             $crate::types::action::Action::LayerOn($x),
-            $crate::types::morse::MorseProfile::const_default(),
+            ::core::primitive::u8::MAX,
         )
     };
 }
@@ -470,7 +402,7 @@ macro_rules! tt {
 ///
 /// # Parameters
 /// - `$x`: Layer number (0-255)
-/// - `$p`: Custom `MorseProfile` for timing configuration
+/// - `$p`: Morse profile index (`u8`, into `MorsesConfig::profiles`); an index with no entry falls back to the default profile
 #[macro_export]
 macro_rules! ttp {
     ($x: literal, $p: expr) => {
@@ -759,27 +691,4 @@ macro_rules! steno {
             $crate::types::steno::StenoKey::$key,
         ))
     };
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::types::modifier::ModifierCombination;
-
-    #[test]
-    fn one_shot_aliases_equal_canonical_sticky_key_macros() {
-        assert_eq!(
-            crate::osm!(ModifierCombination::LSHIFT),
-            crate::sk_mod!(ModifierCombination::LSHIFT)
-        );
-        assert_eq!(crate::osl!(2), crate::sk_layer!(2));
-    }
-
-    #[test]
-    fn profiled_one_shot_aliases_equal_canonical_sticky_key_macros() {
-        assert_eq!(
-            crate::osm!(ModifierCombination::LCTRL, 3),
-            crate::sk_mod!(ModifierCombination::LCTRL, 3)
-        );
-        assert_eq!(crate::osl!(4, 3), crate::sk_layer!(4, 3));
-    }
 }

@@ -10,7 +10,8 @@ use rmk_types::keycode::HidKeyCode;
 use rmk_types::modifier::ModifierCombination;
 
 use crate::config::StickyKeyReleaseMode;
-use crate::event::{KeyboardEvent, KeyboardEventPos, LayerTransitionGeneration};
+use crate::event::state::LayerTransitionGeneration;
+use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::keyboard::Keyboard;
 use crate::keymap::{StickyKeyPolicy, StickyKeyShape};
 
@@ -36,7 +37,6 @@ struct Latch<T> {
     phase: LatchPhase,
     repeat_count: u16,
     deadline: Option<Instant>,
-    /// External layer transitions at or before this generation are stale.
     layer_generation: LayerTransitionGeneration,
 }
 
@@ -122,10 +122,6 @@ impl<T> Latch<T> {
             TimeoutDisposition::Release
         }
     }
-
-    fn releases_on_layer_event(&self, event: StickyKeyReleaseMode, generation: LayerTransitionGeneration) -> bool {
-        self.policy.release_mode.intersects(event) && generation.is_after(self.layer_generation)
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -176,15 +172,7 @@ impl StickyModifierEffect {
 #[derive(Clone, Copy, Debug)]
 struct StickyLayerEffect {
     layer: u8,
-    activated_by_us: bool,
-}
-
-impl StickyLayerEffect {
-    fn observe_later_transition(&mut self, changed_layer: u8) {
-        if changed_layer == self.layer {
-            self.activated_by_us = false;
-        }
-    }
+    ownership_generation: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -326,9 +314,12 @@ impl Keyboard<'_> {
                 }
                 self.release_sticky_layer_effect(previous.value);
             }
-            let activated_by_us = self.keymap.activate_layer(layer);
+            let activated_by_us = self.keymap.activate_layer_if_inactive(layer);
             self.sticky_key_state.layer = Some(Latch::new(
-                StickyLayerEffect { layer, activated_by_us },
+                StickyLayerEffect {
+                    layer,
+                    ownership_generation: activated_by_us.then(|| self.keymap.layer_generation(layer)).flatten(),
+                },
                 event.pos,
                 policy,
             ));
@@ -442,23 +433,11 @@ impl Keyboard<'_> {
         &mut self,
         event: StickyKeyReleaseMode,
         generation: Option<LayerTransitionGeneration>,
-        changed_layer: Option<u8>,
     ) {
-        if let Some(layer) = &mut self.sticky_key_state.layer
-            && generation.is_none_or(|occurred| occurred.is_after(layer.layer_generation))
-            && let Some(changed_layer) = changed_layer
-        {
-            // Another producer changed the target layer after this lifecycle
-            // began. The boolean layer backend cannot retain multiple owners,
-            // so Sticky Key must relinquish cleanup ownership rather than later
-            // deactivating state that may now belong to that producer.
-            layer.value.observe_later_transition(changed_layer);
-        }
-
         if self.sticky_key_state.modifier.is_some_and(|latch| {
             generation.map_or_else(
                 || latch.policy.release_mode.intersects(event),
-                |at| latch.releases_on_layer_event(event, at),
+                |generation| latch.policy.release_mode.intersects(event) && generation.is_after(latch.layer_generation),
             )
         }) {
             self.release_sticky_modifier().await;
@@ -466,7 +445,7 @@ impl Keyboard<'_> {
         if self.sticky_key_state.layer.is_some_and(|latch| {
             generation.map_or_else(
                 || latch.policy.release_mode.intersects(event),
-                |at| latch.releases_on_layer_event(event, at),
+                |generation| latch.policy.release_mode.intersects(event) && generation.is_after(latch.layer_generation),
             )
         }) {
             self.release_sticky_layer();
@@ -474,7 +453,7 @@ impl Keyboard<'_> {
         if self.sticky_key_state.tap_key.is_some_and(|latch| {
             generation.map_or_else(
                 || latch.policy.release_mode.intersects(event),
-                |at| latch.releases_on_layer_event(event, at),
+                |generation| latch.policy.release_mode.intersects(event) && generation.is_after(latch.layer_generation),
             )
         }) {
             self.release_tap_key().await;
@@ -525,8 +504,10 @@ impl Keyboard<'_> {
     }
 
     fn release_sticky_layer_effect(&self, effect: StickyLayerEffect) {
-        if effect.activated_by_us {
-            self.keymap.deactivate_layer(effect.layer);
+        if effect.ownership_generation.is_some()
+            && effect.ownership_generation == self.keymap.layer_generation(effect.layer)
+        {
+            self.keymap.deactivate_layer_if_active(effect.layer);
         }
     }
 
@@ -616,6 +597,24 @@ mod tests {
     }
 
     #[test]
+    fn sticky_layer_ownership_generation_detects_later_mutations() {
+        let effect = StickyLayerEffect {
+            layer: 2,
+            ownership_generation: Some(7),
+        };
+        assert_eq!(effect.ownership_generation, Some(7));
+    }
+
+    #[test]
+    fn preexisting_sticky_layer_never_claims_cleanup_ownership() {
+        let effect = StickyLayerEffect {
+            layer: 2,
+            ownership_generation: None,
+        };
+        assert_eq!(effect.ownership_generation, None);
+    }
+
+    #[test]
     fn external_layer_events_only_release_their_current_lifecycle() {
         let mut latch = Latch::new(
             StickyModifierEffect::new(ModifierCombination::LCTRL),
@@ -624,46 +623,7 @@ mod tests {
         );
         latch.layer_generation = LayerTransitionGeneration::from_raw(10);
 
-        assert!(!latch.releases_on_layer_event(
-            StickyKeyReleaseMode::LAYER_ENTER,
-            LayerTransitionGeneration::from_raw(10)
-        ));
-        assert!(!latch.releases_on_layer_event(
-            StickyKeyReleaseMode::LAYER_EXIT,
-            LayerTransitionGeneration::from_raw(11)
-        ));
-        assert!(!latch.releases_on_layer_event(
-            StickyKeyReleaseMode::LAYER_ENTER,
-            LayerTransitionGeneration::from_raw(9)
-        ));
-        assert!(latch.releases_on_layer_event(
-            StickyKeyReleaseMode::LAYER_ENTER,
-            LayerTransitionGeneration::from_raw(11)
-        ));
-    }
-
-    #[test]
-    fn sticky_layer_relinquishes_only_for_its_own_later_transition() {
-        let mut effect = StickyLayerEffect {
-            layer: 2,
-            activated_by_us: true,
-        };
-
-        effect.observe_later_transition(1);
-        assert!(effect.activated_by_us);
-
-        effect.observe_later_transition(2);
-        assert!(!effect.activated_by_us);
-    }
-
-    #[test]
-    fn preexisting_sticky_layer_never_claims_cleanup_ownership() {
-        let mut effect = StickyLayerEffect {
-            layer: 2,
-            activated_by_us: false,
-        };
-
-        effect.observe_later_transition(2);
-        assert!(!effect.activated_by_us);
+        assert!(!LayerTransitionGeneration::from_raw(10).is_after(latch.layer_generation));
+        assert!(LayerTransitionGeneration::from_raw(11).is_after(latch.layer_generation));
     }
 }

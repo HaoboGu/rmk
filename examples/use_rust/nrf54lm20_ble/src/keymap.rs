@@ -10,12 +10,12 @@ pub(crate) const NUM_LAYER: usize = 2;
 pub const fn get_default_keymap() -> [[[KeyAction; COL]; ROW]; NUM_LAYER] {
     [
         layer!([
-            [k!(Escape), k!(Enter)],
-            [k!(Space), mo!(1)]
+            [k!(A), k!(B)],
+            [k!(C), mo!(1)]
         ]),
         layer!([
             [k!(KbVolumeDown), k!(KbVolumeUp)],
-            [k!(Tab), mo!(1)]
+            [k!(D), mo!(1)]
         ]),
     ]
 }

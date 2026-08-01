@@ -9,8 +9,11 @@ tri_layer = {
   lower = 2,
   adjust = 3,
 }
-sticky_key = {
+one_shot = {
   timeout = "1s",
+}
+one_shot_modifiers = {
+  activate_on_keypress = false,
 }
 ```
 
@@ -29,123 +32,34 @@ adjust = 3
 
 In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 3 (`adjust`) will also be enabled.
 
-Note that `"#layer_name"` could also be used in place of layer numbers.
+## Sticky Keys
 
-## Sticky Key
-
-The `[behavior.sticky_key]` table configures the unified **Sticky Key** (`SK`) feature. `SK` unifies the former `OSM` (one-shot modifier) and `OSL` (one-shot layer) actions into a single engine. `OSM(mod)` and `OSL(n)` remain available as aliases for `SK(mod)` and `SK(MO(n))` — they desugar to the exact same action, so either spelling works.
-
-### SK shapes
-
-`SK` selects its behavior based on the shape of its argument:
-
-| Shape | Syntax | Behavior |
-|-------|--------|----------|
-| Pure-mod | `SK(LGui)` (modifiers chain like `WM`, e.g. `SK(LCtrl\|LShift)`) | One-shot modifier — applies the modifier to the next key and, by default, releases it with that key. |
-| Layer | `SK(MO(n))` | One-shot layer — layer `n` applies to the next key and, by default, releases with that key. |
-| Tap-key | `SK(Tab, [LAlt])` (the modifier list is in `[ ]`; modifiers chain, e.g. `SK(Tab, [LCtrl\|LShift])`) | Alt+Tab-style cycling: the first press sends `modifier + key`, and repeated presses keep the modifier held. By default, another non-SK, non-modifier key press ends the sequence. |
-
-### Config fields
-
-| Field | Default | Meaning |
-|-------|---------|---------|
-| `timeout` | `"1s"` | Auto-release an unused sticky key after this idle time. String suffixed `s` or `ms`. |
-| `activate_on_keypress` | `false` | **Pure-mod SKs only.** When `true`, send the modifier immediately as the SK key itself is pressed, instead of waiting and applying it to the next key. (Also known as One-Shot Sticky Modifiers / OSSM.) |
-| `max_repeat` | `0` | **Tap-key SKs only.** Maximum total key activations in one sequence, including the first; `0` = unlimited. For example, `1` prevents a second cycling press. Pure-mod and layer SKs ignore this. |
-| `release_mode` | unset | Optional `|`-separated release triggers: `other_key_press`, `other_key_release`, `layer_enter`, `layer_exit`, and `double_tap`. |
-
-The default table applies to every Sticky Key. Define named overrides in
-`[behavior.sticky_key.profiles]` and select one by adding `@name` as the last
-argument: `SK(LGui, @gui)`, `SK(Tab, [LAlt], @alt_tab)`, or `SK(MO(1), @nav)`.
-Profile fields omitted from a named profile inherit from the default table.
-
-When `release_mode` is omitted, RMK preserves the legacy shape-native behavior:
-tap-key SKs release on another non-modifier key press; OSM and OSL are consumed
-on the terminating key release. An explicit mode overrides that behavior.
-`double_tap` releases an active Sticky Key when the same physical Sticky Key is
-pressed a second time. For tap-key SKs, this replaces the normal second cycling
-press with a release.
-
-`timeout` applies to the sticky latch, not to a key that is still physically held.
-Holding an `SK` key longer than the configured timeout will not synthesize a key
-release; releasing the physical key then completes the action normally.
-
-Modifier and layer Sticky Keys have independent latches. They can be active at
-the same time, retain their own profile, deadline, and release policy, and expire
-without clearing each other. A tap-key Sticky Key is exclusive with both: starting
-one releases any modifier/layer latch, and starting a modifier or layer Sticky Key
-releases the tap-key sequence being cycled.
-
-RMK's layer state is a boolean rather than a reference-counted owner set. A layer
-Sticky Key therefore never claims a layer that was already active, and its cleanup
-will not turn that pre-existing layer off. Overlapping the same layer with `MO`,
-`TG`, or another automatic layer producer is still subject to the normal boolean
-layer semantics; prefer a one-shot layer that is not simultaneously owned elsewhere.
-
-For example, an Alt+Tab profile can release on another key press or either
-direction of a layer transition:
-
-```toml
-[behavior.sticky_key]
-timeout = "1s"
-
-[behavior.sticky_key.profiles.alt_tab]
-timeout = "5s"
-release_mode = "other_key_press | layer_enter | layer_exit | double_tap"
-```
-
-Default values:
+Sticky Keys unify one-shot modifiers, one-shot layers, and repeated modified keys. Use `SK(LShift)` for a modifier, `SK(MO(1))` for a layer, or `SK(Tab, [LAlt])` for an Alt-Tab-style key. `OSM(...)` and `OSL(...)` remain compatibility aliases for the first two forms.
 
 ```toml
 [behavior.sticky_key]
 timeout = "1s"
 activate_on_keypress = false
 max_repeat = 0
-# release_mode is intentionally unset; shape-native defaults apply
-```
+release_mode = "other_key_release"
 
-OSSM example (pure-mod SK activates on key press):
+[behavior.sticky_key.profiles.quick]
+release_mode = "other_key_press | double_tap"
 
-```toml
-[behavior.sticky_key]
-activate_on_keypress = true
-```
-
-Press-release-mode example (modifier released when next key is pressed):
-
-```toml
-[behavior.sticky_key]
-release_mode = "other_key_press"
-```
-
-Longer timeout example:
-
-```toml
-[behavior.sticky_key]
+[behavior.sticky_key.profiles.alt_tab]
 timeout = "5s"
+max_repeat = 8
+release_mode = "other_key_press | layer_exit"
 ```
 
-For keymap usage, see `SK(...)` in the [keymap configuration](./layout#keyboard-layout-configuration).
+Each field may be omitted. Named profiles inherit omitted fields from `[behavior.sticky_key]` and are selected with `@name`, for example `SK(LShift, @quick)` or `SK(Tab, [LAlt], @alt_tab)`.
 
-### Migration from OSM / OSL
+- `timeout`: releases an unused latch after this duration; the default is `1s`.
+- `activate_on_keypress`: reports a pure modifier immediately instead of waiting for the next key.
+- `max_repeat`: limits tap-key repetitions; `0` means unlimited.
+- `release_mode`: a `|`-separated set of `other_key_press`, `other_key_release`, `layer_enter`, `layer_exit`, and `double_tap`.
 
-`OSM(mod)` and `OSL(n)` are **still supported** as aliases — they desugar to `SK(mod)` and `SK(MO(n))` respectively, so existing keymaps keep working unchanged. The `SK` forms are the canonical spelling; use whichever you prefer. The old 5-positional `SK` form and the `[behavior.one_shot]` / `[behavior.one_shot_modifiers]` TOML tables, however, are **removed** — using them in `keyboard.toml` is a build error. Rust configurations retain the legacy `BehaviorConfig::one_shot` and `BehaviorConfig::one_shot_modifiers` fields as a compatibility adapter. Avoid setting legacy and canonical fields together: legacy timeout fills only the canonical default, legacy `activate_on_keypress = true` enables the canonical default, and an explicit canonical `release_mode` overrides legacy `quick_release`. Otherwise, `quick_release` remains specific to pure-mod/OSM behavior.
-
-| Old | New (canonical) | Alias still accepted |
-|-----|-----------------|----------------------|
-| `OSM(LGui)` | `SK(LGui)` | `OSM(LGui)` |
-| `OSL(1)` | `SK(MO(1))` | `OSL(1)` |
-| `SK(Tab, [LAlt], 0, 0, false)` (5-positional) | `SK(Tab, [LAlt])` + `[behavior.sticky_key]` | — |
-| `[behavior.one_shot]` `timeout` | `[behavior.sticky_key]` `timeout` | — |
-| `[behavior.one_shot_modifiers]` `activate_on_keypress` / `quick_release` | `[behavior.sticky_key]` `activate_on_keypress` / `release_mode` | — |
-| `exit_on_layer_change` | `release_mode = "layer_enter | layer_exit"` | — |
-
-Accepted breaking changes:
-
-- The old 5-positional `SK(key, [mod], max_repeat, timeout_ms, exit_on_layer_change)` form is **removed** → build error. The trailing knobs now live in `[behavior.sticky_key]`.
-- The `[behavior.one_shot]` and `[behavior.one_shot_modifiers]` TOML tables are **removed** → use `[behavior.sticky_key]`. The equivalent Rust `BehaviorConfig` fields remain source-compatible.
-- The former `quick_release` and layer-change settings are replaced by `release_mode`; use one or more of `other_key_press`, `other_key_release`, `layer_enter`, `layer_exit`, and `double_tap`.
-- Tap-key (alt-tab) SKs now have a **1s default timeout** (previously they had no timeout). Set `timeout` higher or rely on the default.
+The legacy `[behavior.one_shot] timeout` and `[behavior.one_shot_modifiers]` settings are still accepted and feed the default Sticky profile. `quick_release = true` maps to `other_key_press` for pure-modifier aliases.
 
 ## Combo
 
@@ -289,7 +203,6 @@ morses = [
 ```
 
 ::: warning
-
 The three definition methods are mutually exclusive. For any single Morse key definition, you must choose only one of the following approaches:
 
 - Full Morse: `morse_actions`
@@ -297,19 +210,20 @@ The three definition methods are mutually exclusive. For any single Morse key de
 - Vial-style: `tap`, `hold`, `hold_after_tap`, `double_tap`.
 
 Mixing fields from different methods in the same definition is not allowed.
-
 :::
 
 ### Profile
 
 The `profile` of a morse key contains all tunable configurations of this morse key, such as behavior mode, timing configurations, etc.
 
+::: tip
+- `enable_flow_tap`: Enables HRM (Home Row Mod) mode. When enabled, the global `prior_idle_time` setting becomes functional. Defaults to `false`. Profiles may set this to override the global `[behavior.morse]` value; omitting it inherits the global value.
+- `prior_idle_time`: _(global only)_ If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter lives in `[behavior.morse]` (not in a per-key profile) and is effective only when `enable_flow_tap` is enabled for the key. Defaults to 120ms.
+:::
+
 A profile contains the following fields:
 
-- `enable_flow_tap`: Enables HRM (Home Row Mod) mode. When enabled, the `prior_idle_time` setting becomes functional. Defaults to `false`. Profiles may set this to override the global `[behavior.morse]` value; omitting it inherits the global value.
-- `prior_idle_time`: If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter is configured globally in `[behavior.morse]` and is effective only when `enable_flow_tap` is enabled for the key. Defaults to 120ms.
-
-- `unilateral_tap`: (Experimental) Enables unilateral tap mode. When enabled, tap action will be triggered when a key from "same" hand is pressed. In current experimental version, the "same" hand is calculated using the `<hand>`, which can be given in `matrix_map`. This option is recommended to set to true when `enable_flow_tap` is set to true.
+- `unilateral_tap`: (Experimental) Enables unilateral tap mode. When enabled, tap action will be triggered when a key from "same" hand is pressed. In current experimental version, the "same" hand is calculated using the `<hand>`, which can be given in `layout.map`. This option is recommended to set to true when `enable_flow_tap` is set to true.
 
 - The morse mode, which can be set by enabling one of these:
   - `permissive_hold`: Enables permissive hold mode. When enabled, hold action will be triggered when a key is pressed and released during tap-hold decision. This option is recommended to set to true when `enable_flow_tap` is set to true.
@@ -355,12 +269,11 @@ gap_timeout = "250ms"
 
 In the `morse.profiles` sub-table you can define individual key profiles. Each profile has an associated name, which can be referred
 
-- from the layout.matrix_map (the name is case sensitive), to override the defaults in certain key positions
 - from the tap hold keys in the key map if the third optional parameter is filled:
   - `TH(key-tap, key-hold, <profile_name>)`,
   - `MT(key, modifier, <profile_name>)`,
   - `LT(n, key, <profile_name>)`
-- the Morse keys may also have their per key profile overrides (which is stronger than the positional override) by setting the `profile` field.
+- the Morse keys may also have their per key profile overrides by setting the `profile` field.
 
 The following examples are the typical default configurations:
 
@@ -380,7 +293,7 @@ MRZ = { normal_mode = true, unilateral_tap = false, hold_timeout = "200ms", gap_
 Then you can reference the profile in layer config:
 
 ```toml
-[[layer]]
+[[keymap.layer]]
 keys = """
 MT(A, LShift, HRM)
 LT(1, A, FH)
@@ -499,21 +412,34 @@ You can use both `Morse` and `TD` to represent a morse key in your keymap, you c
 [layout]
 rows = 4
 cols = 3
+map = """
+(0,0) (0,1) (0,2)
+(1,0) (1,1) (1,2)
+(2,0) (2,1) (2,2)
+(3,0) (3,1) (3,2)
+"""
+
+[keymap]
 layers = 2
-keymap = [
-    [
-        ["A", "B", "C"],
-        ["TD(0)", "TD(1)", "TD(2)"],  # Use morse dances 0, 1, and 2
-        ["LCtrl", "MO(1)", "LShift"],
-        ["SK(MO(1))", "LT(2, Kc9, PN)", "LM(1, LShift | LGui)"]  # PN is a morse profile name here
-    [
-        ["_", "TT(1)", "TG(2)"],
-        ["_", "_", "_"],
-        ["_", "_", "_"],
-        ["_", "_", "_"]
-    ],
-]
+
+[[keymap.layer]]
+keys = """
+A      B              C
+TD(0)  TD(1)          TD(2)
+LCtrl  MO(1)          LShift
+OSL(1) LT(2, Kc9, PN) LM(1, LShift | LGui)
+"""
+
+[[keymap.layer]]
+keys = """
+_ TT(1) TG(2)
+_ _     _
+_ _     _
+_ _     _
+"""
 ```
+
+Here `TD(0)`, `TD(1)`, and `TD(2)` reference morse dances by index, and the trailing `PN` in `LT(2, Kc9, PN)` names a morse profile (defined above). `keys` and `map` blocks hold data only.
 
 ## Fork
 
@@ -636,11 +562,9 @@ subs = 1
 | `reset_timeout_on_key` | bool | `false` | When `true`, key presses that do NOT deactivate `target_layer` push the `timeout` deadline forward (reset it to *now + `timeout`*). When `deactivate_on_key` is `false`, every key press extends the timeout. |
 
 ::: warning
-
 Prefer a dedicated layer that is not bound to any manual keys (like `MO` or `TG`). The auto-mouse task releases its ownership when keyboard-driven changes deactivate the layer, so transient overlap is handled cleanly. Layer state is still a single boolean, however, so pressing `TG(target_layer)` while auto-mouse is active toggles the layer off instead of pinning it on.
 
 Entries that share the same `target_layer` cooperate: the layer stays active until the last device stops moving, so per-device `timeout`/`threshold` differences on a shared layer are safe.
-
 :::
 
 ::: warning Limitation: keys that cannot be classified
@@ -658,7 +582,6 @@ Some keys cannot be classified; they never trigger immediate deactivation (only 
 
 - **Subscriber Slots**: Increment `[event.pointing].subs` and `[event.layer_change].subs` by `1` each in your `keyboard.toml` to reserve slots for this task. If any entry uses `deactivate_on_key` or `reset_timeout_on_key`, also set `[event.action].subs` to `1` (it defaults to `0`), otherwise the build fails with a validation error. See [Event Configuration](./event.md).
 - **Buffer Size**: If pointing events are dropped under high-frequency input, increase `[event.pointing].channel_size` (default `8`). `[event.layer_change].channel_size` defaults to `1` and only needs raising if you burst many layer changes faster than subscribers consume them.
-
 :::
 
 ::: note Rust API

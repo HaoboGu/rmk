@@ -5,13 +5,15 @@
 #
 # rmk's integration tests run against `embassy-time/mock-driver` (via the
 # dev-only `std` feature in rmk/Cargo.toml) and are driven by
-# `tests/common/test_block_on::test_block_on`. Virtual time eliminates the
+# `rmk::test_support::test_block_on`. Virtual time eliminates the
 # wall-clock drift that previously caused flaky tap/hold decisions, so no
 # parallelism cap or retry net is needed.
 
+# Local runs print each failure once, where it happens. `ci` repeats them in a
+# final block, which is what makes them findable at the end of a job log.
 [profile.default]
 fail-fast = false
-failure-output = "immediate-final"
+failure-output = "immediate"
 
 [profile.ci]
 fail-fast = false

@@ -13,6 +13,12 @@ const config: Config = {
       options: {
         proseWrap: 'preserve'
       }
+    },
+    {
+      files: '*.mdx',
+      options: {
+        proseWrap: 'never'
+      }
     }
   ]
 }

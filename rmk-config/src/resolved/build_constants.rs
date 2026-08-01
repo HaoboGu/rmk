@@ -35,6 +35,7 @@ pub struct BuildConstants {
     pub combo_max_length: usize,
     pub fork_max_num: usize,
     pub morse_max_num: usize,
+    pub morse_profile_max_num: usize,
     pub sticky_key_profile_max_num: usize,
     pub max_patterns_per_key: usize,
     pub macro_space_size: usize,
@@ -47,9 +48,10 @@ pub struct BuildConstants {
     pub split_peripherals_num: usize,
     pub ble_profiles_num: usize,
     pub split_central_sleep_timeout_seconds: u32,
-    pub protocol_max_bulk_size: usize,
     pub protocol_macro_chunk_size: usize,
     pub auto_mouse_layer_max_num: usize,
+    /// Rynk RX/TX buffer size (bytes).
+    pub rynk_buffer_size: usize,
     pub events: Vec<EventChannel>,
     pub passkey: Option<Passkey>,
 }
@@ -121,6 +123,12 @@ impl crate::KeyboardTomlConfig {
         // Declarations live in subscriber_default.toml.
         apply_feature_subscriber_bumps(&mut events, active_features);
 
+        let auto_mouse_layers = self
+            .behavior
+            .as_ref()
+            .and_then(|behavior| behavior.auto_mouse_layer.as_deref())
+            .unwrap_or_default();
+
         // Only validate passkey settings when the build will emit passkey constants.
         let passkey = if active_features.contains(&"passkey_entry") {
             self.ble.as_ref().map(resolve_passkey_enabled).transpose()?
@@ -151,33 +159,30 @@ impl crate::KeyboardTomlConfig {
                 protocol_limits::MAX_MACRO_DATA_SIZE
             ));
         }
-        if rmk.protocol_max_bulk_size > protocol_limits::MAX_BULK_SIZE {
-            return Err(format!(
-                "protocol_max_bulk_size ({}) exceeds protocol ceiling MAX_BULK_SIZE ({})",
-                rmk.protocol_max_bulk_size,
-                protocol_limits::MAX_BULK_SIZE
-            ));
-        }
-
         let auto_mouse_layer_max_num = rmk
             .auto_mouse_layer_max_num
             .unwrap_or(crate::resolved::behavior::DEFAULT_AUTO_MOUSE_LAYER_MAX_NUM);
         let sticky_key_profile_max_num = self.sticky_key_profile_capacity();
         let sticky_key_profile_count = self.configured_sticky_key_profile_count();
+        if sticky_key_profile_count > u8::MAX as usize {
+            return Err(format!(
+                "behavior.sticky_key.profiles defines {sticky_key_profile_count} profiles, but at most 255 named profiles are supported"
+            ));
+        }
         if sticky_key_profile_count > sticky_key_profile_max_num {
             return Err(format!(
                 "behavior.sticky_key.profiles defines {sticky_key_profile_count} profiles, but `[rmk] sticky_key_profile_max_num` is {sticky_key_profile_max_num}. Raise it in keyboard.toml"
             ));
         }
-        if let Some(entries) = self.behavior.as_ref().and_then(|b| b.auto_mouse_layer.as_ref()) {
-            if entries.len() > auto_mouse_layer_max_num {
+        if !auto_mouse_layers.is_empty() {
+            if auto_mouse_layers.len() > auto_mouse_layer_max_num {
                 return Err(format!(
                     "number of [[behavior.auto_mouse_layer]] entries ({}) exceeds auto_mouse_layer_max_num ({})",
-                    entries.len(),
+                    auto_mouse_layers.len(),
                     auto_mouse_layer_max_num
                 ));
             }
-            let uses_action_event = entries
+            let uses_action_event = auto_mouse_layers
                 .iter()
                 .any(|e| e.deactivate_on_key == Some(true) || e.reset_timeout_on_key == Some(true));
             if uses_action_event && events.iter().any(|e| e.name == "action" && e.subs == 0) {
@@ -187,10 +192,6 @@ impl crate::KeyboardTomlConfig {
             }
         }
 
-        // The keyboard always subscribes to this internal event. Auto-mouse
-        // additionally publishes it when configured, so validate the generated
-        // pubsub resources at their configuration boundary rather than panicking
-        // during runtime initialization.
         let layer_transition = events
             .iter()
             .find(|event| event.name == "layer_transition")
@@ -203,23 +204,26 @@ impl crate::KeyboardTomlConfig {
                 "[event.layer_transition].subs must be at least 1 because Keyboard subscribes to it".to_string(),
             );
         }
-        let auto_mouse_configured = self
-            .behavior
-            .as_ref()
-            .and_then(|behavior| behavior.auto_mouse_layer.as_ref())
-            .is_some_and(|entries| !entries.is_empty());
-        if auto_mouse_configured && layer_transition.pubs == 0 {
+        if !auto_mouse_layers.is_empty() && layer_transition.pubs == 0 {
             return Err(
                 "[event.layer_transition].pubs must be at least 1 when [[behavior.auto_mouse_layer]] is configured"
                     .to_string(),
             );
         }
 
+        // Host capability fields are u8/u16 on the wire; check the values no deserializer bound
+        // covers (morse_max_num and split_peripherals_num can also be auto-raised past 255).
+        validate_u8_capability("morse_max_num", rmk.morse_max_num)?;
+        validate_u8_capability("split_peripherals_num", split_peripherals_num)?;
+        validate_u8_capability("ble_profiles_num", rmk.ble_profiles_num)?;
+        validate_u16_capability("macro_space_size", rmk.macro_space_size)?;
+        validate_u16_capability("rynk_buffer_size", rmk.rynk_buffer_size)?;
         Ok(BuildConstants {
             combo_max_num: rmk.combo_max_num,
             combo_max_length: rmk.combo_max_length,
             fork_max_num: rmk.fork_max_num,
             morse_max_num: rmk.morse_max_num,
+            morse_profile_max_num: rmk.morse_profile_max_num,
             sticky_key_profile_max_num,
             max_patterns_per_key: rmk.max_patterns_per_key,
             macro_space_size: rmk.macro_space_size,
@@ -232,13 +236,31 @@ impl crate::KeyboardTomlConfig {
             split_peripherals_num,
             ble_profiles_num: rmk.ble_profiles_num,
             split_central_sleep_timeout_seconds: rmk.split_central_sleep_timeout_seconds,
-            protocol_max_bulk_size: rmk.protocol_max_bulk_size,
             protocol_macro_chunk_size: rmk.protocol_macro_chunk_size,
             auto_mouse_layer_max_num,
+            rynk_buffer_size: rmk.rynk_buffer_size,
             events,
             passkey,
         })
     }
+}
+
+fn validate_u8_capability(name: &str, value: usize) -> Result<(), String> {
+    if value > u8::MAX as usize {
+        return Err(format!(
+            "{name} ({value}) exceeds the u8 host capability field (max 255)"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_u16_capability(name: &str, value: usize) -> Result<(), String> {
+    if value > u16::MAX as usize {
+        return Err(format!(
+            "{name} ({value}) exceeds the u16 host capability field (max 65535)"
+        ));
+    }
+    Ok(())
 }
 
 /// Bump event subscriber counts based on feature flags declared in `subscriber_default.toml`.
@@ -279,8 +301,22 @@ fn resolve_passkey_enabled(ble: &crate::BleConfig) -> Result<Passkey, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{BuildConstants, resolve_passkey_enabled};
-    use crate::{BleConfig, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS, MIN_PASSKEY_ENTRY_TIMEOUT_SECS};
+    use super::{BuildConstants, resolve_passkey_enabled, validate_u8_capability, validate_u16_capability};
+    use crate::{BleConfig, DEFAULT_PASSKEY_ENTRY_TIMEOUT_SECS, KeyboardTomlConfig, MIN_PASSKEY_ENTRY_TIMEOUT_SECS};
+
+    #[test]
+    fn reserves_led_subscribers_for_display_split_and_dual_rynk_sessions() {
+        let config: KeyboardTomlConfig = toml::from_str("").unwrap();
+        let constants = config.build_constants(&["display", "split", "rynk", "_ble"]).unwrap();
+        let led_indicator = constants
+            .events
+            .iter()
+            .find(|event| event.name == "led_indicator")
+            .unwrap();
+
+        // Three indicator processors, the display, two split peripherals, and USB/BLE Rynk sessions.
+        assert_eq!(led_indicator.subs, 8);
+    }
 
     #[test]
     fn validates_passkey_timeout() {
@@ -333,34 +369,65 @@ mod tests {
     }
 
     #[test]
-    fn sticky_key_profile_capacity_is_derived_from_configuration() {
-        let toml = r#"
-[behavior.sticky_key.profiles.one]
-[behavior.sticky_key.profiles.two]
-[behavior.sticky_key.profiles.three]
-[behavior.sticky_key.profiles.four]
-[behavior.sticky_key.profiles.five]
-"#;
-        let constants = parse(toml).build_constants(&[]).unwrap();
-        assert_eq!(constants.sticky_key_profile_max_num, 5);
-    }
+    fn sticky_profile_capacity_is_derived_and_validated() {
+        let derived = parse(
+            "[behavior.sticky_key.profiles.one]\n[behavior.sticky_key.profiles.two]\n[behavior.sticky_key.profiles.three]\n[behavior.sticky_key.profiles.four]\n[behavior.sticky_key.profiles.five]\n",
+        )
+        .build_constants(&[])
+        .unwrap();
+        assert_eq!(derived.sticky_key_profile_max_num, 5);
 
-    #[test]
-    fn sticky_key_profile_capacity_can_be_explicitly_disabled() {
-        let constants = parse("[rmk]\nsticky_key_profile_max_num = 0\n")
-            .build_constants(&[])
-            .unwrap();
-        assert_eq!(constants.sticky_key_profile_max_num, 0);
-    }
-
-    #[test]
-    fn sticky_key_profile_capacity_rejects_too_small_override() {
-        let toml = "[rmk]\nsticky_key_profile_max_num = 0\n\n[behavior.sticky_key.profiles.named]\n";
-        let err = match parse(toml).build_constants(&[]) {
-            Ok(_) => panic!("expected sticky_key_profile_max_num validation failure"),
+        let too_small = "[rmk]\nsticky_key_profile_max_num = 0\n\n[behavior.sticky_key.profiles.named]\n";
+        let err = match parse(too_small).build_constants(&[]) {
+            Ok(_) => panic!("expected sticky profile capacity validation failure"),
             Err(err) => err,
         };
         assert!(err.contains("sticky_key_profile_max_num"));
+    }
+
+    #[test]
+    fn sticky_profile_count_preserves_the_default_profile_sentinel() {
+        let mut toml = String::new();
+        for index in 0..=u8::MAX {
+            toml.push_str(&format!("[behavior.sticky_key.profiles.profile_{index}]\n"));
+        }
+
+        let err = match parse(&toml).build_constants(&[]) {
+            Ok(_) => panic!("expected sticky profile count validation failure"),
+            Err(err) => err,
+        };
+        assert!(err.contains("at most 255 named profiles"));
+    }
+
+    #[test]
+    fn layer_transition_requires_keyboard_resources() {
+        for (field, toml) in [
+            (
+                "channel_size",
+                "[event.layer_transition]\nchannel_size = 0\npubs = 1\nsubs = 1\n",
+            ),
+            (
+                "subs",
+                "[event.layer_transition]\nchannel_size = 2\npubs = 1\nsubs = 0\n",
+            ),
+        ] {
+            let err = match parse(toml).build_constants(&[]) {
+                Ok(_) => panic!("expected layer-transition validation failure"),
+                Err(err) => err,
+            };
+            assert!(err.contains("[event.layer_transition]"));
+            assert!(err.contains(field));
+        }
+    }
+
+    #[test]
+    fn auto_mouse_requires_layer_transition_publisher() {
+        let toml = "[event.layer_transition]\nchannel_size = 2\npubs = 0\nsubs = 1\n\n[[behavior.auto_mouse_layer]]\ntarget_layer = 1\n";
+        let err = match parse(toml).build_constants(&[]) {
+            Ok(_) => panic!("expected layer-transition publisher validation failure"),
+            Err(err) => err,
+        };
+        assert!(err.contains("[event.layer_transition].pubs"));
     }
 
     #[test]
@@ -380,33 +447,6 @@ mod tests {
     }
 
     #[test]
-    fn layer_transition_requires_keyboard_resources() {
-        for field in ["channel_size", "subs"] {
-            let toml = if field == "channel_size" {
-                "[event.layer_transition]\nchannel_size = 0\npubs = 1\nsubs = 1\n"
-            } else {
-                "[event.layer_transition]\nchannel_size = 2\npubs = 1\nsubs = 0\n"
-            };
-            let err = match parse(&toml).build_constants(&[]) {
-                Err(err) => err,
-                Ok(_) => panic!("expected layer-transition validation failure"),
-            };
-            assert!(err.contains("[event.layer_transition]"));
-            assert!(err.contains(field));
-        }
-    }
-
-    #[test]
-    fn auto_mouse_requires_layer_transition_publisher() {
-        let toml = "[event.layer_transition]\nchannel_size = 1\npubs = 0\nsubs = 1\n\n[[behavior.auto_mouse_layer]]\ntarget_layer = 1\n";
-        let err = match parse(toml).build_constants(&[]) {
-            Err(err) => err,
-            Ok(_) => panic!("expected layer-transition publisher validation failure"),
-        };
-        assert!(err.contains("[event.layer_transition].pubs"));
-    }
-
-    #[test]
     fn ble_reserves_advertising_timeout_wake_subscribers() {
         // ble/mod.rs subscribes to KeyboardEvent/PointingEvent when advertising
         // times out, on top of every permanent subscriber. Without a reserved
@@ -423,5 +463,20 @@ mod tests {
                 "{event} needs a wake subscriber slot under _ble"
             );
         }
+    }
+
+    #[test]
+    fn validates_capability_wire_widths() {
+        assert!(validate_u8_capability("ble_profiles_num", 255).is_ok());
+        assert_eq!(
+            validate_u8_capability("ble_profiles_num", 256),
+            Err("ble_profiles_num (256) exceeds the u8 host capability field (max 255)".to_string())
+        );
+
+        assert!(validate_u16_capability("macro_space_size", 65535).is_ok());
+        assert_eq!(
+            validate_u16_capability("macro_space_size", 65536),
+            Err("macro_space_size (65536) exceeds the u16 host capability field (max 65535)".to_string())
+        );
     }
 }

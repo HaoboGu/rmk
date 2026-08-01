@@ -2,16 +2,18 @@
 //!
 use std::collections::HashMap;
 
-use quote::quote;
+use quote::{format_ident, quote};
 use rmk_config::resolved::Behavior;
 use rmk_config::resolved::behavior::{
     AutoMouseLayer, Combos, Forks, MacroOperation, Macros, Morse, MorseActionPair, MorseKey,
-    MorseProfile, StickyKeyProfile,
+    MorseProfile, OneShot, StickyKeyProfile,
 };
 
 use super::action_parser::{
-    expand_profile, expand_profile_name, get_key_with_alias, parse_key, sorted_sticky_profile_names,
+    as_hid_keycode, expand_profile, expand_profile_name, get_key_with_alias, parse_action,
+    parse_key, sorted_profile_names, sorted_sticky_profile_names,
 };
+use super::feature::{get_rmk_features, is_feature_enabled};
 
 fn expand_tri_layer(tri_layer: &Option<[u8; 3]>) -> proc_macro2::TokenStream {
     match tri_layer {
@@ -25,6 +27,48 @@ fn expand_tri_layer(tri_layer: &Option<[u8; 3]>) -> proc_macro2::TokenStream {
     }
 }
 
+fn expand_one_shot(one_shot_timeout_ms: &Option<u64>) -> proc_macro2::TokenStream {
+    let default = quote! {::rmk::config::OneShotConfig::default()};
+    match one_shot_timeout_ms {
+        Some(millis) => {
+            let timeout = quote! {::embassy_time::Duration::from_millis(#millis)};
+
+            quote! {
+                ::rmk::config::OneShotConfig {
+                    timeout: #timeout,
+                }
+            }
+        }
+        None => default,
+    }
+}
+
+fn expand_one_shot_modifiers(one_shot_modifiers: &Option<OneShot>) -> proc_macro2::TokenStream {
+    let default = quote! { ::core::default::Default::default() };
+
+    match one_shot_modifiers {
+        Some(one_shot_modifier) => {
+            let activate_on_keypress = match one_shot_modifier.activate_on_keypress {
+                Some(value) => quote! { activate_on_keypress: #value, },
+                None => quote! {},
+            };
+            let quick_release = match one_shot_modifier.quick_release {
+                Some(value) => quote! { quick_release: #value, },
+                None => quote! {},
+            };
+
+            quote! {
+                ::rmk::config::OneShotModifiersConfig {
+                    #activate_on_keypress
+                    #quick_release
+                    ..Default::default()
+                }
+            }
+        }
+        None => default,
+    }
+}
+
 fn expand_sticky_key_profile(
     profile: &StickyKeyProfile,
     fallback: &StickyKeyProfile,
@@ -35,21 +79,16 @@ fn expand_sticky_key_profile(
         .or(fallback.activate_on_keypress)
         .unwrap_or(false);
     let max_repeat = profile.max_repeat.or(fallback.max_repeat).unwrap_or(0);
-    let release_mode = profile.release_mode.or(fallback.release_mode);
-    let release_mode = match release_mode {
+    let release_mode = match profile.release_mode.or(fallback.release_mode) {
         Some(mode) => {
             let bits = mode.into_bits();
-            quote! {
-                ::core::option::Option::Some(
-                    ::rmk::config::StickyKeyReleaseMode::from_bits(#bits)
-                )
-            }
+            quote! { ::core::option::Option::Some(::rmk::config::StickyKeyReleaseMode::from_bits(#bits)) }
         }
         None => quote! { ::core::option::Option::None },
     };
     quote! {
         ::rmk::config::StickyKeyProfile {
-            timeout: ::rmk::embassy_time::Duration::from_millis(#timeout),
+            timeout: ::embassy_time::Duration::from_millis(#timeout),
             activate_on_keypress: #activate_on_keypress,
             max_repeat: #max_repeat,
             release_mode: #release_mode,
@@ -61,28 +100,38 @@ fn expand_sticky_key(behavior: &Behavior) -> proc_macro2::TokenStream {
     let default = behavior
         .sticky_key
         .as_ref()
-        .map(|sk| StickyKeyProfile {
-            timeout_ms: sk.timeout_ms,
-            activate_on_keypress: sk.activate_on_keypress,
-            max_repeat: sk.max_repeat,
-            release_mode: sk.release_mode,
+        .map(|sticky| StickyKeyProfile {
+            timeout_ms: sticky.timeout_ms.or(behavior.one_shot_timeout_ms),
+            activate_on_keypress: sticky.activate_on_keypress.or(behavior
+                .one_shot_modifiers
+                .as_ref()
+                .and_then(|one_shot| one_shot.activate_on_keypress)),
+            max_repeat: sticky.max_repeat,
+            release_mode: sticky.release_mode,
         })
-        .unwrap_or_default();
+        .unwrap_or_else(|| StickyKeyProfile {
+            timeout_ms: behavior.one_shot_timeout_ms,
+            activate_on_keypress: behavior
+                .one_shot_modifiers
+                .as_ref()
+                .and_then(|one_shot| one_shot.activate_on_keypress),
+            ..Default::default()
+        });
     let default_profile = expand_sticky_key_profile(&default, &StickyKeyProfile::default());
-    let profile_tokens = behavior
+    let profiles = behavior
         .sticky_key
         .as_ref()
-        .map(|sk| {
-            sorted_sticky_profile_names(Some(&sk.profiles))
+        .map(|sticky| {
+            sorted_sticky_profile_names(Some(&sticky.profiles))
                 .into_iter()
-                .map(|name| expand_sticky_key_profile(&sk.profiles[&name], &default))
+                .map(|name| expand_sticky_key_profile(&sticky.profiles[&name], &default))
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
     quote! {
         ::rmk::config::StickyKeyConfig {
             default_profile: #default_profile,
-            profiles: ::rmk::heapless::Vec::from_iter([#(#profile_tokens),*]),
+            profiles: ::rmk::heapless::Vec::from_iter([#(#profiles),*]),
         }
     }
 }
@@ -145,11 +194,35 @@ fn expand_morse(
         };
         let morses = expand_morses(&config.morses, &profiles_ref, sticky_profiles);
 
+        // Interned morse profile table, in the same sorted-name order used by
+        // `morse_profile` when it emits per-key indices. The pushes can't overflow:
+        // the profile count is validated against the capacity in `behavior()`.
+        let profile_names = sorted_profile_names(&profiles_ref);
+        let profiles_token = if profile_names.is_empty() {
+            quote! {}
+        } else {
+            let profile_tokens = profile_names.into_iter().map(|name| {
+                let profile = profiles_ref
+                    .as_ref()
+                    .and_then(|m| m.get(&name))
+                    .expect("name from same map");
+                expand_profile(profile)
+            });
+            quote! {
+                profiles: {
+                    let mut v = ::rmk::heapless::Vec::new();
+                    #( let _ = v.push(#profile_tokens); )*
+                    v
+                },
+            }
+        };
+
         quote! {
             ::rmk::config::MorsesConfig {
                 #enable_flow_tap_token
                 #prior_idle_time_token
                 default_profile: #default_profile,
+                #profiles_token
                 #morses
                 ..Default::default()
             }
@@ -225,6 +298,33 @@ fn expand_combos(
     }
 }
 
+/// One key-carrying macro operation. A plain keycode takes the compact 3-byte
+/// encoding; a richer action (`WM(A, LCtrl)`, `PDF(1)`, `MACRO(0)`) takes Vial's
+/// 4-byte extended form, which is decoded through the Vial keycode table and so
+/// needs the `vial` feature.
+fn expand_macro_key(key: &str, compact: &str, extended: &str) -> proc_macro2::TokenStream {
+    let key = key.trim();
+    if let Some(keycode) = as_hid_keycode(key) {
+        let variant = format_ident!("{compact}");
+        return quote! {
+            ::rmk::keyboard_macros::MacroOperation::#variant(::rmk::types::keycode::HidKeyCode::#keycode).into_iter()
+        };
+    }
+    // No feature list means no `rmk` dependency to read — rmk's own test crate,
+    // where the scenario's `features` gate decides instead. Only reject when the
+    // manifest positively says `vial` is off.
+    if let Some(features) = get_rmk_features()
+        && !is_feature_enabled(&Some(features), "vial")
+    {
+        panic!(
+            "\n\u{274c} keyboard.toml: macro operation `{key}` is not a plain keycode, so it needs the extended encoding — enable rmk's `vial` feature or use a plain keycode"
+        );
+    }
+    let action = parse_action(key);
+    let variant = format_ident!("{extended}");
+    quote! { ::rmk::keyboard_macros::MacroOperation::#variant(#action).into_iter() }
+}
+
 fn expand_macros(macros: &Option<Macros>) -> proc_macro2::TokenStream {
     let default = quote! { ::core::default::Default::default() };
 
@@ -236,20 +336,13 @@ fn expand_macros(macros: &Option<Macros>) -> proc_macro2::TokenStream {
                     return quote! { ::rmk::heapless::Vec::new() };
                 }
                 let operations = m.operations.iter().map(|op| match op {
-                    MacroOperation::Tap { keycode } => {
-                        let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Tap(::rmk::types::keycode::HidKeyCode::#key).into_iter() }
-                    }
-                    MacroOperation::Down { keycode } => {
-                        let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Press(::rmk::types::keycode::HidKeyCode::#key).into_iter() }
-                    }
-                    MacroOperation::Up { keycode } => {
-                        let key = get_key_with_alias(keycode.trim().to_owned());
-                        quote! { ::rmk::keyboard_macros::MacroOperation::Release(::rmk::types::keycode::HidKeyCode::#key).into_iter() }
-                    }
+                    MacroOperation::Tap { keycode } => expand_macro_key(keycode, "Tap", "TapAction"),
+                    MacroOperation::Down { keycode } => expand_macro_key(keycode, "Press", "PressAction"),
+                    MacroOperation::Up { keycode } => expand_macro_key(keycode, "Release", "ReleaseAction"),
                     MacroOperation::Delay { duration_ms } => {
-                        let millis = *duration_ms as u16;
+                        let millis = u16::try_from(*duration_ms).ok().filter(|ms| *ms <= 65024).unwrap_or_else(|| {
+                            panic!("\n\u{274c} keyboard.toml: macro delay {duration_ms}ms exceeds the 65024ms the Vial macro encoding can hold")
+                        });
                         quote! { ::rmk::keyboard_macros::MacroOperation::Delay(#millis).into_iter() }
                     }
                     MacroOperation::Text { text } => {
@@ -563,10 +656,12 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
     let sticky_profiles = behavior
         .sticky_key
         .as_ref()
-        .map(|config| config.profiles.clone())
+        .map(|sticky| sticky.profiles.clone())
         .filter(|profiles| !profiles.is_empty());
 
     let tri_layer = expand_tri_layer(&behavior.tri_layer);
+    let one_shot = expand_one_shot(&behavior.one_shot_timeout_ms);
+    let one_shot_modifiers = expand_one_shot_modifiers(&behavior.one_shot_modifiers);
     let combos = expand_combos(&behavior.combos, &profiles, &sticky_profiles);
     let macros = expand_macros(&behavior.macros);
     let forks = expand_forks(&behavior.forks, &profiles, &sticky_profiles);
@@ -578,6 +673,8 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
         #[allow(clippy::needless_update)]
         let mut behavior_config = ::rmk::config::BehaviorConfig {
             tri_layer: #tri_layer,
+            one_shot: #one_shot,
+            one_shot_modifiers: #one_shot_modifiers,
             combo: #combos,
             fork: #forks,
             morse: #morse,
@@ -588,73 +685,5 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
             auto_mouse_layer: #auto_mouse_layer,
             ..Default::default()
         };
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rmk_config::resolved::behavior::{StickyKeyConfig, StickyKeyReleaseMode};
-
-    #[test]
-    fn sticky_key_codegen_emits_profiles() {
-        let behavior = Behavior {
-            tri_layer: None,
-            combos: None,
-            macros: None,
-            forks: None,
-            morse: None,
-            sticky_key: Some(StickyKeyConfig {
-                timeout_ms: None,
-                activate_on_keypress: None,
-                max_repeat: None,
-                release_mode: Some(StickyKeyReleaseMode::LAYER_ENTER),
-                profiles: HashMap::new(),
-            }),
-            auto_mouse_layer: Vec::new(),
-        };
-
-        let tokens = expand_sticky_key(&behavior).to_string().replace(' ', "");
-        assert!(tokens.contains("release_mode:::core::option::Option::Some"));
-        assert!(tokens.contains("profiles:::rmk::heapless::Vec::from_iter"));
-    }
-
-    #[test]
-    fn sticky_key_codegen_uses_the_action_parsers_profile_order() {
-        let mut profiles = HashMap::new();
-        profiles.insert(
-            "zebra".to_string(),
-            StickyKeyProfile {
-                timeout_ms: Some(200),
-                ..Default::default()
-            },
-        );
-        profiles.insert(
-            "alpha".to_string(),
-            StickyKeyProfile {
-                timeout_ms: Some(100),
-                ..Default::default()
-            },
-        );
-        let behavior = Behavior {
-            tri_layer: None,
-            combos: None,
-            macros: None,
-            forks: None,
-            morse: None,
-            sticky_key: Some(StickyKeyConfig {
-                timeout_ms: None,
-                activate_on_keypress: None,
-                max_repeat: None,
-                release_mode: None,
-                profiles,
-            }),
-            auto_mouse_layer: Vec::new(),
-        };
-
-        let tokens = expand_sticky_key(&behavior).to_string().replace(' ', "");
-        let alpha = tokens.find("from_millis(100u64)").unwrap();
-        let zebra = tokens.find("from_millis(200u64)").unwrap();
-        assert!(alpha < zebra);
     }
 }

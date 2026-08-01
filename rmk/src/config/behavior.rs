@@ -1,4 +1,3 @@
-use bitfield_struct::bitfield;
 use embassy_time::Duration;
 use heapless::Vec;
 use rmk_types::fork::Fork;
@@ -7,8 +6,8 @@ use rmk_types::morse::{Morse, MorseMode, MorseProfile};
 
 use crate::keyboard::combo::Combo;
 use crate::{
-    AUTO_MOUSE_LAYER_MAX_NUM, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MOUSE_KEY_INTERVAL,
-    MOUSE_WHEEL_INTERVAL, STICKY_KEY_PROFILE_MAX_NUM,
+    AUTO_MOUSE_LAYER_MAX_NUM, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MORSE_PROFILE_MAX_NUM,
+    MOUSE_KEY_INTERVAL, MOUSE_WHEEL_INTERVAL, STICKY_KEY_PROFILE_MAX_NUM,
 };
 
 /// Config for configurable action behavior
@@ -18,7 +17,6 @@ pub struct BehaviorConfig {
     pub default_layer: u8,
     pub tri_layer: Option<[u8; 3]>,
     pub tap: TapConfig,
-    /// Legacy one-shot inputs, normalized into `sticky_key` when the keymap is built.
     pub one_shot: OneShotConfig,
     pub one_shot_modifiers: OneShotModifiersConfig,
     pub combo: CombosConfig,
@@ -131,6 +129,11 @@ pub struct MorsesConfig {
     pub prior_idle_time: Duration, //used only when flow tap is enabled
     pub default_profile: MorseProfile,
 
+    /// Named morse profiles (`[behavior.morse.profiles]`), indexed by
+    /// `KeyAction::TapHold(_, _, idx)`. A missing index resolves to the
+    /// default profile.
+    pub profiles: Vec<MorseProfile, MORSE_PROFILE_MAX_NUM>,
+
     pub morses: Vec<Morse, MORSE_MAX_NUM>,
 }
 
@@ -140,47 +143,40 @@ impl Default for MorsesConfig {
             enable_flow_tap: false,
             prior_idle_time: Duration::from_millis(120),
             default_profile: MorseProfile::new(Some(false), Some(MorseMode::Normal), Some(250u16), Some(250u16)),
+            profiles: Vec::new(),
             morses: Vec::new(),
         }
     }
 }
 
-#[bitfield(u8, order = Lsb, debug = false)]
-#[derive(Debug, PartialEq, Eq)]
-pub struct StickyKeyReleaseMode {
-    pub other_key_press: bool,
-    pub other_key_release: bool,
-    pub layer_enter: bool,
-    pub layer_exit: bool,
-    pub double_tap: bool,
-    #[bits(3)]
-    __: u8,
-}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StickyKeyReleaseMode(u8);
 
 impl StickyKeyReleaseMode {
-    pub const OTHER_KEY_PRESS: Self = Self::new().with_other_key_press(true);
-    pub const OTHER_KEY_RELEASE: Self = Self::new().with_other_key_release(true);
-    pub const LAYER_ENTER: Self = Self::new().with_layer_enter(true);
-    pub const LAYER_EXIT: Self = Self::new().with_layer_exit(true);
-    pub const DOUBLE_TAP: Self = Self::new().with_double_tap(true);
+    pub const OTHER_KEY_PRESS: Self = Self(1 << 0);
+    pub const OTHER_KEY_RELEASE: Self = Self(1 << 1);
+    pub const LAYER_ENTER: Self = Self(1 << 2);
+    pub const LAYER_EXIT: Self = Self(1 << 3);
+    pub const DOUBLE_TAP: Self = Self(1 << 4);
 
-    /// Returns `true` when the two trigger sets share at least one bit.
+    pub const fn from_bits(bits: u8) -> Self {
+        Self(bits & 0x1f)
+    }
+
+    pub const fn into_bits(self) -> u8 {
+        self.0
+    }
+
     pub const fn intersects(self, other: Self) -> bool {
-        self.into_bits() & other.into_bits() != 0
+        self.0 & other.0 != 0
     }
 }
 
-/// A resolved Sticky Key profile. `release_mode = None` preserves the legacy
-/// shape-native release behavior for keymaps that do not opt into explicit modes.
 #[derive(Clone, Copy, Debug)]
 pub struct StickyKeyProfile {
-    /// Applies to every SK shape. Default 1s.
     pub timeout: Duration,
-    /// Honored only by pure-mod SK. Default false.
     pub activate_on_keypress: bool,
-    /// 0 = infinite; governs tap-key cycling. Default 0.
     pub max_repeat: u16,
-    /// Explicit release triggers. `None` retains legacy shape-native behavior.
     pub release_mode: Option<StickyKeyReleaseMode>,
 }
 
@@ -195,8 +191,6 @@ impl Default for StickyKeyProfile {
     }
 }
 
-/// Unified Sticky Key configuration with a default profile and compact named
-/// profile table. Actions retain only a `u8` profile index.
 #[derive(Clone, Debug)]
 pub struct StickyKeyConfig {
     pub default_profile: StickyKeyProfile,
@@ -212,9 +206,10 @@ impl Default for StickyKeyConfig {
     }
 }
 
-/// Legacy one-shot timeout input retained for Rust keymaps.
+/// Config for one shot behavior
 #[derive(Clone, Copy, Debug)]
 pub struct OneShotConfig {
+    /// Timeout after which modifiers/layers are canceled/released
     pub timeout: Duration,
 }
 
@@ -225,35 +220,13 @@ impl Default for OneShotConfig {
         }
     }
 }
-
-/// Legacy one-shot modifier input retained for Rust keymaps.
+/// Config for one-shot behavior
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OneShotModifiersConfig {
+    /// Should modifiers be active from keypress (sticky modifiers)
     pub activate_on_keypress: bool,
+    /// If true, OSM releases on next key press (ZMK skq); if false, on next key release (ZMK skn)
     pub quick_release: bool,
-}
-
-impl BehaviorConfig {
-    /// Convert legacy one-shot inputs to the canonical sticky-key profile.
-    ///
-    /// This runs once at the keymap boundary. Runtime policy comes from the
-    /// canonical profile; the legacy pure-mod-only quick-release bit is
-    /// captured separately by `KeyMap` because applying it to the shared
-    /// profile would also change OSL behavior.
-    pub(crate) fn normalize_sticky_key_compat(&mut self) {
-        let legacy_timeout = OneShotConfig::default().timeout;
-        if self.one_shot.timeout != legacy_timeout
-            && self.sticky_key.default_profile.timeout == StickyKeyProfile::default().timeout
-        {
-            self.sticky_key.default_profile.timeout = self.one_shot.timeout;
-        }
-        if self.one_shot_modifiers.activate_on_keypress {
-            self.sticky_key.default_profile.activate_on_keypress = true;
-        }
-        // `quick_release` is intentionally not copied into the shared default
-        // profile: the legacy option applied only to OSM/pure-mod behavior.
-        // KeyMap resolves that compatibility input once for the pure-mod shape.
-    }
 }
 
 /// Config for combo behavior
