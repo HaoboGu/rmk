@@ -25,6 +25,11 @@ log_section "Wasm smoke check"
 cargo +stable check -p rynk --lib --target wasm32-unknown-unknown
 cargo +stable check -p rynk-wasm --target wasm32-unknown-unknown
 
+log_section "Wasm tests"
+# The JS byte link's cancel-safety needs a real JS event loop; node has one and
+# needs no browser driver.
+(cd rynk-wasm && wasm-pack test --node)
+
 log_section "Wasm package build"
 # wasm-pack emits the JS package + generated .d.ts under rynk-wasm/pkg/ (ignored, not checked in).
 # --dev keeps wasm-bindgen's type descriptors un-optimized, so a malformed one surfaces as invalid TS below.

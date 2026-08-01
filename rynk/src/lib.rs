@@ -55,13 +55,9 @@
 //! flooding the device — but only one task should consume topics, since the
 //! channels behind the [`Client`] are competitively consumed.
 //!
-//! One pairing is unsafe: never overlap a `read_all_*` pager with a bulk write
-//! (`write_all_*`, or a bare `set_*_bulk`). The pending write fills the
-//! firmware's frame buffer, squeezing its replies below the page spacing the
-//! pager assumes, and a short page reads as end of data — so the pager returns
-//! `Ok` with a truncated result rather than an error. Everything else may
-//! overlap freely, pagers included: the slot pool bounds what reaches the
-//! device, so more callers never mean more requests in the firmware's buffer.
+//! Overlapping a `read_all_*` pager with a bulk write is correct but slow: the
+//! pending write crowds the firmware's frame buffer, its replies page short,
+//! and the pager spends extra round trips covering what they left out.
 //!
 //! ## Transport contract
 //!
@@ -79,6 +75,9 @@
 //! - Reads must be cancel-safe: a read cancelled before completion consumes
 //!   nothing (the session `select`, and the wasm per-call pattern, cancel the
 //!   pump freely).
+//! - Writes must be cancel-safe too: a cancelled `write` whose bytes are still
+//!   going out must finish before the next one starts, or the two interleave
+//!   into a frame the firmware can only discard.
 //!
 //! ## Multi-version dispatch
 //!

@@ -35,9 +35,8 @@ use crate::transport::{JsByteLink, WasmReader, WasmWriter};
 ///
 /// Wraps the session's `Client` + `Driver`. All methods are `&self`: a parked
 /// `next_topic()` pull and up to four requests run concurrently (full-duplex),
-/// with replies matched back by SEQ. Never overlap a `read_all_*` pager with a
-/// bulk write, though — the read resolves silently truncated (see the `rynk`
-/// crate docs).
+/// with replies matched back by SEQ. Overlapping a `read_all_*` pager with a
+/// bulk write is correct, just slower.
 /// Dropping the handle, or closing the JS link, ends the session; the link
 /// itself stays open until the page closes it.
 #[wasm_bindgen]

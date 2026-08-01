@@ -36,10 +36,9 @@ use crate::driver::{Client, RynkHostError};
 #[cfg(feature = "alloc")]
 use crate::layout::LayoutInfo;
 
-/// Space one waiting request takes in the firmware's frame buffer. A
-/// COBS-encoded bulk GET is at most 9 bytes; 12 leaves headroom. A bulk write
-/// parks a near-full frame instead, which is why the crate docs bar one from
-/// overlapping a `read_all_*`.
+/// Space one waiting request takes in the firmware's frame buffer. A COBS-encoded
+/// bulk GET is at most 9 bytes; 12 leaves headroom. Only sizes [`Client::read_all`]'s
+/// windows — a bulk write parks far more, and just costs that lane another fetch.
 #[cfg(feature = "alloc")]
 const PARKED_REQUEST_BYTES: usize = 12;
 
@@ -477,12 +476,12 @@ impl Client {
         advertised: u8,
         fetch: impl AsyncFn(&Self, u16) -> Result<Vec<Item>, RynkHostError>,
     ) -> Result<Vec<Item>, RynkHostError> {
-        // `spacing` is the smallest page the firmware may send: parked requests squeeze
-        // its replies. Overlap is skipped below; a gap would end the read early.
-        const OVERHEAD: usize = 8; // upper bound on fixed frame bytes; guessing high only lowers `spacing`
-        let full = (RYNK_HEADER_SIZE + self.capabilities.max_payload_size as usize).saturating_sub(OVERHEAD);
-        let squeezed = full.saturating_sub(MAX_IN_FLIGHT * PARKED_REQUEST_BYTES);
-        let spacing = (advertised as usize * squeezed / full.max(1)).max(1);
+        // Each lane claims a window of `spacing` items. The firmware's replies shrink as
+        // the other lanes' requests park in its frame buffer, so scale the advertised page
+        // by the fraction of the frame that survives them. Both directions cost round
+        // trips: too big needs a second fetch per window, too small makes extra windows.
+        let frame = RYNK_HEADER_SIZE + self.capabilities.max_payload_size as usize;
+        let spacing = (advertised as usize * frame.saturating_sub(MAX_IN_FLIGHT * PARKED_REQUEST_BYTES) / frame).max(1);
         let next = AtomicUsize::new(0);
         let lanes = join_array(core::array::from_fn::<_, MAX_IN_FLIGHT, _>(|_| async {
             let mut pages = Vec::new();
@@ -491,15 +490,28 @@ impl Client {
                 if start >= total {
                     break Ok::<_, RynkHostError>(pages);
                 }
-                // A full frame buffer leaves no room for our reply; the firmware says `Busy`.
-                let mut retries = 0;
-                let page = loop {
-                    match fetch(self, start as u16).await {
-                        Err(RynkHostError::Rejected(RynkError::Busy)) if retries < 16 => retries += 1,
-                        page => break page?,
+                // Cover the window: parked requests squeeze the firmware's replies, and
+                // walking away from a short page leaves a gap the stitch below would
+                // read as end of data.
+                let window = (start + spacing).min(total);
+                let (mut cursor, mut retries) = (start, 0);
+                while cursor < window {
+                    let page = match fetch(self, cursor as u16).await {
+                        // A reply window squeezed to nothing at all comes back as `Busy`.
+                        Err(RynkHostError::Rejected(RynkError::Busy)) if retries < 16 => {
+                            retries += 1;
+                            continue;
+                        }
+                        page => page?,
+                    };
+                    // Only a start past the device's last item pages empty.
+                    let len = page.len();
+                    if len == 0 {
+                        break;
                     }
-                };
-                pages.push((start, page));
+                    pages.push((cursor, page));
+                    cursor += len;
+                }
             }
         }))
         .await;
@@ -511,7 +523,7 @@ impl Client {
         let mut out = Vec::with_capacity(total);
         for (start, page) in pages {
             if start > out.len() {
-                break; // an earlier page was short — the device has no more items
+                break; // an earlier window hit an empty page — the device has no more items
             }
             let skip = out.len() - start;
             out.extend(page.into_iter().skip(skip));

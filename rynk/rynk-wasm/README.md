@@ -166,14 +166,8 @@ that owns the `rynk::Client` protocol state machine directly. The page keeps
 its own display name for the device (WebHID `productName`, or whatever it
 showed in its picker) in `link.label`; the client does not carry one.
 The session is full duplex: a parked `next_topic()` loop and request calls run
-concurrently. Up to four requests can be in flight — replies are matched back by
-sequence number, and a fifth call waits for a free slot instead of flooding the
-device. One pairing is unsafe: never overlap a `read_all_*` pager with a bulk
-write (`write_all_*`, or a bare `set_*_bulk`). The pending write fills the
-firmware's frame buffer, squeezing its replies below the page size the pager
-assumes, and a short page reads as end of data — so the pager resolves with a
-silently truncated array instead of rejecting. Everything else may overlap
-freely, pagers included: the slot pool bounds what reaches the device.
+concurrently. The generated `pkg/rynk_wasm.d.ts` carries the rest of the
+concurrency contract on `RynkClient` itself.
 
 Topic pushes are pulled, not delivered by callback: drive `next_topic()` in a
 loop. It parks until the next recognized topic and rejects with `Disconnected`
