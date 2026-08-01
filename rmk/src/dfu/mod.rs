@@ -58,7 +58,8 @@ mod split;
 use self::split::PassthroughDfuHandler;
 #[cfg(feature = "dfu_split")]
 pub(crate) use self::split::{
-    PASSTHROUGH_TARGET, PassthroughCommand, passthrough_done_if_empty, passthrough_pending, passthrough_take_command,
+    PASSTHROUGH_SIGNAL, PASSTHROUGH_TARGET, PassthroughCommand, passthrough_done_if_empty, passthrough_pending,
+    passthrough_take_command,
 };
 #[cfg(feature = "dfu_split")]
 pub use self::split::{
