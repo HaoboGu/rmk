@@ -189,7 +189,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'b, 's: 'b, C: Controll
         }
     };
 
-    join(ble_task(runner), peri_task).await;
+    join(crate::ble::ble_task(runner, &crate::ble::NoopHandler), peri_task).await;
 }
 
 /// Create an advertiser to use to connect to a BLE Central, and wait for it to connect.
@@ -264,14 +264,4 @@ fn get_peri_advertiser<'a, C: Controller>(
         }
     };
     Ok(advertisement)
-}
-
-/// This is a background task that is required to run forever alongside any other BLE tasks.
-async fn ble_task<C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(mut runner: Runner<'_, C, P>) {
-    loop {
-        if let Err(e) = runner.run().await {
-            error!("[ble_task] runner.run() error: {:?}", e);
-            embassy_time::Timer::after_millis(100).await;
-        }
-    }
 }
