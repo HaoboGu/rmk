@@ -50,9 +50,14 @@
 //!   pumps for every parked call — see `rynk-wasm`'s `RynkClient` for the
 //!   mechanism.
 //!
-//! At most one task should issue requests, and one consume topics, at a time —
-//! the protocol allows a single request in flight, and the channels behind the
-//! [`Client`] are competitively consumed.
+//! Requests can run concurrently — the [`Client`] has a slot pool and matches
+//! replies back by SEQ, so callers past the pool wait for a slot instead of
+//! flooding the device — but only one task should consume topics, since the
+//! channels behind the [`Client`] are competitively consumed.
+//!
+//! Overlapping a `read_all_*` pager with a bulk write is correct but slow: the
+//! pending write crowds the firmware's frame buffer, its replies page short,
+//! and the pager spends extra round trips covering what they left out.
 //!
 //! ## Transport contract
 //!
@@ -70,6 +75,9 @@
 //! - Reads must be cancel-safe: a read cancelled before completion consumes
 //!   nothing (the session `select`, and the wasm per-call pattern, cancel the
 //!   pump freely).
+//! - Writes must be cancel-safe too: a cancelled `write` whose bytes are still
+//!   going out must finish before the next one starts, or the two interleave
+//!   into a frame the firmware can only discard.
 //!
 //! ## Multi-version dispatch
 //!

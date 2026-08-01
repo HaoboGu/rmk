@@ -8,7 +8,7 @@ rmk = { version = "...", features = [
 ] }
 ```
 
-RMK also provides BLE examples; check out [nrf52840_ble](https://github.com/HaoboGu/rmk/tree/main/examples/use_config/nrf52840_ble), [nrf52832_ble](https://github.com/HaoboGu/rmk/tree/main/examples/use_config/nrf52832_ble), [pi_pico_w_ble](https://github.com/HaoboGu/rmk/tree/main/examples/use_config/pi_pico_w_ble), and [esp32c3_ble](https://github.com/HaoboGu/rmk/tree/main/examples/use_config/esp32c3_ble) for more details.
+RMK also provides BLE examples; check out [nrf52840_ble](https://github.com/rmk-rs/rmk/tree/main/examples/use_config/nrf52840_ble), [nrf52832_ble](https://github.com/rmk-rs/rmk/tree/main/examples/use_config/nrf52832_ble), [pi_pico_w_ble](https://github.com/rmk-rs/rmk/tree/main/examples/use_config/pi_pico_w_ble), and [esp32c3_ble](https://github.com/rmk-rs/rmk/tree/main/examples/use_config/esp32c3_ble) for more details.
 
 Since multiple targets are not currently supported by `docs.rs`, API documentation is not available on `docs.rs`. Check the examples for usage.
 
@@ -30,7 +30,7 @@ The following is the list of available feature gates (i.e., supported BLE chips)
 
 RMK has special support for [nice!nano](https://nicekeyboards.com/), a widely used board for building wireless keyboards.
 
-nice!nano has a built-in bootloader that enables flashing a .uf2 format firmware via USB drive. [`examples/use_rust/nrf52840_ble/README.md`](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/README.md) provides instructions for converting RMK firmware to .uf2 format.
+nice!nano has a built-in bootloader that enables flashing a .uf2 format firmware via USB drive. [`examples/use_rust/nrf52840_ble/README.md`](https://github.com/rmk-rs/rmk/blob/main/examples/use_rust/nrf52840_ble/README.md) provides instructions for converting RMK firmware to .uf2 format.
 
 You can also refer to the [RMK user guide](../user_guide/flash_firmware#use-uf2-bootloader) for the instructions.
 
@@ -46,7 +46,7 @@ Vial user keycodes can be configured to operate wireless profiles. Suppose that 
 - `User(N+2)`: clear current profile bond info
 - `User(N+3)`: switch default output between USB/BLE
 
-Vial also provides a way to customize the displayed keycode, see `customKeycodes` in [this example](https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/nrf52840_ble/vial.json). If `customKeycodes` are configured, the `User0` ~ `User(N+3)` will be displayed as `BT0`, ..., `Switch Output`.
+Vial also provides a way to customize the displayed keycode, see `customKeycodes` in [this example](https://github.com/rmk-rs/rmk/blob/main/examples/use_rust/nrf52840_ble/vial.json). If `customKeycodes` are configured, the `User0` ~ `User(N+3)` will be displayed as `BT0`, ..., `Switch Output`.
 
 If you've connected a host to a profile, other devices will not be able to connect to this profile without manually clearing it first.
 

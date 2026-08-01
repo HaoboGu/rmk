@@ -9,7 +9,7 @@ and byte I/O live in separate transport crates such as `rynk-serial` and
 `rynk-ble`. The `rynk-kle` crate converts KLE exports / Vial `vial.json` ↔
 RMK's `[layout]` and decodes layouts into `rynk::layout` types — natively and,
 via its `wasm` feature, on the web; the `rmkit layout` CLI in
-[rmkit](https://github.com/haobogu/rmkit) wraps it.
+[rmkit](https://github.com/rmk-rs/rmkit) wraps it.
 
 ## Concepts
 

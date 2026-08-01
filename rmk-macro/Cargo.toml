@@ -4,8 +4,8 @@ version = "0.7.1"
 edition = "2024"
 authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Proc-macro crate of RMK"
-homepage = "https://github.com/haobogu/rmk"
-repository = "https://github.com/haobogu/rmk"
+homepage = "https://github.com/rmk-rs/rmk"
+repository = "https://github.com/rmk-rs/rmk"
 license = "MIT OR Apache-2.0"
 resolver = "2"
 

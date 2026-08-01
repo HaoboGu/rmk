@@ -1,4 +1,3 @@
-use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, quote};
 use rmk_config::DcdcReg0Voltage;
@@ -6,7 +5,7 @@ use rmk_config::resolved::Hardware;
 use rmk_config::resolved::hardware::{BoardConfig, ChipModel, ChipSeries, CommunicationConfig};
 use syn::{ItemFn, ItemMod};
 
-use crate::codegen::override_helper::Overwritten;
+use crate::codegen::override_helper::{Overwritten, find_overwritten};
 
 /// Expand chip initialization code
 ///
@@ -23,13 +22,13 @@ pub(crate) fn expand_chip_init(
             .iter()
             .find_map(|item| {
                 if let syn::Item::Fn(item_fn) = &item
-                    && item_fn.attrs.len() == 1
+                    && let Some(Ok(overwritten)) = find_overwritten(item_fn)
                 {
-                    match Overwritten::from_meta(&item_fn.attrs[0].meta) {
-                        Ok(Overwritten::ChipConfig) => {
+                    match overwritten {
+                        Overwritten::ChipConfig => {
                             return Some(override_chip_config(&hardware.chip, item_fn));
                         }
-                        Ok(Overwritten::ChipInit) => {
+                        Overwritten::ChipInit => {
                             // Override the whole chip initialization
                             let stmts = &item_fn.block.stmts;
                             return Some(quote! { #(#stmts)* });

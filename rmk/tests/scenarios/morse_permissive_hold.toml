@@ -284,7 +284,7 @@ steps = [
 ]
 expect = [["A"], [], ["B"], [], ["C"], []]
 
-# Ref: https://github.com/HaoboGu/rmk/pull/496
+# Ref: https://github.com/rmk-rs/rmk/pull/496
 [[test]]
 name = "previous_rolling_keypress"
 steps = [

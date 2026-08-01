@@ -1,8 +1,8 @@
 <!-- PROJECT LOGO -->
 <br />
 <p align="center">
-  <a href="https://github.com/haobogu/rmk">
-    <img src="https://github.com/HaoboGu/rmk/blob/dad1f922f471127f5449262c4cb4a922e351bf43/docs/images/rmk_logo.svg?raw=true" alt="Logo" width="150">
+  <a href="https://github.com/rmk-rs/rmk">
+    <img src="https://github.com/rmk-rs/rmk/blob/dad1f922f471127f5449262c4cb4a922e351bf43/docs/images/rmk_logo.svg?raw=true" alt="Logo" width="150">
   </a>
 
   <p align="center">
@@ -11,7 +11,7 @@
   <br />
   <a href="https://crates.io/crates/rmk"><img src="https://img.shields.io/crates/v/rmk"></a>
   <a href="https://docs.rs/rmk/latest/rmk/"><img src="https://img.shields.io/docsrs/rmk"></a>
-  <a href="https://github.com/HaoboGu/rmk/actions"><img src="https://github.com/haobogu/rmk/actions/workflows/build.yml/badge.svg"></a>
+  <a href="https://github.com/rmk-rs/rmk/actions"><img src="https://github.com/rmk-rs/rmk/actions/workflows/build.yml/badge.svg"></a>
   <a href="https://discord.gg/HHGA7pQxkG"><img src="https://img.shields.io/discord/1166665039793639424?label=discord"></a>
   </p>
 </p>
@@ -19,7 +19,7 @@
 👉 Join our [Discord server](https://discord.gg/HHGA7pQxkG) for discussions, support, and community collaboration!
 
 -----
-[中文](https://github.com/HaoboGu/rmk/blob/main/README_zh.md)
+[中文](https://github.com/rmk-rs/rmk/blob/main/README_zh.md)
 
 
 ## Features
@@ -31,13 +31,13 @@
 - **Easy configuration**: RMK simplifies keyboard development through a single `keyboard.toml` configuration file. For Rust enthusiasts, the firmware remains highly customizable using Rust code
 - **Optimized performance**: RMK achieves approximately 2ms latency in wired mode and 10ms in wireless mode. With the `async_matrix` feature enabled, power consumption is significantly reduced—a 2000mAh battery can power your keyboard for several months
 
-## [User Documentation](https://rmk.rs/docs/user_guide/guide_overview) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://rmk.rs/docs/getting_started/faq) | [Changelog](https://github.com/HaoboGu/rmk/blob/main/rmk/CHANGELOG.md)
+## [User Documentation](https://rmk.rs/docs/user_guide/guide_overview) | [API Reference](https://docs.rs/rmk/latest/rmk/) | [FAQs](https://rmk.rs/docs/getting_started/faq) | [Changelog](https://github.com/rmk-rs/rmk/blob/main/rmk/CHANGELOG.md)
 
 ## Real-World Implementations
 
-### [rmk-ble-keyboard](https://github.com/HaoboGu/rmk-ble-keyboard)
+### [rmk-ble-keyboard](https://github.com/rmk-rs/rmk-ble-keyboard)
 
-<img src="https://raw.githubusercontent.com/HaoboGu/rmk/refs/heads/main/docs/docs/main/images/rmk_ble_keyboard.jpg" width="60%">
+<img src="https://raw.githubusercontent.com/rmk-rs/rmk/refs/heads/main/docs/docs/main/images/rmk_ble_keyboard.jpg" width="60%">
 
 ### [dactyl-lynx-rmk](https://github.com/whitelynx/dactyl-lynx-rmk)
 
@@ -45,11 +45,11 @@
 
 ### [sessile](https://github.com/willpuckett/sessile)
 
-<img src="https://raw.githubusercontent.com/HaoboGu/rmk/refs/heads/main/docs/docs/main/images/sessile.png" width="60%">
+<img src="https://raw.githubusercontent.com/rmk-rs/rmk/refs/heads/main/docs/docs/main/images/sessile.png" width="60%">
 
 ### [Urchin](https://github.com/TimoBbz/urchin-rmk-firmware)
 
-<img src="https://raw.githubusercontent.com/HaoboGu/rmk/refs/heads/main/docs/docs/main/images/urchin.png" width="60%">
+<img src="https://raw.githubusercontent.com/rmk-rs/rmk/refs/heads/main/docs/docs/main/images/urchin.png" width="60%">
 
 ### [zx66](https://github.com/zongxin1993/zx66-keybord)
 
@@ -57,18 +57,18 @@
 
 ### [rmk-zsa-voyager](https://github.com/jpds/rmk-zsa-voyager)
 
-<img src="https://raw.githubusercontent.com/HaoboGu/rmk/refs/heads/main/docs/docs/main/images/zsa-voyager.webp" width="60%">
+<img src="https://raw.githubusercontent.com/rmk-rs/rmk/refs/heads/main/docs/docs/main/images/zsa-voyager.webp" width="60%">
 
 ## Getting Started
 
 ### Option 1: Start with a Template
 
-Quickly bootstrap your project using [rmkit](https://github.com/HaoboGu/rmkit) and the official RMK [project template](https://github.com/HaoboGu/rmk-template).
+Quickly bootstrap your project using [rmkit](https://github.com/rmk-rs/rmkit) and the official RMK [project template](https://github.com/rmk-rs/rmk-template).
 
 ```shell
 cargo install rmkit flip-link
 # If you encounter installation issues on Windows, try this alternative command:
-# powershell -ExecutionPolicy ByPass -c "irm https://github.com/haobogu/rmkit/releases/download/v0.0.20/rmkit-installer.ps1 | iex"
+# powershell -ExecutionPolicy ByPass -c "irm https://github.com/rmk-rs/rmkit/releases/download/v0.0.20/rmkit-installer.ps1 | iex"
 rmkit init
 ```
 
@@ -76,7 +76,7 @@ For comprehensive guidance, refer to the [User Guide](https://rmk.rs/docs/user_g
 
 ### Option 2: Explore Built-in Examples
 
-Browse the examples in the [`examples`](https://github.com/HaoboGu/rmk/tree/main/examples) directory. Below are step-by-step instructions for rp2040 development. The process is similar for other microcontrollers when using a debug probe.
+Browse the examples in the [`examples`](https://github.com/rmk-rs/rmk/tree/main/examples) directory. Below are step-by-step instructions for rp2040 development. The process is similar for other microcontrollers when using a debug probe.
 
 #### rp2040 Setup
 

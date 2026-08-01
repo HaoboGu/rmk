@@ -84,7 +84,7 @@ impl KeyboardTomlConfig {
                 Some(info) => Some(info),
                 None => {
                     return Err(format!(
-                        "`usb_enable = true`, but chip \"{}\" has no USB mapping in RMK — set `usb_enable = false` in [keyboard], or report the missing chip at https://github.com/HaoboGu/rmk/issues",
+                        "`usb_enable = true`, but chip \"{}\" has no USB mapping in RMK — set `usb_enable = false` in [keyboard], or report the missing chip at https://github.com/rmk-rs/rmk/issues",
                         chip.chip
                     ));
                 }

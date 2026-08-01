@@ -165,18 +165,18 @@ Call `requestPort()` inside a user gesture such as a button click.
 that owns the `rynk::Client` protocol state machine directly. The page keeps
 its own display name for the device (WebHID `productName`, or whatever it
 showed in its picker) in `link.label`; the client does not carry one.
-The session is full duplex: a parked `next_topic()` loop and
-request calls run concurrently. Keep requests themselves serialized — await each
-request before issuing the next; the protocol allows a single request in flight.
+The session is full duplex: a parked `next_topic()` loop and request calls run
+concurrently. The generated `pkg/rynk_wasm.d.ts` carries the rest of the
+concurrency contract on `RynkClient` itself.
 
 Topic pushes are pulled, not delivered by callback: drive `next_topic()` in a
 loop. It parks until the next recognized topic and rejects with `Disconnected`
 at EOF, mirroring the native `Client::next_topic()` used by `rynk-serial` /
 `rynk-ble`.
 
-The typed request surface is the `endpoints!` table in `src/client.rs`,
-mirroring the native `rynk::Client` methods (minus the Rust-only conveniences
-such as the `read_all_*`/`write_all_*` pagers); browse it via the generated
+The typed request surface is the `endpoints!` table in `src/client.rs`, which
+mirrors every native `rynk::Client` method, including the whole-resource
+`read_all_*`/`write_all_*` pagers; browse it via the generated
 `pkg/rynk_wasm.d.ts` or the `rynk::Client` docs.
 
 Getter results and topic values are plain JS values produced through the

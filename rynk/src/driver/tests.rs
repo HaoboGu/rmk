@@ -175,6 +175,27 @@ fn caps() -> DeviceCapabilities {
     }
 }
 
+/// Bulk-capable caps for a single-layer 1x10 keymap. `max_bulk_keys` of 4 scales
+/// down to a `spacing` of 3, so `read_all` speculates at offsets 0/3/6/9.
+fn ten_key_caps() -> DeviceCapabilities {
+    DeviceCapabilities {
+        bulk_transfer_supported: true,
+        max_bulk_keys: 4,
+        num_layers: 1,
+        num_rows: 1,
+        num_cols: 10,
+        ..caps()
+    }
+}
+
+/// A bulk page of `n` key actions from `base`. `n == 0` is what a device returns
+/// for a start past its last key.
+fn keymap_page(base: u8, n: u8) -> GetKeymapBulkResponse {
+    GetKeymapBulkResponse {
+        actions: (0..n).map(|i| KeyAction::Morse(base + i)).collect(),
+    }
+}
+
 /// The handshake reply pair every `connect` consumes first.
 fn handshake_steps(capabilities: DeviceCapabilities) -> Vec<Step> {
     vec![
@@ -568,29 +589,15 @@ async fn bulk_methods_round_trip_when_supported() {
 
 #[tokio::test]
 async fn read_all_keymap_concatenates_pages() {
-    let mut supported = caps();
-    supported.bulk_transfer_supported = true;
-    supported.max_bulk_keys = 4;
-    supported.num_layers = 1;
-    supported.num_rows = 1;
-    supported.num_cols = 10;
-
-    let page = |base: u8, n: u8| GetKeymapBulkResponse {
-        actions: (0..n).map(|i| KeyAction::Morse(base + i)).collect(),
-    };
-    let expected: Vec<KeyAction> = (0u8..10).map(KeyAction::Morse).collect();
-
-    // Conservative spacing (4 scaled by the squeezed budget = 3) fetches
-    // offsets 0/3/6/9 concurrently; full pages overlap and the overlaps are
-    // trimmed during reassembly.
+    // Full pages overlap the speculative offsets; reassembly trims the overlaps.
     let (client, mut driver) = connect_session(
-        handshake_steps(supported),
+        handshake_steps(ten_key_caps()),
         vec![
             Step::AwaitWrites(6),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, page(0, 4))),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, page(3, 4))),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 5, page(6, 4))),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 6, page(9, 1))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, keymap_page(0, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, keymap_page(3, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 5, keymap_page(6, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 6, keymap_page(9, 1))),
             Step::AwaitWrites(7),
             Step::Chunk(reply(Cmd::GetWpm, 7, 42u16)),
             Step::Hang,
@@ -598,7 +605,7 @@ async fn read_all_keymap_concatenates_pages() {
     )
     .await;
     drive(&mut driver, &client, async {
-        assert_eq!(client.read_all_keymap().await.unwrap(), expected);
+        assert_eq!(client.read_all_keymap().await.unwrap(), keymap_page(0, 10).actions);
         // The distinct trailing command detects an unexpected fifth fetch.
         assert_eq!(client.get_wpm().await.unwrap(), 42);
     })
@@ -606,28 +613,46 @@ async fn read_all_keymap_concatenates_pages() {
 }
 
 #[tokio::test]
-async fn read_all_stops_on_clamped_empty_page() {
-    let mut supported = caps();
-    supported.bulk_transfer_supported = true;
-    supported.max_bulk_keys = 4;
-    supported.num_layers = 1;
-    supported.num_rows = 1;
-    supported.num_cols = 10;
+async fn read_all_refetches_a_squeezed_page() {
+    // A concurrent bulk write can squeeze a reply below the 3-item window without
+    // emptying it. Reading the shortfall as the end of the keymap would silently
+    // return 2 keys instead of 10, so the lane re-fetches where its short page stopped.
+    let (client, mut driver) = connect_session(
+        handshake_steps(ten_key_caps()),
+        vec![
+            Step::AwaitWrites(6),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, keymap_page(0, 2))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, keymap_page(3, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 5, keymap_page(6, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 6, keymap_page(9, 1))),
+            Step::AwaitWrites(7),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 7, keymap_page(2, 4))),
+            Step::AwaitWrites(8),
+            Step::Chunk(reply(Cmd::GetWpm, 8, 42u16)),
+            Step::Hang,
+        ],
+    )
+    .await;
+    drive(&mut driver, &client, async {
+        assert_eq!(client.read_all_keymap().await.unwrap(), keymap_page(0, 10).actions);
+        // Only the squeezed window re-fetches; the other three stay at one fetch each.
+        assert_eq!(client.get_wpm().await.unwrap(), 42);
+    })
+    .await;
+}
 
-    let full = GetKeymapBulkResponse {
-        actions: (0u8..4).map(KeyAction::Morse).collect(),
-    };
-    let empty = GetKeymapBulkResponse { actions: vec![] };
+#[tokio::test]
+async fn read_all_stops_on_clamped_empty_page() {
     // Speculative offsets 0/3/6/9 are all fetched before the empty page is
     // seen; the clamp shows up as result truncation, not as skipped fetches.
     let (client, mut driver) = connect_session(
-        handshake_steps(supported),
+        handshake_steps(ten_key_caps()),
         vec![
             Step::AwaitWrites(6),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, full)),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, empty.clone())),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 5, empty.clone())),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 6, empty)),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, keymap_page(0, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, keymap_page(0, 0))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 5, keymap_page(0, 0))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 6, keymap_page(0, 0))),
             Step::AwaitWrites(7),
             Step::Chunk(reply(Cmd::GetWpm, 7, 7u16)),
             Step::Hang,
@@ -669,7 +694,7 @@ async fn write_all_keymap_packs_pages_to_the_payload_budget() {
     .await;
     drive(&mut driver, &client, async {
         let actions: Vec<KeyAction> = (0u8..5).map(KeyAction::Morse).collect();
-        client.write_all_keymap(&actions).await.unwrap();
+        client.write_all_keymap(actions).await.unwrap();
         assert_eq!(client.get_wpm().await.unwrap(), 99);
     })
     .await;

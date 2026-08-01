@@ -244,36 +244,45 @@ where
             }
         };
 
+        // This function is called only on split central, so use `split` feature here is safe.
+        #[cfg(feature = "split")]
+        let event_handler = {
+            // Latched before the runner starts so peripheral scanning can proceed
+            // as soon as `join3` polls it.
+            crate::split::ble::central::STACK_STARTED.signal(true);
+            crate::split::ble::central::ScanHandler {}
+        };
+        #[cfg(not(feature = "split"))]
+        let event_handler = NoopHandler;
+
         // The sleep manager lives here because this is the single always-present
         // BLE task: split or not, connected or not, it keeps running, so the
         // sleep state can never get stuck.
-        join3(ble_task(runner), connection_loop, sleep::run_sleep_manager()).await;
+        join3(
+            ble_task(runner, &event_handler),
+            connection_loop,
+            sleep::run_sleep_manager(),
+        )
+        .await;
         unreachable!("BleTransport sub-tasks must run forever")
     }
 }
 
+/// NoopHandler is used on the device which never scans,
+/// such as a split peripheral or a normal keyboard.
+pub(crate) struct NoopHandler;
+
+impl EventHandler for NoopHandler {}
+
 /// This is a background task that is required to run forever alongside any other BLE tasks.
-pub(crate) async fn ble_task<C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
+pub(crate) async fn ble_task<C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool, E: EventHandler>(
     mut runner: Runner<'_, C, P>,
+    handler: &E,
 ) {
     loop {
-        #[cfg(not(feature = "split"))]
-        if let Err(_e) = runner.run().await {
-            error!("[ble_task] runner.run() error");
+        if let Err(e) = runner.run_with_handler(handler).await {
+            error!("[ble_task] runner error: {:?}", e);
             embassy_time::Timer::after_millis(100).await;
-        }
-
-        #[cfg(feature = "split")]
-        {
-            // Signal to indicate the stack is started
-            crate::split::ble::central::STACK_STARTED.signal(true);
-            if let Err(_e) = runner
-                .run_with_handler(&crate::split::ble::central::ScanHandler {})
-                .await
-            {
-                error!("[ble_task] runner.run_with_handler error");
-                embassy_time::Timer::after_millis(100).await;
-            }
         }
     }
 }

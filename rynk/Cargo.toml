@@ -83,7 +83,7 @@ authors = ["Haobo Gu <haobogu@outlook.com>"]
 description = "Host-side tooling for the Rynk protocol — RMK's native host communication channel"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/haobogu/rmk"
+repository = "https://github.com/rmk-rs/rmk"
 version = "0.1.0"
 rust-version = "1.85"
 

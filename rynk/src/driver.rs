@@ -164,7 +164,7 @@ impl Drop for SlotGuard<'_> {
 
 /// The Rynk protocol surface: typed requests plus the topic stream. Both
 /// take `&self`, so one shared client can serve request calls and a topic
-/// loop at the same time. Up to [`MAX_IN_FLIGHT`] requests can run
+/// loop at the same time. Up to `MAX_IN_FLIGHT` requests can run
 /// concurrently; replies are matched back by SEQ, so they may complete in
 /// any order. Moving the actual bytes is [`Driver::run`]'s job.
 pub struct Client {

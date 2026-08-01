@@ -19,11 +19,11 @@ extern "C" {
     #[wasm_bindgen(method, getter, js_name = label)]
     fn js_label(this: &JsByteLink) -> String;
 
+    /// Raw `Promise` imports (not `async`) so the halves get nameable futures
+    /// they can park across cancelled `read`s and `write`s.
     #[wasm_bindgen(method, catch)]
-    async fn send(this: &JsByteLink, frame: Uint8Array) -> Result<(), JsValue>;
+    fn send(this: &JsByteLink, frame: Uint8Array) -> Result<Promise, JsValue>;
 
-    /// A raw `Promise` import (not `async`) so the reader gets a nameable
-    /// future it can park across cancelled `read`s.
     #[wasm_bindgen(method, catch)]
     fn recv(this: &JsByteLink) -> Result<Promise, JsValue>;
 }
@@ -47,7 +47,7 @@ impl RynkDevice for JsByteLink {
                 pending: Vec::new(),
                 pos: 0,
             },
-            WasmWriter { link: self },
+            WasmWriter { link: self, send: None },
         ))
     }
 }
@@ -97,10 +97,27 @@ impl Read for WasmReader {
 /// Write half of the JS byte link.
 pub struct WasmWriter {
     link: JsByteLink,
+    /// In-flight `send()`, parked so a cancelled `write` drains it instead of
+    /// starting a second one: JS promises do not cancel, and two live sends
+    /// interleave their bytes.
+    send: Option<JsFuture>,
 }
 
 impl ErrorType for WasmWriter {
     type Error = ErrorKind;
+}
+
+impl WasmWriter {
+    /// Waits until no `send` is in flight, clearing the parked one only once it
+    /// resolves so a cancel here re-parks it rather than dropping it.
+    async fn drain(&mut self) -> Result<(), ErrorKind> {
+        if let Some(send) = self.send.as_mut() {
+            let done = send.await;
+            self.send = None;
+            done.map_err(|_| ErrorKind::Other)?;
+        }
+        Ok(())
+    }
 }
 
 impl Write for WasmWriter {
@@ -108,14 +125,70 @@ impl Write for WasmWriter {
         if buf.is_empty() {
             return Ok(0);
         }
-        self.link
-            .send(Uint8Array::from(buf))
-            .await
-            .map_err(|_| ErrorKind::Other)?;
+        self.drain().await?; // a cancelled `write` leaves its send running
+        self.send = Some(JsFuture::from(
+            self.link.send(Uint8Array::from(buf)).map_err(|_| ErrorKind::Other)?,
+        ));
+        self.drain().await?;
         Ok(buf.len())
     }
 
     async fn flush(&mut self) -> Result<(), Self::Error> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+    use std::future::ready;
+    use std::rc::Rc;
+
+    use embassy_futures::select::select;
+    use wasm_bindgen_futures::future_to_promise;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    use super::*;
+
+    /// Mirrors the page's WebHID link, which walks a frame across awaited
+    /// `sendReport` calls — one byte per report here, `N` per report in `index.html`.
+    #[wasm_bindgen]
+    struct FakeWebHidLink {
+        sent: Rc<RefCell<String>>,
+    }
+
+    #[wasm_bindgen]
+    impl FakeWebHidLink {
+        pub fn send(&self, frame: Uint8Array) -> Promise {
+            let sent = self.sent.clone();
+            let frame = frame.to_vec();
+            future_to_promise(async move {
+                for byte in frame {
+                    let send_report = JsFuture::from(Promise::resolve(&JsValue::UNDEFINED));
+                    send_report.await?;
+                    sent.borrow_mut().push(byte as char);
+                }
+                Ok(JsValue::UNDEFINED)
+            })
+        }
+    }
+
+    /// The wasm pump drops `Driver::run` — mid-frame — whenever a call it was
+    /// carrying resolves. Cancelling cannot stop the JS `send` that write had
+    /// started, so a second one on top of it interleaves both frames into bytes the
+    /// firmware can only discard.
+    #[wasm_bindgen_test]
+    async fn write_is_cancel_safe() {
+        let sent = Rc::new(RefCell::new(String::new()));
+        let link: JsByteLink = JsValue::from(FakeWebHidLink { sent: sent.clone() }).unchecked_into();
+        let mut writer = WasmWriter { link, send: None };
+
+        // Two bytes per frame: a one-byte frame goes out in a single report, with
+        // no gap inside it for the next send to slip into.
+        let cancel_immediately = ready(());
+        select(writer.write(b"AB"), cancel_immediately).await;
+        writer.write(b"CD").await.unwrap();
+
+        assert_eq!(sent.take(), "ABCD");
     }
 }
