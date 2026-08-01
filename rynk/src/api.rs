@@ -9,6 +9,8 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(feature = "alloc")]
 use embassy_futures::join::join_array;
 #[cfg(feature = "alloc")]
+use postcard::experimental::max_size::MaxSize;
+#[cfg(feature = "alloc")]
 use postcard::experimental::serialized_size;
 use rmk_types::action::{EncoderAction, KeyAction};
 use rmk_types::battery::BatteryStatus;
@@ -26,7 +28,7 @@ use rmk_types::protocol::rynk::{
     SetMorseBulkRequest, SetMorseRequest, StorageResetMode, command,
 };
 #[cfg(feature = "alloc")]
-use rmk_types::protocol::rynk::{RYNK_HEADER_SIZE, RynkError};
+use rmk_types::protocol::rynk::{RYNK_HEADER_SIZE, RynkError, max_wire_size};
 #[cfg(feature = "alloc")]
 use serde::Serialize;
 
@@ -36,11 +38,14 @@ use crate::driver::{Client, RynkHostError};
 #[cfg(feature = "alloc")]
 use crate::layout::LayoutInfo;
 
-/// Space one waiting request takes in the firmware's frame buffer. A COBS-encoded
-/// bulk GET is at most 9 bytes; 12 leaves headroom. Only sizes [`Client::read_all`]'s
-/// windows — a bulk write parks far more, and just costs that lane another fetch.
+/// A pipelined request parks in the firmware's shared frame buffer while another is served,
+/// shrinking the reply window and thus the page it can return. This value is the worst parked size.
+///
+/// [`Client::read_all`] reads concurrently, so it discounts the parked bytes when sizing each
+/// lane's window: the window then matches the largest page the firmware can still return with
+/// the other lanes' requests parked, so one round trip fills it.
 #[cfg(feature = "alloc")]
-const PARKED_REQUEST_BYTES: usize = 12;
+const PARKED_REQUEST_BYTES: usize = max_wire_size(RYNK_HEADER_SIZE + GetKeymapBulkRequest::POSTCARD_MAX_SIZE);
 
 impl Client {
     fn require_bulk_transfer(&self, cmd: Cmd) -> Result<(), RynkHostError> {
@@ -468,18 +473,17 @@ impl Client {
         .await
     }
 
-    /// Read a whole resource on [`MAX_IN_FLIGHT`] lanes, stitched back by offset.
+    /// Read a whole resource on [`MAX_IN_FLIGHT`] lanes concurrently.
     /// `advertised` is the device's max items per page (`max_bulk_items`/`max_bulk_keys`).
+    ///
+    /// Each lane claims a `spacing`-size "window" and the windows together cover all the data.
+    /// The parked size is considered when calculating the window. See [`PARKED_REQUEST_BYTES`].
     async fn read_all<Item>(
         &self,
         total: usize,
         advertised: u8,
         fetch: impl AsyncFn(&Self, u16) -> Result<Vec<Item>, RynkHostError>,
     ) -> Result<Vec<Item>, RynkHostError> {
-        // Each lane claims a window of `spacing` items. The firmware's replies shrink as
-        // the other lanes' requests park in its frame buffer, so scale the advertised page
-        // by the fraction of the frame that survives them. Both directions cost round
-        // trips: too big needs a second fetch per window, too small makes extra windows.
         let frame = RYNK_HEADER_SIZE + self.capabilities.max_payload_size as usize;
         let spacing = (advertised as usize * frame.saturating_sub(MAX_IN_FLIGHT * PARKED_REQUEST_BYTES) / frame).max(1);
         let next = AtomicUsize::new(0);
