@@ -1,4 +1,3 @@
-use darling::FromMeta;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use rmk_config::SplitConnection;
@@ -26,8 +25,8 @@ pub(crate) fn expand_rmk_entry(
             .iter()
             .find_map(|item| {
                 if let syn::Item::Fn(item_fn) = &item
-                    && item_fn.attrs.len() == 1
-                    && let Ok(Overwritten::Entry) = Overwritten::from_meta(&item_fn.attrs[0].meta)
+                    && let Some(Ok(Overwritten::Entry)) =
+                        super::override_helper::find_overwritten(item_fn)
                 {
                     return Some(override_rmk_entry(item_fn));
                 }

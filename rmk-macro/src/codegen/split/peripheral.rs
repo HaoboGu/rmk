@@ -36,6 +36,12 @@ pub(crate) fn parse_split_peripheral_mod(
     _attr: proc_macro::TokenStream,
     item_mod: ItemMod,
 ) -> TokenStream2 {
+    // Reject invalid `#[Overwritten(...)]` attributes up front instead of
+    // silently falling back to the generated defaults (#966)
+    if let Some(errors) = crate::codegen::override_helper::validate_overwritten_attrs(&item_mod) {
+        return errors;
+    }
+
     let rmk_features = get_rmk_features();
     if !is_feature_enabled(&rmk_features, "split") {
         panic!("\"split\" feature of RMK should be enabled");

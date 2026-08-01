@@ -29,6 +29,12 @@ use super::watchdog::expand_watchdog_init;
 
 /// Parse keyboard mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
+    // Reject invalid `#[Overwritten(...)]` attributes up front instead of
+    // silently falling back to the generated defaults (#966)
+    if let Some(errors) = crate::codegen::override_helper::validate_overwritten_attrs(&item_mod) {
+        return errors;
+    }
+
     let rmk_features = get_rmk_features();
 
     let keyboard_config = read_keyboard_toml_config();
