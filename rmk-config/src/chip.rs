@@ -52,7 +52,7 @@ impl ChipModel {
                 }
             }
             _ => Err(format!(
-                "No default chip config for {}, please report at https://github.com/HaoboGu/rmk/issues",
+                "No default chip config for {}, please report at https://github.com/rmk-rs/rmk/issues",
                 self.chip
             )),
         }

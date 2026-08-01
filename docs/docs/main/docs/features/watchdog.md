@@ -12,7 +12,7 @@ The `watchdog` feature is enabled by default, no user configuration is
 required.
 
 Supported chips: RP2040, nRF52, ESP32 (see
-[`rmk/src/watchdog`](https://github.com/HaoboGu/rmk/tree/main/rmk/src/watchdog)).
+[`rmk/src/watchdog`](https://github.com/rmk-rs/rmk/tree/main/rmk/src/watchdog)).
 STM32 has no automatic watchdog codegen.
 
 ## How it works

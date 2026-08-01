@@ -168,7 +168,7 @@ If the keyboard still doesn't work, enable full logging trace in `.cargo/config.
 DEFMT_LOG = "trace"
 ```
 
-run `cargo clean` and then `cargo run --release`. Open an [issue](https://github.com/HaoboGu/rmk/issues) with the detailed logs.
+run `cargo clean` and then `cargo run --release`. Open an [issue](https://github.com/rmk-rs/rmk/issues) with the detailed logs.
 
 ### I see "ERROR: Storage is full" error in the log
 

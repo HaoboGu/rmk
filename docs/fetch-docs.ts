@@ -19,7 +19,7 @@ versions.forEach((branch) => {
     stdio: 'inherit',
     shell: 'bash'
   })
-  execSync(`git remote add rmk-origin https://github.com/HaoboGu/rmk.git`, {
+  execSync(`git remote add rmk-origin https://github.com/rmk-rs/rmk.git`, {
     stdio: 'inherit',
     shell: 'bash'
   })

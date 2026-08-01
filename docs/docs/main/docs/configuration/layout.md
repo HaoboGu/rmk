@@ -243,11 +243,11 @@ If you define fewer layers than `keymap.layers`, RMK fills the rest with empty l
 
 :::
 
-In each `layer.keys`, keys are bound to key actions. Because of the TOML format, this is done in a string: RMK parses it and fills in the actual keymap initializer, like the one in [`keymap.rs`](https://github.com/HaoboGu/rmk/tree/main/examples/use_rust/rp2040/src/keymap.rs).
+In each `layer.keys`, keys are bound to key actions. Because of the TOML format, this is done in a string: RMK parses it and fills in the actual keymap initializer, like the one in [`keymap.rs`](https://github.com/rmk-rs/rmk/tree/main/examples/use_rust/rp2040/src/keymap.rs).
 
 The `layer.keys` string follows several rules:
 
-1. For a simple keycode (i.e., keys in RMK's [`HidKeyCode`](https://github.com/HaoboGu/rmk/blob/main/rmk-types/src/keycode/hid.rs) enum), just fill in its name as listed in the [KeyCode table](./keymap_configuration/keycodes).
+1. For a simple keycode (i.e., keys in RMK's [`HidKeyCode`](https://github.com/rmk-rs/rmk/blob/main/rmk-types/src/keycode/hid.rs) enum), just fill in its name as listed in the [KeyCode table](./keymap_configuration/keycodes).
 
    For example, `Backspace` is turned into the corresponding HID keycode. The keycode string must be valid, or RMK won't compile. To make things easier, a number of alternative key names were added (see the alias column in the [KeyCode table](./keymap_configuration/keycodes)), and lookup is case-insensitive.
 
@@ -279,7 +279,7 @@ The `layer.keys` string follows several rules:
    8. `TG(n)` — toggle layer `n`.
    9. `TO(n)` — activate layer `n` and deactivate all other layers.
 
-   These match QMK's definitions; see the [QMK layer docs](https://docs.qmk.fm/#/feature_layers). If you need another action, please [file an issue](https://github.com/HaoboGu/rmk/issues/new).
+   These match QMK's definitions; see the [QMK layer docs](https://docs.qmk.fm/#/feature_layers). If you need another action, please [file an issue](https://github.com/rmk-rs/rmk/issues/new).
 
 5. For modifier-tap-hold, use `MT(key, modifier, <profile_name>)`, where the modifier can be a chain as in rule 1. The optional `profile_name` sets the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning).
 <!-- If you're using home-row mod(HRM), you can also use `HRM(key, modifier)` to create a modifier-tap-hold whose configuration is optimized for home-row mod. -->
@@ -314,7 +314,7 @@ Alias names may not contain whitespace, and they are case sensitive.
 
 ## Converting from KLE or Vial
 
-If your keyboard already has a [KLE](http://www.keyboard-layout-editor.com/) layout or a [Vial](https://get.vial.today/) definition, you don't have to write the `[layout]` section by hand: `rmkit layout convert` (part of [rmkit](https://github.com/haobogu/rmkit)) converts both. It accepts a raw KLE JSON export ("Download JSON" on keyboard-layout-editor.com) or a `vial.json` (which embeds the same KLE data in `layouts.keymap`), and emits the equivalent `[layout]`:
+If your keyboard already has a [KLE](http://www.keyboard-layout-editor.com/) layout or a [Vial](https://get.vial.today/) definition, you don't have to write the `[layout]` section by hand: `rmkit layout convert` (part of [rmkit](https://github.com/rmk-rs/rmkit)) converts both. It accepts a raw KLE JSON export ("Download JSON" on keyboard-layout-editor.com) or a `vial.json` (which embeds the same KLE data in `layouts.keymap`), and emits the equivalent `[layout]`:
 
 ```bash
 rmkit layout convert path/to/vial.json -o layout.toml   # vial.json → [layout]

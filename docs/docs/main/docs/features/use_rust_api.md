@@ -14,7 +14,7 @@ You can check either your microcontroller's datasheet or an existing Rust projec
 
 ### Update `main.rs`
 
-The generated `main.rs` needs to be updated as well to use Rust code. You can copy the code from RMK's Rust example, such as <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust/rp2040/src/main.rs> to `src/main.rs` to get started.
+The generated `main.rs` needs to be updated as well to use Rust code. You can copy the code from RMK's Rust example, such as <https://github.com/rmk-rs/rmk/blob/main/examples/use_rust/rp2040/src/main.rs> to `src/main.rs` to get started.
 
 Next, check `src/main.rs` and make sure the bound USB interrupt is correct. Different microcontrollers have different USB peripherals, which means the interrupt bindings will also differ. Your best resource is to check [Embassy's examples](https://github.com/embassy-rs/embassy/tree/main/examples) for your chip family to see how to bind the USB interrupt correctly.
 
@@ -38,7 +38,7 @@ If you opt into [Rynk](./rynk) instead of the default Vial protocol, you don't n
 
 After adding the layout of your keyboard, the default keymap should also be updated. The default keymap is defined in `src/keymap.rs`. Update the keyboard matrix constants and add a `get_default_keymap()` function that returns the default keymap of your keyboard.
 
-RMK provides a bunch of useful [macros](https://docs.rs/rmk/latest/rmk/#macros) to help you define your keymap. Check out the [keymap configuration](../configuration/keymap_configuration) chapter for more details. You can also check the `src/keymap.rs` files in the <https://github.com/HaoboGu/rmk/blob/main/examples/use_rust> examples for reference.
+RMK provides a bunch of useful [macros](https://docs.rs/rmk/latest/rmk/#macros) to help you define your keymap. Check out the [keymap configuration](../configuration/keymap_configuration) chapter for more details. You can also check the `src/keymap.rs` files in the <https://github.com/rmk-rs/rmk/blob/main/examples/use_rust> examples for reference.
 
 Some `KeyAction`s are not supported by the macros; plain `KeyAction`s also work, for example: `KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::Kc1)), Action::Key(KeyCode::Hid(HidKeyCode::Kc2)))`
 

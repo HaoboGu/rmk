@@ -12,7 +12,7 @@ Each event channel has three configurable parameters:
 - **`pubs`**: Number of publishers - how many concurrent tasks can publish
 - **`subs`**: Number of subscribers - how many concurrent tasks can subscribe
 
-Each event has default values for typical use cases. You can view all defaults in [`rmk-config/src/default_config/event_default.toml`](https://github.com/HaoboGu/rmk/blob/main/rmk-config/src/default_config/event_default.toml).
+Each event has default values for typical use cases. You can view all defaults in [`rmk-config/src/default_config/event_default.toml`](https://github.com/rmk-rs/rmk/blob/main/rmk-config/src/default_config/event_default.toml).
 
 ## Configuration Syntax
 

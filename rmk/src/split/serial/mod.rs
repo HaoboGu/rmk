@@ -193,7 +193,7 @@ mod tests {
         assert_eq!(drv.serial.read_calls, 2);
     }
 
-    /// Regression test for https://github.com/HaoboGu/rmk/issues/801: when
+    /// Regression test for https://github.com/rmk-rs/rmk/issues/801: when
     /// two complete messages arrive in a single underlying read, the driver
     /// must deliver both without issuing a second underlying read.
     #[test]

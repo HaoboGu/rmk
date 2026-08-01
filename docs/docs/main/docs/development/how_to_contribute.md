@@ -2,7 +2,7 @@
 
 ANY contributions are welcome! Here is a simple step-by-step guide for developers:
 
-1. Before you start, you may want to read the [Under the Hood] section to understand how RMK works. [GitHub Issues](https://github.com/haobogu/rmk/issues) is also a good place for questions.
+1. Before you start, you may want to read the [Under the Hood] section to understand how RMK works. [GitHub Issues](https://github.com/rmk-rs/rmk/issues) is also a good place for questions.
 
 2. Check out the active PRs to make sure that what you want to add isn't already being implemented by others.
 
