@@ -9,6 +9,8 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(feature = "alloc")]
 use embassy_futures::join::join_array;
 #[cfg(feature = "alloc")]
+use postcard::experimental::max_size::MaxSize;
+#[cfg(feature = "alloc")]
 use postcard::experimental::serialized_size;
 use rmk_types::action::{EncoderAction, KeyAction};
 use rmk_types::battery::BatteryStatus;
@@ -26,7 +28,7 @@ use rmk_types::protocol::rynk::{
     SetMorseBulkRequest, SetMorseRequest, StorageResetMode, command,
 };
 #[cfg(feature = "alloc")]
-use rmk_types::protocol::rynk::{RYNK_HEADER_SIZE, RynkError};
+use rmk_types::protocol::rynk::{RYNK_HEADER_SIZE, RynkError, max_wire_size};
 #[cfg(feature = "alloc")]
 use serde::Serialize;
 
@@ -36,11 +38,12 @@ use crate::driver::{Client, RynkHostError};
 #[cfg(feature = "alloc")]
 use crate::layout::LayoutInfo;
 
-/// Space one waiting request takes in the firmware's frame buffer. A COBS-encoded
-/// bulk GET is at most 9 bytes; 12 leaves headroom. Only sizes [`Client::read_all`]'s
-/// windows — a bulk write parks far more, and just costs that lane another fetch.
+/// Space one waiting request takes in the firmware's frame buffer, sized from the
+/// largest bulk GET on the wire so a payload change carries through. Only sizes
+/// [`Client::read_all`]'s windows — a bulk write parks far more, and just costs
+/// that lane another fetch.
 #[cfg(feature = "alloc")]
-const PARKED_REQUEST_BYTES: usize = 12;
+const PARKED_REQUEST_BYTES: usize = max_wire_size(RYNK_HEADER_SIZE + GetKeymapBulkRequest::POSTCARD_MAX_SIZE);
 
 impl Client {
     fn require_bulk_transfer(&self, cmd: Cmd) -> Result<(), RynkHostError> {
