@@ -34,8 +34,10 @@ use crate::transport::{JsByteLink, WasmReader, WasmWriter};
 /// Live Rynk client handle exposed to JavaScript.
 ///
 /// Wraps the session's `Client` + `Driver`. All methods are `&self`: a parked
-/// `next_topic()` pull and one request may run concurrently (full-duplex), but
-/// keep requests serialized — the protocol allows a single request in flight.
+/// `next_topic()` pull and up to four requests run concurrently (full-duplex),
+/// with replies matched back by SEQ. Never overlap a `read_all_*` pager with a
+/// bulk write, though — the read resolves silently truncated (see the `rynk`
+/// crate docs).
 /// Dropping the handle, or closing the JS link, ends the session; the link
 /// itself stays open until the page closes it.
 #[wasm_bindgen]
@@ -124,6 +126,13 @@ endpoints! {
     set_encoder(encoder_id: u8, layer: u8, action: EncoderAction) -> (),
     get_keymap_bulk(layer: u8, start_row: u8, start_col: u8) -> GetKeymapBulkResponse,
     set_keymap_bulk(request: SetKeymapBulkRequest) -> (),
+    // whole-resource pagers
+    read_all_keymap() -> Vec<KeyAction>,
+    write_all_keymap(actions: Vec<KeyAction>) -> (),
+    read_all_combos() -> Vec<Combo>,
+    write_all_combos(configs: Vec<Combo>) -> (),
+    read_all_morses() -> Vec<Morse>,
+    write_all_morses(configs: Vec<Morse>) -> (),
     get_layout() -> LayoutInfo,
     // combos / forks / morse / macros
     get_combo(index: u8) -> Combo,

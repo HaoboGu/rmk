@@ -345,10 +345,10 @@ async fn script(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(all_keys, flat_expected);
     let mut mutated_keys = all_keys.clone();
     mutated_keys[0] = key(HidKeyCode::Kp9);
-    client.write_all_keymap(&mutated_keys).await?;
+    client.write_all_keymap(mutated_keys.clone()).await?;
     assert_eq!(client.read_all_keymap().await?, mutated_keys);
-    client.write_all_keymap(&all_keys).await?;
-    assert_eq!(client.read_all_keymap().await?, all_keys);
+    client.write_all_keymap(all_keys).await?;
+    assert_eq!(client.read_all_keymap().await?, flat_expected);
 
     // Combo table: every slot pages back (empty slots as the empty config), a
     // page-wide write round-trips, then restores.
@@ -361,9 +361,9 @@ async fn script(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
         key(HidKeyCode::Kp1),
         Some(1),
     );
-    client.write_all_combos(&mutated_combos).await?;
+    client.write_all_combos(mutated_combos.clone()).await?;
     assert_eq!(client.read_all_combos().await?, mutated_combos);
-    client.write_all_combos(&all_combos).await?;
+    client.write_all_combos(all_combos).await?;
 
     // Morse table pages back every slot (the list is padded to `max_morse`);
     // slot 0 carries the configured profile, and a page at the slot count is empty.
@@ -373,9 +373,9 @@ async fn script(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
     assert!(client.get_morse_bulk(caps.max_morse).await?.configs.is_empty());
     let mut mutated_morses = all_morses.clone();
     mutated_morses[0] = empty_morse(MorseProfile::const_default().with_hold_timeout_ms(Some(200)));
-    client.write_all_morses(&mutated_morses).await?;
+    client.write_all_morses(mutated_morses.clone()).await?;
     assert_eq!(client.read_all_morses().await?, mutated_morses);
-    client.write_all_morses(&all_morses).await?;
+    client.write_all_morses(all_morses).await?;
 
     // The fixture has no `[layout].map`, so the served blob is empty and decodes
     // to the empty layout rather than erroring.

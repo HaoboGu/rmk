@@ -50,9 +50,18 @@
 //!   pumps for every parked call — see `rynk-wasm`'s `RynkClient` for the
 //!   mechanism.
 //!
-//! At most one task should issue requests, and one consume topics, at a time —
-//! the protocol allows a single request in flight, and the channels behind the
-//! [`Client`] are competitively consumed.
+//! Requests can run concurrently — the [`Client`] has a slot pool and matches
+//! replies back by SEQ, so callers past the pool wait for a slot instead of
+//! flooding the device — but only one task should consume topics, since the
+//! channels behind the [`Client`] are competitively consumed.
+//!
+//! One pairing is unsafe: never overlap a `read_all_*` pager with a bulk write
+//! (`write_all_*`, or a bare `set_*_bulk`). The pending write fills the
+//! firmware's frame buffer, squeezing its replies below the page spacing the
+//! pager assumes, and a short page reads as end of data — so the pager returns
+//! `Ok` with a truncated result rather than an error. Everything else may
+//! overlap freely, pagers included: the slot pool bounds what reaches the
+//! device, so more callers never mean more requests in the firmware's buffer.
 //!
 //! ## Transport contract
 //!

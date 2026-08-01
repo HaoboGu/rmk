@@ -669,7 +669,7 @@ async fn write_all_keymap_packs_pages_to_the_payload_budget() {
     .await;
     drive(&mut driver, &client, async {
         let actions: Vec<KeyAction> = (0u8..5).map(KeyAction::Morse).collect();
-        client.write_all_keymap(&actions).await.unwrap();
+        client.write_all_keymap(actions).await.unwrap();
         assert_eq!(client.get_wpm().await.unwrap(), 99);
     })
     .await;
