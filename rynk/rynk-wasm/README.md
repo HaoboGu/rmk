@@ -165,18 +165,24 @@ Call `requestPort()` inside a user gesture such as a button click.
 that owns the `rynk::Client` protocol state machine directly. The page keeps
 its own display name for the device (WebHID `productName`, or whatever it
 showed in its picker) in `link.label`; the client does not carry one.
-The session is full duplex: a parked `next_topic()` loop and
-request calls run concurrently. Keep requests themselves serialized — await each
-request before issuing the next; the protocol allows a single request in flight.
+The session is full duplex: a parked `next_topic()` loop and request calls run
+concurrently. Up to four requests can be in flight — replies are matched back by
+sequence number, and a fifth call waits for a free slot instead of flooding the
+device. One pairing is unsafe: never overlap a `read_all_*` pager with a bulk
+write (`write_all_*`, or a bare `set_*_bulk`). The pending write fills the
+firmware's frame buffer, squeezing its replies below the page size the pager
+assumes, and a short page reads as end of data — so the pager resolves with a
+silently truncated array instead of rejecting. Everything else may overlap
+freely, pagers included: the slot pool bounds what reaches the device.
 
 Topic pushes are pulled, not delivered by callback: drive `next_topic()` in a
 loop. It parks until the next recognized topic and rejects with `Disconnected`
 at EOF, mirroring the native `Client::next_topic()` used by `rynk-serial` /
 `rynk-ble`.
 
-The typed request surface is the `endpoints!` table in `src/client.rs`,
-mirroring the native `rynk::Client` methods (minus the Rust-only conveniences
-such as the `read_all_*`/`write_all_*` pagers); browse it via the generated
+The typed request surface is the `endpoints!` table in `src/client.rs`, which
+mirrors every native `rynk::Client` method, including the whole-resource
+`read_all_*`/`write_all_*` pagers; browse it via the generated
 `pkg/rynk_wasm.d.ts` or the `rynk::Client` docs.
 
 Getter results and topic values are plain JS values produced through the
