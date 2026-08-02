@@ -3,6 +3,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::signal::Signal;
 use embassy_usb::class::dfu::consts::Status;
 use embassy_usb::class::dfu::dfu_mode::{self};
 use heapless;
@@ -217,6 +218,9 @@ static PASSTHROUGH_CMD: Mutex<
     RefCell<heapless::Vec<PassthroughCommand, PASSTHROUGH_QUEUE_SIZE>>,
 > = Mutex::new(RefCell::new(heapless::Vec::new()));
 
+/// Wakeup signal: set when a command is pushed to [`PASSTHROUGH_CMD`].
+pub(crate) static PASSTHROUGH_SIGNAL: Signal<CriticalSectionRawMutex, u8> = Signal::new();
+
 /// Doorbell atomic: set to a peripheral ID when there is work in
 /// [`PASSTHROUGH_CMD`], `usize::MAX` when idle.
 ///
@@ -232,7 +236,9 @@ pub(crate) fn passthrough_pending(id: usize) -> bool {
 
 /// Push a command into the queue (ISR-safe).
 fn passthrough_push(cmd: PassthroughCommand) -> Result<(), ()> {
-    PASSTHROUGH_CMD.lock(|c| c.borrow_mut().push(cmd).map_err(|_| ()))
+    PASSTHROUGH_CMD.lock(|c| c.borrow_mut().push(cmd).map_err(|_| ()))?;
+    PASSTHROUGH_SIGNAL.signal(1);
+    Ok(())
 }
 
 /// Pop the next pending command (async task).
