@@ -50,13 +50,13 @@ async fn main(_spawner: Spawner) {
     let (row_pins, col_pins) =
         config_matrix_pins_nrf!(peripherals: p, input: [P0_07, P0_22, P0_11, P0_12], output: [P0_13, P0_17, P0_20]);
 
-    // Flash layout using the bootymcbootface formula:
+    // Flash layout using the rmk-boot formula:
     //   state at 0x6000 (4K), active from 0x7000 (size: (flash_size - 28K (= embassy-boot + embassy-boot state) - STORAGE_SIZE (= 64K) - page_size (= 4K)) / 2),
     //   dfu follows active (active_size + page_size (= 4K))
     //
     // All offsets (DFU_OFFSET, DFU_SIZE, STORAGE_OFFSET, etc.) are derived
     // automatically from FLASH_SIZE below — change only that constant when using
-    // bootymcbootface.
+    // rmk-boot.
     //
     // ⚠  You can define your own FLASH_SIZE and addresses, but then you must build and
     //    flash a custom embassy-boot bootloader with a matching memory.x!

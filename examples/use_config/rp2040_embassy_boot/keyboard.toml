@@ -41,7 +41,7 @@ _  _      _
 
 # DFU partition layout — must match your bootloader's memory.x
 #
-# By default RMK uses the bootymcbootface formula with flash_size from the
+# By default RMK uses the rmk-boot formula with flash_size from the
 # chip default (2 MB for RP2040).
 # Calculation: 
 # 2 * 1024 * 1024;    // 2 MB (default)

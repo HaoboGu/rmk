@@ -4,7 +4,7 @@
 RMK supports DFU firmware updates via embassy-boot for **RP2040** and **nRF52840**. An embassy-boot based bootloader splits flash into ACTIVE and DFU slots, providing safe updates with automatic rollback on failure.
 This is an optional feature of RMK, the default bootloaders of the devices can still be used as usual without runtime updates via USB DFU.
 
-A pre-built embassy-boot based bootloader called **bootymcbootface** is available for both platforms. The partition formula is identical:
+A pre-built embassy-boot based bootloader called **rmk-boot** is available for both platforms. The partition formula is identical:
 
 ```text
 bootloader+state = 28K (fixed)
@@ -54,12 +54,12 @@ dfu_size     = 528384
 <Tab label={<Rust />}>
 
 ```rust title="main.rs"
-// Flash layout using the bootymcbootface formula:
+// Flash layout using the rmk-boot formula:
 //   state at 0x6000 (4K), active from 0x7000 (size: (flash_size - 28K (= BOOT2 size + embassy-boot + embassy-boot state) - STORAGE_SIZE (= 128K) - page_size (= 4K)) / 2),
 //   dfu follows active (active_size + page_size (= 4K))
 //
 // All offsets (DFU_OFFSET, DFU_SIZE, STORAGE_OFFSET, etc.) are derived
-// automatically from FLASH_SIZE below — change only that constant when using bootymcbootface.
+// automatically from FLASH_SIZE below — change only that constant when using rmk-boot.
 //
 // ⚠  You can define your own FLASH_SIZE and addresses, but then you must build and
 //    flash a custom embassy-boot bootloader with a matching memory.x!
@@ -161,13 +161,13 @@ dfu_size     = 528384
 <Tab label={<Rust />}>
 
 ```rust title="main.rs"
-// Flash layout using the bootymcbootface formula:
+// Flash layout using the rmk-boot formula:
 //   state at 0x6000 (4K), active from 0x7000 (size: (flash_size - 28K (= embassy-boot + embassy-boot state) - STORAGE_SIZE (= 64K) - page_size (= 4K)) / 2),
 //   dfu follows active (active_size + page_size (= 4K))
 //
 // All offsets (DFU_OFFSET, DFU_SIZE, STORAGE_OFFSET, etc.) are derived
 // automatically from FLASH_SIZE below — change only that constant when using
-// bootymcbootface.
+// rmk-boot.
 //
 // ⚠  You can define your own FLASH_SIZE and addresses, but then you must build and
 //    flash a custom embassy-boot bootloader with a matching memory.x!
@@ -235,7 +235,7 @@ run_all!(
 
 ## Partition layout
 
-The bootloader divides flash into regions. The defaults follow the [bootymcbootface](https://codeberg.org/Schievel/bootymcbootface/) convention and are automatically calculated from `flash_size`:
+The bootloader divides flash into regions. The defaults follow the [rmk-boot](https://github.com/rmk-rs/rmk-boot) convention and are automatically calculated from `flash_size`:
 
 | Region          | Offset         | Size                                 |
 |-----------------|----------------|--------------------------------------|
@@ -247,7 +247,7 @@ The bootloader divides flash into regions. The defaults follow the [bootymcbootf
 
 The DFU partition size follows embassy-boot guidelines, the additional page is used for status information during flashing.
 
-All `[dfu]` fields are optional. The partition values are auto-calculated from `flash_size` and `page_size` using the bootymcbootface formula. If you supply any of `state_offset`, `state_size`, `dfu_offset`, or `dfu_size` directly, auto-calculation is disabled and your values are used as-is.
+All `[dfu]` fields are optional. The partition values are auto-calculated from `flash_size` and `page_size` using the rmk-boot formula. If you supply any of `state_offset`, `state_size`, `dfu_offset`, or `dfu_size` directly, auto-calculation is disabled and your values are used as-is.
 
 Your `memory.x` must match this partition layout — see the [flashing guide](../user_guide/flash_firmware/use_embassy_boot.mdx) for details.
 
