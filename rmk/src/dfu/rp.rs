@@ -74,3 +74,33 @@ pub fn mark_booted() {
 pub fn get_manager() -> Option<&'static DfuFlashManager> {
     MANAGER.try_get()
 }
+
+/// Initialize flash using partition offsets from the linker (rmk-boot.x).
+///
+/// Requires `rmk-boot.x` to be linked into the firmware binary
+/// (e.g. `-Trmk-boot.x` in `.cargo/config.toml`).
+///
+/// # Safety
+///
+/// Reads linker-defined absolute symbols. The symbols must be present in the
+/// linked binary or the firmware will not link.
+pub fn init_flash_from_linkerscript(flash_peri: Peri<'static, FLASH>) -> PartitionType {
+    unsafe extern "C" {
+        static __rmk_boot_state_offset: u8;
+        static __rmk_boot_state_size: u8;
+        static __rmk_boot_dfu_offset: u8;
+        static __rmk_boot_dfu_size: u8;
+        static __rmk_boot_storage_offset: u8;
+        static __rmk_boot_storage_size: u8;
+    }
+    // SAFETY: linker-defined symbols — reading their addresses is safe.
+    init_flash(
+        flash_peri,
+        core::ptr::addr_of!(__rmk_boot_storage_offset) as usize as u32,
+        core::ptr::addr_of!(__rmk_boot_storage_size) as usize as u32,
+        core::ptr::addr_of!(__rmk_boot_state_offset) as usize as u32,
+        core::ptr::addr_of!(__rmk_boot_state_size) as usize as u32,
+        core::ptr::addr_of!(__rmk_boot_dfu_offset) as usize as u32,
+        core::ptr::addr_of!(__rmk_boot_dfu_size) as usize as u32,
+    )
+}

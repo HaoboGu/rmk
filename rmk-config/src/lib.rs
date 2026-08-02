@@ -623,27 +623,15 @@ pub(crate) struct StorageConfig {
     pub clear_layout: Option<bool>,
 }
 
-/// Config for DFU partition layout (embassy-boot).
+/// Config for DFU (embassy-boot).
 ///
-/// These values must match the bootloader's `memory.x` / linker script.
+/// Offsets come from `rmk-boot.x` linker symbols. This section only
+/// configures DFU behaviour (LED, unlock keys, page size).
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct DfuTomlConfig {
-    /// Offset of the boot state partition
-    pub state_offset: Option<u32>,
-    /// Size of the boot state partition
-    pub state_size: Option<u32>,
-    /// Offset of the DFU download partition
-    pub dfu_offset: Option<u32>,
-    /// Size of the DFU download partition
-    pub dfu_size: Option<u32>,
     /// Flash page size in bytes (e.g. 4096 for RP2040).
-    /// Used with `flash_size` to auto-calculate partition addresses.
     pub page_size: Option<u32>,
-    /// Total flash size in bytes. When set, DFU partition addresses are
-    /// calculated automatically using the rmk-boot formula.
-    /// Defaults to 2 MB (2097152) when omitted.
-    pub flash_size: Option<u32>,
     /// Optional DFU activity LED pin, e.g. `"PIN_16"`. When set, the LED
     /// is lit while a DFU download is in progress.
     pub led: Option<String>,
