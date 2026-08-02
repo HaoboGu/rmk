@@ -11,6 +11,14 @@ It uses the DK's four onboard buttons as a 2x2 direct-pin keyboard matrix:
 
 Storage is backed by the internal flash via `nrf-mpsl`, so keymap/profile changes persist.
 
+## Physical layout
+
+rynk serves the physical layout over `GetLayout` so hosts can render the keyboard. Even a `use_rust`
+keyboard keeps that layout in `keyboard.toml`, found through `KEYBOARD_TOML_PATH` in
+`.cargo/config.toml`: RMK bakes the `[layout]` section into the firmware and `RmkConfig::default()`
+picks it up, so `main.rs` wires up nothing. The same file also feeds the `[rmk]` / `[event]` build
+constants — everything else stays in Rust.
+
 ## Running
 
 1. Enter the example directory:

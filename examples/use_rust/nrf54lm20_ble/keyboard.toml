@@ -1,0 +1,9 @@
+# All a `use_rust` keyboard still reads from TOML: the layout rynk serves over
+# `GetLayout`, plus the `[rmk]` / `[event]` build constants.
+[layout]
+rows = 2
+cols = 2
+map = """
+(0,0)  (0,1)
+(1,0)  (1,1)
+"""

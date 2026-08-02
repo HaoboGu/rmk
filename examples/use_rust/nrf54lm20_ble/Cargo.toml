@@ -80,11 +80,11 @@ overflow-checks = false
 lto = "fat"
 
 [patch.crates-io]
-embassy-nrf = { git = "https://github.com/HaoboGu/embassy", rev = "108895f67c04ed336e18a27b4b661f995f105f0b" }
-embassy-sync = { git = "https://github.com/HaoboGu/embassy", rev = "108895f67c04ed336e18a27b4b661f995f105f0b" }
-embassy-usb = { git = "https://github.com/HaoboGu/embassy", rev = "108895f67c04ed336e18a27b4b661f995f105f0b" }
-embassy-time = { git = "https://github.com/HaoboGu/embassy", rev = "108895f67c04ed336e18a27b4b661f995f105f0b" }
-embassy-executor = { git = "https://github.com/HaoboGu/embassy", rev = "108895f67c04ed336e18a27b4b661f995f105f0b" }
-embassy-hal-internal = { git = "https://github.com/HaoboGu/embassy", rev = "108895f67c04ed336e18a27b4b661f995f105f0b" }
-embassy-futures = { git = "https://github.com/HaoboGu/embassy", rev = "108895f67c04ed336e18a27b4b661f995f105f0b" }
-embassy-embedded-hal = { git = "https://github.com/HaoboGu/embassy", rev = "108895f67c04ed336e18a27b4b661f995f105f0b" }
+embassy-nrf = { git = "https://github.com/embassy-rs/embassy", rev = "e6626ce6c04fb5408449a2d209b6809afd965b4f" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy", rev = "e6626ce6c04fb5408449a2d209b6809afd965b4f" }
+embassy-usb = { git = "https://github.com/embassy-rs/embassy", rev = "e6626ce6c04fb5408449a2d209b6809afd965b4f" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", rev = "e6626ce6c04fb5408449a2d209b6809afd965b4f" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy", rev = "e6626ce6c04fb5408449a2d209b6809afd965b4f" }
+embassy-hal-internal = { git = "https://github.com/embassy-rs/embassy", rev = "e6626ce6c04fb5408449a2d209b6809afd965b4f" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy", rev = "e6626ce6c04fb5408449a2d209b6809afd965b4f" }
+embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy", rev = "e6626ce6c04fb5408449a2d209b6809afd965b4f" }
