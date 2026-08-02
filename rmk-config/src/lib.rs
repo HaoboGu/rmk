@@ -524,7 +524,7 @@ pub(crate) struct DfuTomlConfig {
     /// Used with `flash_size` to auto-calculate partition addresses.
     pub page_size: Option<u32>,
     /// Total flash size in bytes. When set, DFU partition addresses are
-    /// calculated automatically using the bootymcbootface formula.
+    /// calculated automatically using the rmk-boot formula.
     /// Defaults to 2 MB (2097152) when omitted.
     pub flash_size: Option<u32>,
     /// Optional DFU activity LED pin, e.g. `"PIN_16"`. When set, the LED

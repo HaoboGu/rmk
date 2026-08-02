@@ -1,5 +1,5 @@
 /*
-Flash layout matching bootymcbootface nRF layout:
+Flash layout matching rmk-boot nRF layout:
   bootloader: 24K at 0x0, state: 4K at 0x6000
   ACTIVE (this firmware): 432K at 0x7000
   DFU: 436K at 0x73000
