@@ -9,6 +9,7 @@ use super::hid::HidKeyCode;
 /// Ref: <https://www.usb.org/sites/default/files/documents/hut1_12v2.pdf#page=75>
 #[non_exhaustive]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, MaxSize)]
+#[cfg_attr(feature = "_codegen", derive(strum::EnumIter))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
@@ -193,6 +194,12 @@ impl From<ConsumerKey> for u16 {
 }
 
 impl ConsumerKey {
+    /// Host-only: list all consumer-page keys, in declaration order.
+    #[cfg(feature = "_codegen")]
+    pub fn all() -> impl Iterator<Item = Self> {
+        <Self as strum::IntoEnumIterator>::iter()
+    }
+
     /// Convert ConsumerKey to the corresponding HidKeyCode
     pub fn to_hid_keycode(&self) -> Option<HidKeyCode> {
         match self {
