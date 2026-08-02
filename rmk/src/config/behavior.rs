@@ -154,6 +154,7 @@ impl Default for MorsesConfig {
 pub struct StickyKeyProfile {
     pub timeout: Duration,
     pub activate_on_keypress: bool,
+    pub release_on_keyup_after_timeout: bool,
     pub max_repeat: u16,
     pub release_mode: Option<StickyKeyReleaseMode>,
 }
@@ -163,6 +164,7 @@ impl Default for StickyKeyProfile {
         Self {
             timeout: Duration::from_secs(1),
             activate_on_keypress: false,
+            release_on_keyup_after_timeout: false,
             max_repeat: 0,
             release_mode: None,
         }

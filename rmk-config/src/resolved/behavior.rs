@@ -75,6 +75,7 @@ impl StickyKeyReleaseMode {
 pub struct StickyKeyConfig {
     pub timeout_ms: Option<u64>,
     pub activate_on_keypress: Option<bool>,
+    pub release_on_keyup_after_timeout: Option<bool>,
     pub max_repeat: Option<u16>,
     pub release_mode: Option<StickyKeyReleaseMode>,
     pub profiles: HashMap<String, StickyKeyProfile>,
@@ -84,6 +85,7 @@ pub struct StickyKeyConfig {
 pub struct StickyKeyProfile {
     pub timeout_ms: Option<u64>,
     pub activate_on_keypress: Option<bool>,
+    pub release_on_keyup_after_timeout: Option<bool>,
     pub max_repeat: Option<u16>,
     pub release_mode: Option<StickyKeyReleaseMode>,
 }
@@ -333,6 +335,7 @@ impl crate::KeyboardTomlConfig {
                     Ok(StickyKeyProfile {
                         timeout_ms: profile.timeout.map(|timeout| timeout.0),
                         activate_on_keypress: profile.activate_on_keypress,
+                        release_on_keyup_after_timeout: profile.release_on_keyup_after_timeout,
                         max_repeat: profile.max_repeat,
                         release_mode: profile
                             .release_mode
@@ -349,6 +352,7 @@ impl crate::KeyboardTomlConfig {
                 Ok(StickyKeyConfig {
                     timeout_ms: sticky.timeout.map(|timeout| timeout.0),
                     activate_on_keypress: sticky.activate_on_keypress,
+                    release_on_keyup_after_timeout: sticky.release_on_keyup_after_timeout,
                     max_repeat: sticky.max_repeat,
                     release_mode: sticky
                         .release_mode
@@ -512,10 +516,12 @@ hold_timeout = "300ms"
         let config: KeyboardTomlConfig = toml::from_str(
             r#"
 [behavior.sticky_key]
+release_on_keyup_after_timeout = true
 release_mode = "other_key_release | layer_exit | double_tap"
 
 [behavior.sticky_key.profiles.alt_tab]
 timeout = "5s"
+release_on_keyup_after_timeout = false
 release_mode = "other_key_press | layer_enter"
 "#,
         )
@@ -523,6 +529,7 @@ release_mode = "other_key_press | layer_enter"
 
         let sticky = config.behavior().unwrap().sticky_key.unwrap();
         assert_eq!(sticky.timeout_ms, None);
+        assert_eq!(sticky.release_on_keyup_after_timeout, Some(true));
         assert_eq!(
             sticky.release_mode.unwrap().into_bits(),
             StickyKeyReleaseMode::OTHER_KEY_RELEASE.into_bits()
@@ -531,6 +538,7 @@ release_mode = "other_key_press | layer_enter"
         );
         let alt_tab = &sticky.profiles["alt_tab"];
         assert_eq!(alt_tab.timeout_ms, Some(5000));
+        assert_eq!(alt_tab.release_on_keyup_after_timeout, Some(false));
         assert_eq!(
             alt_tab.release_mode.unwrap().into_bits(),
             StickyKeyReleaseMode::OTHER_KEY_PRESS.into_bits() | StickyKeyReleaseMode::LAYER_ENTER.into_bits()

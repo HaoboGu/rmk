@@ -32,6 +32,7 @@ pub(crate) enum StickyKeyShape {
 pub(crate) struct StickyKeyPolicy {
     pub timeout: Duration,
     pub activate_on_keypress: bool,
+    pub release_on_keyup_after_timeout: bool,
     pub max_repeat: u16,
     pub release_mode: StickyKeyReleaseMode,
 }
@@ -617,6 +618,7 @@ impl<'a> KeyMap<'a> {
         StickyKeyPolicy {
             timeout: profile.timeout,
             activate_on_keypress: profile.activate_on_keypress,
+            release_on_keyup_after_timeout: shape != StickyKeyShape::TapKey && profile.release_on_keyup_after_timeout,
             max_repeat: profile.max_repeat,
             release_mode,
         }
@@ -970,5 +972,33 @@ mod test {
         let policy = keymap.sticky_key_profile(u8::MAX, StickyKeyShape::PureMod);
         assert_eq!(policy.timeout, Duration::from_secs(1));
         assert!(!policy.activate_on_keypress);
+    }
+
+    #[test]
+    fn keyup_timeout_release_applies_to_modifiers_and_layers_only() {
+        use crate::config::{BehaviorConfig, PositionalConfig};
+        use crate::keymap::{KeyMap, KeymapData, StickyKeyShape};
+
+        let mut data = KeymapData::<1, 1, 1>::new([[[k!(A)]]]);
+        let mut behavior = BehaviorConfig::default();
+        behavior.sticky_key.default_profile.release_on_keyup_after_timeout = true;
+        let positional = PositionalConfig::<1, 1>::default();
+        let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
+
+        assert!(
+            keymap
+                .sticky_key_profile(u8::MAX, StickyKeyShape::PureMod)
+                .release_on_keyup_after_timeout
+        );
+        assert!(
+            keymap
+                .sticky_key_profile(u8::MAX, StickyKeyShape::Layer)
+                .release_on_keyup_after_timeout
+        );
+        assert!(
+            !keymap
+                .sticky_key_profile(u8::MAX, StickyKeyShape::TapKey)
+                .release_on_keyup_after_timeout
+        );
     }
 }

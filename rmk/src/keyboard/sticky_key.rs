@@ -26,6 +26,8 @@ enum LatchPhase {
     Latched,
     /// A foreign key was pressed while a producer remained down.
     Held,
+    /// The configured timeout elapsed while a producer remained down.
+    TimedOut,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -71,23 +73,29 @@ impl<T> Latch<T> {
         self.buffered_claim = false;
     }
 
-    fn on_physical_release(&mut self, owner: Option<KeyboardEventPos>) -> PhysicalRelease {
+    fn on_physical_release(&mut self, owner: Option<KeyboardEventPos>, now: Instant) -> PhysicalRelease {
         if owner.is_some_and(|owner| owner != self.source) {
             return PhysicalRelease::Ignored;
         }
         match self.phase {
             LatchPhase::Pressed => {
+                if self.policy.release_on_keyup_after_timeout && self.deadline.is_some_and(|deadline| deadline <= now) {
+                    self.phase = LatchPhase::TimedOut;
+                    self.deadline = None;
+                    return PhysicalRelease::Released;
+                }
                 self.phase = LatchPhase::Latched;
                 self.deadline = deadline_from_timeout(self.policy.timeout);
                 PhysicalRelease::Latched
             }
             LatchPhase::Held => PhysicalRelease::Released,
+            LatchPhase::TimedOut => PhysicalRelease::Released,
             LatchPhase::Latched => PhysicalRelease::Ignored,
         }
     }
 
     fn mark_foreign_key(&mut self) {
-        if self.phase == LatchPhase::Pressed {
+        if matches!(self.phase, LatchPhase::Pressed | LatchPhase::TimedOut) {
             self.phase = LatchPhase::Held;
             self.deadline = None;
         }
@@ -130,6 +138,9 @@ impl<T> Latch<T> {
         }
         if self.phase == LatchPhase::Pressed {
             self.deadline = None;
+            if self.policy.release_on_keyup_after_timeout {
+                self.phase = LatchPhase::TimedOut;
+            }
             TimeoutDisposition::Deferred
         } else {
             TimeoutDisposition::Release
@@ -414,7 +425,7 @@ impl Keyboard<'_> {
             if let Some(latch) = &mut self.sticky_key_state.modifier
                 && let Some(last) = latch.value.on_exact_release(modifiers, event.pos)
             {
-                if last && latch.on_physical_release(None) == PhysicalRelease::Released {
+                if last && latch.on_physical_release(None, Instant::now()) == PhysicalRelease::Released {
                     self.release_sticky_modifier().await;
                 }
                 return;
@@ -424,7 +435,7 @@ impl Keyboard<'_> {
             }
             if let Some(latch) = &mut self.sticky_key_state.modifier
                 && latch.value.on_combo_release(modifiers).is_some_and(|last| last)
-                && latch.on_physical_release(None) == PhysicalRelease::Released
+                && latch.on_physical_release(None, Instant::now()) == PhysicalRelease::Released
             {
                 self.release_sticky_modifier().await;
             }
@@ -461,7 +472,7 @@ impl Keyboard<'_> {
             self.keymap.activate_layer(layer);
             self.sticky_key_state.layer = Some(Latch::new(StickyLayerEffect { layer }, event.pos, policy));
         } else if let Some(latch) = &mut self.sticky_key_state.layer
-            && latch.on_physical_release(Some(event.pos)) == PhysicalRelease::Released
+            && latch.on_physical_release(Some(event.pos), Instant::now()) == PhysicalRelease::Released
         {
             self.release_sticky_layer();
         }
@@ -527,7 +538,7 @@ impl Keyboard<'_> {
                 .tap_key
                 .as_mut()
                 .expect("tap key checked above")
-                .on_physical_release(Some(event.pos));
+                .on_physical_release(Some(event.pos), Instant::now());
             self.process_action_key(key, event).await;
         }
     }
@@ -539,7 +550,7 @@ impl Keyboard<'_> {
 
         if let Some(modifier) = &mut self.sticky_key_state.modifier {
             match modifier.phase {
-                LatchPhase::Pressed => modifier.mark_foreign_key(),
+                LatchPhase::Pressed | LatchPhase::TimedOut => modifier.mark_foreign_key(),
                 LatchPhase::Latched if modifier.trigger_for_key(event.pressed) => {
                     update.modifier_was_host_visible = modifier.value.host_visible;
                     self.sticky_key_state.modifier = None;
@@ -551,7 +562,7 @@ impl Keyboard<'_> {
 
         if let Some(layer) = &mut self.sticky_key_state.layer {
             match layer.phase {
-                LatchPhase::Pressed => layer.mark_foreign_key(),
+                LatchPhase::Pressed | LatchPhase::TimedOut => layer.mark_foreign_key(),
                 LatchPhase::Latched if layer.trigger_for_key(event.pressed) => {
                     let layer = layer.value;
                     self.sticky_key_state.layer = None;
@@ -669,6 +680,7 @@ mod tests {
         StickyKeyPolicy {
             timeout: Duration::from_secs(1),
             activate_on_keypress: false,
+            release_on_keyup_after_timeout: false,
             max_repeat: 0,
             release_mode,
         }
@@ -693,7 +705,10 @@ mod tests {
             latch.value.on_exact_release(ModifierCombination::LSHIFT, pos(1)),
             Some(true)
         );
-        assert_eq!(latch.on_physical_release(None), PhysicalRelease::Latched);
+        assert_eq!(
+            latch.on_physical_release(None, Instant::now()),
+            PhysicalRelease::Latched
+        );
         assert_eq!(latch.phase, LatchPhase::Latched);
         assert_eq!(
             latch.value.modifiers,
@@ -720,7 +735,10 @@ mod tests {
             latch.value.on_exact_release(ModifierCombination::LSHIFT, pos(1)),
             Some(true)
         );
-        assert_eq!(latch.on_physical_release(None), PhysicalRelease::Released);
+        assert_eq!(
+            latch.on_physical_release(None, Instant::now()),
+            PhysicalRelease::Released
+        );
     }
 
     #[test]
@@ -735,6 +753,47 @@ mod tests {
         assert_eq!(latch.timeout_disposition(deadline), TimeoutDisposition::Deferred);
         assert_eq!(latch.phase, LatchPhase::Pressed);
         assert_eq!(latch.deadline, None);
+        assert_eq!(
+            latch.on_physical_release(None, Instant::now()),
+            PhysicalRelease::Latched
+        );
+        assert_eq!(latch.phase, LatchPhase::Latched);
+        assert!(latch.deadline.is_some());
+    }
+
+    #[test]
+    fn configured_timeout_releases_on_physical_keyup() {
+        let mut timeout_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
+        timeout_policy.release_on_keyup_after_timeout = true;
+        let mut latch = Latch::new(
+            StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
+            pos(0),
+            timeout_policy,
+        );
+        let deadline = latch.deadline.unwrap();
+
+        assert_eq!(latch.timeout_disposition(deadline), TimeoutDisposition::Deferred);
+        assert_eq!(latch.phase, LatchPhase::TimedOut);
+        assert_eq!(
+            latch.on_physical_release(None, Instant::now()),
+            PhysicalRelease::Released
+        );
+    }
+
+    #[test]
+    fn configured_release_checks_expired_deadline_before_timeout_poll() {
+        let mut timeout_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
+        timeout_policy.release_on_keyup_after_timeout = true;
+        let mut latch = Latch::new(
+            StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
+            pos(0),
+            timeout_policy,
+        );
+        let deadline = latch.deadline.unwrap();
+
+        assert_eq!(latch.on_physical_release(None, deadline), PhysicalRelease::Released);
+        assert_eq!(latch.phase, LatchPhase::TimedOut);
+        assert_eq!(latch.deadline, None);
     }
 
     #[test]
@@ -744,7 +803,10 @@ mod tests {
             pos(0),
             policy(StickyKeyReleaseMode::OTHER_KEY_PRESS),
         );
-        assert_eq!(latch.on_physical_release(None), PhysicalRelease::Latched);
+        assert_eq!(
+            latch.on_physical_release(None, Instant::now()),
+            PhysicalRelease::Latched
+        );
 
         latch.claim_buffered_press(pos(1));
         assert!(latch.buffered_claim);

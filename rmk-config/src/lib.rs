@@ -797,6 +797,7 @@ pub(crate) struct BehaviorConfig {
 pub struct StickyKeyConfig {
     pub timeout: Option<DurationMillis>,
     pub activate_on_keypress: Option<bool>,
+    pub release_on_keyup_after_timeout: Option<bool>,
     pub max_repeat: Option<u16>,
     pub release_mode: Option<String>,
     #[serde(default)]
@@ -809,6 +810,7 @@ pub struct StickyKeyConfig {
 pub struct StickyKeyProfile {
     pub timeout: Option<DurationMillis>,
     pub activate_on_keypress: Option<bool>,
+    pub release_on_keyup_after_timeout: Option<bool>,
     pub max_repeat: Option<u16>,
     pub release_mode: Option<String>,
 }

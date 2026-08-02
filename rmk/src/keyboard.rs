@@ -2116,7 +2116,7 @@ mod test {
     use crate::config::{BehaviorConfig, ForksConfig, PositionalConfig};
     use crate::event::{KeyPos, KeyboardEvent, KeyboardEventPos};
     use crate::test_support::test_block_on as block_on;
-    use crate::{a, k, layer, mo, th, thp};
+    use crate::{a, k, layer, mo, osl, th, thp};
 
     #[rustfmt::skip]
     pub const fn get_keymap() -> [[[KeyAction; 14]; 5]; 2] {
@@ -2162,6 +2162,30 @@ mod test {
 
     fn create_test_keyboard() -> Keyboard<'static> {
         create_test_keyboard_with_config(BehaviorConfig::default())
+    }
+
+    #[test]
+    fn sticky_layer_keyup_observes_elapsed_timeout_before_timeout_poll() {
+        let main = async {
+            let mut config = BehaviorConfig::default();
+            config.sticky_key.default_profile.timeout = Duration::from_millis(100);
+            config.sticky_key.default_profile.release_on_keyup_after_timeout = true;
+            let mut keyboard = create_test_keyboard_with_config(config);
+            keyboard
+                .keymap
+                .set_action_at(KeyboardEventPos::Key(KeyPos { row: 0, col: 0 }), 0, osl!(1));
+
+            keyboard.process_inner(KeyboardEvent::key(0, 0, true)).await;
+            assert!(keyboard.keymap.is_layer_active(1));
+
+            // Model an event-first wakeup: time has elapsed, but the keyboard
+            // loop has not processed the sticky timeout before this key-up.
+            embassy_time::MockDriver::get().advance(Duration::from_millis(150));
+            keyboard.process_inner(KeyboardEvent::key(0, 0, false)).await;
+
+            assert!(!keyboard.keymap.is_layer_active(1));
+        };
+        block_on(main);
     }
 
     async fn force_timeout_first_hold(keyboard: &mut Keyboard<'static>) {

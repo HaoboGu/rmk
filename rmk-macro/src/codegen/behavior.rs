@@ -78,6 +78,10 @@ fn expand_sticky_key_profile(
         .activate_on_keypress
         .or(fallback.activate_on_keypress)
         .unwrap_or(false);
+    let release_on_keyup_after_timeout = profile
+        .release_on_keyup_after_timeout
+        .or(fallback.release_on_keyup_after_timeout)
+        .unwrap_or(false);
     let max_repeat = profile.max_repeat.or(fallback.max_repeat).unwrap_or(0);
     let release_mode = match profile.release_mode.or(fallback.release_mode) {
         Some(mode) => {
@@ -90,6 +94,7 @@ fn expand_sticky_key_profile(
         ::rmk::config::StickyKeyProfile {
             timeout: ::rmk::embassy_time::Duration::from_millis(#timeout),
             activate_on_keypress: #activate_on_keypress,
+            release_on_keyup_after_timeout: #release_on_keyup_after_timeout,
             max_repeat: #max_repeat,
             release_mode: #release_mode,
         }
@@ -106,6 +111,7 @@ fn expand_sticky_key(behavior: &Behavior) -> proc_macro2::TokenStream {
                 .one_shot_modifiers
                 .as_ref()
                 .and_then(|one_shot| one_shot.activate_on_keypress)),
+            release_on_keyup_after_timeout: sticky.release_on_keyup_after_timeout,
             max_repeat: sticky.max_repeat,
             release_mode: sticky.release_mode,
         })
@@ -685,5 +691,28 @@ pub(crate) fn expand_behavior_config(behavior: &Behavior) -> proc_macro2::TokenS
             auto_mouse_layer: #auto_mouse_layer,
             ..Default::default()
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sticky_key_profile_inherits_and_overrides_keyup_timeout_release() {
+        let fallback = StickyKeyProfile {
+            release_on_keyup_after_timeout: Some(true),
+            ..Default::default()
+        };
+        let inherited =
+            expand_sticky_key_profile(&StickyKeyProfile::default(), &fallback).to_string();
+        assert!(inherited.contains("release_on_keyup_after_timeout : true"));
+
+        let override_disabled = StickyKeyProfile {
+            release_on_keyup_after_timeout: Some(false),
+            ..Default::default()
+        };
+        let overridden = expand_sticky_key_profile(&override_disabled, &fallback).to_string();
+        assert!(overridden.contains("release_on_keyup_after_timeout : false"));
     }
 }

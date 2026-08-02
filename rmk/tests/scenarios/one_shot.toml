@@ -140,6 +140,37 @@ expect = [
   [],
 ]
 
+# With key-up timeout release enabled, an OSL held beyond its timeout does not
+# latch the layer again when physically released.
+[[test]]
+name = "osl_releases_on_keyup_after_timeout_when_configured"
+behavior.sticky_key = { timeout = "100ms", release_on_keyup_after_timeout = true }
+steps = [
+  { press = [0, 1] },
+  { delay = 150 },
+  { release = [0, 1] },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [
+  ["A"],  # A from layer 0 because releasing OSL also released layer 1
+  [],
+]
+
+# The default remains compatible: releasing a held, timed-out OSL starts a new
+# timeout and leaves layer 1 latched for the next key.
+[[test]]
+name = "osl_default_restarts_timeout_on_keyup_after_elapsed_timeout"
+steps = [
+  { press = [0, 1] },
+  { delay = 1100 },
+  { release = [0, 1] },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [
+  ["C"],  # C from the still-latched layer 1
+  [],
+]
+
 # Only the first key after the OSL sees layer 1.
 [[test]]
 name = "osl_multiple_keys"
