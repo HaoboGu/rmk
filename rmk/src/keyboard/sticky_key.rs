@@ -9,25 +9,30 @@ use rmk_types::action::Action;
 use rmk_types::keycode::HidKeyCode;
 use rmk_types::modifier::ModifierCombination;
 
+#[cfg(test)]
+use crate::config::StickyKeyHoldDuration;
 use crate::config::StickyKeyReleaseMode;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::keyboard::Keyboard;
 use crate::keymap::{StickyKeyPolicy, StickyKeyShape};
 
-fn deadline_from_timeout(timeout: Duration) -> Option<Instant> {
-    (timeout != Duration::MAX).then(|| Instant::now() + timeout)
+fn deadline_from(start: Instant, duration: Duration) -> Option<Instant> {
+    (duration != Duration::MAX).then(|| start + duration)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LatchPhase {
     /// One or more physical producers are still down.
     Pressed,
+    /// A producer remains down, but its press deadline is absent or consumed.
+    /// `Latch::timing_marker` stores the continuous chord's start without scheduling a wake.
+    PressDeadlineInactive,
     /// Every producer is up and the effect is armed.
     Latched,
     /// A foreign key was pressed while a producer remained down.
     Held,
-    /// The configured timeout elapsed while a producer remained down.
-    TimedOut,
+    /// The configured key-up release threshold elapsed while a producer remained down.
+    HoldQualified,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -37,7 +42,9 @@ struct Latch<T> {
     policy: StickyKeyPolicy,
     phase: LatchPhase,
     repeat_count: u16,
-    deadline: Option<Instant>,
+    /// Active deadline in `Pressed`/`Latched`, or the chord start while a
+    /// physical producer is down and no wakeup is needed.
+    timing_marker: Option<Instant>,
     buffered_claim: bool,
 }
 
@@ -49,27 +56,63 @@ enum PhysicalRelease {
 }
 
 impl<T> Latch<T> {
-    fn new(value: T, source: KeyboardEventPos, policy: StickyKeyPolicy) -> Self {
+    fn new(value: T, source: KeyboardEventPos, policy: StickyKeyPolicy, pressed_at: Instant) -> Self {
+        let (phase, timing_marker) = Self::press_state(policy, pressed_at, pressed_at);
         Self {
             value,
             source,
             policy,
-            phase: LatchPhase::Pressed,
+            phase,
             repeat_count: 1,
-            deadline: deadline_from_timeout(policy.timeout),
+            timing_marker,
             buffered_claim: false,
         }
     }
 
     fn deadline(&self) -> Option<Instant> {
-        self.deadline
+        if matches!(self.phase, LatchPhase::Pressed | LatchPhase::Latched) {
+            self.timing_marker
+        } else {
+            None
+        }
     }
 
-    fn begin_press(&mut self, source: KeyboardEventPos, policy: StickyKeyPolicy) {
+    fn press_state(policy: StickyKeyPolicy, chord_started_at: Instant, now: Instant) -> (LatchPhase, Option<Instant>) {
+        let Some(hold_duration) = policy.release_on_keyup_after.duration() else {
+            return (LatchPhase::PressDeadlineInactive, Some(chord_started_at));
+        };
+
+        match deadline_from(chord_started_at, hold_duration) {
+            Some(deadline) if deadline > now => (LatchPhase::Pressed, Some(deadline)),
+            Some(_) => (LatchPhase::HoldQualified, Some(chord_started_at)),
+            None => (LatchPhase::PressDeadlineInactive, Some(chord_started_at)),
+        }
+    }
+
+    fn begin_press(&mut self, source: KeyboardEventPos, policy: StickyKeyPolicy, pressed_at: Instant) {
         self.source = source;
         self.policy = policy;
-        self.phase = LatchPhase::Pressed;
-        self.deadline = deadline_from_timeout(policy.timeout);
+        (self.phase, self.timing_marker) = Self::press_state(policy, pressed_at, pressed_at);
+        self.buffered_claim = false;
+    }
+
+    /// Add a producer to the current modifier chord without forgetting how
+    /// long the chord has already been held. The latest producer still selects
+    /// the policy, but its threshold is measured from the chord's first press.
+    fn begin_modifier_press(&mut self, source: KeyboardEventPos, policy: StickyKeyPolicy, pressed_at: Instant) {
+        let chord_started_at = match self.phase {
+            LatchPhase::Pressed => self
+                .timing_marker
+                .zip(self.policy.release_on_keyup_after.duration())
+                .map(|(deadline, hold_duration)| deadline - hold_duration),
+            LatchPhase::PressDeadlineInactive | LatchPhase::HoldQualified => self.timing_marker,
+            LatchPhase::Latched | LatchPhase::Held => None,
+        }
+        .unwrap_or(pressed_at);
+
+        self.source = source;
+        self.policy = policy;
+        (self.phase, self.timing_marker) = Self::press_state(policy, chord_started_at, pressed_at);
         self.buffered_claim = false;
     }
 
@@ -79,25 +122,37 @@ impl<T> Latch<T> {
         }
         match self.phase {
             LatchPhase::Pressed => {
-                if self.policy.release_on_keyup_after_timeout && self.deadline.is_some_and(|deadline| deadline <= now) {
-                    self.phase = LatchPhase::TimedOut;
-                    self.deadline = None;
+                if self.policy.release_on_keyup_after.duration().is_some()
+                    && self.timing_marker.is_some_and(|deadline| deadline <= now)
+                {
+                    self.phase = LatchPhase::HoldQualified;
+                    self.timing_marker = None;
                     return PhysicalRelease::Released;
                 }
                 self.phase = LatchPhase::Latched;
-                self.deadline = deadline_from_timeout(self.policy.timeout);
+                self.timing_marker = deadline_from(now, self.policy.timeout);
                 PhysicalRelease::Latched
             }
-            LatchPhase::Held => PhysicalRelease::Released,
-            LatchPhase::TimedOut => PhysicalRelease::Released,
+            LatchPhase::PressDeadlineInactive => {
+                self.phase = LatchPhase::Latched;
+                self.timing_marker = deadline_from(now, self.policy.timeout);
+                PhysicalRelease::Latched
+            }
+            LatchPhase::Held | LatchPhase::HoldQualified => {
+                self.timing_marker = None;
+                PhysicalRelease::Released
+            }
             LatchPhase::Latched => PhysicalRelease::Ignored,
         }
     }
 
     fn mark_foreign_key(&mut self) {
-        if matches!(self.phase, LatchPhase::Pressed | LatchPhase::TimedOut) {
+        if matches!(
+            self.phase,
+            LatchPhase::Pressed | LatchPhase::PressDeadlineInactive | LatchPhase::HoldQualified
+        ) {
             self.phase = LatchPhase::Held;
-            self.deadline = None;
+            self.timing_marker = None;
         }
     }
 
@@ -113,14 +168,14 @@ impl<T> Latch<T> {
     fn claim_buffered_press(&mut self, source: KeyboardEventPos) {
         if self.phase == LatchPhase::Latched && self.source != source && self.trigger_for_key(true) {
             self.buffered_claim = true;
-            self.deadline = None;
+            self.timing_marker = None;
         }
     }
 
     fn finish_buffered_claim(&mut self) {
         if self.buffered_claim {
             self.buffered_claim = false;
-            self.deadline = deadline_from_timeout(self.policy.timeout);
+            self.timing_marker = deadline_from(Instant::now(), self.policy.timeout);
         }
     }
 
@@ -132,24 +187,26 @@ impl<T> Latch<T> {
 
     /// A timeout cannot erase a latch whose physical producer is still down:
     /// its later release must still complete the lifecycle.
-    fn timeout_disposition(&mut self, now: Instant) -> TimeoutDisposition {
-        if !self.deadline.is_some_and(|deadline| deadline <= now) {
-            return TimeoutDisposition::Pending;
-        }
+    fn deadline_disposition(&mut self, now: Instant) -> DeadlineDisposition {
+        let Some(deadline) = self.deadline().filter(|deadline| *deadline <= now) else {
+            return DeadlineDisposition::Pending;
+        };
         if self.phase == LatchPhase::Pressed {
-            self.deadline = None;
-            if self.policy.release_on_keyup_after_timeout {
-                self.phase = LatchPhase::TimedOut;
-            }
-            TimeoutDisposition::Deferred
+            self.timing_marker = self
+                .policy
+                .release_on_keyup_after
+                .duration()
+                .map(|hold_duration| deadline - hold_duration);
+            self.phase = LatchPhase::HoldQualified;
+            DeadlineDisposition::Deferred
         } else {
-            TimeoutDisposition::Release
+            DeadlineDisposition::Release
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum TimeoutDisposition {
+enum DeadlineDisposition {
     Pending,
     Deferred,
     Release,
@@ -364,12 +421,22 @@ impl StickyKeyState {
 }
 
 impl Keyboard<'_> {
-    pub(crate) async fn process_action_sticky_key(&mut self, action: Action, profile: u8, event: KeyboardEvent) {
+    pub(crate) async fn process_action_sticky_key(
+        &mut self,
+        action: Action,
+        profile: u8,
+        event: KeyboardEvent,
+        event_time: Instant,
+    ) {
         match action {
-            Action::Modifier(modifiers) => self.process_sticky_modifier(modifiers, profile, event).await,
-            Action::LayerOn(layer) => self.process_sticky_layer(layer, profile, event).await,
+            Action::Modifier(modifiers) => {
+                self.process_sticky_modifier(modifiers, profile, event, event_time)
+                    .await
+            }
+            Action::LayerOn(layer) => self.process_sticky_layer(layer, profile, event, event_time).await,
             Action::KeyWithModifier(key, modifiers) => {
-                self.process_sticky_tap_key(key, modifiers, profile, event).await
+                self.process_sticky_tap_key(key, modifiers, profile, event, event_time)
+                    .await
             }
             _ => warn!("Unsupported Sticky Key action: {:?}", action),
         }
@@ -380,6 +447,7 @@ impl Keyboard<'_> {
         modifiers: ModifierCombination,
         profile_index: u8,
         event: KeyboardEvent,
+        event_time: Instant,
     ) {
         let policy = self.keymap.sticky_key_profile(profile_index, StickyKeyShape::PureMod);
 
@@ -402,13 +470,14 @@ impl Keyboard<'_> {
             match &mut self.sticky_key_state.modifier {
                 Some(latch) => {
                     latch.value.begin_press(modifiers, event.pos);
-                    latch.begin_press(event.pos, policy);
+                    latch.begin_modifier_press(event.pos, policy, event_time);
                 }
                 None => {
                     self.sticky_key_state.modifier = Some(Latch::new(
                         StickyModifierEffect::new(modifiers, event.pos),
                         event.pos,
                         policy,
+                        event_time,
                     ));
                 }
             }
@@ -426,7 +495,7 @@ impl Keyboard<'_> {
             if let Some(latch) = &mut self.sticky_key_state.modifier
                 && let Some(last) = latch.value.on_exact_release(modifiers, event.pos)
             {
-                if last && latch.on_physical_release(None, Instant::now()) == PhysicalRelease::Released {
+                if last && latch.on_physical_release(None, event_time) == PhysicalRelease::Released {
                     self.release_sticky_modifier().await;
                 }
                 return;
@@ -436,14 +505,14 @@ impl Keyboard<'_> {
             }
             if let Some(latch) = &mut self.sticky_key_state.modifier
                 && latch.value.on_combo_release(modifiers).is_some_and(|last| last)
-                && latch.on_physical_release(None, Instant::now()) == PhysicalRelease::Released
+                && latch.on_physical_release(None, event_time) == PhysicalRelease::Released
             {
                 self.release_sticky_modifier().await;
             }
         }
     }
 
-    async fn process_sticky_layer(&mut self, layer: u8, profile_index: u8, event: KeyboardEvent) {
+    async fn process_sticky_layer(&mut self, layer: u8, profile_index: u8, event: KeyboardEvent, event_time: Instant) {
         let policy = self.keymap.sticky_key_profile(profile_index, StickyKeyShape::Layer);
 
         if event.pressed {
@@ -464,16 +533,16 @@ impl Keyboard<'_> {
             if let Some(mut previous) = self.sticky_key_state.layer.take() {
                 if previous.value.layer == layer {
                     self.keymap.activate_layer(layer);
-                    previous.begin_press(event.pos, policy);
+                    previous.begin_press(event.pos, policy, event_time);
                     self.sticky_key_state.layer = Some(previous);
                     return;
                 }
                 self.release_sticky_layer_effect(previous.value);
             }
             self.keymap.activate_layer(layer);
-            self.sticky_key_state.layer = Some(Latch::new(StickyLayerEffect { layer }, event.pos, policy));
+            self.sticky_key_state.layer = Some(Latch::new(StickyLayerEffect { layer }, event.pos, policy, event_time));
         } else if let Some(latch) = &mut self.sticky_key_state.layer
-            && latch.on_physical_release(Some(event.pos), Instant::now()) == PhysicalRelease::Released
+            && latch.on_physical_release(Some(event.pos), event_time) == PhysicalRelease::Released
         {
             self.release_sticky_layer();
         }
@@ -485,6 +554,7 @@ impl Keyboard<'_> {
         modifiers: ModifierCombination,
         profile_index: u8,
         event: KeyboardEvent,
+        event_time: Instant,
     ) {
         let policy = self.keymap.sticky_key_profile(profile_index, StickyKeyShape::TapKey);
 
@@ -517,11 +587,11 @@ impl Keyboard<'_> {
                     if policy.max_repeat > 0 && latch.repeat_count > policy.max_repeat {
                         deactivate = true;
                     } else {
-                        latch.begin_press(event.pos, policy);
+                        latch.begin_press(event.pos, policy, event_time);
                     }
                 }
                 None => {
-                    self.sticky_key_state.tap_key = Some(Latch::new(effect, event.pos, policy));
+                    self.sticky_key_state.tap_key = Some(Latch::new(effect, event.pos, policy, event_time));
                 }
             }
 
@@ -530,16 +600,14 @@ impl Keyboard<'_> {
             } else {
                 self.process_action_key(key, event).await;
             }
-        } else if self
-            .sticky_key_state
-            .tap_key
-            .is_some_and(|latch| latch.source == event.pos && latch.phase == LatchPhase::Pressed)
-        {
+        } else if self.sticky_key_state.tap_key.is_some_and(|latch| {
+            latch.source == event.pos && matches!(latch.phase, LatchPhase::Pressed | LatchPhase::PressDeadlineInactive)
+        }) {
             self.sticky_key_state
                 .tap_key
                 .as_mut()
                 .expect("tap key checked above")
-                .on_physical_release(Some(event.pos), Instant::now());
+                .on_physical_release(Some(event.pos), event_time);
             self.process_action_key(key, event).await;
         }
     }
@@ -551,7 +619,9 @@ impl Keyboard<'_> {
 
         if let Some(modifier) = &mut self.sticky_key_state.modifier {
             match modifier.phase {
-                LatchPhase::Pressed | LatchPhase::TimedOut => modifier.mark_foreign_key(),
+                LatchPhase::Pressed | LatchPhase::PressDeadlineInactive | LatchPhase::HoldQualified => {
+                    modifier.mark_foreign_key()
+                }
                 LatchPhase::Latched if modifier.trigger_for_key(event.pressed) => {
                     update.modifier_was_host_visible = modifier.value.host_visible;
                     self.sticky_key_state.modifier = None;
@@ -563,7 +633,9 @@ impl Keyboard<'_> {
 
         if let Some(layer) = &mut self.sticky_key_state.layer {
             match layer.phase {
-                LatchPhase::Pressed | LatchPhase::TimedOut => layer.mark_foreign_key(),
+                LatchPhase::Pressed | LatchPhase::PressDeadlineInactive | LatchPhase::HoldQualified => {
+                    layer.mark_foreign_key()
+                }
                 LatchPhase::Latched if layer.trigger_for_key(event.pressed) => {
                     let layer = layer.value;
                     self.sticky_key_state.layer = None;
@@ -606,7 +678,7 @@ impl Keyboard<'_> {
             .sticky_key_state
             .modifier
             .as_mut()
-            .is_some_and(|latch| latch.timeout_disposition(now) == TimeoutDisposition::Release)
+            .is_some_and(|latch| latch.deadline_disposition(now) == DeadlineDisposition::Release)
         {
             self.release_sticky_modifier().await;
         }
@@ -614,7 +686,7 @@ impl Keyboard<'_> {
             .sticky_key_state
             .layer
             .as_mut()
-            .is_some_and(|latch| latch.timeout_disposition(now) == TimeoutDisposition::Release)
+            .is_some_and(|latch| latch.deadline_disposition(now) == DeadlineDisposition::Release)
         {
             self.release_sticky_layer();
         }
@@ -622,7 +694,7 @@ impl Keyboard<'_> {
             .sticky_key_state
             .tap_key
             .as_mut()
-            .is_some_and(|latch| latch.timeout_disposition(now) == TimeoutDisposition::Release)
+            .is_some_and(|latch| latch.deadline_disposition(now) == DeadlineDisposition::Release)
         {
             self.release_tap_key().await;
         }
@@ -654,7 +726,7 @@ impl Keyboard<'_> {
         let Some(tap_key) = self.sticky_key_state.tap_key.take() else {
             return;
         };
-        if tap_key.phase == LatchPhase::Pressed {
+        if matches!(tap_key.phase, LatchPhase::Pressed | LatchPhase::PressDeadlineInactive) {
             self.process_action_key(
                 tap_key.value.key,
                 KeyboardEvent {
@@ -681,7 +753,7 @@ mod tests {
         StickyKeyPolicy {
             timeout: Duration::from_secs(1),
             activate_on_keypress: false,
-            release_on_keyup_after_timeout: false,
+            release_on_keyup_after: StickyKeyHoldDuration::DISABLED,
             max_repeat: 0,
             release_mode,
         }
@@ -689,19 +761,21 @@ mod tests {
 
     #[test]
     fn modifier_effect_counts_overlapping_physical_producers() {
+        let pressed_at = Instant::now();
         let mut latch = Latch::new(
             StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
             pos(0),
             policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
+            pressed_at,
         );
         latch.value.begin_press(ModifierCombination::LSHIFT, pos(1));
-        latch.begin_press(pos(1), policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE));
+        latch.begin_modifier_press(pos(1), policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE), pressed_at);
 
         assert_eq!(
             latch.value.on_exact_release(ModifierCombination::LCTRL, pos(0)),
             Some(false)
         );
-        assert_eq!(latch.phase, LatchPhase::Pressed);
+        assert_eq!(latch.phase, LatchPhase::PressDeadlineInactive);
         assert_eq!(
             latch.value.on_exact_release(ModifierCombination::LSHIFT, pos(1)),
             Some(true)
@@ -719,13 +793,15 @@ mod tests {
 
     #[test]
     fn held_latch_releases_after_last_physical_producer() {
+        let pressed_at = Instant::now();
         let mut latch = Latch::new(
             StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
             pos(0),
             policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
+            pressed_at,
         );
         latch.value.begin_press(ModifierCombination::LSHIFT, pos(1));
-        latch.begin_press(pos(1), policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE));
+        latch.begin_modifier_press(pos(1), policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE), pressed_at);
         latch.mark_foreign_key();
 
         assert_eq!(
@@ -743,58 +819,270 @@ mod tests {
     }
 
     #[test]
-    fn timeout_is_deferred_while_physical_producer_is_down() {
+    fn disabled_hold_threshold_has_no_press_deadline() {
+        let pressed_at = Instant::now();
         let mut latch = Latch::new(
             StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
             pos(0),
             policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
+            pressed_at,
         );
-        let deadline = latch.deadline.unwrap();
 
-        assert_eq!(latch.timeout_disposition(deadline), TimeoutDisposition::Deferred);
-        assert_eq!(latch.phase, LatchPhase::Pressed);
-        assert_eq!(latch.deadline, None);
+        assert_eq!(latch.phase, LatchPhase::PressDeadlineInactive);
+        assert_eq!(latch.deadline(), None);
+        assert_eq!(latch.timing_marker, Some(pressed_at));
         assert_eq!(
-            latch.on_physical_release(None, Instant::now()),
+            latch.on_physical_release(None, pressed_at + Duration::from_secs(2)),
             PhysicalRelease::Latched
         );
         assert_eq!(latch.phase, LatchPhase::Latched);
-        assert!(latch.deadline.is_some());
+        assert!(latch.timing_marker.is_some());
     }
 
     #[test]
-    fn configured_timeout_releases_on_physical_keyup() {
-        let mut timeout_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
-        timeout_policy.release_on_keyup_after_timeout = true;
+    fn configured_hold_threshold_releases_after_deferred_timeout() {
+        let mut hold_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
+        hold_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
         let mut latch = Latch::new(
             StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
             pos(0),
-            timeout_policy,
+            hold_policy,
+            Instant::now(),
         );
-        let deadline = latch.deadline.unwrap();
+        let deadline = latch.timing_marker.unwrap();
 
-        assert_eq!(latch.timeout_disposition(deadline), TimeoutDisposition::Deferred);
-        assert_eq!(latch.phase, LatchPhase::TimedOut);
+        assert_eq!(latch.deadline_disposition(deadline), DeadlineDisposition::Deferred);
+        assert_eq!(latch.phase, LatchPhase::HoldQualified);
+        assert_eq!(latch.on_physical_release(None, deadline), PhysicalRelease::Released);
+        assert_eq!(latch.timing_marker, None);
+    }
+
+    #[test]
+    fn configured_hold_threshold_is_inclusive() {
+        let mut hold_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
+        hold_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
+        let mut short_press = Latch::new(
+            StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
+            pos(0),
+            hold_policy,
+            Instant::now(),
+        );
+        let threshold = short_press.timing_marker.unwrap();
+        let just_before_threshold = threshold - Duration::from_millis(1);
+
         assert_eq!(
-            latch.on_physical_release(None, Instant::now()),
+            short_press.on_physical_release(None, just_before_threshold),
+            PhysicalRelease::Latched
+        );
+        assert_eq!(short_press.phase, LatchPhase::Latched);
+        assert_eq!(
+            short_press.timing_marker,
+            Some(just_before_threshold + hold_policy.timeout)
+        );
+
+        let mut threshold_press = Latch::new(
+            StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
+            pos(0),
+            hold_policy,
+            Instant::now(),
+        );
+        let threshold = threshold_press.timing_marker.unwrap();
+
+        assert_eq!(
+            threshold_press.on_physical_release(None, threshold),
+            PhysicalRelease::Released
+        );
+        assert_eq!(threshold_press.timing_marker, None);
+    }
+
+    #[test]
+    fn hold_threshold_may_exceed_the_latched_timeout() {
+        let mut hold_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
+        hold_policy.timeout = Duration::from_millis(300);
+        hold_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_secs(1));
+        let pressed_at = Instant::now();
+        let released_at = pressed_at + Duration::from_millis(600);
+        let mut latch = Latch::new(
+            StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
+            pos(0),
+            hold_policy,
+            pressed_at,
+        );
+
+        assert_eq!(latch.on_physical_release(None, released_at), PhysicalRelease::Latched);
+        assert_eq!(latch.phase, LatchPhase::Latched);
+        assert_eq!(latch.timing_marker, Some(released_at + hold_policy.timeout));
+    }
+
+    #[test]
+    fn hold_threshold_uses_original_buffered_press_time() {
+        let mut hold_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
+        hold_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
+        let pressed_at = Instant::now();
+        let dispatched_at = pressed_at + Duration::from_millis(250);
+        let mut latch = Latch::new(
+            StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
+            pos(0),
+            hold_policy,
+            pressed_at,
+        );
+
+        assert_eq!(
+            latch.on_physical_release(None, dispatched_at + Duration::from_millis(50)),
             PhysicalRelease::Released
         );
     }
 
     #[test]
-    fn configured_release_checks_expired_deadline_before_timeout_poll() {
-        let mut timeout_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
-        timeout_policy.release_on_keyup_after_timeout = true;
+    fn overlapping_modifier_preserves_chord_hold_start() {
+        let mut hold_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
+        hold_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
+        let first_press = Instant::now();
+        let second_press = first_press + Duration::from_millis(250);
+        let release_time = first_press + Duration::from_millis(400);
         let mut latch = Latch::new(
             StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
             pos(0),
-            timeout_policy,
+            hold_policy,
+            first_press,
         );
-        let deadline = latch.deadline.unwrap();
+        latch.value.begin_press(ModifierCombination::LSHIFT, pos(1));
+        latch.begin_modifier_press(pos(1), hold_policy, second_press);
 
-        assert_eq!(latch.on_physical_release(None, deadline), PhysicalRelease::Released);
-        assert_eq!(latch.phase, LatchPhase::TimedOut);
-        assert_eq!(latch.deadline, None);
+        assert_eq!(
+            latch.value.on_exact_release(ModifierCombination::LSHIFT, pos(1)),
+            Some(false)
+        );
+        assert_eq!(
+            latch.value.on_exact_release(ModifierCombination::LCTRL, pos(0)),
+            Some(true)
+        );
+        assert_eq!(latch.on_physical_release(None, release_time), PhysicalRelease::Released);
+
+        let mut reverse_release = Latch::new(
+            StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
+            pos(0),
+            hold_policy,
+            first_press,
+        );
+        reverse_release.value.begin_press(ModifierCombination::LSHIFT, pos(1));
+        reverse_release.begin_modifier_press(pos(1), hold_policy, second_press);
+        assert_eq!(
+            reverse_release
+                .value
+                .on_exact_release(ModifierCombination::LCTRL, pos(0)),
+            Some(false)
+        );
+        assert_eq!(
+            reverse_release
+                .value
+                .on_exact_release(ModifierCombination::LSHIFT, pos(1)),
+            Some(true)
+        );
+        assert_eq!(
+            reverse_release.on_physical_release(None, release_time),
+            PhysicalRelease::Released
+        );
+    }
+
+    #[test]
+    fn latest_modifier_policy_uses_chord_hold_start() {
+        let mut first_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
+        first_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
+        let mut latest_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
+        latest_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_millis(500));
+        let first_press = Instant::now();
+        let mut latch = Latch::new(
+            StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
+            pos(0),
+            first_policy,
+            first_press,
+        );
+        latch.value.begin_press(ModifierCombination::LSHIFT, pos(1));
+        latch.begin_modifier_press(pos(1), latest_policy, first_press + Duration::from_millis(250));
+
+        assert_eq!(
+            latch.on_physical_release(None, first_press + Duration::from_millis(400)),
+            PhysicalRelease::Latched
+        );
+
+        let mut timeout_first = Latch::new(
+            StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
+            pos(0),
+            first_policy,
+            first_press,
+        );
+        assert_eq!(
+            timeout_first.deadline_disposition(first_press + Duration::from_millis(300)),
+            DeadlineDisposition::Deferred
+        );
+        timeout_first.value.begin_press(ModifierCombination::LSHIFT, pos(1));
+        timeout_first.begin_modifier_press(pos(1), latest_policy, first_press + Duration::from_millis(400));
+        assert_eq!(
+            timeout_first.on_physical_release(None, first_press + Duration::from_millis(450)),
+            PhysicalRelease::Latched
+        );
+    }
+
+    #[test]
+    fn mixed_modifier_profiles_are_independent_of_deadline_poll_order() {
+        let mut enabled_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
+        enabled_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_millis(500));
+        let mut disabled_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
+        disabled_policy.timeout = Duration::from_millis(300);
+        let first_press = Instant::now();
+
+        for poll_first in [false, true] {
+            let mut disabled_then_enabled = Latch::new(
+                StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
+                pos(0),
+                disabled_policy,
+                first_press,
+            );
+            if poll_first {
+                assert_eq!(
+                    disabled_then_enabled.deadline_disposition(first_press + Duration::from_millis(300)),
+                    DeadlineDisposition::Pending
+                );
+            }
+            disabled_then_enabled
+                .value
+                .begin_press(ModifierCombination::LSHIFT, pos(1));
+            disabled_then_enabled.begin_modifier_press(
+                pos(1),
+                enabled_policy,
+                first_press + Duration::from_millis(400),
+            );
+            assert_eq!(
+                disabled_then_enabled.on_physical_release(None, first_press + Duration::from_millis(450)),
+                PhysicalRelease::Latched
+            );
+
+            let mut enabled_then_disabled = Latch::new(
+                StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
+                pos(0),
+                enabled_policy,
+                first_press,
+            );
+            if poll_first {
+                assert_eq!(
+                    enabled_then_disabled.deadline_disposition(first_press + Duration::from_millis(500)),
+                    DeadlineDisposition::Deferred
+                );
+            }
+            enabled_then_disabled
+                .value
+                .begin_press(ModifierCombination::LSHIFT, pos(1));
+            enabled_then_disabled.begin_modifier_press(
+                pos(1),
+                disabled_policy,
+                first_press + Duration::from_millis(600),
+            );
+            assert_eq!(
+                enabled_then_disabled.on_physical_release(None, first_press + Duration::from_millis(650)),
+                PhysicalRelease::Latched
+            );
+        }
     }
 
     #[test]
@@ -803,6 +1091,7 @@ mod tests {
             StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
             pos(0),
             policy(StickyKeyReleaseMode::OTHER_KEY_PRESS),
+            Instant::now(),
         );
         assert_eq!(
             latch.on_physical_release(None, Instant::now()),
@@ -811,11 +1100,11 @@ mod tests {
 
         latch.claim_buffered_press(pos(1));
         assert!(latch.buffered_claim);
-        assert_eq!(latch.deadline, None);
+        assert_eq!(latch.timing_marker, None);
 
         latch.finish_buffered_claim();
         assert!(!latch.buffered_claim);
-        assert!(latch.deadline.is_some());
+        assert!(latch.timing_marker.is_some());
     }
 
     #[test]
@@ -829,6 +1118,7 @@ mod tests {
             StickyModifierEffect::new(ModifierCombination::LCTRL, pos(1)),
             pos(1),
             policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
+            Instant::now(),
         ));
 
         assert!(state.consume_exact_canceled_modifier_release(ModifierCombination::LSHIFT, pos(0)));

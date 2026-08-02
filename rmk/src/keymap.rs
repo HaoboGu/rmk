@@ -11,7 +11,9 @@ use {
 };
 
 use crate::MACRO_SPACE_SIZE;
-use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, PositionalConfig, StickyKeyReleaseMode};
+use crate::config::{
+    BehaviorConfig, Hand, MouseKeyConfig, PositionalConfig, StickyKeyHoldDuration, StickyKeyReleaseMode,
+};
 use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_event};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::combo::Combo;
@@ -32,7 +34,7 @@ pub(crate) enum StickyKeyShape {
 pub(crate) struct StickyKeyPolicy {
     pub timeout: Duration,
     pub activate_on_keypress: bool,
-    pub release_on_keyup_after_timeout: bool,
+    pub release_on_keyup_after: StickyKeyHoldDuration,
     pub max_repeat: u16,
     pub release_mode: StickyKeyReleaseMode,
 }
@@ -618,7 +620,11 @@ impl<'a> KeyMap<'a> {
         StickyKeyPolicy {
             timeout: profile.timeout,
             activate_on_keypress: profile.activate_on_keypress,
-            release_on_keyup_after_timeout: shape != StickyKeyShape::TapKey && profile.release_on_keyup_after_timeout,
+            release_on_keyup_after: if shape == StickyKeyShape::TapKey {
+                StickyKeyHoldDuration::DISABLED
+            } else {
+                profile.release_on_keyup_after
+            },
             max_repeat: profile.max_repeat,
             release_mode,
         }
@@ -975,30 +981,51 @@ mod test {
     }
 
     #[test]
-    fn keyup_timeout_release_applies_to_modifiers_and_layers_only() {
-        use crate::config::{BehaviorConfig, PositionalConfig};
+    fn keyup_hold_release_applies_to_modifiers_and_layers_only() {
+        use embassy_time::Duration;
+
+        use crate::config::{BehaviorConfig, PositionalConfig, StickyKeyHoldDuration};
         use crate::keymap::{KeyMap, KeymapData, StickyKeyShape};
 
         let mut data = KeymapData::<1, 1, 1>::new([[[k!(A)]]]);
         let mut behavior = BehaviorConfig::default();
-        behavior.sticky_key.default_profile.release_on_keyup_after_timeout = true;
+        behavior.sticky_key.default_profile.release_on_keyup_after =
+            StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
         let positional = PositionalConfig::<1, 1>::default();
         let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
 
-        assert!(
+        assert_eq!(
             keymap
                 .sticky_key_profile(u8::MAX, StickyKeyShape::PureMod)
-                .release_on_keyup_after_timeout
+                .release_on_keyup_after,
+            StickyKeyHoldDuration::from_duration(Duration::from_millis(300))
         );
-        assert!(
+        assert_eq!(
             keymap
                 .sticky_key_profile(u8::MAX, StickyKeyShape::Layer)
-                .release_on_keyup_after_timeout
+                .release_on_keyup_after,
+            StickyKeyHoldDuration::from_duration(Duration::from_millis(300))
         );
-        assert!(
-            !keymap
+        assert_eq!(
+            keymap
                 .sticky_key_profile(u8::MAX, StickyKeyShape::TapKey)
-                .release_on_keyup_after_timeout
+                .release_on_keyup_after,
+            StickyKeyHoldDuration::DISABLED
         );
+    }
+
+    #[test]
+    fn keyup_hold_release_runtime_storage_is_compact() {
+        use core::mem::size_of;
+
+        use embassy_time::Duration;
+
+        use crate::config::{StickyKeyHoldDuration, StickyKeyReleaseMode};
+        use crate::keymap::StickyKeyPolicy;
+
+        type OptionBasedPolicy = (Duration, bool, Option<Duration>, u16, StickyKeyReleaseMode);
+
+        assert_eq!(size_of::<StickyKeyHoldDuration>(), size_of::<Duration>());
+        assert!(size_of::<StickyKeyPolicy>() < size_of::<OptionBasedPolicy>());
     }
 }

@@ -150,11 +150,38 @@ impl Default for MorsesConfig {
     }
 }
 
+/// Compact runtime representation of the optional physical-hold threshold.
+///
+/// Configuration parsing keeps using `Option`, while firmware profiles use one
+/// `Duration`-sized value instead of a niche-less `Option<Duration>`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StickyKeyHoldDuration(u64);
+
+const _: [(); core::mem::size_of::<Duration>()] = [(); core::mem::size_of::<StickyKeyHoldDuration>()];
+
+impl StickyKeyHoldDuration {
+    const DISABLED_TICKS: u64 = u64::MAX;
+
+    pub const DISABLED: Self = Self(Self::DISABLED_TICKS);
+
+    pub const fn from_duration(duration: Duration) -> Self {
+        Self(duration.as_ticks())
+    }
+
+    pub(crate) const fn duration(self) -> Option<Duration> {
+        if self.0 == Self::DISABLED_TICKS {
+            None
+        } else {
+            Some(Duration::from_ticks(self.0))
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct StickyKeyProfile {
     pub timeout: Duration,
     pub activate_on_keypress: bool,
-    pub release_on_keyup_after_timeout: bool,
+    pub release_on_keyup_after: StickyKeyHoldDuration,
     pub max_repeat: u16,
     pub release_mode: Option<StickyKeyReleaseMode>,
 }
@@ -164,7 +191,7 @@ impl Default for StickyKeyProfile {
         Self {
             timeout: Duration::from_secs(1),
             activate_on_keypress: false,
-            release_on_keyup_after_timeout: false,
+            release_on_keyup_after: StickyKeyHoldDuration::DISABLED,
             max_repeat: 0,
             release_mode: None,
         }

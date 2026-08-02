@@ -140,11 +140,11 @@ expect = [
   [],
 ]
 
-# With key-up timeout release enabled, an OSL held beyond its timeout does not
-# latch the layer again when physically released.
+# An OSL held beyond its key-up hold threshold does not latch the layer again
+# when physically released, even though its normal timeout has not elapsed.
 [[test]]
-name = "osl_releases_on_keyup_after_timeout_when_configured"
-behavior.sticky_key = { timeout = "100ms", release_on_keyup_after_timeout = true }
+name = "osl_releases_on_keyup_after_hold_threshold"
+behavior.sticky_key = { timeout = "1s", release_on_keyup_after = "100ms" }
 steps = [
   { press = [0, 1] },
   { delay = 150 },

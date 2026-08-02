@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Add configurable Sticky Keys for modifiers, layers, and repeated modified keys, with named profiles, timeout/repeat limits, configurable release triggers (including modifier or layer key-up after an elapsed timeout), and `OSM`/`OSL` compatibility aliases
+- Add configurable Sticky Keys for modifiers, layers, and repeated modified keys, with named profiles, timeout/repeat limits, configurable release triggers (including modifier or layer key-up after a configurable hold duration), and `OSM`/`OSL` compatibility aliases
 
 - Add [Rynk](https://rmk.rs/docs/features/rynk), RMK's native host protocol for on-the-fly configuration over USB and BLE — an opt-in alternative to Vial that covers every RMK feature (keymap, layers, encoders, combos, forks, tap-dance/morse, macros, and behavior config), plus live status (current layer, matrix tester, WPM, HID indicators, battery, connection/BLE profile) and device management (reboot, bootloader, storage reset). Enable with the `rynk` Cargo feature and `[host] rynk_enabled = true`; it is mutually exclusive with Vial. Dangerous operations (bootloader, storage reset, matrix tester, clearing a BLE bond) are gated behind a physical-presence unlock (`[host].unlock_keys`). Host client crates live in the new `rynk/` workspace ([#962](https://github.com/rmk-rs/rmk/pull/962))
 - Add Azoteq IQS5xx (IQS550 / IQS572 / IQS525) trackpad driver, used by Azoteq's TPS43/TPS65 modules. Supports operation with or without an `RDY` pin and is configurable via `keyboard.toml` on nRF52 / RP2040; currently publishes single-finger relative cursor movement only ([#29](https://github.com/rmk-rs/rmk/issues/29))

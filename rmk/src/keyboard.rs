@@ -614,7 +614,13 @@ impl<'a> Keyboard<'a> {
                                     self.process_key_action_tap(action, held_key.event).await;
                                 }
                                 KeyAction::Sticky(action, profile) => {
-                                    self.process_action_sticky_key(action, profile, held_key.event).await;
+                                    self.process_action_sticky_key(
+                                        action,
+                                        profile,
+                                        held_key.event,
+                                        held_key.press_time,
+                                    )
+                                    .await;
                                 }
                                 KeyAction::No => {
                                     self.process_key_action_tap(key_action.to_action(), held_key.event)
@@ -873,7 +879,7 @@ impl<'a> Keyboard<'a> {
                         keyboard_event: event,
                     })
                     .await;
-                    self.process_action_sticky_key(action, profile, event).await;
+                    self.process_action_sticky_key(action, profile, event, event_time).await;
                     self.sticky_key_state.finish_buffered_claim();
                 }
                 _ => unreachable!(),
@@ -2165,11 +2171,12 @@ mod test {
     }
 
     #[test]
-    fn sticky_layer_keyup_observes_elapsed_timeout_before_timeout_poll() {
+    fn sticky_layer_keyup_observes_hold_threshold_without_timeout_poll() {
         let main = async {
             let mut config = BehaviorConfig::default();
-            config.sticky_key.default_profile.timeout = Duration::from_millis(100);
-            config.sticky_key.default_profile.release_on_keyup_after_timeout = true;
+            config.sticky_key.default_profile.timeout = Duration::from_secs(1);
+            config.sticky_key.default_profile.release_on_keyup_after =
+                crate::config::StickyKeyHoldDuration::from_duration(Duration::from_millis(100));
             let mut keyboard = create_test_keyboard_with_config(config);
             keyboard
                 .keymap

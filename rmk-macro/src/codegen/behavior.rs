@@ -78,10 +78,15 @@ fn expand_sticky_key_profile(
         .activate_on_keypress
         .or(fallback.activate_on_keypress)
         .unwrap_or(false);
-    let release_on_keyup_after_timeout = profile
-        .release_on_keyup_after_timeout
-        .or(fallback.release_on_keyup_after_timeout)
-        .unwrap_or(false);
+    let release_on_keyup_after = match profile
+        .release_on_keyup_after_ms
+        .or(fallback.release_on_keyup_after_ms)
+    {
+        Some(duration) => {
+            quote! { ::rmk::config::StickyKeyHoldDuration::from_duration(::rmk::embassy_time::Duration::from_millis(#duration)) }
+        }
+        None => quote! { ::rmk::config::StickyKeyHoldDuration::DISABLED },
+    };
     let max_repeat = profile.max_repeat.or(fallback.max_repeat).unwrap_or(0);
     let release_mode = match profile.release_mode.or(fallback.release_mode) {
         Some(mode) => {
@@ -94,7 +99,7 @@ fn expand_sticky_key_profile(
         ::rmk::config::StickyKeyProfile {
             timeout: ::rmk::embassy_time::Duration::from_millis(#timeout),
             activate_on_keypress: #activate_on_keypress,
-            release_on_keyup_after_timeout: #release_on_keyup_after_timeout,
+            release_on_keyup_after: #release_on_keyup_after,
             max_repeat: #max_repeat,
             release_mode: #release_mode,
         }
@@ -111,7 +116,7 @@ fn expand_sticky_key(behavior: &Behavior) -> proc_macro2::TokenStream {
                 .one_shot_modifiers
                 .as_ref()
                 .and_then(|one_shot| one_shot.activate_on_keypress)),
-            release_on_keyup_after_timeout: sticky.release_on_keyup_after_timeout,
+            release_on_keyup_after_ms: sticky.release_on_keyup_after_ms,
             max_repeat: sticky.max_repeat,
             release_mode: sticky.release_mode,
         })
@@ -699,20 +704,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn sticky_key_profile_inherits_and_overrides_keyup_timeout_release() {
+    fn sticky_key_profile_inherits_and_overrides_keyup_hold_release() {
         let fallback = StickyKeyProfile {
-            release_on_keyup_after_timeout: Some(true),
+            release_on_keyup_after_ms: Some(300),
             ..Default::default()
         };
         let inherited =
             expand_sticky_key_profile(&StickyKeyProfile::default(), &fallback).to_string();
-        assert!(inherited.contains("release_on_keyup_after_timeout : true"));
+        assert!(inherited.contains("StickyKeyHoldDuration :: from_duration"));
+        assert!(inherited.contains("Duration :: from_millis (300"));
 
-        let override_disabled = StickyKeyProfile {
-            release_on_keyup_after_timeout: Some(false),
+        let override_duration = StickyKeyProfile {
+            release_on_keyup_after_ms: Some(500),
             ..Default::default()
         };
-        let overridden = expand_sticky_key_profile(&override_disabled, &fallback).to_string();
-        assert!(overridden.contains("release_on_keyup_after_timeout : false"));
+        let overridden = expand_sticky_key_profile(&override_duration, &fallback).to_string();
+        assert!(overridden.contains("Duration :: from_millis (500"));
+
+        let disabled =
+            expand_sticky_key_profile(&StickyKeyProfile::default(), &StickyKeyProfile::default())
+                .to_string();
+        assert!(disabled.contains(
+            "release_on_keyup_after : :: rmk :: config :: StickyKeyHoldDuration :: DISABLED"
+        ));
     }
 }
