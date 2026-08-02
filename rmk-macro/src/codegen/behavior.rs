@@ -88,7 +88,7 @@ fn expand_sticky_key_profile(
     };
     quote! {
         ::rmk::config::StickyKeyProfile {
-            timeout: ::embassy_time::Duration::from_millis(#timeout),
+            timeout: ::rmk::embassy_time::Duration::from_millis(#timeout),
             activate_on_keypress: #activate_on_keypress,
             max_repeat: #max_repeat,
             release_mode: #release_mode,
