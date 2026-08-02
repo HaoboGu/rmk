@@ -164,6 +164,7 @@ struct TapKeyEffect {
 const MAX_STICKY_MODIFIER_PRODUCERS: usize = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 struct ModifierProducer {
     source: KeyboardEventPos,
     modifiers: ModifierCombination,
