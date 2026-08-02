@@ -61,6 +61,8 @@ Each field may be omitted. Named profiles inherit omitted fields from `[behavior
 
 The legacy `[behavior.one_shot] timeout` and `[behavior.one_shot_modifiers]` settings are still accepted and feed the default Sticky profile. `quick_release = true` maps to `other_key_press` for pure-modifier aliases.
 
+Sticky layers use RMK's normal boolean layer state: when multiple actions target the same layer, the latest activate or deactivate command determines its state.
+
 ## Combo
 
 In the `combo` sub-table, you can configure the keyboard's combo key functionality. Combo allows you to define a group of keys that, when pressed simultaneously, will trigger a specific output action.

@@ -3,6 +3,7 @@ use heapless::Vec;
 use rmk_types::fork::Fork;
 use rmk_types::keycode::KeyCode;
 use rmk_types::morse::{Morse, MorseMode, MorseProfile};
+pub use rmk_types::sticky_key::StickyKeyReleaseMode;
 
 use crate::keyboard::combo::Combo;
 use crate::{
@@ -146,29 +147,6 @@ impl Default for MorsesConfig {
             profiles: Vec::new(),
             morses: Vec::new(),
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct StickyKeyReleaseMode(u8);
-
-impl StickyKeyReleaseMode {
-    pub const OTHER_KEY_PRESS: Self = Self(1 << 0);
-    pub const OTHER_KEY_RELEASE: Self = Self(1 << 1);
-    pub const LAYER_ENTER: Self = Self(1 << 2);
-    pub const LAYER_EXIT: Self = Self(1 << 3);
-    pub const DOUBLE_TAP: Self = Self(1 << 4);
-
-    pub const fn from_bits(bits: u8) -> Self {
-        Self(bits & 0x1f)
-    }
-
-    pub const fn into_bits(self) -> u8 {
-        self.0
-    }
-
-    pub const fn intersects(self, other: Self) -> bool {
-        self.0 & other.0 != 0
     }
 }
 

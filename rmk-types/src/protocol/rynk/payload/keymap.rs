@@ -116,7 +116,7 @@ mod tests {
         use heapless::Vec;
 
         use super::super::*;
-        use crate::action::{Action, KeyAction, StickyKeyAction, StickyKeyEffect};
+        use crate::action::{Action, KeyAction};
         use crate::keycode::HidKeyCode;
         use crate::modifier::ModifierCombination;
         use crate::protocol::rynk::payload::bulk_capacity::MAX_BULK_KEYS;
@@ -128,13 +128,7 @@ mod tests {
         /// tests makes `assert_max_size_bound` exercise both the per-element
         /// and the length-prefix dimensions of the bound.
         fn worst_key_action() -> KeyAction {
-            let action = Action::StickyKey(StickyKeyAction {
-                effect: StickyKeyEffect::TapKey {
-                    key: HidKeyCode::A,
-                    modifiers: ModifierCombination::new(),
-                },
-                profile: u8::MAX,
-            });
+            let action = Action::KeyWithModifier(HidKeyCode::A, ModifierCombination::LCTRL);
             KeyAction::TapHold(action, action, u8::MAX)
         }
 

@@ -189,9 +189,18 @@ expect = [
 # Quick-release mode (quick_release = true): the modifier drops on key PRESS,
 # so each key report is followed by an unmodified one.
 #
-# `test_osm_quick_release_rolling` was dropped before this port: OSM combined
-# with a morse/tap-hold key has a known bug where the OSM deadline loop times
-# out before the tap resolves.
+[[test]]
+name = "osm_quick_release_rolling_with_tap_hold"
+behavior.one_shot = { timeout = "100ms" }
+behavior.one_shot_modifiers = { quick_release = true }
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { press = [0, 3] },
+  { delay = 150 },
+  { release = [0, 3] },
+]
+expect = [["LShift", "B"], ["B"], []]
+
 [[test]]
 name = "osm_quick_release_multiple_keys"
 behavior.one_shot_modifiers = { quick_release = true }

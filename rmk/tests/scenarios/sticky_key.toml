@@ -3,24 +3,25 @@
 # Layer 0:
 #   SK(LShift) SK(Tab,[LAlt],@short) SK(MO(1)) A
 #   SK(LCtrl,@double) SK(B,[LGui],@repeat) SK(LAlt,@short) SK(LGui,@short) MO(2) MO(1)
+#   SK(LShift,@visible) SK(LCtrl,@short)
 # Layers 1/2 leave the behavior keys transparent; col 3 is B/C respectively.
 
 [layout]
 rows = 1
-cols = 10
-map = "(0,0) (0,1) (0,2) (0,3) (0,4) (0,5) (0,6) (0,7) (0,8) (0,9)"
+cols = 12
+map = "(0,0) (0,1) (0,2) (0,3) (0,4) (0,5) (0,6) (0,7) (0,8) (0,9) (0,10) (0,11)"
 
 [keymap]
 layers = 3
 
 [[keymap.layer]]
-keys = "SK(LShift) SK(Tab, [LAlt], @short) SK(MO(1)) A SK(LCtrl, @double) SK(B, [LGui], @repeat) SK(LAlt, @short) SK(LGui, @short) MO(2) MO(1)"
+keys = "SK(LShift) SK(Tab, [LAlt], @short) SK(MO(1)) A SK(LCtrl, @double) SK(B, [LGui], @repeat) SK(LAlt, @short) SK(LGui, @short) MO(2) MO(1) SK(LShift, @visible) SK(LCtrl, @short)"
 
 [[keymap.layer]]
-keys = "Trns Trns Trns B Trns Trns Trns Trns Trns Trns"
+keys = "Trns Trns Trns B Trns Trns Trns Trns Trns Trns Trns Trns"
 
 [[keymap.layer]]
-keys = "Trns Trns Trns C Trns Trns Trns Trns Trns Trns"
+keys = "Trns Trns Trns C Trns Trns Trns Trns Trns Trns Trns Trns"
 
 [behavior.sticky_key]
 release_mode = "other_key_press"
@@ -35,6 +36,9 @@ release_mode = "double_tap"
 
 [behavior.sticky_key.profiles.repeat]
 max_repeat = 2
+
+[behavior.sticky_key.profiles.visible]
+activate_on_keypress = true
 
 [[test]]
 name = "canonical_modifier_uses_press_policy"
@@ -54,7 +58,7 @@ steps = [
 expect = [["B"], [], ["A"], []]
 
 [[test]]
-name = "later_same_target_mo_prevents_sticky_cleanup_from_releasing_its_layer"
+name = "sticky_cleanup_is_latest_command_for_shared_layer"
 steps = [
   { tap = { pos = [0, 2], duration = 10 } },
   { press = [0, 9] },
@@ -120,6 +124,27 @@ steps = [
 expect = [["A"], []]
 
 [[test]]
+name = "late_release_after_double_tap_does_not_consume_new_modifier"
+steps = [
+  { tap = { pos = [0, 4], duration = 10 } },
+  { press = [0, 4] },
+  { press = [0, 0] },
+  { release = [0, 4] },
+  { tap = { pos = [0, 3], duration = 10 } },
+  { release = [0, 0] },
+]
+expect = [["LShift", "A"], ["LShift"], []]
+
+[[test]]
+name = "mixed_visibility_profiles_release_host_visible_modifiers"
+steps = [
+  { tap = { pos = [0, 10], duration = 10 } },
+  { tap = { pos = [0, 11], duration = 10 } },
+  { delay = 150 },
+]
+expect = [["LShift"], []]
+
+[[test]]
 name = "timeout_is_deferred_while_sticky_modifier_is_held"
 steps = [
   { press = [0, 4] },
@@ -150,7 +175,7 @@ steps = [
 expect = [["A"], []]
 
 [[test]]
-name = "sticky_layer_does_not_claim_preexisting_layer_ownership"
+name = "sticky_layer_cleanup_overrides_preexisting_layer_state"
 steps = [
   { press = [0, 9] },
   { tap = { pos = [0, 2], duration = 10 } },

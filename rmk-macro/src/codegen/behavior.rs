@@ -82,7 +82,7 @@ fn expand_sticky_key_profile(
     let release_mode = match profile.release_mode.or(fallback.release_mode) {
         Some(mode) => {
             let bits = mode.into_bits();
-            quote! { ::core::option::Option::Some(::rmk::config::StickyKeyReleaseMode::from_bits(#bits)) }
+            quote! { ::core::option::Option::Some(::rmk::types::sticky_key::StickyKeyReleaseMode::from_bits(#bits)) }
         }
         None => quote! { ::core::option::Option::None },
     };

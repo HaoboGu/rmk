@@ -29,34 +29,6 @@ use crate::modifier::ModifierCombination;
 #[cfg(feature = "steno")]
 use crate::steno::StenoKey;
 
-/// Effect produced by a sticky-key action.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-pub enum StickyKeyEffect {
-    /// Apply modifiers to the next key.
-    Modifier(ModifierCombination),
-    /// Activate a layer for the next key.
-    Layer(u8),
-    /// Tap a HID key while retaining modifiers between repetitions.
-    TapKey {
-        key: HidKeyCode,
-        modifiers: ModifierCombination,
-    },
-}
-
-/// Parameters for a sticky-key action.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
-#[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
-pub struct StickyKeyAction {
-    pub effect: StickyKeyEffect,
-    /// Profile-table index. `u8::MAX` selects the default sticky-key profile.
-    pub profile: u8,
-}
-
 /// A single basic action that a keyboard can execute.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -89,12 +61,6 @@ pub enum Action {
     TriLayerUpper,
     /// Triggers the Macro at the 'index'.
     TriggerMacro(u8),
-    /// Oneshot layer, keep the layer active until the next key is triggered.
-    OneShotLayer(u8),
-    /// Oneshot modifier, keep the modifier active until the next key is triggered.
-    OneShotModifier(ModifierCombination),
-    /// Oneshot key, keep the key active until the next key is triggered.
-    OneShotKey(HidKeyCode),
     /// Actions for controlling lights
     Light(LightAction),
     /// Actions for controlling the keyboard
@@ -117,26 +83,4 @@ pub enum Action {
     #[cfg(not(feature = "steno"))]
     #[doc(hidden)]
     ReservedSteno,
-    /// Configurable sticky modifier, layer, or tap-key behavior.
-    StickyKey(StickyKeyAction),
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn sticky_key_round_trips_with_a_stable_wire_slot() {
-        let action = Action::StickyKey(StickyKeyAction {
-            effect: StickyKeyEffect::TapKey {
-                key: HidKeyCode::Tab,
-                modifiers: ModifierCombination::LALT,
-            },
-            profile: 7,
-        });
-        let mut bytes = [0; 32];
-        let encoded = postcard::to_slice(&action, &mut bytes).unwrap();
-        assert_eq!(encoded[0], 22);
-        assert_eq!(postcard::from_bytes::<Action>(encoded).unwrap(), action);
-    }
 }

@@ -1,39 +1,74 @@
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct StickyKeyReleaseMode(u8);
+pub struct StickyKeyReleaseMode {
+    pub other_key_press: bool,
+    pub other_key_release: bool,
+    pub layer_enter: bool,
+    pub layer_exit: bool,
+    pub double_tap: bool,
+}
 
 impl StickyKeyReleaseMode {
-    pub const OTHER_KEY_PRESS: Self = Self(1 << 0);
-    pub const OTHER_KEY_RELEASE: Self = Self(1 << 1);
-    pub const LAYER_ENTER: Self = Self(1 << 2);
-    pub const LAYER_EXIT: Self = Self(1 << 3);
-    pub const DOUBLE_TAP: Self = Self(1 << 4);
+    pub const OTHER_KEY_PRESS: Self = Self {
+        other_key_press: true,
+        ..Self::default_const()
+    };
+    pub const OTHER_KEY_RELEASE: Self = Self {
+        other_key_release: true,
+        ..Self::default_const()
+    };
+    pub const LAYER_ENTER: Self = Self {
+        layer_enter: true,
+        ..Self::default_const()
+    };
+    pub const LAYER_EXIT: Self = Self {
+        layer_exit: true,
+        ..Self::default_const()
+    };
+    pub const DOUBLE_TAP: Self = Self {
+        double_tap: true,
+        ..Self::default_const()
+    };
+
+    const fn default_const() -> Self {
+        Self {
+            other_key_press: false,
+            other_key_release: false,
+            layer_enter: false,
+            layer_exit: false,
+            double_tap: false,
+        }
+    }
 
     pub const fn into_bits(self) -> u8 {
-        self.0
+        (self.other_key_press as u8)
+            | ((self.other_key_release as u8) << 1)
+            | ((self.layer_enter as u8) << 2)
+            | ((self.layer_exit as u8) << 3)
+            | ((self.double_tap as u8) << 4)
     }
 
     pub fn parse(value: &str) -> Result<Self, String> {
-        let mut bits = 0;
+        let mut mode = Self::default();
         for part in value.split('|').map(str::trim).filter(|part| !part.is_empty()) {
-            bits |= match part {
-                "other_key_press" => Self::OTHER_KEY_PRESS.0,
-                "other_key_release" => Self::OTHER_KEY_RELEASE.0,
-                "layer_enter" => Self::LAYER_ENTER.0,
-                "layer_exit" => Self::LAYER_EXIT.0,
-                "double_tap" => Self::DOUBLE_TAP.0,
+            match part {
+                "other_key_press" => mode.other_key_press = true,
+                "other_key_release" => mode.other_key_release = true,
+                "layer_enter" => mode.layer_enter = true,
+                "layer_exit" => mode.layer_exit = true,
+                "double_tap" => mode.double_tap = true,
                 _ => {
                     return Err(format!(
                         "unknown Sticky Key release_mode `{part}`; expected other_key_press, other_key_release, layer_enter, layer_exit, or double_tap"
                     ));
                 }
-            };
+            }
         }
-        if bits == 0 {
+        if mode == Self::default() {
             return Err("Sticky Key release_mode must contain at least one trigger".to_string());
         }
-        Ok(Self(bits))
+        Ok(mode)
     }
 }
 

@@ -258,21 +258,21 @@ fn parse_sticky_action(
     };
     let action = action_args.join(", ");
 
-    let effect = match alias {
+    let action = match alias {
         Some("modifier") => {
             let modifiers = parse_modifiers(&action);
             if modifiers.is_empty() {
                 panic!("\n❌ keyboard.toml: OSM(modifier) is not valid");
             }
-            quote! { ::rmk::types::action::StickyKeyEffect::Modifier(#modifiers) }
+            quote! { ::rmk::types::action::Action::Modifier(#modifiers) }
         }
         Some("layer") => {
             let layer = action.parse::<u8>().unwrap();
-            quote! { ::rmk::types::action::StickyKeyEffect::Layer(#layer) }
+            quote! { ::rmk::types::action::Action::LayerOn(#layer) }
         }
         None if action.to_lowercase().starts_with("mo(") => {
             let layer = parse_layer(&action);
-            quote! { ::rmk::types::action::StickyKeyEffect::Layer(#layer) }
+            quote! { ::rmk::types::action::Action::LayerOn(#layer) }
         }
         None if action.contains('[') => {
             let start = action.find('[').unwrap();
@@ -297,7 +297,7 @@ fn parse_sticky_action(
             } else {
                 parse_modifiers(&action[start + 1..end])
             };
-            quote! { ::rmk::types::action::StickyKeyEffect::TapKey { key: ::rmk::types::keycode::HidKeyCode::#key_ident, modifiers: #modifiers } }
+            quote! { ::rmk::types::action::Action::KeyWithModifier(::rmk::types::keycode::HidKeyCode::#key_ident, #modifiers) }
         }
         None => {
             if action.contains('(') {
@@ -309,15 +309,12 @@ fn parse_sticky_action(
             if modifiers.is_empty() {
                 panic!("\n❌ keyboard.toml: SK(modifier) is not valid");
             }
-            quote! { ::rmk::types::action::StickyKeyEffect::Modifier(#modifiers) }
+            quote! { ::rmk::types::action::Action::Modifier(#modifiers) }
         }
         _ => unreachable!(),
     };
     Some(quote! {
-        ::rmk::types::action::Action::StickyKey(::rmk::types::action::StickyKeyAction {
-            effect: #effect,
-            profile: #profile,
-        })
+        ::rmk::types::action::KeyAction::Sticky(#action, #profile)
     })
 }
 
@@ -334,8 +331,10 @@ fn parse_action_with_profiles(
 ) -> TokenStream2 {
     let lower = key.to_lowercase();
 
-    if let Some(action) = parse_sticky_action(key, sticky_profiles) {
-        return action;
+    if parse_sticky_action(key, sticky_profiles).is_some() {
+        panic!(
+            "\n❌ keyboard.toml: Sticky Keys are key actions and cannot be nested inside MT/TH/LT"
+        );
     } else if lower == "no" {
         return quote! { ::rmk::types::action::Action::No };
     } else if lower.starts_with("mod(") {
@@ -513,7 +512,7 @@ pub(crate) fn parse_key(
     let lower = key.to_lowercase();
 
     if let Some(action) = parse_sticky_action(&key, sticky_profiles) {
-        return quote! { ::rmk::types::action::KeyAction::Single(#action) };
+        return action;
     }
 
     if lower.starts_with("mt(") {
@@ -750,7 +749,7 @@ mod tests {
         );
         assert!(squash(&expand("WM(C,LCtrl)")).contains("Action::KeyWithModifier"));
         assert!(squash(&expand("MOD(LCtrl | LAlt | LGui)")).contains("Action::Modifier"));
-        assert!(squash(&expand("OSM(LShift)")).contains("Action::StickyKey"));
+        assert!(squash(&expand("OSM(LShift)")).contains("KeyAction::Sticky"));
     }
 
     #[test]

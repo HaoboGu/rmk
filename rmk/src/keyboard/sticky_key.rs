@@ -5,12 +5,11 @@
 //! both a HID key and modifiers live between repetitions.
 
 use embassy_time::{Duration, Instant};
-use rmk_types::action::{StickyKeyAction, StickyKeyEffect};
+use rmk_types::action::Action;
 use rmk_types::keycode::HidKeyCode;
 use rmk_types::modifier::ModifierCombination;
 
 use crate::config::StickyKeyReleaseMode;
-use crate::event::state::LayerTransitionGeneration;
 use crate::event::{KeyboardEvent, KeyboardEventPos};
 use crate::keyboard::Keyboard;
 use crate::keymap::{StickyKeyPolicy, StickyKeyShape};
@@ -37,7 +36,7 @@ struct Latch<T> {
     phase: LatchPhase,
     repeat_count: u16,
     deadline: Option<Instant>,
-    layer_generation: LayerTransitionGeneration,
+    buffered_claim: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,7 +55,7 @@ impl<T> Latch<T> {
             phase: LatchPhase::Pressed,
             repeat_count: 1,
             deadline: deadline_from_timeout(policy.timeout),
-            layer_generation: LayerTransitionGeneration::current(),
+            buffered_claim: false,
         }
     }
 
@@ -69,7 +68,7 @@ impl<T> Latch<T> {
         self.policy = policy;
         self.phase = LatchPhase::Pressed;
         self.deadline = deadline_from_timeout(policy.timeout);
-        self.layer_generation = LayerTransitionGeneration::current();
+        self.buffered_claim = false;
     }
 
     fn on_physical_release(&mut self, owner: Option<KeyboardEventPos>) -> PhysicalRelease {
@@ -101,6 +100,20 @@ impl<T> Latch<T> {
             StickyKeyReleaseMode::OTHER_KEY_RELEASE
         };
         self.policy.release_mode.intersects(trigger)
+    }
+
+    fn claim_buffered_press(&mut self, source: KeyboardEventPos) {
+        if self.phase == LatchPhase::Latched && self.source != source && self.trigger_for_key(true) {
+            self.buffered_claim = true;
+            self.deadline = None;
+        }
+    }
+
+    fn finish_buffered_claim(&mut self) {
+        if self.buffered_claim {
+            self.buffered_claim = false;
+            self.deadline = deadline_from_timeout(self.policy.timeout);
+        }
     }
 
     fn is_double_tap(&self, source: KeyboardEventPos, policy: StickyKeyPolicy) -> bool {
@@ -137,34 +150,68 @@ struct TapKeyEffect {
     modifiers: ModifierCombination,
 }
 
-/// Counted physical ownership used only by accumulated sticky modifiers.
-/// Combo outputs may release from a different constituent position, so they
-/// cannot use the source-specific ownership used by layer and tap-key effects.
+const MAX_STICKY_MODIFIER_PRODUCERS: usize = 8;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ModifierProducer {
+    source: KeyboardEventPos,
+    modifiers: ModifierCombination,
+}
+
+/// Physical ownership and host-report state for accumulated sticky modifiers.
+///
+/// Positions distinguish a canceled producer's late release from a newer
+/// latch. The modifier fallback supports combo outputs, whose release event can
+/// come from a different constituent position than their press event.
 #[derive(Clone, Copy, Debug)]
 struct StickyModifierEffect {
     modifiers: ModifierCombination,
-    pressed_count: u8,
+    producers: [Option<ModifierProducer>; MAX_STICKY_MODIFIER_PRODUCERS],
+    host_visible: bool,
 }
 
 impl StickyModifierEffect {
-    fn new(modifiers: ModifierCombination) -> Self {
-        Self {
+    fn new(modifiers: ModifierCombination, source: KeyboardEventPos) -> Self {
+        let mut effect = Self {
             modifiers,
-            pressed_count: 1,
-        }
+            producers: [None; MAX_STICKY_MODIFIER_PRODUCERS],
+            host_visible: false,
+        };
+        effect.begin_press(modifiers, source);
+        effect
     }
 
-    fn begin_press(&mut self, modifiers: ModifierCombination) {
+    fn begin_press(&mut self, modifiers: ModifierCombination, source: KeyboardEventPos) {
         self.modifiers |= modifiers;
-        self.pressed_count = self.pressed_count.saturating_add(1).max(1);
+        let producer = ModifierProducer { source, modifiers };
+        if let Some(slot) = self.producers.iter_mut().find(|slot| slot.is_none()) {
+            *slot = Some(producer);
+        } else {
+            warn!(
+                "Too many simultaneous Sticky modifier producers; ignoring {:?}",
+                producer
+            );
+        }
     }
 
-    fn on_physical_release(&mut self) -> bool {
-        if self.pressed_count == 0 {
-            return false;
-        }
-        self.pressed_count -= 1;
-        self.pressed_count == 0
+    fn release_at(&mut self, index: usize) -> bool {
+        self.producers[index] = None;
+        self.producers.iter().all(Option::is_none)
+    }
+
+    fn on_exact_release(&mut self, modifiers: ModifierCombination, source: KeyboardEventPos) -> Option<bool> {
+        let exact = ModifierProducer { source, modifiers };
+        self.producers
+            .iter()
+            .position(|producer| *producer == Some(exact))
+            .map(|index| self.release_at(index))
+    }
+
+    fn on_combo_release(&mut self, modifiers: ModifierCombination) -> Option<bool> {
+        self.producers
+            .iter()
+            .position(|producer| producer.is_some_and(|producer| producer.modifiers == modifiers))
+            .map(|index| self.release_at(index))
     }
 }
 
@@ -172,7 +219,6 @@ impl StickyModifierEffect {
 #[derive(Clone, Copy, Debug)]
 struct StickyLayerEffect {
     layer: u8,
-    ownership_generation: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -188,11 +234,49 @@ pub(crate) struct StickyKeyUpdate {
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct StickyKeyState {
     modifier: Option<Latch<StickyModifierEffect>>,
+    canceled_modifier_releases: [Option<ModifierProducer>; MAX_STICKY_MODIFIER_PRODUCERS],
     layer: Option<Latch<StickyLayerEffect>>,
     tap_key: Option<Latch<TapKeyEffect>>,
 }
 
 impl StickyKeyState {
+    fn remember_canceled_modifier_release(&mut self, producer: ModifierProducer) {
+        if let Some(slot) = self.canceled_modifier_releases.iter_mut().find(|slot| slot.is_none()) {
+            *slot = Some(producer);
+        } else {
+            warn!("Too many canceled Sticky modifier releases; dropping {:?}", producer);
+        }
+    }
+
+    fn consume_exact_canceled_modifier_release(
+        &mut self,
+        modifiers: ModifierCombination,
+        source: KeyboardEventPos,
+    ) -> bool {
+        let exact = ModifierProducer { source, modifiers };
+        let Some(index) = self
+            .canceled_modifier_releases
+            .iter()
+            .position(|producer| *producer == Some(exact))
+        else {
+            return false;
+        };
+        self.canceled_modifier_releases[index] = None;
+        true
+    }
+
+    fn consume_canceled_combo_release(&mut self, modifiers: ModifierCombination) -> bool {
+        let Some(index) = self
+            .canceled_modifier_releases
+            .iter()
+            .position(|producer| producer.is_some_and(|producer| producer.modifiers == modifiers))
+        else {
+            return false;
+        };
+        self.canceled_modifier_releases[index] = None;
+        true
+    }
+
     pub(crate) fn deadline(&self) -> Option<Instant> {
         [
             self.modifier.as_ref().and_then(Latch::deadline),
@@ -214,6 +298,33 @@ impl StickyKeyState {
             .is_some_and(|tap_key| tap_key.trigger_for_key(pressed))
     }
 
+    pub(crate) fn claim_buffered_press(&mut self, event: KeyboardEvent) {
+        if !event.pressed {
+            return;
+        }
+        if let Some(modifier) = &mut self.modifier {
+            modifier.claim_buffered_press(event.pos);
+        }
+        if let Some(layer) = &mut self.layer {
+            layer.claim_buffered_press(event.pos);
+        }
+        if let Some(tap_key) = &mut self.tap_key {
+            tap_key.claim_buffered_press(event.pos);
+        }
+    }
+
+    pub(crate) fn finish_buffered_claim(&mut self) {
+        if let Some(modifier) = &mut self.modifier {
+            modifier.finish_buffered_claim();
+        }
+        if let Some(layer) = &mut self.layer {
+            layer.finish_buffered_claim();
+        }
+        if let Some(tap_key) = &mut self.tap_key {
+            tap_key.finish_buffered_claim();
+        }
+    }
+
     pub(crate) fn modifier_releases_on_press(&self) -> bool {
         self.modifier
             .as_ref()
@@ -232,18 +343,23 @@ impl StickyKeyState {
         }
         modifiers
     }
+
+    pub(crate) fn mark_modifier_host_visible(&mut self) {
+        if let Some(modifier) = &mut self.modifier {
+            modifier.value.host_visible = true;
+        }
+    }
 }
 
 impl Keyboard<'_> {
-    pub(crate) async fn process_action_sticky_key(&mut self, action: StickyKeyAction, event: KeyboardEvent) {
-        match action.effect {
-            StickyKeyEffect::Modifier(modifiers) => {
-                self.process_sticky_modifier(modifiers, action.profile, event).await
+    pub(crate) async fn process_action_sticky_key(&mut self, action: Action, profile: u8, event: KeyboardEvent) {
+        match action {
+            Action::Modifier(modifiers) => self.process_sticky_modifier(modifiers, profile, event).await,
+            Action::LayerOn(layer) => self.process_sticky_layer(layer, profile, event).await,
+            Action::KeyWithModifier(key, modifiers) => {
+                self.process_sticky_tap_key(key, modifiers, profile, event).await
             }
-            StickyKeyEffect::Layer(layer) => self.process_sticky_layer(layer, action.profile, event).await,
-            StickyKeyEffect::TapKey { key, modifiers } => {
-                self.process_sticky_tap_key(key, modifiers, action.profile, event).await
-            }
+            _ => warn!("Unsupported Sticky Key action: {:?}", action),
         }
     }
 
@@ -262,27 +378,54 @@ impl Keyboard<'_> {
                 .modifier
                 .is_some_and(|latch| latch.is_double_tap(event.pos, policy))
             {
+                self.sticky_key_state
+                    .remember_canceled_modifier_release(ModifierProducer {
+                        source: event.pos,
+                        modifiers,
+                    });
                 self.release_sticky_modifier().await;
                 return;
             }
 
             match &mut self.sticky_key_state.modifier {
                 Some(latch) => {
-                    latch.value.begin_press(modifiers);
+                    latch.value.begin_press(modifiers, event.pos);
                     latch.begin_press(event.pos, policy);
                 }
                 None => {
-                    self.sticky_key_state.modifier =
-                        Some(Latch::new(StickyModifierEffect::new(modifiers), event.pos, policy));
+                    self.sticky_key_state.modifier = Some(Latch::new(
+                        StickyModifierEffect::new(modifiers, event.pos),
+                        event.pos,
+                        policy,
+                    ));
                 }
             }
             if policy.activate_on_keypress {
+                self.sticky_key_state.mark_modifier_host_visible();
                 self.send_keyboard_report_with_resolved_modifiers(true).await;
             }
-        } else if let Some(latch) = &mut self.sticky_key_state.modifier {
-            // Combo outputs may be released by a different constituent
-            // position, so modifier producers use counted ownership.
-            if latch.value.on_physical_release() && latch.on_physical_release(None) == PhysicalRelease::Released {
+        } else {
+            if self
+                .sticky_key_state
+                .consume_exact_canceled_modifier_release(modifiers, event.pos)
+            {
+                return;
+            }
+            if let Some(latch) = &mut self.sticky_key_state.modifier
+                && let Some(last) = latch.value.on_exact_release(modifiers, event.pos)
+            {
+                if last && latch.on_physical_release(None) == PhysicalRelease::Released {
+                    self.release_sticky_modifier().await;
+                }
+                return;
+            }
+            if self.sticky_key_state.consume_canceled_combo_release(modifiers) {
+                return;
+            }
+            if let Some(latch) = &mut self.sticky_key_state.modifier
+                && latch.value.on_combo_release(modifiers).is_some_and(|last| last)
+                && latch.on_physical_release(None) == PhysicalRelease::Released
+            {
                 self.release_sticky_modifier().await;
             }
         }
@@ -308,21 +451,15 @@ impl Keyboard<'_> {
             }
             if let Some(mut previous) = self.sticky_key_state.layer.take() {
                 if previous.value.layer == layer {
+                    self.keymap.activate_layer(layer);
                     previous.begin_press(event.pos, policy);
                     self.sticky_key_state.layer = Some(previous);
                     return;
                 }
                 self.release_sticky_layer_effect(previous.value);
             }
-            let activated_by_us = self.keymap.activate_layer_if_inactive(layer);
-            self.sticky_key_state.layer = Some(Latch::new(
-                StickyLayerEffect {
-                    layer,
-                    ownership_generation: activated_by_us.then(|| self.keymap.layer_generation(layer)).flatten(),
-                },
-                event.pos,
-                policy,
-            ));
+            self.keymap.activate_layer(layer);
+            self.sticky_key_state.layer = Some(Latch::new(StickyLayerEffect { layer }, event.pos, policy));
         } else if let Some(latch) = &mut self.sticky_key_state.layer
             && latch.on_physical_release(Some(event.pos)) == PhysicalRelease::Released
         {
@@ -379,8 +516,7 @@ impl Keyboard<'_> {
             if deactivate {
                 self.release_tap_key().await;
             } else {
-                self.register_key(key, event);
-                self.send_keyboard_report_with_resolved_modifiers(true).await;
+                self.process_action_key(key, event).await;
             }
         } else if self
             .sticky_key_state
@@ -392,8 +528,7 @@ impl Keyboard<'_> {
                 .as_mut()
                 .expect("tap key checked above")
                 .on_physical_release(Some(event.pos));
-            self.unregister_key(key, event);
-            self.send_keyboard_report_with_resolved_modifiers(false).await;
+            self.process_action_key(key, event).await;
         }
     }
 
@@ -406,7 +541,7 @@ impl Keyboard<'_> {
             match modifier.phase {
                 LatchPhase::Pressed => modifier.mark_foreign_key(),
                 LatchPhase::Latched if modifier.trigger_for_key(event.pressed) => {
-                    update.modifier_was_host_visible = modifier.policy.activate_on_keypress;
+                    update.modifier_was_host_visible = modifier.value.host_visible;
                     self.sticky_key_state.modifier = None;
                     update.modifier_consumed = true;
                 }
@@ -429,33 +564,26 @@ impl Keyboard<'_> {
         update
     }
 
-    pub(crate) async fn release_sticky_key_on_layer_event(
-        &mut self,
-        event: StickyKeyReleaseMode,
-        generation: Option<LayerTransitionGeneration>,
-    ) {
-        if self.sticky_key_state.modifier.is_some_and(|latch| {
-            generation.map_or_else(
-                || latch.policy.release_mode.intersects(event),
-                |generation| latch.policy.release_mode.intersects(event) && generation.is_after(latch.layer_generation),
-            )
-        }) {
+    pub(crate) async fn release_sticky_key_on_layer_event(&mut self, event: StickyKeyReleaseMode) {
+        if self
+            .sticky_key_state
+            .modifier
+            .is_some_and(|latch| latch.policy.release_mode.intersects(event))
+        {
             self.release_sticky_modifier().await;
         }
-        if self.sticky_key_state.layer.is_some_and(|latch| {
-            generation.map_or_else(
-                || latch.policy.release_mode.intersects(event),
-                |generation| latch.policy.release_mode.intersects(event) && generation.is_after(latch.layer_generation),
-            )
-        }) {
+        if self
+            .sticky_key_state
+            .layer
+            .is_some_and(|latch| latch.policy.release_mode.intersects(event))
+        {
             self.release_sticky_layer();
         }
-        if self.sticky_key_state.tap_key.is_some_and(|latch| {
-            generation.map_or_else(
-                || latch.policy.release_mode.intersects(event),
-                |generation| latch.policy.release_mode.intersects(event) && generation.is_after(latch.layer_generation),
-            )
-        }) {
+        if self
+            .sticky_key_state
+            .tap_key
+            .is_some_and(|latch| latch.policy.release_mode.intersects(event))
+        {
             self.release_tap_key().await;
         }
     }
@@ -492,7 +620,10 @@ impl Keyboard<'_> {
         let Some(modifier) = self.sticky_key_state.modifier.take() else {
             return;
         };
-        if modifier.phase == LatchPhase::Held || modifier.policy.activate_on_keypress {
+        for producer in modifier.value.producers.into_iter().flatten() {
+            self.sticky_key_state.remember_canceled_modifier_release(producer);
+        }
+        if modifier.value.host_visible {
             self.send_keyboard_report_with_resolved_modifiers(false).await;
         }
     }
@@ -504,11 +635,7 @@ impl Keyboard<'_> {
     }
 
     fn release_sticky_layer_effect(&self, effect: StickyLayerEffect) {
-        if effect.ownership_generation.is_some()
-            && effect.ownership_generation == self.keymap.layer_generation(effect.layer)
-        {
-            self.keymap.deactivate_layer_if_active(effect.layer);
-        }
+        self.keymap.deactivate_layer_if_active(effect.layer);
     }
 
     pub(crate) async fn release_tap_key(&mut self) {
@@ -516,15 +643,17 @@ impl Keyboard<'_> {
             return;
         };
         if tap_key.phase == LatchPhase::Pressed {
-            self.unregister_key(
+            self.process_action_key(
                 tap_key.value.key,
                 KeyboardEvent {
                     pressed: false,
                     pos: tap_key.source,
                 },
-            );
+            )
+            .await;
+        } else {
+            self.send_keyboard_report_with_resolved_modifiers(false).await;
         }
-        self.send_keyboard_report_with_resolved_modifiers(false).await;
     }
 }
 
@@ -548,16 +677,22 @@ mod tests {
     #[test]
     fn modifier_effect_counts_overlapping_physical_producers() {
         let mut latch = Latch::new(
-            StickyModifierEffect::new(ModifierCombination::LCTRL),
+            StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
             pos(0),
             policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
         );
-        latch.value.begin_press(ModifierCombination::LSHIFT);
+        latch.value.begin_press(ModifierCombination::LSHIFT, pos(1));
         latch.begin_press(pos(1), policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE));
 
-        assert!(!latch.value.on_physical_release());
+        assert_eq!(
+            latch.value.on_exact_release(ModifierCombination::LCTRL, pos(0)),
+            Some(false)
+        );
         assert_eq!(latch.phase, LatchPhase::Pressed);
-        assert!(latch.value.on_physical_release());
+        assert_eq!(
+            latch.value.on_exact_release(ModifierCombination::LSHIFT, pos(1)),
+            Some(true)
+        );
         assert_eq!(latch.on_physical_release(None), PhysicalRelease::Latched);
         assert_eq!(latch.phase, LatchPhase::Latched);
         assert_eq!(
@@ -569,23 +704,29 @@ mod tests {
     #[test]
     fn held_latch_releases_after_last_physical_producer() {
         let mut latch = Latch::new(
-            StickyModifierEffect::new(ModifierCombination::LCTRL),
+            StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
             pos(0),
             policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
         );
-        latch.value.begin_press(ModifierCombination::LSHIFT);
+        latch.value.begin_press(ModifierCombination::LSHIFT, pos(1));
         latch.begin_press(pos(1), policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE));
         latch.mark_foreign_key();
 
-        assert!(!latch.value.on_physical_release());
-        assert!(latch.value.on_physical_release());
+        assert_eq!(
+            latch.value.on_exact_release(ModifierCombination::LCTRL, pos(0)),
+            Some(false)
+        );
+        assert_eq!(
+            latch.value.on_exact_release(ModifierCombination::LSHIFT, pos(1)),
+            Some(true)
+        );
         assert_eq!(latch.on_physical_release(None), PhysicalRelease::Released);
     }
 
     #[test]
     fn timeout_is_deferred_while_physical_producer_is_down() {
         let mut latch = Latch::new(
-            StickyModifierEffect::new(ModifierCombination::LCTRL),
+            StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
             pos(0),
             policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
         );
@@ -597,33 +738,51 @@ mod tests {
     }
 
     #[test]
-    fn sticky_layer_ownership_generation_detects_later_mutations() {
-        let effect = StickyLayerEffect {
-            layer: 2,
-            ownership_generation: Some(7),
-        };
-        assert_eq!(effect.ownership_generation, Some(7));
-    }
-
-    #[test]
-    fn preexisting_sticky_layer_never_claims_cleanup_ownership() {
-        let effect = StickyLayerEffect {
-            layer: 2,
-            ownership_generation: None,
-        };
-        assert_eq!(effect.ownership_generation, None);
-    }
-
-    #[test]
-    fn external_layer_events_only_release_their_current_lifecycle() {
+    fn buffered_foreign_press_claims_latch_until_action_resolves() {
         let mut latch = Latch::new(
-            StickyModifierEffect::new(ModifierCombination::LCTRL),
+            StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
             pos(0),
-            policy(StickyKeyReleaseMode::LAYER_ENTER),
+            policy(StickyKeyReleaseMode::OTHER_KEY_PRESS),
         );
-        latch.layer_generation = LayerTransitionGeneration::from_raw(10);
+        assert_eq!(latch.on_physical_release(None), PhysicalRelease::Latched);
 
-        assert!(!LayerTransitionGeneration::from_raw(10).is_after(latch.layer_generation));
-        assert!(LayerTransitionGeneration::from_raw(11).is_after(latch.layer_generation));
+        latch.claim_buffered_press(pos(1));
+        assert!(latch.buffered_claim);
+        assert_eq!(latch.deadline, None);
+
+        latch.finish_buffered_claim();
+        assert!(!latch.buffered_claim);
+        assert!(latch.deadline.is_some());
+    }
+
+    #[test]
+    fn canceled_release_does_not_consume_a_new_modifier_latch() {
+        let mut state = StickyKeyState::default();
+        state.remember_canceled_modifier_release(ModifierProducer {
+            source: pos(0),
+            modifiers: ModifierCombination::LSHIFT,
+        });
+        state.modifier = Some(Latch::new(
+            StickyModifierEffect::new(ModifierCombination::LCTRL, pos(1)),
+            pos(1),
+            policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE),
+        ));
+
+        assert!(state.consume_exact_canceled_modifier_release(ModifierCombination::LSHIFT, pos(0)));
+        assert!(state.modifier.is_some());
+        assert!(!state.consume_exact_canceled_modifier_release(ModifierCombination::LCTRL, pos(1)));
+    }
+
+    #[test]
+    fn new_exact_release_wins_over_same_modifier_combo_fallback() {
+        let mut state = StickyKeyState::default();
+        state.remember_canceled_modifier_release(ModifierProducer {
+            source: pos(0),
+            modifiers: ModifierCombination::LSHIFT,
+        });
+        let mut effect = StickyModifierEffect::new(ModifierCombination::LSHIFT, pos(1));
+
+        assert_eq!(effect.on_exact_release(ModifierCombination::LSHIFT, pos(1)), Some(true));
+        assert!(state.consume_exact_canceled_modifier_release(ModifierCombination::LSHIFT, pos(0)));
     }
 }

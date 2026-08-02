@@ -11,9 +11,7 @@ use {
 };
 
 use crate::MACRO_SPACE_SIZE;
-use crate::config::{
-    BehaviorConfig, Hand, MouseKeyConfig, OneShotModifiersConfig, PositionalConfig, StickyKeyReleaseMode,
-};
+use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, PositionalConfig, StickyKeyReleaseMode};
 use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_event};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::combo::Combo;
@@ -46,8 +44,6 @@ pub struct KeymapData<const ROW: usize, const COL: usize, const NUM_LAYER: usize
     pub(crate) encoder_map: [[EncoderAction; NUM_ENCODER]; NUM_LAYER],
     /// Per-layer activation flags
     layer_state: [bool; NUM_LAYER],
-    /// Per-layer mutation generations used to avoid releasing another owner's layer.
-    layer_generation: [u64; NUM_LAYER],
     /// Layer cache for key positions
     layer_cache: [[u8; COL]; ROW],
     /// Layer cache for encoder directions
@@ -61,7 +57,6 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeymapData<ROW,
             keymap,
             encoder_map: [const { [] }; NUM_LAYER],
             layer_state: [false; NUM_LAYER],
-            layer_generation: [0; NUM_LAYER],
             layer_cache: [[0; COL]; ROW],
             encoder_layer_cache: [],
         }
@@ -80,7 +75,6 @@ impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCOD
             keymap,
             encoder_map,
             layer_state: [false; NUM_LAYER],
-            layer_generation: [0; NUM_LAYER],
             layer_cache: [[0; COL]; ROW],
             encoder_layer_cache: [[0u8; 2]; NUM_ENCODER],
         }
@@ -113,8 +107,6 @@ struct KeyMapInner<'a> {
     encoders: Option<&'a mut [EncoderAction]>,
     /// Per-layer activation state
     layer_state: &'a mut [bool],
-    /// Per-layer mutation generations.
-    layer_generation: &'a mut [u64],
     /// Layer cache for keys: row * col
     layer_cache: &'a mut [u8],
     /// Layer cache for encoders: num_encoder * 2
@@ -309,10 +301,7 @@ impl KeyMapInner<'_> {
     fn update_fn_layer_state(&mut self) {
         if self.num_layer > 3 {
             let active = self.layer_state[1] && self.layer_state[2];
-            if self.layer_state[3] != active {
-                self.layer_state[3] = active;
-                self.layer_generation[3] = self.layer_generation[3].wrapping_add(1);
-            }
+            self.layer_state[3] = active;
             let layer = self.get_activated_layer();
             publish_event(LayerChangeEvent::new(layer));
         }
@@ -322,10 +311,7 @@ impl KeyMapInner<'_> {
         if let Some(ref tri_layer) = self.behavior.tri_layer {
             let target = tri_layer[2] as usize;
             let active = self.layer_state[tri_layer[0] as usize] && self.layer_state[tri_layer[1] as usize];
-            if self.layer_state[target] != active {
-                self.layer_state[target] = active;
-                self.layer_generation[target] = self.layer_generation[target].wrapping_add(1);
-            }
+            self.layer_state[target] = active;
         }
         let layer = self.get_activated_layer();
         publish_event(LayerChangeEvent::new(layer));
@@ -339,7 +325,6 @@ impl KeyMapInner<'_> {
             );
             return false;
         }
-        self.layer_generation[layer_num as usize] = self.layer_generation[layer_num as usize].wrapping_add(1);
         if self.layer_state[layer_num as usize] {
             return false;
         }
@@ -356,7 +341,6 @@ impl KeyMapInner<'_> {
             );
             return false;
         }
-        self.layer_generation[layer_num as usize] = self.layer_generation[layer_num as usize].wrapping_add(1);
         if !self.layer_state[layer_num as usize] {
             return false;
         }
@@ -373,7 +357,6 @@ impl KeyMapInner<'_> {
             );
             return None;
         }
-        self.layer_generation[layer_num as usize] = self.layer_generation[layer_num as usize].wrapping_add(1);
         self.layer_state[layer_num as usize] = !self.layer_state[layer_num as usize];
         let active = self.layer_state[layer_num as usize];
         self.update_tri_layer();
@@ -400,7 +383,6 @@ impl<'a> KeyMap<'a> {
             None
         };
         let layer_state = &mut data.layer_state;
-        let layer_generation = &mut data.layer_generation;
         let layer_cache = data.layer_cache.as_mut_slice().as_flattened_mut();
         let encoder_layer_cache = data.encoder_layer_cache.as_mut_slice().as_flattened_mut();
         let hand = positional_config.hand.as_slice().as_flattened();
@@ -414,7 +396,6 @@ impl<'a> KeyMap<'a> {
                 layers,
                 encoders,
                 layer_state,
-                layer_generation,
                 layer_cache,
                 encoder_layer_cache,
                 behavior,
@@ -536,7 +517,6 @@ impl<'a> KeyMap<'a> {
             return false;
         }
         inner.layer_state[idx] = true;
-        inner.layer_generation[idx] = inner.layer_generation[idx].wrapping_add(1);
         inner.update_tri_layer();
         true
     }
@@ -552,14 +532,8 @@ impl<'a> KeyMap<'a> {
             return false;
         }
         inner.layer_state[idx] = false;
-        inner.layer_generation[idx] = inner.layer_generation[idx].wrapping_add(1);
         inner.update_tri_layer();
         true
-    }
-
-    pub(crate) fn layer_generation(&self, layer_num: u8) -> Option<u64> {
-        let inner = self.inner.borrow();
-        inner.layer_generation.get(layer_num as usize).copied()
     }
 
     pub(crate) fn auto_mouse_layer_configs(
@@ -622,10 +596,6 @@ impl<'a> KeyMap<'a> {
 
     pub(crate) fn one_shot_timeout(&self) -> Duration {
         self.inner.borrow().behavior.sticky_key.default_profile.timeout
-    }
-
-    pub(crate) fn one_shot_modifiers_config(&self) -> OneShotModifiersConfig {
-        self.inner.borrow().behavior.one_shot_modifiers
     }
 
     pub(crate) fn sticky_key_profile(&self, index: u8, shape: StickyKeyShape) -> StickyKeyPolicy {
@@ -976,35 +946,6 @@ mod test {
         assert!(!(self_activated && !keymap.is_layer_active(2)));
         keymap.deactivate_layer_if_active(2);
         assert!(self_activated && !keymap.is_layer_active(2));
-    }
-
-    #[test]
-    fn layer_generations_track_same_state_requests_and_tri_layer_changes() {
-        use crate::config::{BehaviorConfig, PositionalConfig};
-        use crate::keymap::{KeyMap, KeymapData};
-
-        let mut data = KeymapData::<1, 1, 4>::new([[[k!(A)]], [[k!(B)]], [[k!(C)]], [[k!(D)]]]);
-        let mut behavior = BehaviorConfig {
-            tri_layer: Some([1, 2, 3]),
-            ..Default::default()
-        };
-        let positional = PositionalConfig::<1, 1>::default();
-        let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
-
-        assert!(keymap.activate_layer(1));
-        let layer_one_generation = keymap.layer_generation(1).unwrap();
-        assert!(!keymap.activate_layer(1));
-        assert!(keymap.layer_generation(1).unwrap() > layer_one_generation);
-
-        let adjust_generation = keymap.layer_generation(3).unwrap();
-        assert!(keymap.activate_layer(2));
-        assert!(keymap.is_layer_active(3));
-        assert!(keymap.layer_generation(3).unwrap() > adjust_generation);
-
-        let adjust_generation = keymap.layer_generation(3).unwrap();
-        assert!(keymap.deactivate_layer(1));
-        assert!(!keymap.is_layer_active(3));
-        assert!(keymap.layer_generation(3).unwrap() > adjust_generation);
     }
 
     #[test]

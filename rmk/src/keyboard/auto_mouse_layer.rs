@@ -26,10 +26,8 @@ use rmk_types::modifier::ModifierCombination;
 use crate::AUTO_MOUSE_LAYER_MAX_NUM;
 use crate::config::AutoMouseLayerConfig;
 use crate::core_traits::Runnable;
-use crate::event::state::{LayerTransition, LayerTransitionEvent};
 use crate::event::{
     ActionEvent, Axis, AxisValType, EventSubscriber, LayerChangeEvent, PointingEvent, SubscribableEvent,
-    publish_event_async,
 };
 use crate::keymap::KeyMap;
 use crate::processor::Processor;
@@ -107,11 +105,7 @@ impl<'a, 'k> AutoMouseLayerRunner<'a, 'k> {
         }
         let target_layer = self.entries[idx].config.target_layer;
         let activated_by_us = self.keymap.activate_layer_if_inactive(target_layer);
-        let outcome = pointing_step(&mut self.entries, idx, Instant::now(), activated_by_us);
-        if activated_by_us {
-            publish_event_async(LayerTransitionEvent::new(target_layer, LayerTransition::Enter)).await;
-        }
-        if outcome == PointingOutcome::OverlapFirstSeen {
+        if pointing_step(&mut self.entries, idx, Instant::now(), activated_by_us) == PointingOutcome::OverlapFirstSeen {
             warn!(
                 "auto_mouse_layer: layer {} is already active when motion was detected; \
                  the layer is likely driven by another key (MO/TG). The auto mouse layer \
@@ -144,9 +138,7 @@ impl<'a, 'k> AutoMouseLayerRunner<'a, 'k> {
             return;
         }
         for layer in keypress_step(&mut self.entries, event.action, Instant::now()) {
-            if self.keymap.deactivate_layer_if_active(layer) {
-                publish_event_async(LayerTransitionEvent::new(layer, LayerTransition::Exit)).await;
-            }
+            self.keymap.deactivate_layer_if_active(layer);
         }
     }
 }
@@ -180,9 +172,7 @@ impl AutoMouseLayerRunner<'_, '_> {
 
     async fn on_deadline(&mut self) {
         for layer in timeout_step(&mut self.entries, Instant::now()) {
-            if self.keymap.deactivate_layer_if_active(layer) {
-                publish_event_async(LayerTransitionEvent::new(layer, LayerTransition::Exit)).await;
-            }
+            self.keymap.deactivate_layer_if_active(layer);
         }
     }
 }
@@ -323,7 +313,7 @@ fn keypress_step(entries: &mut [EntryState], action: Action, now: Instant) -> Ve
                     KeyCode::Hid(hid) if hid.is_mouse_key() => false,
                     _ => !cfg.extra_mouse_keys.contains(&kc),
                 },
-                Action::KeyWithModifier(hid, _) | Action::OneShotKey(hid) => {
+                Action::KeyWithModifier(hid, _) => {
                     if hid.is_mouse_key() {
                         false
                     } else {
@@ -1036,13 +1026,9 @@ mod tests {
 
     #[test]
     fn keypress_step_keeps_layer_active_for_non_key_actions() {
-        // Layer switches, macros, and one-shot modifiers emit no keycode and
+        // Layer switches and macros emit no keycode and
         // must never deactivate; the timeout path handles clearing.
-        for action in [
-            Action::LayerOn(2),
-            Action::TriggerMacro(0),
-            Action::OneShotModifier(ModifierCombination::LCTRL),
-        ] {
+        for action in [Action::LayerOn(2), Action::TriggerMacro(0)] {
             let mut entries = [holding_entry_with_deactivate(3, &[])];
             let released = keypress_step(&mut entries, action, at(2000));
             assert!(released.is_empty(), "{:?} should not release layer", action);
