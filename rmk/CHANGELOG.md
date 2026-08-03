@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor mouse key state machine into a dedicated module with per-direction press counts, independent movement/wheel repeat scheduling, and configurable acceleration curves
 - Optimize the timing for motion read and sending reports on the PMW3610
 - Correct the delay length of PMW3610 to the precise value
+- Update `sequential-storage` to v8.0. The on-flash format is unchanged, so existing storage is read back as-is
 
 ### Fixed
 
