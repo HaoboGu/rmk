@@ -2,11 +2,11 @@
 
 RMK supports keyboard macros: Pressing a trigger to execute a sequence of keypresses.
 
-This can be configured via Vial or rust. A configuration via the toml configuration file will be provided in the future.
+This can be configured via Vial, the toml configuration file, or Rust.
 
 ## Macro operations
 
-The following operations, coming from Vial, can be used to form a macro sequence. They are in `rmk::config::keyboard_macros::keyboard_macro`:
+The following operations, coming from Vial, can be used to form a macro sequence. They are in `rmk::keyboard_macros`:
 
 ### Text(HidKeyCode, bool)
 
@@ -34,6 +34,8 @@ Wait the given time in ms before executing the next macro operation.
 
 This marks the end of a macro sequence. Don't use it: The code removes all occurrences and adds one marker to the end of every sequence to be sure the sequences are terminated correctly.
 
+With the `vial` feature enabled there are additionally `TapAction`, `PressAction`, and `ReleaseAction` operations, which tap/press/release an extended (non-HID) `Action` such as a Bluetooth-profile key.
+
 ## Configure a macro sequence
 
 ### Via the configuration file
@@ -42,11 +44,11 @@ See [macro](../behavior#macro) section under `behavior`
 
 ### Via Rust
 
-A new field `keyboard_macros` has been added to the `BehaviorConfig` struct. Within it a field `macro_sequences` has to be set. This is in binary format (`[u8]`) and can only be as long as `MACRO_SPACE_SIZE`, which is set to 256.
+A new field `keyboard_macros` has been added to the `BehaviorConfig` struct. Within it a field `macro_sequences` has to be set. This is in binary format (`[u8]`) and can only be as long as `MACRO_SPACE_SIZE`, which defaults to 256 and can be changed via `macro_space_size` in the `[rmk]` section of `keyboard.toml`.
 
 The maximum number of Macros depends on the length of the sequences: The space consumed is MacroOperations \* 3 + Number of Macros (where the operation `text` is only 1/3).
 
-The code is silently cutting anything longer than 256 bytes! So if your last macro is not complete you used too much space.
+If your sequences don't fit into `MACRO_SPACE_SIZE`, `define_macro_sequences` panics with "Too many Macro Operations!".
 
 There are two helper functions to define macro sequences:
 
@@ -94,7 +96,7 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
 
 (With the improvement that the `Text` macro operation is used in both cases.)
 
-Note that you are still limited to the ascii characters defined as `HidKeyCode`s. For example, you can't enter a German Umlaut (`ü`) or unicode directly with a `HidKeyCode` binding. If you enter an illegal character it will be converted to `X`.
+Note that you are still limited to the ascii characters defined as `HidKeyCode`s. For example, you can't enter a German Umlaut (`ü`) or unicode directly with a `HidKeyCode` binding. If you enter an illegal character it will be converted to `No` (nothing is typed).
 
 Entering these special characters usually require a key combination which depends on your operating system and chosen keyboard layout (setting in the OS). For example, in MacOS with a en-US layout you can define the following sequence to enter an `ö`:
 
@@ -118,11 +120,11 @@ pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
 
 A macro can be triggered in two ways:
 
-1. Using the macro shortcuts in keymap configuration (e.g., `Macro(0)` - `Macro(31)` in toml config, or `macros!(0)` - `macros!(31)` in Rust).
-2. Using the `Action::TriggerMacro(index)`, where index can be any number between 0~31. If the total number of macro sequences is less than the index passed, nothing is executed (and an error "Macro not found" is logged). Remember that the index starts at `0`.
+1. Using the macro shortcuts in keymap configuration (e.g., `Macro(0)` - `Macro(255)` in toml config, or `macros!(0)` - `macros!(255)` in Rust).
+2. Using the `Action::TriggerMacro(index)`, where index can be any number between 0~255. If the total number of macro sequences is less than the index passed, nothing is executed (and an error "Macro not found" is logged). Remember that the index starts at `0`.
 3. Defined macro sequences are automatically bound to a sequence: The first macro sequence defined is executed when triggering `Macro(0)` and `Action::TriggerMacro(0)`.
 
-There is no difference using either, other than that there are only 32 shortcuts available (0-31). To trigger the 33rd macro and above you need to use `Action::TriggerMacro(index)`.
+There is no difference using either: `macros!(n)` simply expands to `KeyAction::Single(Action::TriggerMacro(n))`.
 
 ### Combining
 
@@ -138,7 +140,8 @@ For example:
 
 ```rust
 // Trigger macro(1) when tapping and switch to layer 1 when holding
-KeyAction::TapHold(Action::TriggerMacro(1), Action::LayerOn(1))
+// (the third field selects the morse profile; u8::MAX = default profile)
+KeyAction::TapHold(Action::TriggerMacro(1), Action::LayerOn(1), u8::MAX)
 ```
 
 Probably you most likely will need
@@ -162,18 +165,22 @@ Thus, one can press only the beginning of a word to write the whole word. For ex
 This is the configuration for the above example, assuming `1` is the chording layer:
 
 ```rust
+    use rmk::keyboard::combo::{Combo, ComboConfig};
+
     define_macro_sequences(&[
         to_macro_sequence("type"),
         to_macro_sequence("typing"),
     ])
 
-    CombosConfig {
-        combos: [
-            Some(Combo::new([k!(T), k!(Y)], macros!(0), Some(1))),
-            Some(Combo::new([k!(T), k!(Y), k!(G)], KeyAction::Single(Action::TriggerMacro(1)), Some(1))),
-        ],
-        timeout: Duration::from_millis(50),
-    }
+    // `combos` is a `[Option<Combo>; COMBO_MAX_NUM]` array; unused slots stay `None`.
+    // The default timeout is 50 ms.
+    let mut combo_config = CombosConfig::default();
+    combo_config.combos[0] = Some(Combo::new(ComboConfig::new([k!(T), k!(Y)], macros!(0), Some(1))));
+    combo_config.combos[1] = Some(Combo::new(ComboConfig::new(
+        [k!(T), k!(Y), k!(G)],
+        KeyAction::Single(Action::TriggerMacro(1)),
+        Some(1),
+    )));
 ```
 
 (`Action::TriggerMacro(1)` was used for demonstration only. Using `macros!(1)` is recommended to keep it brief.)
@@ -192,13 +199,13 @@ Note that instead of having a second macro for all verbs (normal and `ing` form)
         .expect("too many elements"),
     ])
 
-    CombosConfig {
-        combos: [
-            Some(Combo::new([k!(T), k!(Y)], macros!(0), Some(1))),
-            Some(Combo::new([k!(G)], KeyAction::Single(Action::TriggerMacro(1)), Some(1))),
-        ],
-        timeout: Duration::from_millis(50),
-    }
+    let mut combo_config = CombosConfig::default();
+    combo_config.combos[0] = Some(Combo::new(ComboConfig::new([k!(T), k!(Y)], macros!(0), Some(1))));
+    combo_config.combos[1] = Some(Combo::new(ComboConfig::new(
+        [k!(G)],
+        KeyAction::Single(Action::TriggerMacro(1)),
+        Some(1),
+    )));
 ```
 
 With the configuration above pressing `T` & `Y` writes `type` and pressing `G` changes it to `typing`.
@@ -266,8 +273,8 @@ When you press `shift` and use `MacroOperation::Text`, like in the code above, n
 pub(crate) fn get_macro_sequences() -> [u8; MACRO_SPACE_SIZE] {
     define_macro_sequences(&[
         Vec::from_slice(&[
-            MacroOperation::Text(HidKeyCode::Q, false),
-            MacroOperation::Tap(HidKeyCode::U),
+            MacroOperation::Tap(HidKeyCode::Q),
+            MacroOperation::Text(HidKeyCode::U, false),
         ])
         .expect("too many elements"),
     ])

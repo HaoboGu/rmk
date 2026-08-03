@@ -32,7 +32,7 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
 - [x] Macro support enhancement
   - [x] 🟢 Macro definition via toml
   - [x] 🟢 Make macro storage space configurable
-- [ ] 🔴 Tap dance
+- [x] 🔴 Tap dance
 - [x] 🔵 Controller device
   - [x] External power control(GPIO)
   - [ ] 🔴 RGB
@@ -62,7 +62,7 @@ There are a bunch of things to do with RMK in the near future. I plan to ship 1.
 - [x] Versioned documentation site, better documentation
 - [ ] Making vial and default keymap consistent automatically
 - [ ] 🔴🔵 GUI keymap configurator which supports windows/macos/linux/web
-- [ ] Default bootloader
+- [x] Default bootloader
 - [x] USB DFU
 - [x] Flashing peripherals from the central via uart
 - [ ] Flashing peripherals from the central via ble

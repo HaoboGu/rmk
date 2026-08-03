@@ -47,3 +47,9 @@ let rmk_config = RmkConfig {
 
 </Tab>
 </Tabs>
+
+::: info Storage is re-initialized when the firmware changes
+
+Every firmware build embeds a unique build hash, and on boot RMK compares it with the hash saved in flash. If they differ (for example after flashing a new build), the whole storage area is erased and re-initialized with the firmware's defaults, so saved keymap changes and BLE bonds don't survive a firmware update.
+
+:::

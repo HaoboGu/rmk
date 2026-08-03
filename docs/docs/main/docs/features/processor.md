@@ -16,7 +16,8 @@ Processors can operate in two modes:
 Use the `#[processor]` macro to define custom processors:
 
 ```rust
-use rmk_macro::processor;
+use rmk::event::LayerChangeEvent;
+use rmk::macros::processor;
 
 #[processor(subscribe = [LayerChangeEvent])]
 pub struct MyProcessor {
@@ -43,7 +44,9 @@ impl MyProcessor {
 
 ## Registering Processors
 
-Processors need to be registered in your `#[rmk_keyboard]` module using the `#[register_processor]` attribute:
+If you use the Rust API directly, no registration is needed — every processor implements `Runnable`, so just pass it to `run_all!` alongside your other tasks (see [Input Device](./input_device#running-input-devices)).
+
+For `keyboard.toml` users, processors are registered in the `#[rmk_keyboard]` module using the `#[register_processor]` attribute:
 
 ```rust
 #[rmk_keyboard]
@@ -67,7 +70,8 @@ Available registration modes:
 Processors can subscribe to multiple event types and handle them with separate methods:
 
 ```rust
-use rmk_macro::processor;
+use rmk::event::{BatteryStatusEvent, LayerChangeEvent};
+use rmk::macros::processor;
 
 #[processor(subscribe = [LayerChangeEvent, BatteryStatusEvent])]
 pub struct MultiEventProcessor {
@@ -91,16 +95,17 @@ impl MultiEventProcessor {
 For processors that need periodic updates (e.g., display refresh, LED animations), use the `poll_interval` parameter:
 
 ```rust
-use rmk_macro::processor;
+use rmk::event::LayerChangeEvent;
+use rmk::macros::processor;
 
 #[processor(subscribe = [LayerChangeEvent], poll_interval = 500)]
-pub struct DisplayProcessor<D: DrawTarget> {
+pub struct StatusScreen<D: DrawTarget> {
     display: D,
     layer: u8,
     needs_refresh: bool,
 }
 
-impl<D: DrawTarget> DisplayProcessor<D> {
+impl<D: DrawTarget> StatusScreen<D> {
     pub fn new(display: D) -> Self {
         Self {
             display,
@@ -134,8 +139,9 @@ impl<D: DrawTarget> DisplayProcessor<D> {
 A complete example of a processor that controls an LED based on keyboard indicators:
 
 ```rust
-use rmk_macro::processor;
 use embedded_hal::digital::StatefulOutputPin;
+use rmk::event::LedIndicatorEvent;
+use rmk::macros::processor;
 
 #[processor(subscribe = [LedIndicatorEvent])]
 pub struct CapsLockLed<P: StatefulOutputPin> {
@@ -152,15 +158,17 @@ impl<P: StatefulOutputPin> CapsLockLed<P> {
     }
 
     async fn on_led_indicator_event(&mut self, event: LedIndicatorEvent) {
-        let should_light = event.indicator.caps_lock;
-        if self.low_active {
-            if should_light { self.led.set_low() } else { self.led.set_high() }
+        let should_light = event.caps_lock();
+        if should_light != self.low_active {
+            self.led.set_high().ok();
         } else {
-            if should_light { self.led.set_high() } else { self.led.set_low() }
+            self.led.set_low().ok();
         }
     }
 }
 ```
+
+RMK ships this functionality as the built-in `rmk::processor::builtin::led_indicator::KeyboardIndicatorProcessor`, so you only need a custom processor like this for behavior the built-in doesn't cover.
 
 ## Related Documentation
 

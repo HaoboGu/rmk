@@ -31,13 +31,13 @@ event_name.subs = <value>
 ```toml
 [event]
 # Increase key event buffer for fast typing
-keyboard.channel_size = 16
+keyboard.channel_size = 32
 
 # Add more subscribers for multiple displays monitoring layer changes
 layer_change.subs = 8
 
 # Reduce subscribers to save memory on constrained devices
-battery_status.subs = 2
+keyboard.subs = 2
 led_indicator.subs = 2
 
 # Configure multiple parameters for one event
@@ -47,28 +47,34 @@ peripheral_battery.subs = 4
 
 ## Configurable Event Names
 
-| Config Name                | Event Type                    | Default Notes          |
-| -------------------------- | ----------------------------- | ---------------------- |
-| **Input Events**           |                               |                        |
-| `keyboard`                 | `KeyboardEvent`               | channel_size=16        |
-| `modifier`                 | `ModifierEvent`               |                        |
-| `pointing`                 | `PointingEvent`               | channel_size=8         |
-| **State Events**           |                               |                        |
-| `layer_change`             | `LayerChangeEvent`            | subs=4                 |
-| `wpm_update`               | `WpmUpdateEvent`              |                        |
-| `led_indicator`            | `LedIndicatorEvent`           |                        |
-| `sleep_state`              | `SleepStateEvent`             |                        |
-| **Battery Events**         |                               |                        |
-| `battery_adc`              | `BatteryAdcEvent`             | channel_size=2         |
-| `charging_state`           | `ChargingStateEvent`          | channel_size=2         |
-| `battery_status`           | `BatteryStatusEvent`          | subs=4                 |
-| **Connection Events**      |                               |                        |
-| `connection_status_change` | `ConnectionStatusChangeEvent` | channel_size=2, pubs=2 |
-| **Split Events**           |                               |                        |
-| `peripheral_connected`     | `PeripheralConnectedEvent`    |                        |
-| `central_connected`        | `CentralConnectedEvent`       |                        |
-| `peripheral_battery`       | `PeripheralBatteryEvent`      | channel_size=2, subs=2 |
-| `clear_peer`               | `ClearPeerEvent`              |                        |
+| Config Name                | Event Type                    | Default Notes                   |
+| -------------------------- | ----------------------------- | ------------------------------- |
+| **Input Events**           |                               |                                 |
+| `keyboard`                 | `KeyboardEvent`               | channel_size=16, pubs=2, subs=3 |
+| `modifier`                 | `ModifierEvent`               | channel_size=8, subs=2          |
+| `pointing`                 | `PointingEvent`               | channel_size=8, pubs=2, subs=2  |
+| **State Events**           |                               |                                 |
+| `layer_change`             | `LayerChangeEvent`            | pubs=2                          |
+| `wpm_update`               | `WpmUpdateEvent`              |                                 |
+| `led_indicator`            | `LedIndicatorEvent`           | channel_size=2, pubs=2, subs=3  |
+| `sleep_state`              | `SleepStateEvent`             |                                 |
+| **Battery Events**         |                               |                                 |
+| `battery_adc`              | `BatteryAdcEvent`             | channel_size=2                  |
+| `charging_state`           | `ChargingStateEvent`          | channel_size=2                  |
+| `battery_status`           | `BatteryStatusEvent`          | subs=0                          |
+| **Connection Events**      |                               |                                 |
+| `connection_status_change` | `ConnectionStatusChangeEvent` | channel_size=2, pubs=2          |
+| **Split Events**           |                               |                                 |
+| `peripheral_connected`     | `PeripheralConnectedEvent`    |                                 |
+| `central_connected`        | `CentralConnectedEvent`       |                                 |
+| `peripheral_battery`       | `PeripheralBatteryEvent`      | channel_size=2, subs=2          |
+| `clear_peer`               | `ClearPeerEvent`              | subs=0                          |
+| **DFU Events**             |                               |                                 |
+| `dfu_status`               | `DfuStatusEvent`              | channel_size=2                  |
+| **Action Events**          |                               |                                 |
+| `action`                   | `ActionEvent`                 | channel_size=16, subs=0         |
+
+Unlisted parameters default to `1`.
 
 ## Related Documentation
 

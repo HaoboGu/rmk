@@ -28,7 +28,8 @@ You don't need to implement this trait manually. Use the `#[input_device]` macro
 Use the `#[input_device]` macro on a struct to define an input device:
 
 ```rust
-use rmk_macro::input_device;
+use rmk::event::BatteryAdcEvent;
+use rmk::macros::input_device;
 
 #[input_device(publish = BatteryAdcEvent)]
 pub struct MyBatteryReader {
@@ -53,7 +54,8 @@ pub struct MyBatteryReader {
 A device that reads charging state from a GPIO pin:
 
 ```rust
-use rmk_macro::input_device;
+use rmk::event::ChargingStateEvent;
+use rmk::macros::input_device;
 
 #[input_device(publish = ChargingStateEvent)]
 pub struct ChargingStateReader<I: InputPin> {
@@ -94,7 +96,8 @@ impl<I: InputPin> ChargingStateReader<I> {
 A device that produces multiple event types using a wrapper enum (see [Multi-event Enums](./event#multi-event-enums)):
 
 ```rust
-use rmk_macro::{Event, input_device};
+use rmk::event::{BatteryAdcEvent, PointingEvent};
+use rmk::macros::{Event, input_device};
 
 // Define a wrapper enum for multiple event types
 #[derive(Event, Clone, Debug)]
@@ -120,23 +123,31 @@ impl<'a, const PIN_NUM: usize, const EVENT_NUM: usize> NrfAdc<'a, PIN_NUM, EVENT
 
 ## Running Input Devices
 
-All input devices implement the `Runnable` trait. Use the `run_all!` macro to run multiple runnables concurrently:
+All input devices implement the `Runnable` trait. Use the `run_all!` macro to run all runnables — input devices, processors, and the rest of the firmware (keyboard, storage, transports) — concurrently:
 
 ```rust
 use rmk::run_all;
 
 // Create your devices and processors
-let mut matrix = Matrix::new(row_pins, col_pins, debouncer);
+let mut matrix = Matrix::<_, _, _, ROW, COL, true>::new(row_pins, col_pins, debouncer);
 let mut encoder = RotaryEncoder::new(pin_a, pin_b, 0);
 let mut adc_device = NrfAdc::new(saadc, [AnalogEventType::Battery], [0], interval, None);
 let mut batt_proc = BatteryProcessor::new(2000, 2806);
 
-// Run them concurrently using join and run_all!
-join(
-    run_all!(matrix, encoder, adc_device, batt_proc),
-    run_rmk(&keymap, driver, &stack, &mut storage, rmk_config),
-).await;
+// Run everything concurrently
+run_all!(
+    matrix,
+    encoder,
+    adc_device,
+    batt_proc,
+    storage,
+    usb_transport,
+    keyboard
+)
+.await;
 ```
+
+See [`examples/use_rust/nrf52840_ble`](https://github.com/rmk-rs/rmk/blob/main/examples/use_rust/nrf52840_ble/src/main.rs) for a complete `main.rs` using these devices.
 
 ## Configuration
 
@@ -147,7 +158,7 @@ RMK provides `keyboard.toml` configuration support for some built-in input devic
 `#[input_device]` can be combined with `#[processor]` on the same struct. This allows a single struct to both produce events and subscribe to other events:
 
 ```rust
-use rmk_macro::{input_device, processor};
+use rmk::macros::{input_device, processor};
 
 #[input_device(publish = SensorEvent)]
 #[processor(subscribe = [ConfigEvent])]
@@ -171,7 +182,7 @@ impl InputSensor {
 ::: warning Beware of infinite event loops
 When combining input device and processor, be careful not to create event loops:
 
-- **Direct loop**: Subscribing to an event you publish yourself
+- **Direct loop**: Subscribing to an event you publish yourself (RMK rejects this case at compile time)
 - **Indirect loop**: Device A subscribes to X and publishes Y, Device B subscribes to Y and publishes X — this forms a cycle
 - **Longer chains**: A→B→C→A loops are also possible (A publishes B, B publishes C, C publishes A)
 

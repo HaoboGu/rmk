@@ -85,26 +85,21 @@ Caret mode currently gets rid of all pressed modifiers (shift, CTRL) and sends t
 
 ## Mode switching
 
-Users can define a processor, in this case called `PointingProcessorController`, which subscribes to events (e.g. layer changes) and updates the active mode. The example below switches to Cursor on layer 0, Sniper on layer 1, Scroll on layer 2, and Caret on layer 3 or when key bound to User0 is pressed:
+Users can define a processor, in this case called `PointingProcessorController`, which subscribes to events (e.g. layer changes) and updates the active mode. The example below switches to Cursor on layer 0, Sniper on layer 1, Scroll on layer 2, and Caret on layer 3 or when a key bound to `User0` is pressed (see the shipped [`rp2040_pointing_modes`](https://github.com/rmk-rs/rmk/tree/main/examples/use_config/rp2040_pointing_modes) example):
 
-```rust title="src/pointingproccontroller.rs"
-use rmk::{
-    event::{LayerChangeEvent, KeyboardEvent, KeyboardEventPos, PointingProcessorEvent, publish_event},
-    input_device::pointing::PointingMode, types::keycode::HidKeyCode,
-};
-use rmk_macro::processor;
+```rust title="src/pointing_processor_controller.rs"
+use rmk::event::{ActionEvent, LayerChangeEvent, PointingProcessorEvent, publish_event};
+use rmk::input_device::pointing::PointingMode;
+use rmk::macros::processor;
+use rmk::types::action::Action;
+use rmk::types::keycode::HidKeyCode;
 
-#[processor(subscribe = [LayerChangeEvent, KeyboardEvent])] // could be any other event
-#[derive(Default)]
-pub struct PointingProcessorController<'a> {
-    keymap: &'a KeyMap<'a>, // you can omit this (and the lifetime 'a) if you don't use the KeyboardEvent
-}
+#[processor(subscribe = [LayerChangeEvent, ActionEvent])] // could be any other event
+pub struct PointingProcessorController;
 
 impl PointingProcessorController {
-    pub fn new(keymap: &'a KeyMap<'a>) -> Self {
-        Self {
-            keymap,
-        }
+    pub fn new() -> Self {
+        Self
     }
 
     async fn on_layer_change_event(&mut self, event: LayerChangeEvent) {
@@ -160,36 +155,28 @@ impl PointingProcessorController {
         }
     }
 
-    pub async fn on_keyboard_event(&mut self, event: KeyboardEvent) {
-        if let KeyboardEventPos::Key(pos) = event.pos {
-            let keyevent = self
-                .keymap
-                .action_at_pos(self.current_layer as usize, pos.row, pos.col);
-            if event.pressed {
-                match keyevent {
-                    KeyAction::Single(Action::User(0)) => {
-                        publish_event(PointingProcessorEvent {
-                            device_id: 255,
-                            mode: PointingMode::Caret(rmk::input_device::pointing::CaretConfig {
-                                disable_x: false, // disable horizontal caret taps
-                                disable_y: false, // disable vertical caret taps
-                                invert_x: false,
-                                invert_y: false,
-                                threshold: 100, // minimum accumulated motion (|dx|+|dy|) to trigger a tap
-                                keycode_up: HidKeyCode::Up,
-                                keycode_down: HidKeyCode::Down,
-                                keycode_left: HidKeyCode::Left,
-                                keycode_right: HidKeyCode::Right,
-                            }),
-                        });
-                    }
-                    _ => {}
-                }
-            }
+    async fn on_action_event(&mut self, event: ActionEvent) {
+        // Every resolved key action is published as an ActionEvent.
+        if event.keyboard_event.pressed && event.action == Action::User(0) {
+            publish_event(PointingProcessorEvent {
+                device_id: 255,
+                mode: PointingMode::Caret(rmk::input_device::pointing::CaretConfig::default()),
+            });
         }
     }
 }
 ```
+
+::: note
+
+`ActionEvent` ships with zero subscriber slots by default, so subscribing to it requires reserving one in `keyboard.toml`:
+
+```toml
+[event.action]
+subs = 1
+```
+
+:::
 
 Register the controller on the **central** side (always — even if the sensor is on a peripheral):
 
@@ -198,23 +185,21 @@ import { Rust, Toml, Tab, Tabs } from '@theme'
 <Tabs>
 <Tab label={<Toml />}>
 
-```rust title="src/central.rs"
-// always into central.rs/ main.rs, regardless of where the sensor is connected.
+```rust title="src/main.rs"
+// always into main.rs (or central.rs with #[rmk_central] for a split keyboard),
+// regardless of where the sensor is connected.
 #![no_main]
 #![no_std]
 
-mod pointingproccontroller;
+mod pointing_processor_controller;
 
-use rmk::macros::rmk_central;
-use crate::pointingproccontroller::PointingProcessorController;
+use rmk::macros::rmk_keyboard;
 
-#[rmk_central]
-mod keyboard_central {
-    use super::*;
-
+#[rmk_keyboard]
+mod keyboard {
     #[register_processor(event)]
-    fn pointing_processor_controller() -> PointingProcessorController {
-        PointingProcessorController::new()
+    fn pointing_processor_controller() -> crate::pointing_processor_controller::PointingProcessorController {
+        crate::pointing_processor_controller::PointingProcessorController::new()
     }
 }
 ```
@@ -222,12 +207,12 @@ mod keyboard_central {
 </Tab>
 <Tab label={<Rust />}>
 
-```rust title="src/central.rs"
-// always into central.rs/ main.rs, regardless of where the sensor is connected.
-	mod pointingproccontroller;
-	use crate::pointingproccontroller::PointingProcessorController;
+```rust title="src/main.rs"
+// always into main.rs/ central.rs, regardless of where the sensor is connected.
+	mod pointing_processor_controller;
+	use crate::pointing_processor_controller::PointingProcessorController;
 // ...
-    let mut pointing_controller = PointingProcessorController::default();
+    let mut pointing_controller = PointingProcessorController::new();
     run_all!(
 		/* other processors go here */
         pointing_controller,

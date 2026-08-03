@@ -56,7 +56,7 @@ unlock_keys = [[0, 0], [0, 1]]
 ```
 
 ```toml title="Cargo.toml"
-rmk = { version = "...", default-features = false, features = [
+rmk = { version = "0.9", default-features = false, features = [
     "defmt",
     "storage",
     "rynk",
@@ -74,7 +74,7 @@ rynk_enabled = false
 ```
 
 ```toml title="Cargo.toml"
-rmk = { version = "...", default-features = false, features = [
+rmk = { version = "0.9", default-features = false, features = [
     "defmt",
     "storage",
     "watchdog",

@@ -17,7 +17,7 @@ PMW3610 is a low‑power optical mouse sensor.
 ```toml
 [[input_device.pmw3610]]
 name = "trackball0"
-id = 0 # optional number between 0-255. Ids are used for debug prints. Set to 0 if omitted.
+id = 0 # optional number between 0-255. The generated PointingProcessor is paired to it. Set to 0 if omitted.
 
 spi.instance = "bitbang0"
 spi.sck = "P0_05"
@@ -137,9 +137,10 @@ This should be added to the `central.rs`-File even if the sensor is on split per
     use rmk::input_device::pointing::{ PointingProcessor, PointingProcessorConfig };
 
     let pmw3610_proc_config = PointingProcessorConfig {
+        // device_id: 0, // Match the id set on the PointingDevice (default 255 to match all devices)
         // invert_x: true, // invert axis if necessary
         // invert_y: true,
-        // swap_y: true,
+        // swap_xy: true,
         ..Default::default()
     };
 
