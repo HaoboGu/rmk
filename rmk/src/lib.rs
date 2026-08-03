@@ -34,6 +34,12 @@ compile_error!(
      Use `defmt` logging on these chips."
 );
 
+#[cfg(all(feature = "dfu_split", feature = "_ble"))]
+compile_error!(
+    "`dfu_split` is not supported on BLE keyboards yet: the DFU passthrough only \
+     runs over the wired split transport. Disable `dfu_split` on BLE builds."
+);
+
 // Re-export self as ::rmk for macro-generated code to work both inside and outside the crate
 extern crate self as rmk;
 
