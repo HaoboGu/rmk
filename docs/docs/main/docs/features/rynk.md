@@ -44,7 +44,7 @@ Then disable RMK's default features, which include Vial, and enable `rynk`
 explicitly. Add the other features your keyboard needs:
 
 ```toml title="Cargo.toml"
-rmk = { version = "...", default-features = false, features = [
+rmk = { version = "0.9", default-features = false, features = [
     "defmt",
     "storage",
     "rynk",

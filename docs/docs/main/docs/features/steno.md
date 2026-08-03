@@ -20,7 +20,7 @@ options also work because the firmware reports every state change.
 Add the `steno` feature to your `Cargo.toml`:
 
 ```toml
-rmk = { version = "...", features = ["steno"] }
+rmk = { version = "0.9", features = ["steno"] }
 ```
 
 ### 2. Map steno keys in your layout

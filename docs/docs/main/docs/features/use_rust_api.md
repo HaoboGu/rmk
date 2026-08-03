@@ -4,7 +4,7 @@ By default, the generated project uses `keyboard.toml` to configure the RMK keyb
 
 ### Update memory.x
 
-`memory.x` is the linker script of a Rust embedded project; it's used to define the memory layout of the microcontroller. RMK enables the `memory-x` feature for `embassy-stm32`, so if you're using STM32, you can just ignore this step.
+`memory.x` is the linker script of a Rust embedded project; it's used to define the memory layout of the microcontroller. The generated project enables the `memory-x` feature for `embassy-stm32`, so if you're using STM32, you can just ignore this step.
 
 For other ARM Cortex-M microcontrollers, you only need to update the `LENGTH` of FLASH and RAM for your microcontroller.
 
@@ -40,7 +40,7 @@ After adding the layout of your keyboard, the default keymap should also be upda
 
 RMK provides a bunch of useful [macros](https://docs.rs/rmk/latest/rmk/#macros) to help you define your keymap. Check out the [keymap configuration](../configuration/keymap_configuration) chapter for more details. You can also check the `src/keymap.rs` files in the <https://github.com/rmk-rs/rmk/blob/main/examples/use_rust> examples for reference.
 
-Some `KeyAction`s are not supported by the macros; plain `KeyAction`s also work, for example: `KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::Kc1)), Action::Key(KeyCode::Hid(HidKeyCode::Kc2)))`
+Some `KeyAction`s are not supported by the macros; plain `KeyAction`s also work, for example: `KeyAction::TapHold(Action::Key(KeyCode::Hid(HidKeyCode::Kc1)), Action::Key(KeyCode::Hid(HidKeyCode::Kc2)), u8::MAX)` (the last argument indexes the morse profile table; use `u8::MAX` for the default tap-hold timing)
 
 ### Define your matrix
 

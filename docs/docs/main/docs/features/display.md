@@ -4,10 +4,13 @@ RMK has built-in support for OLED and other small displays through the `DisplayP
 
 ## Supported Drivers
 
-| Driver     | Chip(s)                         | Feature flag |
-| ---------- | ------------------------------- | ------------ |
-| SSD1306    | SSD1306                         | `ssd1306`    |
-| oled-async | SH1106, SH1107, SH1108, SSD1309 | `oled_async` |
+| Driver     | Chip(s)                                                                                       | Feature flag |
+| ---------- | --------------------------------------------------------------------------------------------- | ------------ |
+| SSD1306    | SSD1306                                                                                       | `ssd1306`    |
+| oled-async | SH1106, SH1107, SH1108, SSD1309                                                               | `oled_async` |
+| lcd-async  | GC9107, GC9A01, ILI9225, ILI9341, ILI9342C, ILI9486, ILI9488, RM67162, ST7735, ST7789, ST7796 | `lcd_async`  |
+
+There is also a per-chip feature flag for each supported chip (for example `sh1106` or `st7789`) which simply enables the corresponding driver feature.
 
 ### Supported Sizes
 
@@ -19,14 +22,16 @@ RMK has built-in support for OLED and other small displays through the `DisplayP
 | SH1108  | 64x160, 96x160, 128x160, 160x160    |
 | SSD1309 | 128x64                              |
 
-All drivers support 0, 90, 180 and 270 degree rotation.
+All OLED drivers support 0, 90, 180 and 270 degree rotation. LCD resolutions are set via the `W`/`H` parameters of `LcdAsyncDisplay`.
 
 ## Built-in Renderers
 
-RMK ships two renderers out of the box:
+RMK ships two renderers out of the box (both monochrome, for `BinaryColor` displays):
 
 - **`LogoRenderer`** — displays the RMK logo. Used by default when you don't specify a renderer.
 - **`OledRenderer`** — full keyboard status screen: layer, WPM, modifier indicators, Caps/Num Lock, battery level, BLE status, and split keyboard connection state. Layout adapts automatically between landscape and portrait orientations.
+
+Color LCDs (`lcd_async`) use the `Rgb565` color type, so they need a [custom renderer](#custom-renderers).
 
 ## Configuration
 
@@ -75,19 +80,47 @@ run_all!(matrix, oled).await;
 ### SH1106 / oled-async
 
 ```rust
-use oled_async::Builder;
-use oled_async::displays::sh1106::Sh1106_128_64;
-use oled_async::displayrotation::DisplayRotation;
 use display_interface_i2c::I2CInterface;
+use oled_async::Builder;
+use oled_async::displayrotation::DisplayRotation;
+use oled_async::displays::sh1106::Sh1106_128_64;
+use oled_async::mode::graphics::GraphicsMode;
 use rmk::display::DisplayProcessor;
 
 let interface = I2CInterface::new(i2c, 0x3C, 0x40);
-let display = Builder::new(Sh1106_128_64 {})
+let display: GraphicsMode<_, _> = Builder::new(Sh1106_128_64 {})
     .with_rotation(DisplayRotation::Rotate0)
     .connect(interface)
     .into();
 
 let mut oled = DisplayProcessor::new(display);
+```
+
+A complete SH1106 keyboard is in the [`rp2040_oled`](https://github.com/rmk-rs/rmk/blob/main/examples/use_rust/rp2040_oled/src/main.rs) example.
+
+### Color LCDs / lcd-async
+
+LCDs driven by the [`lcd-async`](https://crates.io/crates/lcd-async) crate are wrapped in `LcdAsyncDisplay`, which pairs the initialized display with a `Rgb565` framebuffer (`W * H * 2` bytes). The built-in renderers are monochrome, so pass a custom `Rgb565` renderer:
+
+```rust
+use lcd_async::{Builder, models::GC9107};
+use rmk::display::DisplayProcessor;
+use rmk::display::drivers::lcd_async::LcdAsyncDisplay;
+use static_cell::StaticCell;
+
+const W: usize = 128;
+const H: usize = 128;
+
+static FB: StaticCell<[u8; W * H * 2]> = StaticCell::new();
+let fb = FB.init([0; W * H * 2]);
+
+let display = Builder::new(GC9107, my_interface)
+    .display_size(W as u16, H as u16)
+    .init(&mut embassy_time::Delay)
+    .await
+    .unwrap();
+
+let mut lcd = DisplayProcessor::with_renderer(LcdAsyncDisplay::<_, _, _, _, W, H>::new(display, fb), MyRgb565Renderer);
 ```
 
 ### Render Intervals
@@ -160,7 +193,7 @@ The `ctx` argument passed to `render` carries a snapshot of the current keyboard
 | `key_pressed`     | `bool`                | Whether a key is currently held down                                       |
 | `key_press_latch` | `bool`                | True if a key was pressed since the last render; cleared after each render |
 | `sleeping`        | `bool`                | Whether the keyboard is in sleep mode                                      |
-| `battery`         | `BatteryStateEvent`   | Battery charge level and state                                             |
+| `battery`         | `BatteryStatusEvent`  | Battery charge level and state                                             |
 
 Feature-gated fields (require the corresponding RMK feature to be enabled):
 

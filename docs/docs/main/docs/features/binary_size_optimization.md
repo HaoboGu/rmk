@@ -60,7 +60,7 @@ RMK provides several options that you can use to reduce the binary size:
 
 ```toml
 # The default features `defmt`, `storage`, `vial`, `host_lock`, and `watchdog` are all disabled
-rmk = { version = "...", default-features = false }
+rmk = { version = "0.9", default-features = false }
 ```
 
 If you're using `keyboard.toml`, you'll also need to disable storage, defmt, and the host protocol in the toml config:
@@ -135,7 +135,7 @@ You can disable the `storage` and host protocol (`vial`, or `rynk` if you enable
 
 ```toml
 # The default features `defmt`, `storage`, `vial`, `host_lock`, and `watchdog` are all disabled
-rmk = { version = "...", default-features = false }
+rmk = { version = "0.9", default-features = false }
 ```
 
 And then remove anything no longer needed in `main.rs`.

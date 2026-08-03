@@ -162,7 +162,7 @@ dfu_size     = 528384
 
 ```rust title="main.rs"
 // Flash layout using the rmk-boot formula:
-//   state at 0x6000 (4K), active from 0x7000 (size: (flash_size - 28K (= embassy-boot + embassy-boot state) - STORAGE_SIZE (= 64K) - page_size (= 4K)) / 2),
+//   state at 0x6000 (4K), active from 0x7000 (size: (flash_size - 28K (= embassy-boot + embassy-boot state) - STORAGE_SIZE (= 128K) - page_size (= 4K)) / 2),
 //   dfu follows active (active_size + page_size (= 4K))
 //
 // All offsets (DFU_OFFSET, DFU_SIZE, STORAGE_OFFSET, etc.) are derived
@@ -225,7 +225,7 @@ let mut dfu_lock = ::rmk::dfu::DfuLock::new(unlock_keys, &keymap);
 // ...
 run_all!(
 	// other processors ...
-	dfu_led_processor
+	dfu_led_processor,
 	dfu_lock,
 )
 ```
@@ -247,7 +247,7 @@ The bootloader divides flash into regions. The defaults follow the [rmk-boot](ht
 
 The DFU partition size follows embassy-boot guidelines, the additional page is used for status information during flashing.
 
-All `[dfu]` fields are optional. The partition values are auto-calculated from `flash_size` and `page_size` using the rmk-boot formula. If you supply any of `state_offset`, `state_size`, `dfu_offset`, or `dfu_size` directly, auto-calculation is disabled and your values are used as-is.
+All `[dfu]` fields are optional. The partition values are auto-calculated from `flash_size` and `page_size` using the rmk-boot formula. To override them, supply `state_offset`, `state_size`, `dfu_offset`, and `dfu_size` directly — all four must be set together (setting only some of them is a build error) — and auto-calculation is disabled in favor of your values.
 
 Your `memory.x` must match this partition layout — see the [flashing guide](../user_guide/flash_firmware/use_embassy_boot.mdx) for details.
 

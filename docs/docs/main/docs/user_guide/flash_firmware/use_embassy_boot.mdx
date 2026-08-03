@@ -26,7 +26,7 @@ The 4K page delta is an **invariant of embassy-boot's swap algorithm**: the DFU 
 | Storage     | 128K (0x20000)    | 128K (0x20000)    | 128K (0x20000)    | 128K (0x20000)    | 128K (0x20000)   |
 
 The size of the ACTIVE Region is what you need to plug in as the flash size in `memory.x`. 
-(see also the examples `memory.x` in `rmk/examples/use_rust/rp2040_embassy_boot/` for RP2040 or `rmk/examples/use_rust/nrf52840_embassy_boot/` for nRF)
+(see also the examples `memory.x` in `examples/use_rust/rp2040_embassy_boot/` for RP2040 or `examples/use_rust/nrf52840_embassy_boot/` for nRF)
 
 If you override `flash_size` in your `keyboard.toml`'s `[dfu]` section, RMK's auto-calc recomputes the layout on the fly. You never need to manually set the addresses like `dfu_offset` or `dfu_size` when using rmk-boot.
 
@@ -38,9 +38,9 @@ You need the [rmk-boot](https://github.com/rmk-rs/rmk-boot) bootloader in the **
 
 **RP2040:**
 - `rmk-boot-rp2040-2mb.uf2` – for 2 MB flash
-- `rmk-boot-rp204o-4mb.uf2` – for 4 MB flash
-- `rmk-boot-rp204o-8mb.uf2` – for 8 MB flash
-- `rmk-boot-rp204o-16mb.uf2` – for 16 MB flash
+- `rmk-boot-rp2040-4mb.uf2` – for 4 MB flash
+- `rmk-boot-rp2040-8mb.uf2` – for 8 MB flash
+- `rmk-boot-rp2040-16mb.uf2` – for 16 MB flash
 
 ::: tip
 The **2 MB version works with larger flash chips too** (e.g. 4 MB or 8 MB), using only the first 2 MB. On 2 MB you get 944K of ACTIVE space, which is ample for most RMK firmwares. If you need more room (e.g. with large keymaps, displays, RGB, or many features), pick the matching flash size variant — see the table above for exact slot sizes.
@@ -65,7 +65,7 @@ If configuring manually, ensure:
 
 - `Cargo.toml` uses the `dfu_rp` (RP2040) or `dfu_nrf` (nRF52840) feature
 - `keyboard.toml` has `[dfu]` section
-- The flash partitioning in `memory.x` matches your bootloader and flash size (see `rmk/examples/use_rust/rp2040_embassy_boot/` for RP2040 or `rmk/examples/use_rust/nrf52840_embassy_boot/` for nRF)
+- The flash partitioning in `memory.x` matches your bootloader and flash size (see `examples/use_rust/rp2040_embassy_boot/` for RP2040 or `examples/use_rust/nrf52840_embassy_boot/` for nRF)
 
 **Important:** For RP2040 the rmk-boot version (2MB, 4MB, ...) and the RMK settings must use the **same flash size**. Example: rmk-boot 2 MB → RMK with 2 MB flash configuration. So that means, if you have a RP2040 with bigger flash, you can always use a rmk-boot and a memory.x in your firmware for a smaller flash size, but the both must be for the same flash size.
 
@@ -194,7 +194,7 @@ If you don't press the unlock keys within the first 10 seconds, the window close
 
 #### LED behavior during DFU transfer (optional)
 
-If an LED pin is configured in `keyboard.toml` (default PIN_25, if not `[dfu] led = "none"`):
+If an LED pin is configured in `keyboard.toml` (default `PIN_25` on RP2040 and `P0_15` on nRF52; disable with `[dfu] led = "none"`):
 
 | State                                 | LED behavior                     |
 |---------------------------------------|----------------------------------|

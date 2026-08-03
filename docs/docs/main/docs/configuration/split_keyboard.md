@@ -48,7 +48,7 @@ col_pins = ["P0_30"]
 rows = 2
 cols = 1
 row_offset = 2
-col_offset = 2
+col_offset = 0
 # Peripheral's ble addr will be automatically generated. You can override it if you want.
 # ble_addr = [0x7e, 0xfe, 0x71, 0x91, 0x11, 0xe3]
 
@@ -58,6 +58,10 @@ matrix_type = "normal"
 row_pins = ["P1_11", "P1_10"]
 col_pins = ["P0_30"]
 ```
+
+Note that each board's region (`rows`/`cols` plus `row_offset`/`col_offset`) must not overlap another board's region in the whole keyboard's matrix — overlapping regions are rejected at build time.
+
+Each split board can also define battery ADC settings (`battery_adc_pin`, `adc_divider_measured`, `adc_divider_total`); see [Split battery ADC configuration](./wireless.md#split-battery-adc-configuration).
 
 ## Split keyboard matrix configuration
 
@@ -129,10 +133,6 @@ serial = [
 serial = [{ instance = "PIO0", tx_pin = "PIN_0", rx_pin = "PIN_0" }]
 ```
 
-## Define central and peripherals via `keyboard.toml`
-
-See [this section](../configuration/split_keyboard) for more details.
-
 ## Define central and peripherals via Rust
 
 ::: info
@@ -175,13 +175,19 @@ import { Rust, Toml, Tab, Tabs } from '@theme'
 
 ```rust title="BLE Split Central"
 // BLE split central, arguments might be different for other microcontrollers, check the API docs or examples for other usages.
-run_peripheral_manager::<
-    2, // PERIPHERAL_ROW
-    1, // PERIPHERAL_COL
-    2, // PERIPHERAL_ROW_OFFSET
-    2, // PERIPHERAL_COL_OFFSET
-    _,
-  >(peripheral_id, peripheral_addr, &stack)
+// Read the stored peripheral address list first, and run `scan_peripherals` alongside the peripheral managers to discover peripherals whose addresses are not stored yet.
+// The const generic is the number of peripherals.
+let peripheral_addrs = storage.read_peripheral_addresses::<1>().await;
+join(
+    run_peripheral_manager::<
+        2, // PERIPHERAL_ROW
+        1, // PERIPHERAL_COL
+        2, // PERIPHERAL_ROW_OFFSET
+        2, // PERIPHERAL_COL_OFFSET
+        _,
+    >(peripheral_id, &peripheral_addrs, &stack),
+    scan_peripherals(&stack, &peripheral_addrs),
+)
 ```
 
 </Tab>
@@ -213,7 +219,8 @@ Running split peripheral is simpler. For the peripheral, we don't need to specif
 let mut matrix = Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer);
 
 // BLE split peripheral, arguments might be different for other microcontrollers, check the API docs or examples for other usages.
-run_rmk_split_peripheral(central_addr, &stack),
+// The first argument is the peripheral's id, which should match the id used in the central's `run_peripheral_manager` call.
+run_rmk_split_peripheral(peripheral_id, &stack),
 ```
 
 </Tab>

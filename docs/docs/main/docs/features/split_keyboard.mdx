@@ -26,7 +26,7 @@ For keyboards connected using only a single wire, e.g. a 3-pole TRS cable, for t
 To use the RP2040's PIO UART driver, you need to enable the `rp2040` feature gate in your `Cargo.toml`:
 
 ```toml {3}
-rmk = { version = "...", features = [
+rmk = { version = "0.9", features = [
     "split",
     "rp2040", # Enable PIO UART driver for rp2040
 ] }
@@ -34,7 +34,7 @@ rmk = { version = "...", features = [
 
 ### Wireless split
 
-RMK supports BLE wireless split on nRF52, ESP32 and Pi Pico W right now. For BLE split, the central and peripheral parts are connected via BLE, and the host is connected to the central via USB or BLE.
+RMK supports BLE wireless split on nRF52, nRF54, ESP32 and Pi Pico W right now. For BLE split, the central and peripheral parts are connected via BLE, and the host is connected to the central via USB or BLE.
 
 ::: tip [storage](./storage.md) feature is required for BLE split. :::
 
@@ -54,7 +54,7 @@ Cargo.toml
 In `Cargo.toml`, the `split` feature should be enabled, and the `[[bin]]` section should be added for both central and peripheral:
 
 ```toml
-rmk = { version = "...", features = [
+rmk = { version = "0.9", features = [
     "nrf52840_ble",
     "split", # Enable split keyboard feature
     "async_matrix",

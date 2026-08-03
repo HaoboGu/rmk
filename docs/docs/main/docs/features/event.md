@@ -24,32 +24,32 @@ RMK uses an event-driven architecture for communication between components. Even
 
 ## Built-in Events
 
-RMK provides built-in event types organized by category:
+RMK provides built-in event types organized by category. All of them are exported from the `rmk::event` module:
 
-**Input Events** (`rmk::event::input`):
+**Input Events**:
 
 - `KeyboardEvent` - Key press/release event from matrix or encoders
 - `ModifierEvent` - Modifier key combination changes
 - `PointingEvent` - Pointing device events (mouse movement, scroll)
 
-**State Events** (`rmk::event::state`):
+**State Events**:
 
 - `LayerChangeEvent` - Active layer changed
 - `LedIndicatorEvent` - LED indicator state changed (NumLock, CapsLock, ScrollLock)
 - `WpmUpdateEvent` - Words per minute updated
 - `SleepStateEvent` - Sleep state changed
 
-**Battery Events** (`rmk::event::battery`):
+**Battery Events**:
 
 - `BatteryAdcEvent` - Raw battery ADC reading
 - `ChargingStateEvent` - Charging state changed
 - `BatteryStatusEvent` - Battery status changed (includes level and charging status)
 
-**Connection Events** (`rmk::event::connection`):
+**Connection Events**:
 
 - `ConnectionStatusChangeEvent` - Full `ConnectionStatus` snapshot (USB lifecycle, BLE profile/state, preferred transport); fires on every transition
 
-**Split Keyboard Events** (`rmk::event::split`, when split is enabled):
+**Split Keyboard Events** (when split is enabled):
 
 - `PeripheralConnectedEvent` - Peripheral connection state changed
 - `CentralConnectedEvent` - Connected to central state changed
@@ -61,7 +61,7 @@ RMK provides built-in event types organized by category:
 Use the `#[event]` macro to define custom events:
 
 ```rust
-use rmk_macro::event;
+use rmk::macros::event;
 
 // Channel - each event consumed by ONE subscriber
 #[event(channel_size = 2)]
@@ -93,7 +93,8 @@ pub struct AnotherEvent {
 When a component produces multiple types of events, use `#[derive(Event)]` on an enum:
 
 ```rust
-use rmk_macro::Event;
+use rmk::event::{BatteryAdcEvent, PointingEvent};
+use rmk::macros::Event;
 
 #[derive(Event, Clone, Debug)]
 pub enum NrfAdcEvent {

@@ -16,7 +16,7 @@ combo_max_num = 8
 combo_max_length = 4
 # Maximum number of forks for conditional key actions
 fork_max_num = 8
-# Maximum number of morse keys keyboard can store (max 256)
+# Maximum number of morse keys keyboard can store (max 255)
 morse_max_num = 8
 # Maximum number of named morse profiles, shared by morse and tap-hold keys (max 255)
 morse_profile_max_num = 16
@@ -61,12 +61,12 @@ Increasing the number of combos, forks, morses (tap dances), and macros will inc
 
 :::
 
-- `combo_max_num`: Maximum number of combos that the keyboard can store, default value is 8. This value must be between 0 and 256.
+- `combo_max_num`: Maximum number of combos that the keyboard can store, default value is 8. This value must be between 0 and 255.
 - `combo_max_length`: Maximum number of keys that can be pressed simultaneously in a combo, default value is 4.
-- `fork_max_num`: Maximum number of forks for conditional key actions, default value is 8. This value must be between 0 and 256.
-- `morse_max_num`: Maximum number of morses that can be stored, default value is 8. This value must be between 0 and 256.
+- `fork_max_num`: Maximum number of forks for conditional key actions, default value is 8. This value must be between 0 and 255.
+- `morse_max_num`: Maximum number of morses that can be stored, default value is 8. This value must be between 0 and 255.
 - `morse_profile_max_num`: Capacity of the morse profile table (the named profiles in `[behavior.morse.profiles]`, referenced by morse and tap-hold keys), default value is 16. This value must be between 0 and 255.
-- `max_patterns_per_key` : Maximum number of tap/hold patterns a morse key can handle, default value is 8. This value must be between 4 and 65536. (Will be automatically set to the maximum length of `tap_actions` + `hold_actions` or `morse_actions`.)
+- `max_patterns_per_key` : Maximum number of tap/hold patterns a morse key can handle, default value is 8. This value must be between 4 and 65536. (Automatically raised to fit the largest `tap_actions` + `hold_actions` + `morse_actions` count among the configured morse keys.)
 - `macro_space_size`: Space size in bytes for storing macro sequences, default value is 256.
 
 ### Matrix Configuration
@@ -76,6 +76,8 @@ Increasing the number of combos, forks, morses (tap dances), and macros will inc
 ### Channel Configuration
 
 In RMK there are several channels used for communication between tasks. The length of the channel can be adjusted. Larger channel size means more events can be buffered, but it will increase memory usage.
+
+Per-event pub/sub channels (key events, battery events, etc.) are configured separately in the [`[event]`](./event) section.
 
 - `report_channel_size`: The length of report channel, default value is 16. Used for buffering HID reports to be sent to the host.
 - `vial_channel_size`: The length of the legacy Vial channel, default value is 4. Used only by Vial builds.

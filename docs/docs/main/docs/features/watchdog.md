@@ -11,7 +11,8 @@ feeding, so the timeout expires and the hardware resets the MCU.
 The `watchdog` feature is enabled by default, no user configuration is
 required.
 
-Supported chips: RP2040, nRF52, ESP32 (see
+Supported chips: RP2040, nRF52 (BLE and `dfu_nrf` builds; the nRF54L series
+is not yet covered), ESP32 (see
 [`rmk/src/watchdog`](https://github.com/rmk-rs/rmk/tree/main/rmk/src/watchdog)).
 STM32 has no automatic watchdog codegen.
 
@@ -23,19 +24,20 @@ STM32 has no automatic watchdog codegen.
   interval.
 - `rmk-macro` generates chip-specific init code and joins a
   `watchdog_runner.run()` task alongside the keyboard and matrix tasks.
-- Each chip module provides a `default_runner()` with a timeout/feed interval
-  pair:
+- `Rp2040Watchdog` and `Nrf52Watchdog` provide a `default_runner()`; for
+  ESP32 the generated code configures the MWDT and wraps it in a
+  `WatchdogRunner` directly. The timeout/feed interval pairs:
 
-| Chip   | Hardware timeout  | Feed interval |
-| ------ | ----------------- | ------------- |
-| RP2040 | 8s                | 4s            |
-| nRF52  | 10s               | 5s            |
-| ESP32  | 10s               | 5s            |
+| Chip   | Hardware timeout | Feed interval |
+| ------ | ---------------- | ------------- |
+| RP2040 | 8s               | 4s            |
+| nRF52  | 10s              | 5s            |
+| ESP32  | 10s              | 5s            |
 
 ## Adding support for other chips
 
 `WatchdogFeed` and `WatchdogRunner` are public, so downstream consumers
 using the Rust API aren't limited to the chips `rmk-macro` generates code
 for. Implement `WatchdogFeed` for your chip's watchdog peripheral, build a
-`WatchdogRunner` around it, and join its `.run()` alongside your other
+`WatchdogRunner` around it, and pass it to `run_all!` alongside your other
 tasks.

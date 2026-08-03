@@ -1,5 +1,11 @@
 # Wireless/Bluetooth
 
+::: warning Upgrading from v0.8
+
+RMK v0.9 merges all BLE HID reports into a single HID service and renumbers the HID report ids, so hosts bonded to a keyboard running an older RMK version must forget the device and pair it again. See the [migration guide](../migration/v08_v09#ble-hosts-must-forget-and-re-pair) for details.
+
+:::
+
 ### `[ble]`
 
 To enable BLE, add `enabled = true` under the `[ble]` section.
@@ -32,9 +38,11 @@ passkey_entry_timeout = 120
 # charge_led= { pin = "PIN_2", low_active = true }
 ```
 
+Some legacy BLE adapters cannot connect to devices using 2M PHY at all. For those hosts, enable the `use_1m_phy` Cargo feature of the `rmk` crate, which makes the keyboard use 1M PHY for the host connection.
+
 ### Passkey entry
 
-RMK supports typing a BLE passkey directly on the keyboard during pairing. This is disabled by default.
+RMK supports typing a BLE passkey directly on the keyboard during pairing. This is disabled by default, and requires the `passkey_entry` Cargo feature of the `rmk` crate in addition to the configuration below.
 
 ```toml
 [ble]

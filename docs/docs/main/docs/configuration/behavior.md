@@ -4,17 +4,9 @@ The `[behavior]` section contains configuration for how different keyboard actio
 
 ```toml
 [behavior]
-tri_layer = {
-  upper = 1,
-  lower = 2,
-  adjust = 3,
-}
-one_shot = {
-  timeout = "1s",
-}
-one_shot_modifiers = {
-  activate_on_keypress = false,
-}
+tri_layer = { upper = 1, lower = 2, adjust = 3 }
+one_shot = { timeout = "1s" }
+one_shot_modifiers = { activate_on_keypress = false }
 ```
 
 ## Tri Layer
@@ -229,9 +221,10 @@ Mixing fields from different methods in the same definition is not allowed.
 The `profile` of a morse key contains all tunable configurations of this morse key, such as behavior mode, timing configurations, etc.
 
 ::: tip
+
 - `enable_flow_tap`: Enables HRM (Home Row Mod) mode. When enabled, the global `prior_idle_time` setting becomes functional. Defaults to `false`. Profiles may set this to override the global `[behavior.morse]` value; omitting it inherits the global value.
 - `prior_idle_time`: _(global only)_ If the previous non-modifier key is released within this period before pressing the current tap-hold key, the tap action for the tap-hold behavior will be triggered. This parameter lives in `[behavior.morse]` (not in a per-key profile) and is effective only when `enable_flow_tap` is enabled for the key. Defaults to 120ms.
-:::
+  :::
 
 A profile contains the following fields:
 
@@ -262,14 +255,18 @@ prior_idle_time = "120ms"
 hold_on_other_press = true
 hold_timeout = "250ms"
 gap_timeout = "250ms"
+```
 
+```toml
 # This default setting enables fast modifiers without HRM
 [behavior.morse]
 enable_flow_tap = false
 hold_on_other_press = true
 hold_timeout = "200ms"
 gap_timeout = "200ms"
+```
 
+```toml
 # This default setting is the most basic configuration
 [behavior.morse]
 enable_flow_tap = false
@@ -317,7 +314,8 @@ TH(A, B, MRZ)
 
 The following parameters in the `[rmk]` section control the resource allocation for the Morse feature:
 
-- `morse_max_num`: The maximum number of Morse key you can create. (Default: 8, Range: 0-256)
+- `morse_max_num`: The maximum number of Morse key you can create. (Default: 8, Range: 0-255)
+- `morse_profile_max_num`: The capacity of the named profile table in `[behavior.morse.profiles]`. (Default: 16, Range: 0-255)
 - `max_patterns_per_key`: The maximum number of individual patterns (like ".-") or actions that a single Morse key can contain. (Default: 8, Range: 4-65536)
 
 ```toml
@@ -338,7 +336,7 @@ Here is a comprehensive example of morse configuration:
 
 ```toml
 [rmk]
-# Maximum number of morses keyboard can store (max 256)
+# Maximum number of morses keyboard can store (max 255)
 morse_max_num = 9
 # Maximum number of patterns a morse key can handle
 max_patterns_per_key = 36
@@ -363,7 +361,7 @@ morses = [
   { tap = "Tab", hold = "MO(2)", double_tap = "Escape" },
 
   # td(3): Extended morse for function keys
-  { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"] }
+  { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"] },
 
   # td(4): the morse ABC
   { morse_actions = [
@@ -432,7 +430,8 @@ map = """
 """
 
 [keymap]
-layers = 2
+# Layers 0 and 1 are defined below; layer 2 (referenced by LT(2, ...) and TG(2)) stays empty
+layers = 3
 
 [[keymap.layer]]
 keys = """
@@ -563,15 +562,15 @@ reset_timeout_on_key = true
 subs = 1
 ```
 
-| Field          | Type    | Default | Description |
-|----------------|---------|---------|-------------|
-| `device_id`    | integer | —       | Pointing device id this entry applies to. Omit for a fallback that matches any device not covered by another entry. At most one fallback (and at most one entry per `device_id`) is allowed. |
-| `target_layer` | integer | —       | Layer index to activate (must be `< [layout.layers]`). |
-| `timeout`      | string  | `"500ms"`| Inactivity duration before deactivation (e.g., `"600ms"`, `"2s"`). |
-| `threshold`    | integer | `1`     | Minimum absolute X/Y delta to trigger motion (`>= 1`). Increase to filter sensor noise. |
-| `deactivate_on_key` | bool | `false` | When `true`, pressing any non-mouse key immediately deactivates `target_layer` (ignoring `timeout`). Mouse HID keys and keys listed in `extra_mouse_keys` do NOT trigger deactivation. Keys are classified by their **resolved** keycode; see the limitation note below. |
-| `extra_mouse_keys` | array of strings | `[]` | Extra keycodes (e.g. `"LCtrl"`, `"Space"`) treated like mouse keys for the purpose of `deactivate_on_key`. |
-| `reset_timeout_on_key` | bool | `false` | When `true`, key presses that do NOT deactivate `target_layer` push the `timeout` deadline forward (reset it to *now + `timeout`*). When `deactivate_on_key` is `false`, every key press extends the timeout. |
+| Field                  | Type             | Default   | Description                                                                                                                                                                                                                                                              |
+| ---------------------- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `device_id`            | integer          | —         | Pointing device id this entry applies to. Omit for a fallback that matches any device not covered by another entry. At most one fallback (and at most one entry per `device_id`) is allowed.                                                                             |
+| `target_layer`         | integer          | —         | Layer index to activate (must be `< [keymap].layers`).                                                                                                                                                                                                                   |
+| `timeout`              | string           | `"500ms"` | Inactivity duration before deactivation (e.g., `"600ms"`, `"2s"`).                                                                                                                                                                                                       |
+| `threshold`            | integer          | `1`       | Minimum absolute X/Y delta to trigger motion (`>= 1`). Increase to filter sensor noise.                                                                                                                                                                                  |
+| `deactivate_on_key`    | bool             | `false`   | When `true`, pressing any non-mouse key immediately deactivates `target_layer` (ignoring `timeout`). Mouse HID keys and keys listed in `extra_mouse_keys` do NOT trigger deactivation. Keys are classified by their **resolved** keycode; see the limitation note below. |
+| `extra_mouse_keys`     | array of strings | `[]`      | Extra keycodes (e.g. `"LCtrl"`, `"Space"`) treated like mouse keys for the purpose of `deactivate_on_key`.                                                                                                                                                               |
+| `reset_timeout_on_key` | bool             | `false`   | When `true`, key presses that do NOT deactivate `target_layer` push the `timeout` deadline forward (reset it to _now + `timeout`_). When `deactivate_on_key` is `false`, every key press extends the timeout.                                                            |
 
 ::: warning
 Prefer a dedicated layer that is not bound to any manual keys (like `MO` or `TG`). The auto-mouse task releases its ownership when keyboard-driven changes deactivate the layer, so transient overlap is handled cleanly. Layer state is still a single boolean, however, so pressing `TG(target_layer)` while auto-mouse is active toggles the layer off instead of pinning it on.
@@ -594,7 +593,7 @@ Some keys cannot be classified; they never trigger immediate deactivation (only 
 
 - **Subscriber Slots**: Increment `[event.pointing].subs` and `[event.layer_change].subs` by `1` each in your `keyboard.toml` to reserve slots for this task. If any entry uses `deactivate_on_key` or `reset_timeout_on_key`, also set `[event.action].subs` to `1` (it defaults to `0`), otherwise the build fails with a validation error. See [Event Configuration](./event.md).
 - **Buffer Size**: If pointing events are dropped under high-frequency input, increase `[event.pointing].channel_size` (default `8`). `[event.layer_change].channel_size` defaults to `1` and only needs raising if you burst many layer changes faster than subscribers consume them.
-:::
+  :::
 
 ::: note Rust API
 Configure the layer via `BehaviorConfig` and run the helper future alongside your other keyboard tasks. Subscriber slots are resolved from `keyboard.toml`'s `[event]` section at build time, so point `KEYBOARD_TOML_PATH` (set in `.cargo/config.toml`) to a `keyboard.toml` and increment `[event.pointing].subs` and `[event.layer_change].subs` by `1` there as well. When using `deactivate_on_key` / `reset_timeout_on_key`, also set `[event.action].subs` to `1` (it defaults to `0`) in that file. Otherwise the firmware panics at startup.
@@ -650,4 +649,5 @@ run_all!(
     auto_mouse_layer,
 ).await;
 ```
+
 :::

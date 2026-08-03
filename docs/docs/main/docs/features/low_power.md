@@ -7,7 +7,7 @@ RMK supports low-power mode by utilizing embassy's low-power feature and the `Wa
 By default, RMK uses a busy-loop for matrix scanning, which is not very power efficient. To enable the low-power mode, add the `async_matrix` feature to your `Cargo.toml`:
 
 ```toml {3}
-rmk = { version = "...", features = [
+rmk = { version = "0.9", features = [
     "nrf52840_ble",
     "async_matrix",
 ] }
@@ -26,7 +26,7 @@ There are a few more things that you need to do:
 1. Enable the `exti` feature for your `embassy-stm32` dependency in `Cargo.toml`
 2. Ensure that your input pins don't share the same EXTI channel
 3. For configuration:
-   - If you're using `keyboard.toml`, you are all set. The `[rmk_keyboard]` macro will automatically check your `Cargo.toml` and handle it for you.
+   - If you're using `keyboard.toml`, you are all set. The `#[rmk_keyboard]` macro will automatically check your `Cargo.toml` and handle it for you.
    - If you're using Rust code, you'll need to use `ExtiInput` for your input pins:
 
 ```rust

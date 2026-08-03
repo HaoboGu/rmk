@@ -7,7 +7,7 @@ RMK uses [defmt](https://defmt.ferrous-systems.com) as the default logger, which
 To enable USB logging, disable the default features and then enable the `usb_log` feature in `Cargo.toml`:
 
 ```toml
-rmk = { version = "...", default-features = false, features = [
+rmk = { version = "0.9", default-features = false, features = [
     "storage",
     "usb_log", # Enable USB logging
     "..",
@@ -15,7 +15,7 @@ rmk = { version = "...", default-features = false, features = [
 ```
 
 ::: tip
-Don't forget to enable all other features that you need, especially the default ones.
+Don't forget to re-enable the other default features you need (such as `storage`, `vial`, `host_lock`, and `watchdog`) — but not `defmt`: `usb_log` is based on the `log` crate, which cannot be enabled together with the `defmt` feature.
 :::
 
 To view the logs, you'll need to install a serial port monitor. Open your serial monitor, select the port corresponding to your keyboard, and connect. The logs will be displayed in the monitor window. Note that logs from the boot stage cannot be captured by the USB logger. You will only be able to see logs after the serial port connection is established.

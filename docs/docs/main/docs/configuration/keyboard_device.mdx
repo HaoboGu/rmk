@@ -109,16 +109,19 @@ board = "nice!nano_v2"  # Pre-configured board
 - `nice!nano_v2` - Updated version of nice!nano
 - `pi_pico_w` - Raspberry Pi Pico W with WiFi/BLE
 - `XIAO BLE` - Seeed Studio XIAO nRF52840
+- `nrfmicro` - nRF52840-based Pro Micro replacement
+- `bluemicro840` - nRF52840-based Pro Micro replacement
+- `puchi_ble` - nRF52840-based wireless board
 
 ::: tip Board names are case-sensitive. :::
 
 ## USB Configuration
 
-For microcontrollers that lack full USB device functionality (such as the nRF52832 or ESP32-C3), USB support must be explicitly disabled:
+For microcontrollers that lack full USB device functionality (such as the nRF52832 or ESP32-C3), the chip default config already disables USB, so `usb_enable = false` only needs to be set explicitly when your chip's default enables it:
 
 ```toml
 [keyboard]
 chip = "nrf52832"
-usb_enable = false  # Required for chips without USB
+usb_enable = false  # Disable USB for chips without USB support
 ```
 

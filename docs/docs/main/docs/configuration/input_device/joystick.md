@@ -19,6 +19,7 @@ TODO:
 ```toml
 [[input_device.joystick]]
 name = "default"
+# id = 0
 pin_x = "P0_31"
 pin_y = "P0_29"
 pin_z = "_"
@@ -31,6 +32,7 @@ resolution = 6
 ### Parameters:
 
 - `name`: Unique name for the joystick. If you have multiple joysticks, they need different names
+- `id`: Optional device id used to match this joystick with its `JoystickProcessor`. If omitted, ids are assigned sequentially starting from 0
 - `pin_x`: Pin for X-axis
 - `pin_y`: Pin for Y-axis
 - `pin_z`: Pin for Z-axis
@@ -82,25 +84,31 @@ The transform might be not very intuitive, please read the document below for mo
 
 Because the `joystick` and `battery` use the same ADC peripheral, they actually use the same `NrfAdc` `input_device`.
 
-If the `light_sleep` is not `None`, the `NrfAdc` will enter light sleep mode when no event is generated after 1200ms, and the polling interval will be reduced to the value assigned.
+If the `light_sleep` is not `None`, the `NrfAdc` will enter light sleep mode when no event is generated after 1200ms, and the polling interval will be changed to the value assigned.
 
 ```rust
+use embassy_nrf::saadc::{self, Input as _};
+use embassy_time::Duration;
+
 let saadc_config = saadc::Config::default();
-let adc = saadc::SAADC::new(p.SAADC, Irqs, saadc_config,
+let adc = saadc::Saadc::new(p.SAADC, Irqs, saadc_config,
     [
-        saadc::ChannelConfig::SingleEnded(saadc::VddhDiv5Input.degrade_saadc()),
-        saadc::ChannelConfig::SingleEnded(p.P0_31.degrade_saadc()),
-        saadc::ChannelConfig::SingleEnded(p.P0_29.degrade_saadc())
+        saadc::ChannelConfig::single_ended(saadc::VddhDiv5Input.degrade_saadc()),
+        saadc::ChannelConfig::single_ended(p.P0_31.degrade_saadc()),
+        saadc::ChannelConfig::single_ended(p.P0_29.degrade_saadc())
     ],
 );
-saadc.calibrate().await;
-let mut adc_dev = NrfAdc::new(adc, [AnalogEventType::Battery, AnalogEventType::Joystick(2)], [0, 0], 20 /* polling interval */, Some(350)/* light sleep interval */);
+adc.calibrate().await;
+let mut adc_dev = NrfAdc::new(
+    adc,
+    [AnalogEventType::Battery, AnalogEventType::Joystick(2)],
+    [0, 0], // device id per event; unused for battery events
+    Duration::from_millis(20), // polling interval
+    Some(Duration::from_millis(350)), // light sleep interval
+);
 let mut batt_proc = BatteryProcessor::new(1, 5);
 let mut joy_proc = JoystickProcessor::new(0, [[80, 0], [0, 80]], [29130, 29365], 6, &keymap);
 ...
-run_all!(matrix, adc_dev),
-run_all! {
-    joy_proc, batt_proc
-}
+run_all!(matrix, adc_dev, joy_proc, batt_proc)
 ...
 ```

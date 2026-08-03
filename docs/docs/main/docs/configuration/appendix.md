@@ -43,6 +43,11 @@ direct_pins = [
 # WARNING: If you use a normal matrix, it will be ineffective
 direct_pin_low_active = true
 
+# Debouncer mode, "default" or "fast". Default is "default"
+debouncer = "default"
+# Bootmagic: jump to the chip's USB bootloader when the key at (row, col) is held at boot. Optional
+bootmagic = [0, 0]
+
 # Layout info for the keyboard, this section is mandatory
 [layout]
 # Number of rows. For a split keyboard, this is the total number of rows for all splits
@@ -71,7 +76,9 @@ map = """
 
 [keymap]
 # Number of layers. Be careful, since large layer number takes more flash and RAM
-layers = 3
+# Optional: defaults to the number of `[[keymap.layer]]` entries. Set it larger
+# to reserve extra empty layers (e.g. for editing in Vial/Rynk)
+layers = 4
 
 # here are the aliases for the example layer.keys below
 [aliases]
@@ -96,6 +103,9 @@ Kp4     Kp5     Kp6
 Kp1     Kp2     Kp3        Enter
     Kp0         KpDot
 """
+# Per-layer encoder actions, one [clockwise, counter-clockwise] pair per encoder
+# defined in [[input_device.encoder]]. Optional
+# encoders = [["AudioVolUp", "AudioVolDown"]]
 
 # layer 1:
 [[keymap.layer]]
@@ -111,22 +121,13 @@ MouseWheelLeft   MouseDown  MouseWheelRight  MouseWheelDown
 # Behavior configuration, if you don't want to customize anything, just ignore this section
 [behavior]
 # Tri Layer configuration
-tri_layer = {
-  upper = 1,
-  lower = 2,
-  adjust = 3,
-}
+tri_layer = { upper = 1, lower = 2, adjust = 3 }
 
 # OneShot configuration
-one_shot = {
-  timeout = "1s"
-}
+one_shot = { timeout = "1s" }
 
 # One Shot Modifiers configuration
-one_shot_modifiers = {
-  activate_on_keypress = false,
-  quick_release = false,
-}
+one_shot_modifiers = { activate_on_keypress = false, quick_release = false }
 
 [behavior.morse]
 # default profile for morse, tap dance and tap-hold keys:
@@ -143,7 +144,7 @@ morses = [
   { tap = "F1", hold = "MO(1)", double_tap = "F2" },
 
   # TD(1) Extended tap dance representation for function keys
-  { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"] }
+  { tap_actions = ["F1", "F2", "F3", "F4", "F5"], hold_actions = ["MO(1)", "MO(2)", "MO(3)", "MO(4)", "MO(5)"] },
 
   # TD(2) Morse code like representation
   { morse_actions = [
@@ -230,13 +231,37 @@ pin = "PIN_13"
 initial_state_active = false
 low_active = false
 
+# Display configuration, see the Display documentation page.
+# For split keyboards, use [split.central.display] / [split.peripheral.display] instead
+[display]
+# Display driver: "ssd1306", "sh1106", "sh1107", "sh1108" or "ssd1309"
+driver = "ssd1306"
+# Display resolution
+size = "128x32"
+# Display rotation in degrees: 0, 90, 180 or 270. Default is 0
+rotation = 0
+# Renderer, defaults to the built-in "LogoRenderer"
+renderer = "OledRenderer"
+# Poll interval in ms for periodic redraws; omit for event-driven rendering only
+# render_interval = 33
+# Minimum time in ms between event-driven renders, defaults to 33
+min_render_interval = 33
+
+# The bus the display is connected to
+[display.protocol.i2c]
+instance = "I2C1"
+scl = "PIN_3"
+sda = "PIN_2"
+# 7-bit I2C address, defaults to 0x3C
+address = 0x3C
+
 # Storage configuration.
 # To use the default configuration, ignore this section completely
 [storage]
 # Whether the storage is enabled
 enabled = true
 # The start address of storage
-# Note: When the `dfu_rp` feature is enabled, this value is ignored.
+# Note: When the `dfu_rp` or `dfu_nrf` feature is enabled, this value is ignored.
 # The storage partition is automatically placed after the DFU download slot.
 start_addr = 0xA0000
 # Number of sectors used for storage, >= 2
@@ -245,6 +270,26 @@ num_sectors = 16
 # Set it to true will reset the storage(including keymap, BLE bond info, etc.) at each reboot.
 # This option is useful when testing the firmware.
 clear_storage = false
+# Clear the saved layout at keyboard boot, set this to true if you want to reset the layout
+clear_layout = false
+
+# DFU partition configuration (embassy-boot), see the Bootloader documentation page.
+# All fields are optional; partition addresses are auto-calculated from `flash_size`
+# using the rmk-boot formula
+[dfu]
+# Total flash size in bytes, defaults to 2 MB (2097152) when omitted
+flash_size = 2097152
+# Flash page size in bytes
+page_size = 4096
+# DFU activity LED pin ("none" to disable; defaults to "PIN_25" on RP2040, "P0_15" on nRF52)
+led = "PIN_25"
+# Unlock keys for the DFU lock (requires the `dfu_lock` Cargo feature)
+unlock_keys = [[0, 0], [1, 1]]
+# Manual partition overrides (set all four together; disables auto-calculation)
+# state_offset = 0x6000
+# state_size = 0x1000
+# dfu_offset = 0x87000
+# dfu_size = 528384
 
 # Ble configuration
 # To use the default configuration, ignore this section completely
@@ -259,6 +304,14 @@ battery_adc_pin = "vddh"
 adc_divider_measured = 2000
 # Total resistance of the full path for input adc
 adc_divider_total = 2806
+# BLE tx power; higher means better signal but more power consumption
+default_tx_power = 0
+# Whether to enable 2M PHY, defaults to true
+use_2m_phy = true
+# Enable passkey entry during BLE pairing, defaults to false
+passkey_entry = false
+# Timeout in seconds for passkey entry, defaults to 120, minimum 30
+passkey_entry_timeout = 120
 # [Deprecated] Pin that reads battery's charging state, `low-active` means the battery is charging when `charge_state.pin` is low
 # Input pin that indicates the charging state
 # charge_state = { pin = "PIN_1", low_active = true }
@@ -277,9 +330,11 @@ combo_max_num = 8
 combo_max_length = 4
 # Maximum number of forks for conditional key actions
 fork_max_num = 8
-# Maximum number of morse keys keyboard can store (max 256)
+# Maximum number of morse keys keyboard can store (max 255)
 # (Each morse key is a programmable multi-tap/hold key)
 morse_max_num = 8
+# Capacity of the named morse profile table ([behavior.morse.profiles], max 255)
+morse_profile_max_num = 16
 # Maximum number of patterns a morse key can handle
 max_patterns_per_key = 36
 # Macro space size in bytes for storing sequences
@@ -301,7 +356,25 @@ split_central_sleep_timeout_seconds = 0
 # Maximum macro data bytes in one Rynk macro request or response
 protocol_macro_chunk_size = 64
 # Rynk RX/TX buffer size in bytes. 488 bytes = 2*BLE maximum packet size
-# rynk_buffer_size = 488
+rynk_buffer_size = 488
+# Maximum number of [[behavior.auto_mouse_layer]] entries.
+# Auto-derived from the number of configured entries when unset
+# auto_mouse_layer_max_num = 2
+
+# Event channel configuration.
+# Tune the pub/sub channel of a single event type with [event.<name>], where
+# <name> is one of: connection_status_change, modifier, keyboard, layer_change,
+# wpm_update, led_indicator, sleep_state, battery_status, battery_adc,
+# charging_state, pointing, peripheral_connected, central_connected,
+# peripheral_battery, clear_peer, dfu_status, action.
+# All defaults are in rmk-config/src/default_config/event_default.toml
+[event.keyboard]
+# Channel buffer size
+channel_size = 16
+# Number of publishers
+pubs = 2
+# Number of subscribers
+subs = 3
 
 # Split configuration
 # This section conflicts with the [matrix] section. You can only have either [matrix] or [split], but NOT BOTH
@@ -444,6 +517,7 @@ Available chip names in `chip` field:
 - nrf52810
 - esp32c3
 - esp32c6
+- esp32h2
 - esp32s3
 - ALL stm32s supported by [embassy-stm32](https://github.com/embassy-rs/embassy/blob/main/embassy-stm32/Cargo.toml) with USB
 
@@ -454,6 +528,9 @@ Available board names in `board` field:
 - `nice!nano`
 - `nice!nano_v2`
 - `XIAO BLE`
+- `nrfmicro`
+- `bluemicro840`
+- `puchi_ble`
 - `pi_pico_w`
 
 If you want to add more built-in boards, feel free to open a PR!

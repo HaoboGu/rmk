@@ -36,7 +36,8 @@ trackpad modules.
 ```toml
 [[input_device.iqs5xx]]
 name = "trackpad0"
-id = 0 # optional 0-255. Used for debug prints. Defaults to 0.
+id = 0 # optional 0-255 pointing-device id; the generated PointingProcessor
+       # is paired to it. Defaults to 0.
 
 i2c.instance = "I2C0"  # RP2040: I2C0 / I2C1.  nRF52: TWISPI0 / TWISPI1 / TWISPI2.
 i2c.sda = "PIN_4"
