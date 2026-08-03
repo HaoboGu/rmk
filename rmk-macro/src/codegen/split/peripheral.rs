@@ -10,6 +10,7 @@ use syn::ItemMod;
 
 use super::central::expand_serial_init;
 use crate::codegen::chip::chip_init::expand_chip_init;
+use crate::codegen::chip::comm::expand_usb_init;
 use crate::codegen::chip::flash::expand_flash_init;
 use crate::codegen::chip::gpio::expand_output_initialization;
 use crate::codegen::display::{expand_display_config, expand_display_interrupt};
@@ -57,7 +58,8 @@ pub(crate) fn parse_split_peripheral_mod(
 
     let dfu_enabled =
         is_feature_enabled(&rmk_features, "dfu_rp") || is_feature_enabled(&rmk_features, "dfu_nrf");
-    let device_config = if dfu_enabled {
+    let usb_log_enabled = is_feature_enabled(&rmk_features, "usb_log");
+    let device_config = if dfu_enabled || usb_log_enabled {
         let vid = identity.vendor_id;
         let pid = identity.product_id;
         let manufacturer = &identity.manufacturer;
@@ -143,11 +145,14 @@ fn expand_bind_interrupt_for_split_peripheral(
     };
     let iqs5xx_interrupt = expand_iqs5xx_interrupts(&chip.series, &iqs5xx_config_for_irq);
 
+    let dfu_enabled =
+        is_feature_enabled(rmk_features, "dfu_rp") || is_feature_enabled(rmk_features, "dfu_nrf");
+    let usb_log_enabled = is_feature_enabled(rmk_features, "usb_log");
+    let usb_enabled = dfu_enabled || usb_log_enabled;
+
     match chip.series {
         ChipSeries::Nrf52 => {
-            let dfu_enabled = is_feature_enabled(rmk_features, "dfu_rp")
-                || is_feature_enabled(rmk_features, "dfu_nrf");
-            let usb_interrupt = if dfu_enabled {
+            let usb_interrupt = if usb_enabled {
                 quote! {
                     USBD => ::embassy_nrf::usb::InterruptHandler<::embassy_nrf::peripherals::USBD>;
                 }
@@ -207,7 +212,7 @@ fn expand_bind_interrupt_for_split_peripheral(
                 quote! {}
             };
 
-            let clock_power_handler = if dfu_enabled {
+            let clock_power_handler = if usb_enabled {
                 quote! {
                     CLOCK_POWER => ::nrf_sdc::mpsl::ClockInterruptHandler, ::embassy_nrf::usb::vbus_detect::InterruptHandler;
                 }
@@ -267,14 +272,12 @@ fn expand_bind_interrupt_for_split_peripheral(
             }
         }
         ChipSeries::Rp2040 => {
-            let dfu_enabled = is_feature_enabled(rmk_features, "dfu_rp")
-                || is_feature_enabled(rmk_features, "dfu_nrf");
+            let usb_int = if usb_enabled {
+                quote! { USBCTRL_IRQ => ::embassy_rp::usb::InterruptHandler<::embassy_rp::peripherals::USB>; }
+            } else {
+                quote! {}
+            };
             if communication.ble_enabled() {
-                let usb_int = if dfu_enabled {
-                    quote! { USBCTRL_IRQ => ::embassy_rp::usb::InterruptHandler<::embassy_rp::peripherals::USB>; }
-                } else {
-                    quote! {}
-                };
                 quote! {
                     use ::embassy_rp::bind_interrupts;
                     bind_interrupts!(struct Irqs {
@@ -290,11 +293,6 @@ fn expand_bind_interrupt_for_split_peripheral(
                     }
                 }
             } else if !display_interrupt.is_empty() || !iqs5xx_interrupt.is_empty() || dfu_enabled {
-                let usb_int = if dfu_enabled {
-                    quote! { USBCTRL_IRQ => ::embassy_rp::usb::InterruptHandler<::embassy_rp::peripherals::USB>; }
-                } else {
-                    quote! {}
-                };
                 quote! {
                     use ::embassy_rp::bind_interrupts;
                     bind_interrupts!(struct Irqs {
@@ -326,6 +324,9 @@ fn expand_split_peripheral(
         }
     };
 
+    let dfu_enabled =
+        is_feature_enabled(rmk_features, "dfu_rp") || is_feature_enabled(rmk_features, "dfu_nrf");
+
     let peripheral_config = split_config
         .peripheral
         .get(id)
@@ -340,37 +341,25 @@ fn expand_split_peripheral(
             #flash_init
             let mut storage = ::rmk::storage::new_storage_for_split_peripheral(flash, storage_config).await;
         });
-    } else if is_feature_enabled(rmk_features, "dfu_rp")
-        || is_feature_enabled(rmk_features, "dfu_nrf")
-    {
+    } else if dfu_enabled {
         let flash_init = expand_flash_init(hardware);
         chip_init.extend(quote! { #flash_init });
     }
-
-    let dfu_enabled =
-        is_feature_enabled(rmk_features, "dfu_rp") || is_feature_enabled(rmk_features, "dfu_nrf");
 
     // Mark booted when DFU is enabled so the bootloader doesn't
     // revert the previous update.
     if dfu_enabled {
         chip_init.extend(quote! { ::rmk::dfu::mark_booted(); });
     }
+    let usb_log_enabled = is_feature_enabled(rmk_features, "usb_log");
+    let usb_enabled = dfu_enabled || usb_log_enabled;
 
-    // Initialize USB driver for DFU on the peripheral side
-    // so it can be firmware-updated via USB.
-    let dfu_task_future = if dfu_enabled {
-        let usb_init = match hardware.chip.series {
-            ChipSeries::Nrf52 => quote! {
-                let driver = ::embassy_nrf::usb::Driver::new(p.USBD, Irqs, ::embassy_nrf::usb::vbus_detect::HardwareVbusDetect::new(Irqs));
-            },
-            ChipSeries::Rp2040 => quote! {
-                let driver = ::embassy_rp::usb::Driver::new(p.USB, Irqs);
-            },
-            _ => quote! {},
-        };
+    // Run usb device if dfu or usb_log is enabled.
+    let usb_task_future = if usb_enabled {
+        let usb_init = expand_usb_init(hardware, &item_mod);
         chip_init.extend(usb_init);
         Some(quote! {
-            async { ::rmk::dfu::run_peripheral_dfu(driver, KEYBOARD_DEVICE_CONFIG).await }
+            ::rmk::usb::run_peripheral_usb(driver, KEYBOARD_DEVICE_CONFIG)
         })
     } else {
         None
@@ -503,7 +492,7 @@ fn expand_split_peripheral(
         processors,
         registered_processors,
         watchdog_task,
-        dfu_task_future,
+        usb_task_future,
     );
 
     quote! {
@@ -531,7 +520,7 @@ fn expand_split_peripheral_entry(
     processors: Vec<TokenStream2>,
     registered_processors: Vec<TokenStream2>,
     watchdog_task: Option<TokenStream2>,
-    dfu_task_future: Option<TokenStream2>,
+    usb_task_future: Option<TokenStream2>,
 ) -> TokenStream2 {
     // Add matrix to devices, and run all devices
     let mut devs = devices.clone();
@@ -574,9 +563,11 @@ fn expand_split_peripheral_entry(
             if let Some(t) = &watchdog_task {
                 tasks.push(t.clone());
             }
-            if let Some(t) = &dfu_task_future {
+
+            if let Some(t) = &usb_task_future {
                 tasks.push(t.clone());
             }
+
             let run_rmk_peripheral = join_all_tasks(tasks);
             quote! {
                 #run_rmk_peripheral
@@ -611,9 +602,11 @@ fn expand_split_peripheral_entry(
             if let Some(t) = &watchdog_task {
                 tasks.push(t.clone());
             }
-            if let Some(t) = &dfu_task_future {
+
+            if let Some(t) = &usb_task_future {
                 tasks.push(t.clone());
             }
+
             let run_rmk_peripheral = join_all_tasks(tasks);
             quote! {
                 #serial_init

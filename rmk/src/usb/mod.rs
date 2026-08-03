@@ -1,6 +1,8 @@
 use embassy_futures::join::join4;
 use embassy_futures::select::{Either, select};
 use embassy_sync::signal::Signal;
+#[cfg(feature = "usb_log")]
+use embassy_usb::class::cdc_acm::CdcAcmClass;
 use embassy_usb::class::hid::{HidReader, HidWriter, ReportId, RequestHandler};
 use embassy_usb::control::OutResponse;
 use embassy_usb::driver::{Driver, EndpointError};
@@ -374,27 +376,57 @@ impl<D: Driver<'static>> Runnable for UsbTransport<'_, D> {
             let host_task = core::future::pending::<()>();
 
             #[cfg(feature = "usb_log")]
-            {
+            let logger_fut = {
                 let logger_class = logger.take().expect("UsbTransport::run called twice");
-                let logger_fut = embassy_usb_logger::with_custom_style!(
-                    1024,
-                    log::LevelFilter::Debug,
-                    logger_class,
-                    |record, writer| {
-                        use core::fmt::Write;
-                        let ms = embassy_time::Instant::now().as_millis();
-                        let _ = write!(writer, "[{:>8}ms {:5}] {}\r\n", ms, record.level(), record.args());
-                    }
-                );
-                embassy_futures::join::join(host_task, logger_fut).await;
-            }
+                run_usb_logger(logger_class)
+            };
             #[cfg(not(feature = "usb_log"))]
-            host_task.await;
+            let logger_fut = core::future::pending::<()>();
+
+            embassy_futures::join::join(host_task, logger_fut).await;
         };
 
         join4(usb_device_task, writer_task, led_task, host_and_extras).await;
         unreachable!("UsbTransport sub-tasks must run forever");
     }
+}
+
+#[cfg(feature = "usb_log")]
+async fn run_usb_logger<D: Driver<'static>>(logger_class: CdcAcmClass<'static, D>) {
+    // Add a usb logger with log filter set to `Trace` to catch all logs.
+    // The log level itself is set via the `max_level_*` feature of the log crate.
+    let logger_fut =
+        ::embassy_usb_logger::with_custom_style!(1024, log::LevelFilter::Trace, logger_class, |record, writer| {
+            use core::fmt::Write;
+            let ms = embassy_time::Instant::now().as_millis();
+            let _ = write!(writer, "[{:>8}ms {:5}] {}\r\n", ms, record.level(), record.args());
+        });
+    logger_fut.await;
+}
+
+#[cfg(any(feature = "usb_log", feature = "dfu_nrf", feature = "dfu_rp"))]
+pub async fn run_peripheral_usb<D: Driver<'static>>(driver: D, config: DeviceConfig<'static>) {
+    let mut builder = new_usb_builder(driver, config);
+
+    #[cfg(feature = "usb_log")]
+    let logger_fut = run_usb_logger(add_usb_logger!(&mut builder));
+    #[cfg(not(feature = "usb_log"))]
+    let logger_fut = ::core::future::pending::<()>();
+
+    #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
+    if let Some(mgr) = crate::dfu::get_manager() {
+        ::rmk::dfu::register_dfu_interface(
+            &mut builder,
+            mgr,
+            config.product_name,
+            #[cfg(feature = "dfu_split")]
+            0,
+        );
+    }
+
+    let mut usb_device = builder.build();
+
+    ::embassy_futures::join::join(usb_device.run(), logger_fut).await;
 }
 
 #[cfg(feature = "usb_log")]

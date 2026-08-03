@@ -98,7 +98,7 @@ async fn main(_spawner: Spawner) {
     join3(
         run_all!(matrix, storage, dfu_led, watchdog_runner),
         run_rmk_split_peripheral(uart_instance),
-        rmk::dfu::run_peripheral_dfu(dfu_driver, dfu_device_config),
+        rmk::usb::run_peripheral_usb(dfu_driver, dfu_device_config),
     )
     .await;
 }
