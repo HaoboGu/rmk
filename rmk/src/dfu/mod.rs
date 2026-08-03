@@ -327,6 +327,8 @@ pub fn register_dfu_interface<D: Driver<'static>>(
 
     // Alt 0: Central flash
     let central_attrs = DfuAttributes::CAN_DOWNLOAD | DfuAttributes::WILL_DETACH;
+    // embassy-usb's DfuAttributes is Copy only under defmt, so read the bits before the move
+    let central_attrs_bits = central_attrs.bits();
     let central_handler = RmkDfuHandler {
         inner: FirmwareHandler::new(updater, ResetImmediate),
         target_id: None,
@@ -364,7 +366,7 @@ pub fn register_dfu_interface<D: Driver<'static>>(
     alt.descriptor(
         0x21,
         &[
-            central_attrs.bits(),
+            central_attrs_bits,
             0xc4,
             0x09,
             (BLOCK_SIZE_DFU & 0xff) as u8,
