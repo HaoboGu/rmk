@@ -1273,21 +1273,7 @@ impl<'a> Keyboard<'a> {
         })
         .await;
 
-        let mut release_tap_key_after_action = false;
-        if self.sticky_key_state.has_tap_key() {
-            let is_sticky_or_modifier = match action {
-                Action::Modifier(_) => true,
-                Action::Key(KeyCode::Hid(key)) if key.is_modifier() => true,
-                _ => false,
-            };
-            if !is_sticky_or_modifier && self.sticky_key_state.tap_key_releases_on(event.pressed) {
-                if event.pressed {
-                    self.release_tap_key().await;
-                } else {
-                    release_tap_key_after_action = true;
-                }
-            }
-        }
+        let release_sticky_after_action = self.prepare_sticky_key_for_action(action, event).await;
 
         match action {
             Action::No => {}
@@ -1296,15 +1282,13 @@ impl<'a> Keyboard<'a> {
                 // Consumer/system keys with no HID alias are dispatched directly here.
                 KeyCode::Consumer(consumer) => {
                     self.process_action_consumer_control(consumer, event).await;
-                    let update = self.update_sticky_key(event);
-                    if update.modifier_consumed && update.modifier_was_host_visible {
+                    if self.finish_sticky_key_for_key(event, false) {
                         self.send_keyboard_report_with_resolved_modifiers(false).await;
                     }
                 }
                 KeyCode::SystemControl(system_control) => {
                     self.process_action_system_control(system_control, event).await;
-                    let update = self.update_sticky_key(event);
-                    if update.modifier_consumed && update.modifier_was_host_visible {
+                    if self.finish_sticky_key_for_key(event, false) {
                         self.send_keyboard_report_with_resolved_modifiers(false).await;
                     }
                 }
@@ -1444,9 +1428,7 @@ impl<'a> Keyboard<'a> {
             _ => warn!("Action variant not supported: {:?}", action),
         }
 
-        if release_tap_key_after_action {
-            self.release_tap_key().await;
-        }
+        self.finish_sticky_key_after_action(release_sticky_after_action).await;
         self.sticky_key_state.finish_buffered_claim();
     }
 
@@ -1669,14 +1651,7 @@ impl<'a> Keyboard<'a> {
             true
         };
 
-        if is_basic_keyboard_key {
-            self.sticky_key_state.mark_modifier_host_visible();
-        }
-        let modifier_releases_on_press = self.sticky_key_state.modifier_releases_on_press();
-        let update = self.update_sticky_key(event);
-        if (is_basic_keyboard_key && event.pressed && modifier_releases_on_press && update.modifier_consumed)
-            || (!is_basic_keyboard_key && update.modifier_consumed && update.modifier_was_host_visible)
-        {
+        if self.finish_sticky_key_for_key(event, is_basic_keyboard_key) {
             self.send_keyboard_report_with_resolved_modifiers(true).await;
         }
     }
