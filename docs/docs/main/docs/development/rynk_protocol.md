@@ -123,6 +123,8 @@ Which commands a firmware answers depends on the RMK Cargo features it was built
 | `0x092B` | `GetLightingExtensionParams`                   | `LightingExtensionParamsRequest`                      | `LightingExtensionParamsPageResult`                | `lighting`       | Per-effect tunable parameters: descriptors plus live values, pinned to `LightingState.revision`. Page until `total`.                   |
 | `0x092C` | `SetLightingExtensionParam`                    | `SetLightingExtensionParamRequest`                    | `LightingStateResult`                              | `lighting`       | Set one effect parameter when the state revision matches.                                                                              |
 | `0x092D` | `SetLightingWakeLayers`                        | `SetLightingWakeLayersRequest`                        | `LightingOutputModeStateResult`                    | `lighting`       | Replace the wake-layer mask. Policy rather than lighting content, but dynamic so which layers wake lighting is not a firmware rebuild. |
+| `0x092E` | `GetLightingExtensionLayers`                   | `()`                                                  | `LightingExtensionLayersResult`                    | `lighting`       | Read the optional second effect layered over the primary extension.                                                                    |
+| `0x092F` | `SetLightingExtensionLayers`                   | `SetLightingExtensionLayersRequest`                   | `LightingStateResult`                              | `lighting`       | Replace the optional second effect when the state revision matches.                                                                    |
 
 ## Topics
 
