@@ -78,7 +78,7 @@ impl<T> Latch<T> {
     }
 
     fn press_state(policy: StickyKeyPolicy, chord_started_at: Instant, now: Instant) -> (LatchPhase, Option<Instant>) {
-        let Some(hold_duration) = policy.release_on_keyup_after.duration() else {
+        let Some(hold_duration) = policy.release_after_hold.duration() else {
             return (LatchPhase::PressDeadlineInactive, Some(chord_started_at));
         };
 
@@ -103,7 +103,7 @@ impl<T> Latch<T> {
         let chord_started_at = match self.phase {
             LatchPhase::Pressed => self
                 .timing_marker
-                .zip(self.policy.release_on_keyup_after.duration())
+                .zip(self.policy.release_after_hold.duration())
                 .map(|(deadline, hold_duration)| deadline - hold_duration),
             LatchPhase::PressDeadlineInactive | LatchPhase::HoldQualified => self.timing_marker,
             LatchPhase::Latched | LatchPhase::Held => None,
@@ -122,7 +122,7 @@ impl<T> Latch<T> {
         }
         match self.phase {
             LatchPhase::Pressed => {
-                if self.policy.release_on_keyup_after.duration().is_some()
+                if self.policy.release_after_hold.duration().is_some()
                     && self.timing_marker.is_some_and(|deadline| deadline <= now)
                 {
                     self.phase = LatchPhase::HoldQualified;
@@ -194,7 +194,7 @@ impl<T> Latch<T> {
         if self.phase == LatchPhase::Pressed {
             self.timing_marker = self
                 .policy
-                .release_on_keyup_after
+                .release_after_hold
                 .duration()
                 .map(|hold_duration| deadline - hold_duration);
             self.phase = LatchPhase::HoldQualified;
@@ -753,7 +753,7 @@ mod tests {
         StickyKeyPolicy {
             timeout: Duration::from_secs(1),
             activate_on_keypress: false,
-            release_on_keyup_after: StickyKeyHoldDuration::DISABLED,
+            release_after_hold: StickyKeyHoldDuration::DISABLED,
             max_repeat: 0,
             release_mode,
         }
@@ -842,7 +842,7 @@ mod tests {
     #[test]
     fn configured_hold_threshold_releases_after_deferred_timeout() {
         let mut hold_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
-        hold_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
+        hold_policy.release_after_hold = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
         let mut latch = Latch::new(
             StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
             pos(0),
@@ -860,7 +860,7 @@ mod tests {
     #[test]
     fn configured_hold_threshold_is_inclusive() {
         let mut hold_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
-        hold_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
+        hold_policy.release_after_hold = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
         let mut short_press = Latch::new(
             StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
             pos(0),
@@ -899,7 +899,7 @@ mod tests {
     fn hold_threshold_may_exceed_the_latched_timeout() {
         let mut hold_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
         hold_policy.timeout = Duration::from_millis(300);
-        hold_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_secs(1));
+        hold_policy.release_after_hold = StickyKeyHoldDuration::from_duration(Duration::from_secs(1));
         let pressed_at = Instant::now();
         let released_at = pressed_at + Duration::from_millis(600);
         let mut latch = Latch::new(
@@ -917,7 +917,7 @@ mod tests {
     #[test]
     fn hold_threshold_uses_original_buffered_press_time() {
         let mut hold_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
-        hold_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
+        hold_policy.release_after_hold = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
         let pressed_at = Instant::now();
         let dispatched_at = pressed_at + Duration::from_millis(250);
         let mut latch = Latch::new(
@@ -936,7 +936,7 @@ mod tests {
     #[test]
     fn overlapping_modifier_preserves_chord_hold_start() {
         let mut hold_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
-        hold_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
+        hold_policy.release_after_hold = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
         let first_press = Instant::now();
         let second_press = first_press + Duration::from_millis(250);
         let release_time = first_press + Duration::from_millis(400);
@@ -988,9 +988,9 @@ mod tests {
     #[test]
     fn latest_modifier_policy_uses_chord_hold_start() {
         let mut first_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
-        first_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
+        first_policy.release_after_hold = StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
         let mut latest_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
-        latest_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_millis(500));
+        latest_policy.release_after_hold = StickyKeyHoldDuration::from_duration(Duration::from_millis(500));
         let first_press = Instant::now();
         let mut latch = Latch::new(
             StickyModifierEffect::new(ModifierCombination::LCTRL, pos(0)),
@@ -1027,7 +1027,7 @@ mod tests {
     #[test]
     fn mixed_modifier_profiles_are_independent_of_deadline_poll_order() {
         let mut enabled_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
-        enabled_policy.release_on_keyup_after = StickyKeyHoldDuration::from_duration(Duration::from_millis(500));
+        enabled_policy.release_after_hold = StickyKeyHoldDuration::from_duration(Duration::from_millis(500));
         let mut disabled_policy = policy(StickyKeyReleaseMode::OTHER_KEY_RELEASE);
         disabled_policy.timeout = Duration::from_millis(300);
         let first_press = Instant::now();

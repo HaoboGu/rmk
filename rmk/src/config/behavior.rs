@@ -181,7 +181,7 @@ impl StickyKeyHoldDuration {
 pub struct StickyKeyProfile {
     pub timeout: Duration,
     pub activate_on_keypress: bool,
-    pub release_on_keyup_after: StickyKeyHoldDuration,
+    pub release_after_hold: StickyKeyHoldDuration,
     pub max_repeat: u16,
     pub release_mode: Option<StickyKeyReleaseMode>,
 }
@@ -191,7 +191,7 @@ impl Default for StickyKeyProfile {
         Self {
             timeout: Duration::from_secs(1),
             activate_on_keypress: false,
-            release_on_keyup_after: StickyKeyHoldDuration::DISABLED,
+            release_after_hold: StickyKeyHoldDuration::DISABLED,
             max_repeat: 0,
             release_mode: None,
         }

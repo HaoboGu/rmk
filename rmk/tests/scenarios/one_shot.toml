@@ -144,7 +144,7 @@ expect = [
 # when physically released, even though its normal timeout has not elapsed.
 [[test]]
 name = "osl_releases_on_keyup_after_hold_threshold"
-behavior.sticky_key = { timeout = "1s", release_on_keyup_after = "100ms" }
+behavior.sticky_key = { timeout = "1s", release_after_hold = "100ms" }
 steps = [
   { press = [0, 1] },
   { delay = 150 },

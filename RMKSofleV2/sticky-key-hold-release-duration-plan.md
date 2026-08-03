@@ -63,7 +63,7 @@ Replace the newly introduced boolean with a duration-valued setting:
 ```toml
 [behavior.sticky_key]
 timeout = "1s"
-release_on_keyup_after = "300ms"
+release_after_hold = "500ms"
 ```
 
 Example results with that configuration:
@@ -71,19 +71,19 @@ Example results with that configuration:
 | Physical press duration | Result on physical release |
 | --- | --- |
 | 100 ms | Treat as a tap; latch and start a fresh 1 s timeout |
-| 299 ms | Treat as a tap; latch and start a fresh 1 s timeout |
-| 300 ms | Treat as a hold; release immediately |
+| 499 ms | Treat as a tap; latch and start a fresh 1 s timeout |
+| 500 ms | Treat as a hold; release immediately |
 | 500 ms | Treat as a hold; release immediately |
 | More than 1 s | Release immediately; never re-latch |
 
 The threshold comparison should be inclusive: a duration equal to the
 configured value is a hold.
 
-`300ms` is a suggested personal configuration, not necessarily a library
+`500ms` is a suggested personal configuration, not necessarily a library
 default. It leaves separation between ordinary taps below roughly 250 ms and
 intentional holds around 500 ms.
 
-Omitting `release_on_keyup_after` should preserve the historical behavior: an
+Omitting `release_after_hold` should preserve the historical behavior: an
 otherwise unused physical press latches when released, even when the normal
 timeout elapsed while the key was still down.
 
@@ -119,7 +119,7 @@ RAM cost.
 
 Instead, let the existing `deadline` have phase-specific meaning:
 
-- In `Pressed`, it is the configured `release_on_keyup_after` threshold when
+- In `Pressed`, it is the configured `release_after_hold` threshold when
   that option is present. If the option is absent, it remains the normal
   timeout so historical held-timeout behavior is preserved.
 - In `Latched`, it is always the normal unused-latch `timeout`.
@@ -203,7 +203,7 @@ release_on_keyup_after_timeout: bool
 becomes:
 
 ```text
-release_on_keyup_after: optional duration
+release_after_hold: optional duration
 ```
 
 Use these representations through the configuration pipeline:
@@ -227,7 +227,7 @@ If the boolean must remain backward-compatible, use both:
 
 ```toml
 release_on_keyup_after_timeout = true
-release_on_keyup_after = "300ms"
+release_after_hold = "500ms"
 ```
 
 and define the old boolean-without-duration behavior as using the normal
@@ -247,7 +247,7 @@ configured in the default profile.
 
 The minimal implementation accepts this behavior, which matches ordinary
 optional duration inheritance. A user who needs selective enablement can put
-`release_on_keyup_after` only on the named profiles that need it rather than on
+`release_after_hold` only on the named profiles that need it rather than on
 the default profile.
 
 If explicit child-profile disablement is required later, add an intentional
@@ -305,7 +305,7 @@ unnecessary.
 
 1. Replace the TOML boolean with `Option<DurationMillis>` under both the
    default Sticky Key configuration and partial named profiles.
-2. Rename it to `release_on_keyup_after` throughout resolved configuration.
+2. Rename it to `release_after_hold` throughout resolved configuration.
 3. Resolve/inherit it as optional milliseconds during macro expansion.
 4. Emit `StickyKeyHoldDuration::from_duration(...)` or
    `StickyKeyHoldDuration::DISABLED` in generated profiles.
@@ -366,7 +366,7 @@ consumer that needs migration.
    becomes, for example:
 
    ```text
-   release_on_keyup_after = "300ms"
+   release_after_hold = "500ms"
    ```
 
 ## Required Test Matrix
@@ -379,10 +379,10 @@ Use deterministic instants rather than relying on wall-clock timing.
    - release before normal timeout latches;
    - release after the normal timeout was polled still latches and starts a
      fresh timeout.
-2. Configured 300 ms threshold:
-   - release at 299 ms latches;
-   - release at exactly 300 ms releases;
-   - release after 300 ms releases.
+2. Configured 500 ms threshold:
+   - release at 499 ms latches;
+   - release at exactly 500 ms releases;
+   - release after 500 ms releases.
 3. Normal timeout interaction:
    - normal timeout shorter than the physical press is deferred;
    - later qualifying key-up releases;
@@ -503,7 +503,7 @@ The work is complete only when all of the following are true:
 Confirm whether `release_on_keyup_after_timeout` has any compatibility
 obligation outside this feature branch.
 
-- If **no**, replace it with `release_on_keyup_after = "..."` as recommended.
+- If **no**, replace it with `release_after_hold = "..."` as recommended.
 - If **yes**, retain a compatibility path using the old boolean and document
   exactly how it selects the legacy normal-timeout threshold.
 

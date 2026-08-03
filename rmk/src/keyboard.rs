@@ -2175,7 +2175,7 @@ mod test {
         let main = async {
             let mut config = BehaviorConfig::default();
             config.sticky_key.default_profile.timeout = Duration::from_secs(1);
-            config.sticky_key.default_profile.release_on_keyup_after =
+            config.sticky_key.default_profile.release_after_hold =
                 crate::config::StickyKeyHoldDuration::from_duration(Duration::from_millis(100));
             let mut keyboard = create_test_keyboard_with_config(config);
             keyboard

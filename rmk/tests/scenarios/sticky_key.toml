@@ -28,7 +28,7 @@ release_mode = "other_key_press"
 
 [behavior.sticky_key.profiles.short]
 timeout = "100ms"
-release_on_keyup_after = "50ms"
+release_after_hold = "50ms"
 release_mode = "layer_enter | layer_exit"
 
 [behavior.sticky_key.profiles.double]
@@ -41,7 +41,7 @@ max_repeat = 2
 [behavior.sticky_key.profiles.visible]
 activate_on_keypress = true
 timeout = "1s"
-release_on_keyup_after = "100ms"
+release_after_hold = "100ms"
 
 [[test]]
 name = "canonical_modifier_uses_press_policy"

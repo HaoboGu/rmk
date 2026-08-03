@@ -11,7 +11,7 @@ keys = "SK(LShift) A"
 
 [behavior.sticky_key]
 activate_on_keypress = true
-release_on_keyup_after = "75ms"
+release_after_hold = "75ms"
 
 [behavior.combo]
 timeout = "100ms"

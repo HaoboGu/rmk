@@ -34,7 +34,7 @@ pub(crate) enum StickyKeyShape {
 pub(crate) struct StickyKeyPolicy {
     pub timeout: Duration,
     pub activate_on_keypress: bool,
-    pub release_on_keyup_after: StickyKeyHoldDuration,
+    pub release_after_hold: StickyKeyHoldDuration,
     pub max_repeat: u16,
     pub release_mode: StickyKeyReleaseMode,
 }
@@ -620,10 +620,10 @@ impl<'a> KeyMap<'a> {
         StickyKeyPolicy {
             timeout: profile.timeout,
             activate_on_keypress: profile.activate_on_keypress,
-            release_on_keyup_after: if shape == StickyKeyShape::TapKey {
+            release_after_hold: if shape == StickyKeyShape::TapKey {
                 StickyKeyHoldDuration::DISABLED
             } else {
-                profile.release_on_keyup_after
+                profile.release_after_hold
             },
             max_repeat: profile.max_repeat,
             release_mode,
@@ -989,7 +989,7 @@ mod test {
 
         let mut data = KeymapData::<1, 1, 1>::new([[[k!(A)]]]);
         let mut behavior = BehaviorConfig::default();
-        behavior.sticky_key.default_profile.release_on_keyup_after =
+        behavior.sticky_key.default_profile.release_after_hold =
             StickyKeyHoldDuration::from_duration(Duration::from_millis(300));
         let positional = PositionalConfig::<1, 1>::default();
         let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
@@ -997,19 +997,19 @@ mod test {
         assert_eq!(
             keymap
                 .sticky_key_profile(u8::MAX, StickyKeyShape::PureMod)
-                .release_on_keyup_after,
+                .release_after_hold,
             StickyKeyHoldDuration::from_duration(Duration::from_millis(300))
         );
         assert_eq!(
             keymap
                 .sticky_key_profile(u8::MAX, StickyKeyShape::Layer)
-                .release_on_keyup_after,
+                .release_after_hold,
             StickyKeyHoldDuration::from_duration(Duration::from_millis(300))
         );
         assert_eq!(
             keymap
                 .sticky_key_profile(u8::MAX, StickyKeyShape::TapKey)
-                .release_on_keyup_after,
+                .release_after_hold,
             StickyKeyHoldDuration::DISABLED
         );
     }

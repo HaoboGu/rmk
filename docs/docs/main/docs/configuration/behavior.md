@@ -40,7 +40,7 @@ Sticky Keys unify one-shot modifiers, one-shot layers, and repeated modified key
 [behavior.sticky_key]
 timeout = "1s"
 activate_on_keypress = true
-release_on_keyup_after = "300ms"
+release_after_hold = "500ms"
 max_repeat = 0
 release_mode = "other_key_release"
 
@@ -57,7 +57,7 @@ Each field may be omitted. Named profiles inherit omitted fields from `[behavior
 
 - `timeout`: releases an unused latch after this duration; the default is `1s`.
 - `activate_on_keypress`: reports a pure modifier immediately instead of waiting for the next key.
-- `release_on_keyup_after`: for modifiers or layers held for at least this duration, releases the modifier or layer when the Sticky Key is physically released instead of latching it. A shorter tap receives the full `timeout` starting from key-up. This hold threshold is independent of `timeout` and may be shorter or longer. Pure modifiers must also set `activate_on_keypress = true` to be reported while physically held. Modified tap keys are unaffected. The default is disabled.
+- `release_after_hold`: for modifiers or layers held for at least this duration, releases the modifier or layer when the Sticky Key is physically released instead of latching it. A shorter tap receives the full `timeout` starting from key-up. This hold threshold is independent of `timeout` and may be shorter or longer. Pure modifiers must also set `activate_on_keypress = true` to be reported while physically held. Modified tap keys are unaffected. The default is disabled.
 - `max_repeat`: limits tap-key repetitions; `0` means unlimited.
 - `release_mode`: a `|`-separated set of `other_key_press`, `other_key_release`, `layer_enter`, `layer_exit`, and `double_tap`.
 
