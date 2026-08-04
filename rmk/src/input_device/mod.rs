@@ -62,10 +62,11 @@ pub trait InputDevice: Runnable {
     async fn read_event(&mut self) -> Self::Event;
 }
 
-/// Macro to run multiple Runnable instances concurrently.
+/// Run multiple tasks concurrently by calling each task's `run` method.
 ///
-/// This macro simplifies running multiple input devices and processors
-/// that implement the `Runnable` trait.
+/// The `Runnable` trait is brought into scope for input devices and
+/// processors. Types with an inherent `run` method, such as `BleTransport`,
+/// can be included without implementing `Runnable`.
 ///
 /// # Example
 /// ```rust
@@ -79,7 +80,7 @@ pub trait InputDevice: Runnable {
 #[macro_export]
 macro_rules! run_all {
     ($( $dev:ident ),* $(,)*) => {{
-        use $crate::core_traits::Runnable;
+        use $crate::core_traits::Runnable as _;
         $crate::join_all!(
             $(
                 $dev.run()

@@ -103,8 +103,7 @@ pub(crate) fn rmk_entry_select(
 
     let board = &hardware.board;
     let communication = &hardware.communication;
-    // A BLE split central manages its peripherals inside the BLE transport.
-    let ble_run = match board {
+    let with_split_peripherals = match board {
         BoardConfig::Split(split) if matches!(split.connection, SplitConnection::Ble) => {
             let matrix_configs = split.peripheral.iter().map(|p| {
                 let rows = p.rows as u8;
@@ -120,11 +119,12 @@ pub(crate) fn rmk_entry_select(
                     }
                 }
             });
-            quote! { ble_transport.run_split_central(peripheral_addrs, [#(#matrix_configs),*]) }
+            quote! { .with_split_peripherals(peripheral_addrs, [#(#matrix_configs),*]) }
         }
-        _ => quote! { ble_transport.run() },
+        _ => quote! {},
     };
-    let (transport_prelude, transport_tasks) = transport_setup(host, communication, ble_run);
+    let (transport_prelude, transport_tasks) =
+        transport_setup(host, communication, with_split_peripherals);
 
     let entry = match board {
         BoardConfig::Split(split_config) => {
@@ -261,12 +261,11 @@ pub(crate) fn rmk_entry_unibody(
 }
 
 /// Build (`let transport = ...;` prelude, transport run tasks) for the active
-/// communication config. `ble_run` is the BLE transport's run call — `run()`,
-/// or `run_split_central(...)` on a BLE split central.
+/// communication config.
 fn transport_setup(
     host: &Host,
     communication: &CommunicationConfig,
-    ble_run: TokenStream2,
+    with_split_peripherals: TokenStream2,
 ) -> (TokenStream2, Vec<TokenStream2>) {
     let wpm_prelude = quote! {
         let mut wpm_processor = ::rmk::processor::builtin::wpm::WpmProcessor::new();
@@ -285,8 +284,9 @@ fn transport_setup(
         let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config)#with_host;
     };
     let ble_prelude = quote! {
-        let ble_transport = ::rmk::ble::BleTransport::new(ble_controller, ble_addr, rmk_config).await #with_host;
+        let ble_transport = ::rmk::ble::BleTransport::new(ble_controller, ble_addr, rmk_config).await #with_host #with_split_peripherals;
     };
+    let ble_task = quote! { ble_transport.run() };
 
     match communication {
         CommunicationConfig::Usb(_) => {
@@ -301,7 +301,7 @@ fn transport_setup(
                 #wpm_prelude
                 #ble_prelude
             };
-            (prelude, vec![ble_run, wpm_task])
+            (prelude, vec![ble_task, wpm_task])
         }
         CommunicationConfig::Both(_, _) => {
             let prelude = quote! {
@@ -311,7 +311,7 @@ fn transport_setup(
             };
             (
                 prelude,
-                vec![quote! { usb_transport.run() }, ble_run, wpm_task],
+                vec![quote! { usb_transport.run() }, ble_task, wpm_task],
             )
         }
         CommunicationConfig::None => panic!("USB and BLE are both disabled"),

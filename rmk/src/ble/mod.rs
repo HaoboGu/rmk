@@ -41,19 +41,31 @@ pub(crate) mod sleep;
 
 /// Max number of connections of a BLE split central's stack: the host link
 /// plus split peripherals. Every other keyboard's stack is sized to its
-/// single host link inside [`BleTransport::run`].
+/// single host link.
 pub(crate) const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + 1;
 
 /// Max number of L2CAP channels
 pub(crate) const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
 
-/// BLE transport. Owns the whole BLE stack and the trouble-host server;
-/// running it consumes the transport and joins the background `ble_task`
-/// runner with the advertise→connect→serve loop, running forever. A BLE
-/// split central enters through [`Self::run_split_central`], which also runs
-/// the peripheral managers and scanner on the same stack; everything else
-/// enters through [`Self::run`].
-pub struct BleTransport<'a, C>
+/// A standalone keyboard's BLE role.
+#[doc(hidden)]
+pub struct Standalone;
+
+/// A BLE split central's peripheral configuration.
+#[cfg(feature = "split")]
+#[doc(hidden)]
+pub struct SplitCentral {
+    peripheral_addrs: [Option<[u8; 6]>; crate::SPLIT_PERIPHERALS_NUM],
+    matrix_configs: [crate::split::PeripheralMatrixConfig; crate::SPLIT_PERIPHERALS_NUM],
+}
+
+/// BLE transport. Owns the whole BLE stack and the trouble-host server.
+///
+/// Running it consumes the transport and joins the background stack runner
+/// with the advertise→connect→serve loop. A BLE split central also runs its
+/// peripheral managers and scanner on the same stack. Both roles expose a
+/// `run` task entry point.
+pub struct BleTransport<'a, C, Role = Standalone>
 where
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
@@ -67,9 +79,10 @@ where
     // Keeps `'a` in the type's parameter list across all feature configurations.
     #[cfg(not(feature = "host"))]
     _phantom: core::marker::PhantomData<&'a ()>,
+    role: Role,
 }
 
-impl<'a, C> BleTransport<'a, C>
+impl<'a, C> BleTransport<'a, C, Standalone>
 where
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
@@ -125,16 +138,8 @@ where
             host_service: None,
             #[cfg(not(feature = "host"))]
             _phantom: core::marker::PhantomData,
+            role: Standalone,
         }
-    }
-
-    /// Attach the host-protocol service (Vial or Rynk, picked at compile
-    /// time by feature). See
-    /// [`UsbTransport::with_host_service`](crate::usb::UsbTransport::with_host_service).
-    #[cfg(feature = "host")]
-    pub fn with_host_service(mut self, service: &'a crate::host::HostService<'a>) -> Self {
-        self.host_service = Some(service);
-        self
     }
 
     /// Run the BLE transport forever, serving the host link. Consumes the
@@ -160,23 +165,47 @@ where
         .await
     }
 
-    /// Run a BLE split central forever: the host link plus one manager per
-    /// split peripheral and the scanner, all on one stack.
+    /// Attach the BLE split peripherals before starting the transport.
     ///
-    /// `addrs` are the peripherals' stored addresses (usually from
+    /// `peripheral_addrs` are the stored addresses (usually from
     /// [`read_peripheral_addresses`](crate::storage::Storage::read_peripheral_addresses));
-    /// `matrix_configs` is one region entry per peripheral. A serial split
-    /// central passes its matrix regions to `run_peripheral_manager` instead
-    /// and enters through [`Self::run`].
+    /// `matrix_configs` contains one matrix region per peripheral.
     #[cfg(feature = "split")]
-    pub async fn run_split_central(
+    pub fn with_split_peripherals(
         self,
-        addrs: [Option<[u8; 6]>; crate::SPLIT_PERIPHERALS_NUM],
+        peripheral_addrs: [Option<[u8; 6]>; crate::SPLIT_PERIPHERALS_NUM],
         matrix_configs: [crate::split::PeripheralMatrixConfig; crate::SPLIT_PERIPHERALS_NUM],
-    ) -> !
-    where
-        C: ControllerCmdSync<bt_hci::cmd::le::LeSetScanParams>,
-    {
+    ) -> BleTransport<'a, C, SplitCentral> {
+        BleTransport {
+            controller: self.controller,
+            address: self.address,
+            server: self.server,
+            product_name: self.product_name,
+            config: self.config,
+            #[cfg(feature = "host")]
+            host_service: self.host_service,
+            #[cfg(not(feature = "host"))]
+            _phantom: self._phantom,
+            role: SplitCentral {
+                peripheral_addrs,
+                matrix_configs,
+            },
+        }
+    }
+}
+
+#[cfg(feature = "split")]
+impl<'a, C> BleTransport<'a, C, SplitCentral>
+where
+    C: Controller
+        + ControllerCmdAsync<LeSetPhy>
+        + ControllerCmdSync<LeReadLocalSupportedFeatures>
+        + ControllerCmdSync<bt_hci::cmd::le::LeSetScanParams>,
+{
+    /// Run the BLE split central forever, including the host link, peripheral
+    /// managers, and scanner. Consumes the transport because its stack takes
+    /// ownership of the controller.
+    pub async fn run(self) -> ! {
         // Load the preferred connection from storage
         let preferred = crate::state::load_preferred_connection().await;
         crate::state::set_preferred_connection(preferred);
@@ -187,10 +216,10 @@ where
             .build();
 
         // The scanner and the managers share the address slots.
-        let addrs = core::cell::RefCell::new(addrs);
+        let addrs = core::cell::RefCell::new(self.role.peripheral_addrs);
         let managers =
             embassy_futures::join::join_array(core::array::from_fn::<_, { crate::SPLIT_PERIPHERALS_NUM }, _>(|i| {
-                crate::split::ble::central::run_ble_peripheral_manager(i, &addrs, &stack, matrix_configs[i])
+                crate::split::ble::central::run_ble_peripheral_manager(i, &addrs, &stack, self.role.matrix_configs[i])
             }));
         join3(
             serve(
@@ -206,6 +235,20 @@ where
         )
         .await;
         unreachable!("BleTransport sub-tasks must run forever")
+    }
+}
+
+impl<'a, C, Role> BleTransport<'a, C, Role>
+where
+    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+{
+    /// Attach the host-protocol service (Vial or Rynk, picked at compile
+    /// time by feature). See
+    /// [`UsbTransport::with_host_service`](crate::usb::UsbTransport::with_host_service).
+    #[cfg(feature = "host")]
+    pub fn with_host_service(mut self, service: &'a crate::host::HostService<'a>) -> Self {
+        self.host_service = Some(service);
+        self
     }
 }
 

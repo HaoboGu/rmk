@@ -174,13 +174,13 @@ import { Rust, Toml, Tab, Tabs } from '@theme'
 <Tab label={<Rust />}>
 
 ```rust title="BLE Split Central"
-// BLE split central: run the BLE transport with the peripherals' stored
-// addresses and one `PeripheralMatrixConfig` per peripheral. The transport
-// runs the peripheral managers and the scanner on its own BLE stack.
+// BLE split central: attach the peripherals' stored addresses and one
+// `PeripheralMatrixConfig` per peripheral. The transport runs the peripheral
+// managers and the scanner on its own BLE stack.
 let peripheral_addrs = storage.read_peripheral_addresses().await;
-let ble_transport = BleTransport::new(controller, ble_addr, rmk_config).await;
-ble_transport
-    .run_split_central(
+let ble_transport = BleTransport::new(controller, ble_addr, rmk_config)
+    .await
+    .with_split_peripherals(
         peripheral_addrs,
         [PeripheralMatrixConfig {
             rows: 2,
@@ -188,8 +188,8 @@ ble_transport
             row_offset: 2,
             col_offset: 2,
         }],
-    )
-    .await;
+    );
+run_all!(matrix, storage, ble_transport, keyboard).await;
 ```
 
 </Tab>
@@ -224,7 +224,7 @@ Running split peripheral is simpler. For the peripheral, we don't need to specif
 let mut matrix = Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer);
 
 // BLE split peripheral, arguments might be different for other microcontrollers, check the API docs or examples for other usages.
-// The first argument is the peripheral's id, which should match the index of this peripheral in the central's `run_split_central` list.
+// The first argument is the peripheral's id, which should match the index of this peripheral in the central's `with_split_peripherals` list.
 run_rmk_split_peripheral(peripheral_id, controller, ble_addr),
 ```
 

@@ -647,7 +647,8 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 
     /// Read all peripheral addresses from flash at startup, one slot per
-    /// peripheral, for [`BleTransport::run_split_central`](crate::ble::BleTransport::run_split_central).
+    /// peripheral, for
+    /// [`BleTransport::with_split_peripherals`](crate::ble::BleTransport::with_split_peripherals).
     ///
     /// Must be called before the storage task starts; once it is running it owns
     /// `&mut Storage` and no other reader can hold it.
