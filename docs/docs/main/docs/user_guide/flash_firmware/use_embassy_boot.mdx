@@ -58,6 +58,10 @@ __rmk_boot_storage_size   = 0x20000;  /* storage partition size */
 
 Make sure `FLASH : ORIGIN` in your `MEMORY` block starts at your ACTIVE partition. RMK's `init_flash_from_linkerscript()` picks up the symbols at runtime. All symbols must use **flash-relative offsets** (byte offsets from the start of the flash chip, not absolute XIP addresses). For RP2040, subtract the flash base (`0x10000000`). For nRF52840, flash-relative and absolute offsets are the same (flash starts at `0x00000000`).
 
+::: tip External Flash DFU
+If your firmware is too large for the internal DFU/ACTIVE partition split, you can offload the DFU download slot to an external SPI NOR flash chip. This frees the internal DFU space and roughly doubles the ACTIVE region. See [External Flash DFU](../configuration/bootloader.mdx#external-flash-dfu-optional-feature-dfu_ext) for setup instructions.
+:::
+
 ## Prerequisites
 
 ### rmk-boot + rmk-memory.x

@@ -9,9 +9,10 @@ pub use crate::communication::{CommunicationConfig, UsbInfo};
 use crate::validate_unlock_keys;
 pub use crate::{
     BleConfig, ChipConfig, CommunicationProtocol, DependencyConfig, DisplayConfig, DisplayDriver, EncoderConfig,
-    EncoderResolution, I2cConfig, InputDeviceConfig, Iqs5xxConfig, Iqs5xxI2cConfig, JoystickConfig, KeyInfo,
-    LightConfig, MatrixConfig, MatrixType, OutputConfig, PinConfig, Pmw33xxConfig, Pmw33xxType, Pmw3610Config,
-    PointingDeviceConfig, SerialConfig, SpiConfig, SplitBoardConfig, SplitConfig,
+    EncoderResolution, ExternalFlashDriver, ExternalFlashTomlConfig, I2cConfig, InputDeviceConfig, Iqs5xxConfig,
+    Iqs5xxI2cConfig, JoystickConfig, KeyInfo, LightConfig, MatrixConfig, MatrixType, OutputConfig, PinConfig,
+    Pmw33xxConfig, Pmw33xxType, Pmw3610Config, PointingDeviceConfig, SerialConfig, SpiConfig, SplitBoardConfig,
+    SplitConfig,
 };
 
 /// Resolved storage hardware config
@@ -27,6 +28,15 @@ pub struct DfuConfig {
     pub page_size: u32,
     pub led: Option<PinConfig>,
     pub unlock_keys: Vec<[u8; 2]>,
+    pub external_flash: Option<ExternalFlashConfig>,
+}
+
+/// Resolved config for external SPI flash used as DFU partition.
+pub struct ExternalFlashConfig {
+    pub driver: ExternalFlashDriver,
+    pub flash_size: u32,
+    pub init_fn: Option<String>,
+    pub spi: SpiConfig,
 }
 
 /// Complete hardware configuration for init code generation.
@@ -73,10 +83,29 @@ impl crate::KeyboardTomlConfig {
             Some(d) => {
                 let unlock_keys = d.unlock_keys.clone().unwrap_or_default();
                 validate_unlock_keys("[dfu]", &unlock_keys, self.layout.as_ref())?;
+                let external_flash = if let Some(ef) = d.external_flash {
+                    let init_fn = if matches!(ef.driver, ExternalFlashDriver::Custom) {
+                        let path = ef
+                            .init_fn
+                            .ok_or("[dfu.external_flash] init_fn is required when driver = \"custom\"")?;
+                        Some(path)
+                    } else {
+                        ef.init_fn
+                    };
+                    Some(ExternalFlashConfig {
+                        driver: ef.driver,
+                        flash_size: ef.flash_size,
+                        init_fn,
+                        spi: ef.spi,
+                    })
+                } else {
+                    None
+                };
                 Some(DfuConfig {
                     page_size: d.page_size.unwrap_or(4096),
                     led: d.led.clone().map(|pin| PinConfig { pin, low_active: false }),
                     unlock_keys,
+                    external_flash,
                 })
             }
             None => None,

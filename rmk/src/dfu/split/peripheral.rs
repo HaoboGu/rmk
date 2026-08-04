@@ -3,7 +3,7 @@ use core::sync::atomic::Ordering;
 use rmk_types::dfu::DfuStatus;
 use static_cell::StaticCell;
 
-use super::super::{PartitionType, get_manager};
+use super::super::{DfuPartition, PartitionType, get_manager};
 use crate::event::{DfuStatusEvent, publish_event};
 
 // =========================================================================
@@ -28,7 +28,7 @@ use crate::event::{DfuStatusEvent, publish_event};
 /// 4. [`mark_updated_and_reset`](SplitDfuHandler::mark_updated_and_reset)
 ///    — tell embassy-boot the new firmware is valid, then reset into it.
 pub struct SplitDfuHandler {
-    dfu_partition: PartitionType,
+    dfu_partition: DfuPartition,
     state_partition: PartitionType,
     last_erased_page: Option<u32>,
     written_len: u32,
@@ -55,7 +55,7 @@ impl SplitDfuHandler {
     pub fn write_chunk(&mut self, offset: u32, data: &[u8]) -> Result<(), ()> {
         use embedded_storage::nor_flash::NorFlash;
         let mut dfu = self.dfu_partition.clone();
-        let erase_size = <PartitionType as NorFlash>::ERASE_SIZE as u32;
+        let erase_size = <DfuPartition as NorFlash>::ERASE_SIZE as u32;
         let start_page = offset / erase_size;
         let end = offset + data.len() as u32;
         let end_page = (end - 1) / erase_size;
