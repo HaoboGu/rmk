@@ -278,7 +278,8 @@ The `layer.keys` string follows several rules:
    7. `TT(n)` — activate layer `n`, or tap-toggle it.
    8. `TG(n)` — toggle layer `n`.
    9. `TO(n)` — activate layer `n` and deactivate all other layers.
-
+   11. `PDF(n)` — switch the default layer to layer `n` and persist it to storage, so it survives reboots.
+   
    These match QMK's definitions; see the [QMK layer docs](https://docs.qmk.fm/#/feature_layers). If you need another action, please [file an issue](https://github.com/rmk-rs/rmk/issues/new).
 
 5. For modifier-tap-hold, use `MT(key, modifier, <profile_name>)`, where the modifier can be a chain as in rule 1. The optional `profile_name` sets the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning).
@@ -310,7 +311,7 @@ my_paste = "WM(V, LCtrl)"
 
 ::: warning
 
-Alias names may not contain whitespace, and they are case sensitive.
+Alias names may not contain whitespace or any of `(`, `)`, `,`, `@`, and they are case sensitive.
 
 :::
 

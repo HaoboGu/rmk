@@ -19,7 +19,7 @@ rynk_enabled = false
 In `Cargo.toml`, keep RMK's default features and add the features your keyboard needs:
 
 ```toml title="Cargo.toml"
-rmk = { version = "...", features = ["rp2040"] }
+rmk = { version = "0.9", features = ["rp2040"] }
 ```
 
 Add any chip, BLE, split, display, or other features your board needs.
@@ -28,7 +28,7 @@ Add any chip, BLE, split, display, or other features your board needs.
 
 To use Vial with RMK, you need a keyboard definition file named `vial.json`. Vial provides detailed documentation on how to generate this file: https://get.vial.today/docs/porting-to-via.html.
 
-::: Note When creating your `vial.json`, it is essential that you use the exact same layout definition as your RMK firmware's internal keymap, which is defined in either `src/keymap.rs` or `keyboard.toml`.
+::: note When creating your `vial.json`, it is essential that you use the exact same layout definition as your RMK firmware's internal keymap, which is defined in either `src/keymap.rs` or `keyboard.toml`.
 
 It's important to understand the difference:
 
@@ -59,7 +59,7 @@ rynk_enabled = true
 ```
 
 ```toml title="Cargo.toml"
-rmk = { version = "...", default-features = false, features = [
+rmk = { version = "0.9", default-features = false, features = [
   "defmt",
   "storage",
   "rynk",
@@ -94,6 +94,6 @@ For development and testing it can be convenient to skip this step. Setting `ins
 insecure = true
 ```
 
-::: Note
-`insecure` (formerly `vial_insecure`; the old name still parses) only takes effect for Vial with the `host_lock` Cargo feature, which is enabled by default. If you disable default features and select Vial explicitly, add both `vial` and `host_lock`. `insecure` does not replace `unlock_keys`: the host can still lock and re-unlock a session that started unlocked, so you may keep `unlock_keys` configured alongside it. 
+::: note
+`insecure` (formerly `vial_insecure`; the old name still parses) only takes effect for Vial with the `host_lock` Cargo feature, which is enabled by default. If you disable default features and select Vial explicitly, add both `vial` and `host_lock`. `insecure` does not replace `unlock_keys`: the host can still lock and re-unlock a session that started unlocked, so you may keep `unlock_keys` configured alongside it.
 :::

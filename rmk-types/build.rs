@@ -9,8 +9,8 @@ fn main() {
     println!("cargo:rerun-if-env-changed=KEYBOARD_TOML_PATH");
     println!("cargo:rerun-if-env-changed=VIAL_JSON_PATH");
 
-    // Build-time constants only need [rmk] + [event], so load event defaults
-    // without requiring [keyboard.board]/[keyboard.chip].
+    // Build-time constants only need [rmk] + [event] + [layout], so load event
+    // defaults without requiring [keyboard.board]/[keyboard.chip].
     let toml_path = std::env::var("KEYBOARD_TOML_PATH").ok();
     let config: KeyboardTomlConfig = if let Some(toml_path) = &toml_path {
         println!("cargo:rerun-if-changed={toml_path}");
@@ -26,14 +26,14 @@ fn main() {
     let bc = config
         .build_constants(&feature_refs)
         .unwrap_or_else(|err| panic!("Failed to resolve build constants: {err}"));
-    let output = generate_constants(&bc);
+    let output = generate_constants(&bc, &config);
 
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("constants.rs");
     fs::write(&dest_path, output).expect("Failed to write constants.rs file");
 }
 
-fn generate_constants(bc: &BuildConstants) -> String {
+fn generate_constants(bc: &BuildConstants, config: &KeyboardTomlConfig) -> String {
     let mut lines = Vec::new();
 
     // Direct constants
@@ -140,6 +140,14 @@ fn generate_constants(bc: &BuildConstants) -> String {
     // capacities derive from it in `protocol::rynk`.
     if env::var("CARGO_FEATURE_RYNK").is_ok() {
         lines.push(format!("pub const RYNK_BUFFER_SIZE: usize = {};", bc.rynk_buffer_size));
+
+        // The physical layout served over `GetLayout`, baked here so that firmware
+        // reads it from `RmkConfig::default()`. Empty without a `[layout]` section.
+        let blob = config
+            .layout()
+            .unwrap_or_else(|err| panic!("Failed to resolve the layout blob: {err}"))
+            .blob;
+        lines.push(format!("pub const LAYOUT_BLOB: &[u8] = b\"{}\";", blob.escape_ascii()));
     }
 
     // Event channels

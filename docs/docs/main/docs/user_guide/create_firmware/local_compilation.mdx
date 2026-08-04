@@ -39,7 +39,7 @@ rustup target add thumbv7em-none-eabihf
 ```shell
 cargo install rmkit
 # If you have problems installing rmkit on Windows, try the following command to install it:
-# powershell -ExecutionPolicy ByPass -c "irm https://github.com/rmk-rs/rmkit/releases/download/v0.0.13/rmkit-installer.ps1 | iex"
+# powershell -ExecutionPolicy ByPass -c "irm https://github.com/rmk-rs/rmkit/releases/download/v0.0.21/rmkit-installer.ps1 | iex"
 ```
 
 There are several other tools that should be installed:
@@ -117,8 +117,6 @@ This step applies only when you build with the [Vial](https://get.vial.today/) p
 Fortunately, RMK does most of the heavy things for you, all you need to do is to create your own keymap definition and convert it to `vial.json` following **[vial's doc here](https://get.vial.today/docs/porting-to-via.html)**, and place it at the root of the firmware project, replacing the default one. RMK will do all the rest for you.
 
 If you opt into [Rynk](../../features/rynk) instead of the default Vial protocol, you don't need a `vial.json` — skip this step.
-
-If your `keyboard.toml` already defines the `[layout]` section, you can also generate a matching `vial.json` from it with `rmkit layout convert --to-vial` — see [Vial support](../../features/vial_support).
 
 ### (Optional) Update compilation target
 

@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor mouse key state machine into a dedicated module with per-direction press counts, independent movement/wheel repeat scheduling, and configurable acceleration curves
 - Optimize the timing for motion read and sending reports on the PMW3610
 - Correct the delay length of PMW3610 to the precise value
+- Update `sequential-storage` to v8.0. The on-flash format is unchanged, so existing storage is read back as-is
 
 ### Fixed
 
@@ -45,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix spurious "Timer buffer full" warns after 16 distinct key positions are pressed. The per-position timer `LinearMap` is gone; press time is now threaded as a parameter through the morse-press dispatch.
 - Fix override attributes (`#[Override(...)]` / `#[Overwritten(...)]`) silently falling back to the generated default: an unknown or miscased variant (e.g. `Entry` instead of `entry`) is now a compile error carrying darling's diagnostic, and an extra attribute on the function (doc comments included) no longer disables a valid override ([#966](https://github.com/rmk-rs/rmk/issues/966))
 - Fix `#[Override(bind_interrupt)]` (the form the stm32h7 example documents) never taking effect: the custom interrupt binding is now selected through the shared override matcher instead of being silently dropped in favor of the generated default. The legacy bare `#[bind_interrupt]` marker keeps working unchanged
+- Fix non-`defmt` DFU builds (e.g. `dfu_rp` with `usb_log`) failing with a borrow-of-moved-value error on `central_attrs`: embassy-usb's `DfuAttributes` is `Copy` only under `defmt`, so the DFU descriptor now reads the attribute bits before handing the attributes to `DfuState` ([#973](https://github.com/rmk-rs/rmk/issues/973))
 
 ## [0.8.2] - 2025-12-18
 

@@ -23,7 +23,7 @@ pub use storage::StorageConfig;
 pub use vial::VialConfig;
 
 /// Internal configurations for RMK keyboard.
-#[derive(Default)]
+#[cfg_attr(not(feature = "rynk"), derive(Default))]
 pub struct RmkConfig<'a> {
     pub device_config: DeviceConfig<'a>,
     #[cfg(feature = "vial")]
@@ -38,4 +38,21 @@ pub struct RmkConfig<'a> {
     pub storage_config: StorageConfig,
     #[cfg(feature = "_ble")]
     pub ble_battery_config: BleBatteryConfig<'a>,
+}
+
+#[cfg(feature = "rynk")]
+impl Default for RmkConfig<'_> {
+    fn default() -> Self {
+        Self {
+            device_config: DeviceConfig::default(),
+            #[cfg(feature = "vial")]
+            vial_config: VialConfig::default(),
+            lock_config: LockConfig::default(),
+            layout_blob: rmk_types::constants::LAYOUT_BLOB,
+            #[cfg(feature = "storage")]
+            storage_config: StorageConfig::default(),
+            #[cfg(feature = "_ble")]
+            ble_battery_config: BleBatteryConfig::default(),
+        }
+    }
 }

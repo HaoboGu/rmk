@@ -11,7 +11,7 @@ use crate::modifier::ModifierCombination;
 // All key codes defined in HID spec
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord, FromRepr, MaxSize)]
-#[cfg_attr(feature = "_codegen", derive(strum::VariantNames))]
+#[cfg_attr(feature = "_codegen", derive(strum::EnumIter, strum::VariantNames))]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
@@ -383,6 +383,12 @@ pub enum HidKeyCode {
 }
 
 impl HidKeyCode {
+    /// Host-only: list all HID keycodes, in declaration order.
+    #[cfg(feature = "_codegen")]
+    pub fn all() -> impl Iterator<Item = Self> {
+        <Self as strum::IntoEnumIterator>::iter()
+    }
+
     /// Returns `true` if the keycode is a simple keycode defined in HID spec
     pub fn is_simple_key(self) -> bool {
         HidKeyCode::No <= self && self <= HidKeyCode::MouseAccel2

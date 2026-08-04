@@ -230,9 +230,12 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                 }
             };
 
-            let event_or_timer = select(next_event_to_peri, embassy_time::Timer::after_millis(5));
+            #[cfg(feature = "dfu_split")]
+            let event_or_signal = select(next_event_to_peri, crate::dfu::PASSTHROUGH_SIGNAL.wait());
+            #[cfg(not(feature = "dfu_split"))]
+            let event_or_signal = next_event_to_peri;
 
-            match select(self.transceiver.read(), event_or_timer).await {
+            match select(self.transceiver.read(), event_or_signal).await {
                 Either::First(read_result) => match read_result {
                     #[cfg(feature = "dfu_split")]
                     Ok(SplitMessage::FirmwareHashResponse(hash)) => {
@@ -241,12 +244,21 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
                     Ok(split_message) => self.process_peripheral_message(split_message).await,
                     Err(e) => error!("Peripheral message read error: {:?}", e),
                 },
-                Either::Second(Either::First(msg)) => {
+                #[cfg(feature = "dfu_split")]
+                Either::Second(result) => match result {
+                    Either::First(msg) => {
+                        if self.send(&msg).await.is_err() {
+                            return;
+                        }
+                    }
+                    Either::Second(_) => {}
+                },
+                #[cfg(not(feature = "dfu_split"))]
+                Either::Second(msg) => {
                     if self.send(&msg).await.is_err() {
                         return;
                     }
                 }
-                Either::Second(Either::Second(())) => {}
             }
         }
     }

@@ -155,8 +155,8 @@ mod central;
 mod peripheral;
 
 pub(crate) use central::{
-    PASSTHROUGH_TARGET, PassthroughCommand, PassthroughDfuHandler, passthrough_done_if_empty, passthrough_pending,
-    passthrough_take_command,
+    PASSTHROUGH_SIGNAL, PASSTHROUGH_TARGET, PassthroughCommand, PassthroughDfuHandler, passthrough_done_if_empty,
+    passthrough_pending, passthrough_take_command,
 };
 pub use central::{get_firmware_update_data, set_firmware_update_data};
 pub use peripheral::{SplitDfuHandler, read_embedded_firmware_hash};

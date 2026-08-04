@@ -183,8 +183,20 @@ where
                     Either::First(Ok(conn)) => {
                         // Do NOT emit BleState::Connected here. gatt_events_task emits
                         // Connected when it sees GattConnectionEvent::Encrypted.
-                        #[cfg(feature = "storage")]
                         let active_bond_info = profile_manager.active_bond_info();
+                        // Check the bond info after the connection is just created.
+                        if let Some(bond) = &active_bond_info
+                            && !bond.info.identity.match_identity(&conn.raw().peer_identity())
+                        {
+                            warn!("[ble] connected peer doesn't match the active profile, disconnecting");
+                            conn.raw().disconnect();
+                            loop {
+                                if let GattConnectionEvent::Disconnected { .. } = conn.next().await {
+                                    break;
+                                }
+                            }
+                            continue;
+                        }
                         if let Either::Second(_) = select(
                             run_ble_keyboard(
                                 server,

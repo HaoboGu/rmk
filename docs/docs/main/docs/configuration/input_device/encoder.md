@@ -21,7 +21,8 @@ internal_pullup = false
 # Working mode of the encoder
 # Available modes:
 # - default: resolution = 1
-# - resolution: custom resolution, requires specifying resolution and reverse parameters
+# - e8h7: phase table tuned for E8H7 encoders
+# - resolution: custom resolution, requires specifying the resolution parameter
 phase = "resolution"
 
 # `resolution` represents the number of steps generated per detent.
@@ -39,10 +40,14 @@ phase = "resolution"
 resolution = 2
 
 # Or you can specify detent and pulse to calculate resolution automatically
-resolution = { detent = 30, pulse = 15 }
+# resolution = { detent = 30, pulse = 15 }
 
 # Whether the direction of the rotary encoder is reversed.
 reverse = false
+
+# Debounce interval in milliseconds. Suppresses spurious events from
+# mechanical contact bounce. Defaults to 0 (disabled).
+debounce_ms = 5
 ```
 
 Multiple encoders can be added directly. Encoder indices are determined by the order they are defined.
@@ -131,10 +136,11 @@ You can also use the resolution based phase:
 Then add the encoder to `run_all!` macro.
 
 ```rust
-    join3(
-        run_all!(matrix, encoder),
-        keyboard.run(),
-        run_rmk(&keymap, driver, storage, rmk_config, sd),
+    run_all!(
+        matrix,
+        encoder,
+        keyboard,
+        // ... other devices, processors and runners
     )
     .await;
 ```

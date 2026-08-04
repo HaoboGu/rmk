@@ -37,6 +37,8 @@ You should also specify the path to your `keyboard.toml` file in `.cargo/config.
 KEYBOARD_TOML_PATH =  { value = "keyboard.toml", relative = true }
 ```
 
+Your `keyboard.toml` is loaded on top of built-in defaults: RMK first loads the per-event channel defaults, then the chip-specific default config selected by `chip` (or `board`) in the `[keyboard]` section, and finally your `keyboard.toml` — later layers override earlier ones. The chip defaults live in [`rmk-config/src/default_config`](https://github.com/rmk-rs/rmk/tree/main/rmk-config/src/default_config), so you only need to write the settings that differ from them.
+
 ## Rust API
 
 For developers who want full programmatic control over the keyboard's behavior, RMK provides a comprehensive Rust API. This approach offers maximum flexibility and customization capabilities, allowing you to leverage Rust's powerful type system and compile-time guarantees to build sophisticated keyboard firmware.

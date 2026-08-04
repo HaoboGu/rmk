@@ -2,7 +2,7 @@
 
 This page contains real world examples of RMK keyboards.
 
-## [rmk-ble-keyboard](https://github.com/rmk-rs/rmk-ble-keyboard)
+## [rmk-ble-keyboard](https://github.com/HaoboGu/rmk-ble-keyboard)
 
 A BLE/USB dual-mode GH60 keyboard using Ebyte's E73 nRF52840 module.
 

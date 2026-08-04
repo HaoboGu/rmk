@@ -58,7 +58,8 @@ mod split;
 use self::split::PassthroughDfuHandler;
 #[cfg(feature = "dfu_split")]
 pub(crate) use self::split::{
-    PASSTHROUGH_TARGET, PassthroughCommand, passthrough_done_if_empty, passthrough_pending, passthrough_take_command,
+    PASSTHROUGH_SIGNAL, PASSTHROUGH_TARGET, PassthroughCommand, passthrough_done_if_empty, passthrough_pending,
+    passthrough_take_command,
 };
 #[cfg(feature = "dfu_split")]
 pub use self::split::{
@@ -326,6 +327,8 @@ pub fn register_dfu_interface<D: Driver<'static>>(
 
     // Alt 0: Central flash
     let central_attrs = DfuAttributes::CAN_DOWNLOAD | DfuAttributes::WILL_DETACH;
+    // embassy-usb's DfuAttributes is Copy only under defmt, so read the bits before the move
+    let central_attrs_bits = central_attrs.bits();
     let central_handler = RmkDfuHandler {
         inner: FirmwareHandler::new(updater, ResetImmediate),
         target_id: None,
@@ -363,7 +366,7 @@ pub fn register_dfu_interface<D: Driver<'static>>(
     alt.descriptor(
         0x21,
         &[
-            central_attrs.bits(),
+            central_attrs_bits,
             0xc4,
             0x09,
             (BLOCK_SIZE_DFU & 0xff) as u8,

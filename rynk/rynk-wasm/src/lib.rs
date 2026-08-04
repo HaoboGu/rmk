@@ -5,6 +5,7 @@
 //! Build with `wasm-pack build --target web`.
 #![cfg(target_arch = "wasm32")]
 
+mod catalog;
 mod client;
 mod transport;
 

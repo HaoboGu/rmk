@@ -16,8 +16,8 @@ Both chips, the PMW3360 and PMW3389, are very similar. The main difference is th
 ```toml
 [[input_device.pmw33xx]]
 name = "trackball0"
-sensor_type = "PMW3360" # or 3389
-id = 0 # optional number between 0-255. Ids are used for debug prints. Set to 0 if omitted.
+sensor_type = "PMW3360" # or "PMW3389"
+id = 0 # optional number between 0-255. The generated PointingProcessor is paired to it. Set to 0 if omitted.
 
 spi.instance = "SPI0"
 spi.sck = "PIN_18"
@@ -33,7 +33,7 @@ spi.cs = "PIN_17"
 # spi.rx_dma = "DMA_CH3" # omit for nrf52
 
 # STM32 pins do not implement the Wait trait, therefore the motion pin has no effect.
-# For STM32 you could use ExitInput and configure in Rust.
+# For STM32 you could use ExtiInput and configure in Rust.
 motion = "PIN_20" # Optional. If omitted, the sensor is polled.
 
 # how often the sensor sends reports to the computer
@@ -166,7 +166,7 @@ This should be added to the `central.rs`-File even if the sensor is on split per
 		// device_id: 0, // Match the id set on the PointingDevice (default 255 to match all devices)
         // invert_x: true, // invert axis if necessary
         // invert_y: true,
-        // swap_y: true,
+        // swap_xy: true,
         ..Default::default()
     };
 

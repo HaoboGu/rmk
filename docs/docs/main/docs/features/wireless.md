@@ -1,9 +1,9 @@
 # Wireless
 
-RMK has built-in wireless (BLE) support for nRF52 series, ESP32, and Raspberry Pi Pico W. To use the wireless feature, you need to enable the corresponding feature gate in your `Cargo.toml`:
+RMK has built-in wireless (BLE) support for nRF52 and nRF54 series, ESP32, Raspberry Pi Pico W, and SF32LB52x. To use the wireless feature, you need to enable the corresponding feature gate in your `Cargo.toml`:
 
 ```toml
-rmk = { version = "...", features = [
+rmk = { version = "0.9", features = [
     "nrf52840_ble", # Enable BLE feature for nRF52840
 ] }
 ```
@@ -12,10 +12,16 @@ RMK also provides BLE examples; check out [nrf52840_ble](https://github.com/rmk-
 
 Since multiple targets are not currently supported by `docs.rs`, API documentation is not available on `docs.rs`. Check the examples for usage.
 
+::: warning Upgrading from v0.8?
+v0.9 moves all BLE HID reports into a single HID service and renumbers the HID report ids, so hosts bonded to a v0.8 keyboard cache a stale layout. After flashing v0.9, forget the keyboard in the Bluetooth settings of every previously paired host, then pair again. See the [migration guide](../migration/v08_v09#ble-hosts-must-forget-and-re-pair).
+:::
+
 ## Supported Microcontrollers
 
 The following is the list of available feature gates (i.e., supported BLE chips):
 
+- nrf54lm20_ble
+- nrf54l15_ble
 - nrf52840_ble
 - nrf52833_ble
 - nrf52832_ble
@@ -23,8 +29,10 @@ The following is the list of available feature gates (i.e., supported BLE chips)
 - nrf52810_ble
 - esp32c3_ble
 - esp32c6_ble
+- esp32h2_ble
 - esp32s3_ble
 - pico_w_ble (for Raspberry Pi Pico W and Raspberry Pi Pico 2 W)
+- sf32lb52x_ble
 
 ## Nice!nano Support
 
@@ -45,10 +53,11 @@ Vial user keycodes can be configured to operate wireless profiles. Suppose that 
 - `User(N+1)`: switch to the previous profile
 - `User(N+2)`: clear current profile bond info
 - `User(N+3)`: switch default output between USB/BLE
+- `User(N+4)`: clear the stored split peer bond — hold the key for 5 seconds (BLE split keyboards only)
 
 Vial also provides a way to customize the displayed keycode, see `customKeycodes` in [this example](https://github.com/rmk-rs/rmk/blob/main/examples/use_rust/nrf52840_ble/vial.json). If `customKeycodes` are configured, the `User0` ~ `User(N+3)` will be displayed as `BT0`, ..., `Switch Output`.
 
-If you've connected a host to a profile, other devices will not be able to connect to this profile without manually clearing it first.
+If you've connected a host to a profile, other devices will not be able to connect to this profile: the keyboard immediately disconnects any device that doesn't match the profile's stored bond. To pair a different host to that profile, clear it first.
 
 ## BLE Passkey Entry
 

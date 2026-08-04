@@ -108,7 +108,7 @@ When used in configuration files, all keycodes are case-insensitive.
 | `LGui`   | `l_gui`, `leftgui`, `left_gui`, `lcmd`, `lwin`   | Left GUI      |
 | `RCtrl`  | `r_ctrl`, `rightctrl`, `right_ctrl`, `rctl`      | Right Control |
 | `RShift` | `r_shift`, `rightshift`, `right_shift`, `rsft`   | Right Shift   |
-| `RAlt`   | `r_alt`, `rightalt`, `right_alt`, `ropt`         | Right Alt     |
+| `RAlt`   | `r_alt`, `rightalt`, `right_alt`, `ropt`, `algr` | Right Alt     |
 | `RGui`   | `r_gui`, `rightgui`, `right_gui`, `rcmd`, `rwin` | Right GUI     |
 
 For simple keycodes with shift active you can use `SHIFTED(key)` in your [layout](../layout#layout), or more generally expressions like `WM(key, LShift | RGui)` with modifiers.
@@ -160,7 +160,7 @@ For simple keycodes with shift active you can use `SHIFTED(key)` in your [layout
 | ---------------- | ------------------------- | ---------------------- |
 | `International1` | `international_1`, `int1` | JIS `\` and `_`        |
 | `International2` | `international_2`, `int2` | JIS Katana or Hiragana |
-| `International3` | `international_3`, `int3` | JIS `¥` and `          |
+| `International3` | `international_3`, `int3` | JIS `¥` and `\|`       |
 | `International4` | `international_4`, `int4` | JIS Henkan             |
 | `International5` | `international_5`, `int5` | JIS Muhenkan           |
 | `International6` | `international_6`, `int6` | JIS Numpad `,`         |
@@ -209,43 +209,59 @@ For simple keycodes with shift active you can use `SHIFTED(key)` in your [layout
 | `MissionControl`   | `mission_control`, `mctl`    | macOS Mission Control                                 |
 | `Launchpad`        | `lpad`                       | macOS Launchpad                                       |
 
+## System & keyboard-page keys
+
+| Keycode        | Aliases                | Usage                                    |
+| -------------- | ---------------------- | ---------------------------------------- |
+| `SystemPower`  | `system_power`, `pwr`  | System Power Down                        |
+| `SystemSleep`  | `system_sleep`, `slep` | System Sleep                             |
+| `SystemWake`   | `system_wake`, `wake`  | System Wake                              |
+| `KbPower`      | `kb_power`             | Keyboard Power (HID keyboard page)       |
+| `KbMute`       | `kb_mute`              | Keyboard Mute (HID keyboard page)        |
+| `KbVolumeUp`   | `kb_volume_up`         | Keyboard Volume Up (HID keyboard page)   |
+| `KbVolumeDown` | `kb_volume_down`       | Keyboard Volume Down (HID keyboard page) |
+
 ## Navigation & editing keys
 
-| Keycode       | Aliases                       | Usage                                 |
-| ------------- | ----------------------------- | ------------------------------------- |
-| `PrintScreen` | `print_screen`, `pscr`        | Print Screen                          |
-| `ScrollLock`  | `scroll_lock`, `scrl`, `brmd` | Scroll Lock / macOS brightness toggle |
-| `Pause`       | `paus`, `brk`, `brmu`         | Pause / Break                         |
-| `Insert`      | `ins`                         | Insert                                |
-| `Home`        | —                             | Home                                  |
-| `PageUp`      | `page_up`, `pgup`             | Page Up                               |
-| `Delete`      | `del`                         | Delete                                |
-| `End`         | —                             | End                                   |
-| `PageDown`    | `page_down`, `pgdn`           | Page Down                             |
-| `Right`       | `rght`                        | Right arrow                           |
-| `Left`        | —                             | Left arrow                            |
-| `Down`        | —                             | Down arrow                            |
-| `Up`          | —                             | Up arrow                              |
-| `Execute`     | `exec`                        | Execute                               |
-| `Help`        | —                             | Help                                  |
-| `Menu`        | —                             | Application/Menu key                  |
-| `Select`      | `slct`                        | Select                                |
-| `Stop`        | —                             | Stop                                  |
-| `Again`       | `agin`                        | Again / Redo                          |
-| `Undo`        | —                             | Undo                                  |
-| `Cut`         | —                             | Cut                                   |
-| `Copy`        | —                             | Copy                                  |
-| `Paste`       | `pste`                        | Paste                                 |
-| `Find`        | —                             | Find                                  |
-| `Clear`       | `clr`                         | Clear                                 |
-| `Prior`       | `prir`                        | Prior / Previous                      |
-| `Return`      | `retn`                        | Return (alias of Enter)               |
-| `Separator`   | `sepr`                        | Separator (numeric/document use)      |
-| `Out`         | —                             | Out                                   |
-| `Oper`        | —                             | Oper                                  |
-| `ClearAgain`  | `clear_again`, `clag`         | Clear Again                           |
-| `Crsel`       | `crsl`                        | Cursor Select                         |
-| `Exsel`       | `exsl`                        | Extend Selection                      |
+| Keycode          | Aliases                       | Usage                                 |
+| ---------------- | ----------------------------- | ------------------------------------- |
+| `PrintScreen`    | `print_screen`, `pscr`        | Print Screen                          |
+| `ScrollLock`     | `scroll_lock`, `scrl`, `brmd` | Scroll Lock / macOS brightness toggle |
+| `Pause`          | `paus`, `brk`, `brmu`         | Pause / Break                         |
+| `Insert`         | `ins`                         | Insert                                |
+| `Home`           | —                             | Home                                  |
+| `PageUp`         | `page_up`, `pgup`             | Page Up                               |
+| `Delete`         | `del`                         | Delete                                |
+| `End`            | —                             | End                                   |
+| `PageDown`       | `page_down`, `pgdn`           | Page Down                             |
+| `Right`          | `rght`                        | Right arrow                           |
+| `Left`           | —                             | Left arrow                            |
+| `Down`           | —                             | Down arrow                            |
+| `Up`             | —                             | Up arrow                              |
+| `Execute`        | `exec`                        | Execute                               |
+| `Help`           | —                             | Help                                  |
+| `Menu`           | —                             | Menu                                  |
+| `Application`    | `app`                         | Application / context-menu key        |
+| `Select`         | `slct`                        | Select                                |
+| `Stop`           | —                             | Stop                                  |
+| `Again`          | `agin`                        | Again / Redo                          |
+| `Undo`           | —                             | Undo                                  |
+| `Cut`            | —                             | Cut                                   |
+| `Copy`           | —                             | Copy                                  |
+| `Paste`          | `pste`                        | Paste                                 |
+| `Find`           | —                             | Find                                  |
+| `Clear`          | `clr`                         | Clear                                 |
+| `Prior`          | `prir`                        | Prior / Previous                      |
+| `Return`         | `retn`                        | Return (alias of Enter)               |
+| `Separator`      | `sepr`                        | Separator (numeric/document use)      |
+| `Out`            | —                             | Out                                   |
+| `Oper`           | —                             | Oper                                  |
+| `ClearAgain`     | `clear_again`, `clag`         | Clear Again                           |
+| `Crsel`          | `crsl`                        | Cursor Select                         |
+| `Exsel`          | `exsl`                        | Extend Selection                      |
+| `AlternateErase` | `alternate_erase`, `eras`     | Alternate Erase                       |
+| `SystemRequest`  | `system_request`, `syrq`      | SysReq/Attention                      |
+| `Cancel`         | `cncl`                        | Cancel                                |
 
 ## Mouse keys
 
@@ -273,7 +289,7 @@ For simple keycodes with shift active you can use `SHIFTED(key)` in your [layout
 
 ## Special keys
 
-| Keycode | Aliases                                                               | Usage                                   |
-| ------- | --------------------------------------------------------------------- | --------------------------------------- |
-| `No`    |                                                                       | Ignore this key                         |
-| `TRNS`  |  `_`, `__`, ... (you can repeat underscore as many times as you like) | Use the next lowest non-transparent key |
+| Keycode | Aliases                                                              | Usage                                   |
+| ------- | -------------------------------------------------------------------- | --------------------------------------- |
+| `No`    |                                                                      | Ignore this key                         |
+| `TRNS`  | `_`, `__`, ... (you can repeat underscore as many times as you like) | Use the next lowest non-transparent key |

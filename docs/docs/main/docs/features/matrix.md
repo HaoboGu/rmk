@@ -12,7 +12,7 @@ The standard approach. Keys are wired in a row-column grid, using diodes to prev
 
 ### Direct Pin Matrix
 
-Each key connects directly to its own GPIO pin, eliminating the matrix grid and the need for diodes. All key states are read simultaneously without scanning. This method requires a high number of GPIO pins, so it's best for small keyboards and macropads.
+Each key connects directly to its own GPIO pin, eliminating the matrix grid and the need for diodes. All key states are read simultaneously without scanning. This method requires a high number of GPIO pins, so it's best for small keyboards and macropads. In the Rust API this is [`rmk::matrix::direct_pin::DirectPinMatrix`](https://github.com/rmk-rs/rmk/blob/main/rmk/src/matrix/direct_pin.rs); see the [`rp2040_direct_pin`](https://github.com/rmk-rs/rmk/blob/main/examples/use_rust/rp2040_direct_pin/src/main.rs) example.
 
 ### Bidirectional Matrix
 
@@ -25,7 +25,7 @@ Async matrix is a power-saving feature that transforms how the matrix operates, 
 To enable it, add the `async_matrix` feature in `Cargo.toml`:
 
 ```toml
-rmk = { version = "...", features = ["async_matrix"] }
+rmk = { version = "0.9", features = ["async_matrix"] }
 ```
 
 ## Configuration
@@ -40,25 +40,36 @@ RMK's matrix system is built on a trait-based architecture. Any matrix or deboun
 
 **`DebouncerTrait`**: Controls switch bounce filtering. RMK includes default and fast debouncing algorithms, and you can also implement custom debouncing logic optimized for your own use cases.
 
-The following is an example demonstrating how to use a customized matrix:
+A matrix is an input device that publishes `KeyboardEvent`s, so `MatrixTrait` builds on the [`InputDevice`](./input_device) trait. The following is an example demonstrating how to use a customized matrix:
 
 ```rust
+use rmk::event::KeyboardEvent;
+use rmk::macros::input_device;
+use rmk::matrix::MatrixTrait;
+use rmk::run_all;
+
+// `#[input_device]` generates the `InputDevice` and `Runnable` impls
+#[input_device(publish = KeyboardEvent)]
 struct YourOwnMatrix<const ROW: usize, const COL: usize> {}
-impl<const ROW: usize, const COL: usize> MatrixTrait<ROW, COL> for YourOwnMatrix<ROW, COL> {
-    // Implement the `MatrixTrait`
+
+impl<const ROW: usize, const COL: usize> YourOwnMatrix<ROW, COL> {
+    // Required by `#[input_device(publish = KeyboardEvent)]`
+    async fn read_keyboard_event(&mut self) -> KeyboardEvent {
+        // Scan your hardware, debounce, and return
+        // `KeyboardEvent::key(row, col, pressed)` for each key state change
+    }
 }
 
-let my_matrix = YourOwnMatrix::new(); // Create the matrix struct
+impl<const ROW: usize, const COL: usize> MatrixTrait<ROW, COL> for YourOwnMatrix<ROW, COL> {
+    // With the `async_matrix` feature, implement `wait_for_key()` here
+}
+
+let mut my_matrix = YourOwnMatrix::<ROW, COL> {}; // Create the matrix struct
 
 // .. Other initialization
 
 // Run the main process
-join3(
-    run_all!(my_matrix),
-    keyboard.run(),
-    run_rmk(&keymap, driver, &mut storage, rmk_config),
-)
-.await;
+run_all!(my_matrix, keyboard, storage, usb_transport).await;
 ```
 
 ## See Also

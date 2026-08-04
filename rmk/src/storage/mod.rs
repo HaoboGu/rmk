@@ -9,7 +9,7 @@ use postcard::experimental::max_size::MaxSize;
 use rmk_types::connection::ConnectionType;
 use rmk_types::morse::MorseProfile;
 use sequential_storage::Error as SSError;
-use sequential_storage::cache::NoCache;
+use sequential_storage::cache::{Cache, Uncached};
 use sequential_storage::map::{Key, MapConfig, MapStorage, PostcardValue, SerializationError};
 #[cfg(feature = "host")]
 use {
@@ -21,6 +21,7 @@ use {
 
 #[cfg(feature = "_ble")]
 use crate::ble::profile::ProfileInfo;
+use crate::boot::reboot_keyboard;
 use crate::channel::FLASH_CHANNEL;
 use crate::config::StorageConfig;
 #[cfg(all(feature = "_ble", feature = "split"))]
@@ -362,6 +363,8 @@ pub async fn new_storage_for_split_peripheral<F: AsyncNorFlash>(
     .await
 }
 
+type StorageCache = Cache<Uncached, Uncached, Uncached, StorageKey>;
+
 pub struct Storage<
     F: AsyncNorFlash,
     const ROW: usize,
@@ -369,7 +372,7 @@ pub struct Storage<
     const NUM_LAYER: usize,
     const NUM_ENCODER: usize = 0,
 > {
-    pub(crate) flash: MapStorage<StorageKey, F, NoCache>,
+    pub(crate) flash: MapStorage<StorageKey, F, StorageCache>,
     pub(crate) buffer: [u8; get_buffer_size()],
 }
 
@@ -452,7 +455,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         };
 
         let mut storage = Self {
-            flash: MapStorage::new(flash, MapConfig::new(storage_range), NoCache::new()),
+            flash: MapStorage::new(flash, MapConfig::new(storage_range), Cache::new_uncached()),
             buffer: [0; get_buffer_size()],
         };
 
@@ -714,7 +717,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 FlashOperationMessage::LayoutOptions(layout_option) => {
                     update_storage_field!(&mut self.flash, &mut self.buffer, LayoutConfig, layout_option)
                 }
-                FlashOperationMessage::Reset => self.flash.erase_all().await,
+                FlashOperationMessage::Reset => {
+                    let result = self.flash.erase_all().await;
+                    reboot_keyboard();
+                    result
+                }
                 FlashOperationMessage::ResetLayout => {
                     info!("Ignoring ResetLayout at runtime (handled at startup via clear_layout).");
                     Ok(())
@@ -869,7 +876,7 @@ const fn get_buffer_size() -> usize {
 
 #[cfg(test)]
 mod tests {
-    use sequential_storage::cache::NoCache;
+    use sequential_storage::cache::Cache;
     use sequential_storage::map::{MapConfig, MapStorage};
 
     use super::*;
@@ -1015,7 +1022,7 @@ mod tests {
 
             let storage_range = (16_384 - 2 * 4_096) as u32..16_384u32;
             let mut map =
-                MapStorage::<StorageKey, _, _>::new(Flash::new(), MapConfig::new(storage_range), NoCache::new());
+                MapStorage::<StorageKey, _, _>::new(Flash::new(), MapConfig::new(storage_range), Cache::new_uncached());
             let mut buffer = [0u8; 256];
 
             map.store_item(
