@@ -1504,7 +1504,7 @@ dependencies = [
 [[package]]
 name = "nrf-mpsl"
 version = "0.3.0"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=abe49d22ebfc85fae134eb082fbfddf752016a55#abe49d22ebfc85fae134eb082fbfddf752016a55"
+source = "git+https://github.com/alexmoon/nrf-sdc?rev=f54b6389ffa2750d4d3a4f5435660cb66b47e51a#f54b6389ffa2750d4d3a4f5435660cb66b47e51a"
 dependencies = [
  "cfg-if",
  "cortex-m",
@@ -1521,7 +1521,7 @@ dependencies = [
 [[package]]
 name = "nrf-mpsl-sys"
 version = "0.2.1"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=abe49d22ebfc85fae134eb082fbfddf752016a55#abe49d22ebfc85fae134eb082fbfddf752016a55"
+source = "git+https://github.com/alexmoon/nrf-sdc?rev=f54b6389ffa2750d4d3a4f5435660cb66b47e51a#f54b6389ffa2750d4d3a4f5435660cb66b47e51a"
 dependencies = [
  "bindgen",
  "doxygen-rs",
@@ -1540,7 +1540,7 @@ dependencies = [
 [[package]]
 name = "nrf-sdc"
 version = "0.4.0"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=abe49d22ebfc85fae134eb082fbfddf752016a55#abe49d22ebfc85fae134eb082fbfddf752016a55"
+source = "git+https://github.com/alexmoon/nrf-sdc?rev=f54b6389ffa2750d4d3a4f5435660cb66b47e51a#f54b6389ffa2750d4d3a4f5435660cb66b47e51a"
 dependencies = [
  "bt-hci",
  "critical-section",
@@ -1557,7 +1557,7 @@ dependencies = [
 [[package]]
 name = "nrf-sdc-sys"
 version = "0.2.1"
-source = "git+https://github.com/alexmoon/nrf-sdc?rev=abe49d22ebfc85fae134eb082fbfddf752016a55#abe49d22ebfc85fae134eb082fbfddf752016a55"
+source = "git+https://github.com/alexmoon/nrf-sdc?rev=f54b6389ffa2750d4d3a4f5435660cb66b47e51a#f54b6389ffa2750d4d3a4f5435660cb66b47e51a"
 dependencies = [
  "bindgen",
  "doxygen-rs",
