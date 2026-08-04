@@ -146,11 +146,17 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'b, 's: 'b, C: Controll
 
     let peri_task = async {
         let server = BleSplitPeripheralServer::new_default("rmk").unwrap();
+        // Once the advertising ladder has expired, the central has given up initiating
+        // and only scans — and a scanner can't see directed advertising (no payload).
+        // So advertising resumed by a key press must start undirected.
+        let mut try_directed = true;
         loop {
             update_status(|c| *c = ConnectionStatus::new());
             publish_event(CentralConnectedEvent { connected: false });
-            match split_peripheral_advertise(id, central_addr, &mut peripheral, &server).await {
+            match split_peripheral_advertise(id, central_addr.filter(|_| try_directed), &mut peripheral, &server).await
+            {
                 Ok(conn) => {
+                    try_directed = true;
                     info!("Connected to the central");
                     publish_event(CentralConnectedEvent { connected: true });
                     let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
@@ -176,6 +182,7 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'b, 's: 'b, C: Controll
                     let mut sub = KeyboardEvent::subscriber();
                     sub.clear();
                     let _ = sub.next_message_pure().await;
+                    try_directed = false;
                     continue;
                 }
                 Err(e) => {
@@ -193,75 +200,62 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'b, 's: 'b, C: Controll
 }
 
 /// Create an advertiser to use to connect to a BLE Central, and wait for it to connect.
+///
+/// With a central address, advertise directed first: right after a disconnect the
+/// central still initiates towards our address and connects immediately. Then fall
+/// back to undirected advertising, which both an initiating and a scanning central
+/// can see.
 async fn split_peripheral_advertise<'a, 'b, C: Controller>(
     id: usize,
     central_addr: Option<[u8; 6]>,
     peripheral: &mut Peripheral<'a, C, DefaultPacketPool>,
     server: &'b BleSplitPeripheralServer<'_>,
 ) -> Result<GattConnection<'a, 'b, DefaultPacketPool>, BleHostError<C::Error>> {
-    let mut advertiser_data = [0; 31];
-    let advertisement = get_peri_advertiser::<C>(id, central_addr, &mut advertiser_data)?;
+    if let Some(addr) = central_addr {
+        let advertisement = Advertisement::ConnectableNonscannableDirected {
+            peer: Address::random(addr),
+        };
+        let advertiser = peripheral
+            .advertise(&AdvertisementParameters::default(), advertisement)
+            .await?;
+        match with_timeout(Duration::from_secs(10), advertiser.accept()).await {
+            Ok(conn_res) => {
+                let conn = conn_res?.with_attribute_server(server)?;
+                info!("[adv] connection established");
+                return Ok(conn);
+            }
+            Err(_) => warn!("[adv] directed advertising timed out, advertise as undirected"),
+        }
+    }
 
+    let mut advertiser_data = [0; 31];
+    AdStructure::encode_slice(
+        &[
+            AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
+            AdStructure::CompleteServiceUuids128(&[
+                // uuid: 4dd5fbaa-18e5-4b07-bf0a-353698659946
+                [
+                    70u8, 153u8, 101u8, 152u8, 54u8, 53u8, 10u8, 191u8, 7u8, 75u8, 229u8, 24u8, 170u8, 251u8, 213u8,
+                    77u8,
+                ],
+            ]),
+            AdStructure::ManufacturerSpecificData {
+                company_identifier: 0xe118,
+                payload: &[id as u8],
+            },
+        ],
+        &mut advertiser_data[..],
+    )?;
+    trace!("Advertising data: {:?}", advertiser_data);
+    let advertisement = Advertisement::ConnectableScannableUndirected {
+        adv_data: &advertiser_data[..],
+        scan_data: &[],
+    };
     let advertiser = peripheral
         .advertise(&AdvertisementParameters::default(), advertisement)
         .await?;
-
-    match with_timeout(Duration::from_secs(10), advertiser.accept()).await {
-        Ok(conn_res) => {
-            let conn = conn_res?.with_attribute_server(server)?;
-            info!("[adv] connection established");
-            Ok(conn)
-        }
-        Err(_) => {
-            warn!("[adv] Try update central_addr");
-            // Advertise without central addr
-            let advertisement = get_peri_advertiser::<C>(id, None, &mut advertiser_data)?;
-            let advertiser = peripheral
-                .advertise(&AdvertisementParameters::default(), advertisement)
-                .await?;
-            match with_timeout(Duration::from_secs(300), advertiser.accept()).await {
-                Ok(re) => Ok(re?.with_attribute_server(server)?),
-                Err(_e) => Err(BleHostError::BleHost(Error::Timeout)),
-            }
-        }
+    match with_timeout(Duration::from_secs(300), advertiser.accept()).await {
+        Ok(re) => Ok(re?.with_attribute_server(server)?),
+        Err(_e) => Err(BleHostError::BleHost(Error::Timeout)),
     }
-}
-
-fn get_peri_advertiser<'a, C: Controller>(
-    id: usize,
-    central_addr: Option<[u8; 6]>,
-    advertiser_data: &'a mut [u8; 31],
-) -> Result<Advertisement<'a>, BleHostError<C::Error>> {
-    let advertisement = match central_addr {
-        Some(addr) => Advertisement::ConnectableNonscannableDirected {
-            peer: Address::random(addr),
-        },
-        None => {
-            info!("No central address provided, so we advertise as undirected");
-            // No central address provided, so we advertise as undirected
-            AdStructure::encode_slice(
-                &[
-                    AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
-                    AdStructure::CompleteServiceUuids128(&[
-                        // uuid: 4dd5fbaa-18e5-4b07-bf0a-353698659946
-                        [
-                            70u8, 153u8, 101u8, 152u8, 54u8, 53u8, 10u8, 191u8, 7u8, 75u8, 229u8, 24u8, 170u8, 251u8,
-                            213u8, 77u8,
-                        ],
-                    ]),
-                    AdStructure::ManufacturerSpecificData {
-                        company_identifier: 0xe118,
-                        payload: &[id as u8],
-                    },
-                ],
-                &mut advertiser_data[..],
-            )?;
-            trace!("Advertising data: {:?}", advertiser_data);
-            Advertisement::ConnectableScannableUndirected {
-                adv_data: &advertiser_data[..],
-                scan_data: &[],
-            }
-        }
-    };
-    Ok(advertisement)
 }
