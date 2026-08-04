@@ -221,7 +221,7 @@ async fn main(spawner: Spawner) {
     let host_service = HostService::new(&keymap, &rmk_config);
 
     let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
-    let mut ble_transport = BleTransport::new(sdc, ble_addr(), rmk_config)
+    let ble_transport = BleTransport::new(sdc, ble_addr(), rmk_config)
         .await
         .with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();

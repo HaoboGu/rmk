@@ -23,7 +23,7 @@ use lcd_async::Builder;
 use lcd_async::models::GC9107;
 use panic_probe as _;
 use renderers::KeyLabelRenderer;
-use rmk::ble::BleTransport;
+use rmk::ble::{BleTransport, build_ble_stack};
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::display::DisplayProcessor;
@@ -35,7 +35,7 @@ use rmk::matrix::direct_pin::DirectPinMatrix;
 use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::storage::async_flash_wrapper;
 use rmk::usb::UsbTransport;
-use rmk::{KeymapData, initialize_keymap_and_storage, run_all};
+use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all};
 use sifli_hal::efuse::Efuse;
 use sifli_hal::gpio::{Input, Level, Output};
 use sifli_hal::mpi::{BlockingNorFlash, BuiltInProfile, NorConfig, ProfileSource};
@@ -144,6 +144,8 @@ async fn main(_spawner: Spawner) {
             }
         }
     };
+    let mut host_resources = HostResources::new();
+    let stack = build_ble_stack(controller, ble_addr, &mut host_resources).await;
 
     // Initialize USB driver (dual-mode USB + BLE). PA35/PA36 are the USB D+/D- pins.
     let usb_driver = Driver::new(p.USBC, Irqs, p.PA35, p.PA36);
@@ -247,7 +249,7 @@ async fn main(_spawner: Spawner) {
     info!("Starting RMK dual-mode (USB + BLE) runner...");
 
     let mut usb_transport = UsbTransport::new(usb_driver, rmk_config.device_config).with_host_service(&host_service);
-    let mut ble_transport = BleTransport::new(controller, ble_addr, rmk_config)
+    let mut ble_transport = BleTransport::new(&stack, rmk_config)
         .await
         .with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();

@@ -646,24 +646,21 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         false
     }
 
-    /// Read all peripheral addresses from flash at startup, returning a `RefCell`
-    /// suitable for sharing with `scan_peripherals` and `run_peripheral_manager`.
+    /// Read all peripheral addresses from flash at startup, one slot per
+    /// peripheral, for [`BleTransport::with_split_peripherals`](crate::ble::BleTransport::with_split_peripherals).
     ///
     /// Must be called before the storage task starts; once it is running it owns
     /// `&mut Storage` and no other reader can hold it.
     #[cfg(all(feature = "_ble", feature = "split"))]
-    pub async fn read_peripheral_addresses<const PERI_NUM: usize>(
-        &mut self,
-    ) -> core::cell::RefCell<heapless::Vec<Option<[u8; 6]>, PERI_NUM>> {
-        let mut peripheral_addresses: heapless::Vec<Option<[u8; 6]>, PERI_NUM> = heapless::Vec::new();
-        for id in 0..PERI_NUM {
-            let entry = match self.fetch_data(StorageKey::peer_address(id as u8)).await {
+    pub async fn read_peripheral_addresses(&mut self) -> [Option<[u8; 6]>; crate::SPLIT_PERIPHERALS_NUM] {
+        let mut addrs = [None; crate::SPLIT_PERIPHERALS_NUM];
+        for (id, slot) in addrs.iter_mut().enumerate() {
+            *slot = match self.fetch_data(StorageKey::peer_address(id as u8)).await {
                 Some(StorageData::PeerAddress(addr)) if addr.is_valid => Some(addr.address),
                 _ => None,
             };
-            peripheral_addresses.push(entry).unwrap();
         }
-        core::cell::RefCell::new(peripheral_addresses)
+        addrs
     }
 }
 

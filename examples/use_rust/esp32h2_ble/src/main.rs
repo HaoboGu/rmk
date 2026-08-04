@@ -89,7 +89,7 @@ async fn main(_s: Spawner) {
     let mut keyboard = Keyboard::new(&keymap); // Initialize the light controller
     let host_service = HostService::new(&keymap, &rmk_config);
 
-    let mut ble_transport = BleTransport::new(controller, central_addr, rmk_config)
+    let ble_transport = BleTransport::new(controller, central_addr, rmk_config)
         .await
         .with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();

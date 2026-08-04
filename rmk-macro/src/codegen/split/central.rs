@@ -19,11 +19,9 @@ pub(crate) fn expand_split_central_config(hardware: &Hardware) -> proc_macro2::T
 fn expand_split_communication_config(chip: &ChipModel, split_config: &SplitConfig) -> TokenStream2 {
     match split_config.connection {
         SplitConnection::Ble => {
-            // We need to create addrs for BLE
-            let num_peripheral = split_config.peripheral.len();
             quote! {
                 // Must run before the storage task starts (both need `&mut storage`).
-                let peripheral_addrs = storage.read_peripheral_addresses::<#num_peripheral>().await;
+                let peripheral_addrs = storage.read_peripheral_addresses().await;
             }
         }
         SplitConnection::Serial => {

@@ -118,8 +118,7 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                     );
                     let mut rng = ::embassy_nrf::rng::Rng::new(p.RNG, Irqs);
                     let mut sdc_mem = ::nrf_sdc::Mem::<#sdc_mem_size>::new();
-                    let sdc = ::defmt::unwrap!(build_sdc(sdc_p, &mut rng, &*mpsl, &mut sdc_mem));
-                    let ble_controller = sdc;
+                    let ble_controller = ::defmt::unwrap!(build_sdc(sdc_p, &mut rng, &*mpsl, &mut sdc_mem));
                     let ble_addr = #ble_addr;
                 },
                 _ => quote! {},

@@ -6,7 +6,6 @@ use embassy_futures::select::{Either, Either3, select, select3};
 use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer, with_timeout};
-use heapless::VecView;
 use trouble_host::prelude::*;
 
 use super::GattSplitMessage;
@@ -53,7 +52,7 @@ pub(crate) async fn scan_peripherals<
         + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 >(
     stack: &'b Stack<'s, C, DefaultPacketPool>,
-    addrs: &RefCell<VecView<Option<[u8; 6]>>>,
+    addrs: &RefCell<[Option<[u8; 6]>]>,
 ) {
     loop {
         // Wait unitil `START_SCANNING` is signaled
@@ -163,7 +162,7 @@ pub(crate) async fn run_ble_peripheral_manager<
         + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 >(
     peri_id: usize,
-    addrs: &RefCell<VecView<Option<[u8; 6]>>>,
+    addrs: &RefCell<[Option<[u8; 6]>]>,
     stack: &'b Stack<'s, C, DefaultPacketPool>,
     matrix_config: PeripheralMatrixConfig,
 ) {

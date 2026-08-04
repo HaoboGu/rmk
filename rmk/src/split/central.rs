@@ -6,8 +6,8 @@ pub use crate::split::driver::UpdatePolicy;
 
 /// Run the manager task of one serial split peripheral.
 ///
-/// BLE split peripherals are managed inside the BLE transport — attach them
-/// with [`with_split_peripherals`](crate::ble::BleTransport::with_split_peripherals).
+/// BLE split peripherals are managed inside the BLE transport — see
+/// `BleTransport::run_split_central`.
 #[cfg(not(feature = "_ble"))]
 pub async fn run_peripheral_manager<S: Read + Write>(
     id: usize,

@@ -209,7 +209,7 @@ async fn main(spawner: Spawner) {
     let host_service = HostService::new(&keymap, &rmk_config);
 
     // Read peripheral address from storage
-    let peripheral_addrs = storage.read_peripheral_addresses::<2>().await;
+    let peripheral_addrs = storage.read_peripheral_addresses().await;
 
     // Initialize pointing device
     let pmw3610_config = Pmw3610Config {
@@ -256,11 +256,32 @@ async fn main(spawner: Spawner) {
     );
 
     let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
-    // Two peripheral halves, both 4x7 at row offset 4.
-    let mut ble_transport = BleTransport::new(sdc, ble_addr(), rmk_config)
+    let ble_transport = BleTransport::new(sdc, ble_addr(), rmk_config)
         .await
-        .with_split_peripherals(
-            &peripheral_addrs,
+        .with_host_service(&host_service);
+    let mut wpm_processor = WpmProcessor::new();
+
+    let mut watchdog_runner = Nrf52Watchdog::default_runner(p.WDT);
+
+    // Start
+    rmk::join_all!(
+        run_all!(
+            matrix,
+            encoder,
+            pmw3610_device,
+            adc_device,
+            batt_proc,
+            pointing_processor,
+            storage,
+            usb_transport,
+            wpm_processor,
+            keyboard,
+            capslock_led,
+            watchdog_runner
+        ),
+        // Two peripheral halves, both 4x7 at row offset 4.
+        ble_transport.run_split_central(
+            peripheral_addrs,
             [
                 PeripheralMatrixConfig {
                     rows: 4,
@@ -275,27 +296,7 @@ async fn main(spawner: Spawner) {
                     col_offset: 0,
                 },
             ],
-        )
-        .with_host_service(&host_service);
-    let mut wpm_processor = WpmProcessor::new();
-
-    let mut watchdog_runner = Nrf52Watchdog::default_runner(p.WDT);
-
-    // Start
-    run_all!(
-        matrix,
-        encoder,
-        pmw3610_device,
-        adc_device,
-        batt_proc,
-        pointing_processor,
-        storage,
-        usb_transport,
-        ble_transport,
-        wpm_processor,
-        keyboard,
-        capslock_led,
-        watchdog_runner
+        ),
     )
     .await;
 }

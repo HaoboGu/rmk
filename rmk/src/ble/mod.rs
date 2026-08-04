@@ -39,43 +39,34 @@ pub mod passkey;
 pub(crate) mod profile;
 pub(crate) mod sleep;
 
-/// Max number of connections of a split central's shared stack: the host link
-/// plus split peripherals. A standalone keyboard's stack lives inside
-/// [`BleTransport::run`].
+/// Max number of connections of a BLE split central's stack: the host link
+/// plus split peripherals. Every other keyboard's stack is sized to its
+/// single host link inside [`BleTransport::run`].
 pub(crate) const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + 1;
 
 /// Max number of L2CAP channels
 pub(crate) const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
 
-/// BLE transport runnable. Owns the whole BLE stack and the trouble-host
-/// server; `run` joins the background `ble_task` runner with the
-/// advertise→connect→serve loop and runs forever. On a split central it also
-/// runs the peripheral managers and scanner on the same stack — attach them
-/// with [`Self::with_split_peripherals`].
+/// BLE transport. Owns the whole BLE stack and the trouble-host server;
+/// running it consumes the transport and joins the background `ble_task`
+/// runner with the advertise→connect→serve loop, running forever. A BLE
+/// split central enters through [`Self::run_split_central`], which also runs
+/// the peripheral managers and scanner on the same stack; everything else
+/// enters through [`Self::run`].
 pub struct BleTransport<'a, C>
 where
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
-    /// Taken by `run`, which builds and owns the stack.
-    controller: Option<C>,
+    controller: C,
     address: [u8; 6],
     server: Server<'static>,
     product_name: &'static str,
     config: BleBatteryConfig<'static>,
-    #[cfg(feature = "split")]
-    split_peripherals: Option<SplitCentralSection<'a>>,
     #[cfg(feature = "host")]
     host_service: Option<&'a crate::host::HostService<'a>>,
     // Keeps `'a` in the type's parameter list across all feature configurations.
-    #[cfg(not(any(feature = "split", feature = "host")))]
+    #[cfg(not(feature = "host"))]
     _phantom: core::marker::PhantomData<&'a ()>,
-}
-
-/// The split peripherals a central manages on its BLE stack.
-#[cfg(feature = "split")]
-struct SplitCentralSection<'a> {
-    addrs: &'a core::cell::RefCell<heapless::VecView<Option<[u8; 6]>>>,
-    matrix_configs: [crate::split::PeripheralMatrixConfig; crate::SPLIT_PERIPHERALS_NUM],
 }
 
 impl<'a, C> BleTransport<'a, C>
@@ -125,32 +116,16 @@ where
             .unwrap();
 
         Self {
-            controller: Some(controller),
+            controller,
             address,
             server,
             product_name: rmk_config.device_config.product_name,
             config: rmk_config.ble_battery_config,
-            #[cfg(feature = "split")]
-            split_peripherals: None,
             #[cfg(feature = "host")]
             host_service: None,
-            #[cfg(not(any(feature = "split", feature = "host")))]
+            #[cfg(not(feature = "host"))]
             _phantom: core::marker::PhantomData,
         }
-    }
-
-    /// Attach the split peripherals this central manages: their discovered
-    /// addresses (usually from
-    /// [`read_peripheral_addresses`](crate::storage::Storage::read_peripheral_addresses))
-    /// and one region entry per peripheral.
-    #[cfg(feature = "split")]
-    pub fn with_split_peripherals(
-        mut self,
-        addrs: &'a core::cell::RefCell<heapless::VecView<Option<[u8; 6]>>>,
-        matrix_configs: [crate::split::PeripheralMatrixConfig; crate::SPLIT_PERIPHERALS_NUM],
-    ) -> Self {
-        self.split_peripherals = Some(SplitCentralSection { addrs, matrix_configs });
-        self
     }
 
     /// Attach the host-protocol service (Vial or Rynk, picked at compile
@@ -161,188 +136,209 @@ where
         self.host_service = Some(service);
         self
     }
-}
 
-impl<'a, C> Runnable for BleTransport<'a, C>
-where
-    C: Controller
-        + ControllerCmdAsync<LeSetPhy>
-        + ControllerCmdSync<LeReadLocalSupportedFeatures>
-        + ControllerCmdSync<bt_hci::cmd::le::LeSetScanParams>,
-{
-    async fn run(&mut self) -> ! {
+    /// Run the BLE transport forever, serving the host link. Consumes the
+    /// transport: the stack it builds takes ownership of the controller.
+    pub async fn run(self) -> ! {
         // Load the preferred connection from storage
         let preferred = crate::state::load_preferred_connection().await;
         crate::state::set_preferred_connection(preferred);
 
-        let controller = self.controller.take().expect("BleTransport::run called twice");
-        let address = self.address;
+        // Exactly one link — the host.
+        let mut resources: HostResources<DefaultPacketPool, 1, 4> = HostResources::new();
+        let stack = trouble_host::new(self.controller, &mut resources)
+            .set_random_address(Address::random(self.address))
+            .build();
+        serve(
+            &stack,
+            &self.server,
+            self.product_name,
+            &self.config,
+            #[cfg(feature = "host")]
+            self.host_service,
+        )
+        .await
+    }
+
+    /// Run a BLE split central forever: the host link plus one manager per
+    /// split peripheral and the scanner, all on one stack.
+    ///
+    /// `addrs` are the peripherals' stored addresses (usually from
+    /// [`read_peripheral_addresses`](crate::storage::Storage::read_peripheral_addresses));
+    /// `matrix_configs` is one region entry per peripheral. A serial split
+    /// central passes its matrix regions to `run_peripheral_manager` instead
+    /// and enters through [`Self::run`].
+    #[cfg(feature = "split")]
+    pub async fn run_split_central(
+        self,
+        addrs: [Option<[u8; 6]>; crate::SPLIT_PERIPHERALS_NUM],
+        matrix_configs: [crate::split::PeripheralMatrixConfig; crate::SPLIT_PERIPHERALS_NUM],
+    ) -> !
+    where
+        C: ControllerCmdSync<bt_hci::cmd::le::LeSetScanParams>,
+    {
+        // Load the preferred connection from storage
+        let preferred = crate::state::load_preferred_connection().await;
+        crate::state::set_preferred_connection(preferred);
 
         let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
-
-        #[cfg(feature = "split")]
-        if let Some(section) = self.split_peripherals.take() {
-            // Split central: the stack also serves the peripheral links.
-            let stack = trouble_host::new(controller, &mut resources)
-                .set_random_address(Address::random(address))
-                .build();
-            let managers =
-                embassy_futures::join::join_array(core::array::from_fn::<_, { crate::SPLIT_PERIPHERALS_NUM }, _>(
-                    |i| {
-                        crate::split::ble::central::run_ble_peripheral_manager(
-                            i,
-                            section.addrs,
-                            &stack,
-                            section.matrix_configs[i],
-                        )
-                    },
-                ));
-            join3(
-                self.serve(&stack),
-                managers,
-                crate::split::ble::central::scan_peripherals(&stack, section.addrs),
-            )
-            .await;
-            unreachable!("BleTransport sub-tasks must run forever")
-        }
-
-        // Standalone keyboard: exactly one link — the host.
-        let stack = trouble_host::new(controller, &mut resources)
-            .set_random_address(Address::random(address))
+        let stack = trouble_host::new(self.controller, &mut resources)
+            .set_random_address(Address::random(self.address))
             .build();
-        self.serve(&stack).await
+
+        // The scanner and the managers share the address slots.
+        let addrs = core::cell::RefCell::new(addrs);
+        let managers =
+            embassy_futures::join::join_array(core::array::from_fn::<_, { crate::SPLIT_PERIPHERALS_NUM }, _>(|i| {
+                crate::split::ble::central::run_ble_peripheral_manager(i, &addrs, &stack, matrix_configs[i])
+            }));
+        join3(
+            serve(
+                &stack,
+                &self.server,
+                self.product_name,
+                &self.config,
+                #[cfg(feature = "host")]
+                self.host_service,
+            ),
+            managers,
+            crate::split::ble::central::scan_peripherals(&stack, &addrs),
+        )
+        .await;
+        unreachable!("BleTransport sub-tasks must run forever")
     }
 }
 
-impl<C> BleTransport<'_, C>
+/// Advertise→connect→serve forever, joined with the stack runner and the
+/// sleep manager.
+async fn serve<'r, C>(
+    stack: &Stack<'_, C, DefaultPacketPool>,
+    server: &Server<'_>,
+    product_name: &'static str,
+    config: &BleBatteryConfig<'static>,
+    #[cfg(feature = "host")] host_service: Option<&'r crate::host::HostService<'r>>,
+) -> !
 where
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
-    /// Advertise→connect→serve forever, joined with the stack runner and the
-    /// sleep manager.
-    async fn serve(&mut self, stack: &Stack<'_, C, DefaultPacketPool>) -> ! {
-        if crate::ble::passkey::passkey_entry_enabled() {
-            stack.set_io_capabilities(IoCapabilities::KeyboardOnly);
-        }
-        let mut profile_manager = ProfileManager::new(stack);
-        // Load the bonded devices from storage
-        #[cfg(feature = "storage")]
-        profile_manager.load_bonded_devices().await;
-        profile_manager.update_stack_bonds();
+    if crate::ble::passkey::passkey_entry_enabled() {
+        stack.set_io_capabilities(IoCapabilities::KeyboardOnly);
+    }
+    let mut profile_manager = ProfileManager::new(stack);
+    // Load the bonded devices from storage
+    #[cfg(feature = "storage")]
+    profile_manager.load_bonded_devices().await;
+    profile_manager.update_stack_bonds();
 
-        let mut peripheral = stack.peripheral();
-        let runner = stack.runner();
+    let mut peripheral = stack.peripheral();
+    let runner = stack.runner();
 
-        let server = &self.server;
-        let profile_manager = &mut profile_manager;
-        let product_name = self.product_name;
+    let profile_manager = &mut profile_manager;
 
-        let connection_loop = async {
-            loop {
-                match select(
-                    advertise(product_name, &mut peripheral, server),
-                    profile_manager.update_profile(),
-                )
-                .await
-                {
-                    Either::First(Ok(conn)) => {
-                        // Do NOT emit BleState::Connected here. gatt_events_task emits
-                        // Connected when it sees GattConnectionEvent::Encrypted.
-                        let active_bond_info = profile_manager.active_bond_info();
-                        // Check the bond info after the connection is just created.
-                        if let Some(bond) = &active_bond_info
-                            && !bond.info.identity.match_identity(&conn.raw().peer_identity())
-                        {
-                            warn!("[ble] connected peer doesn't match the active profile, disconnecting");
+    let connection_loop = async {
+        loop {
+            match select(
+                advertise(product_name, &mut peripheral, server),
+                profile_manager.update_profile(),
+            )
+            .await
+            {
+                Either::First(Ok(conn)) => {
+                    // Do NOT emit BleState::Connected here. gatt_events_task emits
+                    // Connected when it sees GattConnectionEvent::Encrypted.
+                    let active_bond_info = profile_manager.active_bond_info();
+                    // Check the bond info after the connection is just created.
+                    if let Some(bond) = &active_bond_info
+                        && !bond.info.identity.match_identity(&conn.raw().peer_identity())
+                    {
+                        warn!("[ble] connected peer doesn't match the active profile, disconnecting");
+                        conn.raw().disconnect();
+                        loop {
+                            if let GattConnectionEvent::Disconnected { .. } = conn.next().await {
+                                break;
+                            }
+                        }
+                        continue;
+                    }
+                    if let Either::Second(_) = select(
+                        run_ble_keyboard(
+                            server,
+                            &conn,
+                            stack,
+                            #[cfg(feature = "storage")]
+                            active_bond_info,
+                            config,
+                            #[cfg(feature = "host")]
+                            host_service,
+                        ),
+                        profile_manager.update_profile(),
+                    )
+                    .await
+                    {
+                        // When the profile changes, manually disconnect from the current host
+                        if conn.raw().is_connected() {
                             conn.raw().disconnect();
                             loop {
                                 if let GattConnectionEvent::Disconnected { .. } = conn.next().await {
                                     break;
                                 }
                             }
-                            continue;
-                        }
-                        if let Either::Second(_) = select(
-                            run_ble_keyboard(
-                                server,
-                                &conn,
-                                stack,
-                                #[cfg(feature = "storage")]
-                                active_bond_info,
-                                &self.config,
-                                #[cfg(feature = "host")]
-                                self.host_service,
-                            ),
-                            profile_manager.update_profile(),
-                        )
-                        .await
-                        {
-                            // When the profile changes, manually disconnect from the current host
-                            if conn.raw().is_connected() {
-                                conn.raw().disconnect();
-                                loop {
-                                    if let GattConnectionEvent::Disconnected { .. } = conn.next().await {
-                                        break;
-                                    }
-                                }
-                            }
                         }
                     }
-                    Either::First(Err(BleHostError::BleHost(Error::Timeout))) => {
-                        warn!("Advertising timeout, sleep and wait for any key");
-                        set_ble_state(BleState::Inactive);
-
-                        request_sleep();
-
-                        // Wake on key or pointing activity after the advertising
-                        // timeout. Subscribed here, not up front: a permanently
-                        // idle subscriber stalls `publish_event_async` once the
-                        // channel fills, and its backlog would satisfy this wait
-                        // instantly with a stale event.
-                        let mut key_wake = crate::event::KeyboardEvent::subscriber();
-                        let mut pointing_wake = crate::event::PointingEvent::subscriber();
-                        let _ = select(key_wake.next_message_pure(), pointing_wake.next_message_pure()).await;
-
-                        report_activity();
-                    }
-                    Either::First(Err(e)) => {
-                        #[cfg(feature = "defmt")]
-                        let e = defmt::Debug2Format(&e);
-                        error!("Advertise error: {:?}", e);
-                        Timer::after_millis(200).await;
-                    }
-                    Either::Second(()) => {}
-                };
-
-                // Skip the Inactive transition if we never moved off Advertising
-                if crate::state::current_ble_status().state != BleState::Advertising {
-                    set_ble_state(BleState::Inactive);
                 }
+                Either::First(Err(BleHostError::BleHost(Error::Timeout))) => {
+                    warn!("Advertising timeout, sleep and wait for any key");
+                    set_ble_state(BleState::Inactive);
+
+                    request_sleep();
+
+                    // Wake on key or pointing activity after the advertising
+                    // timeout. Subscribed here, not up front: a permanently
+                    // idle subscriber stalls `publish_event_async` once the
+                    // channel fills, and its backlog would satisfy this wait
+                    // instantly with a stale event.
+                    let mut key_wake = crate::event::KeyboardEvent::subscriber();
+                    let mut pointing_wake = crate::event::PointingEvent::subscriber();
+                    let _ = select(key_wake.next_message_pure(), pointing_wake.next_message_pure()).await;
+
+                    report_activity();
+                }
+                Either::First(Err(e)) => {
+                    #[cfg(feature = "defmt")]
+                    let e = defmt::Debug2Format(&e);
+                    error!("Advertise error: {:?}", e);
+                    Timer::after_millis(200).await;
+                }
+                Either::Second(()) => {}
+            };
+
+            // Skip the Inactive transition if we never moved off Advertising
+            if crate::state::current_ble_status().state != BleState::Advertising {
+                set_ble_state(BleState::Inactive);
             }
-        };
+        }
+    };
 
-        // This function is called only on split central, so use `split` feature here is safe.
-        #[cfg(feature = "split")]
-        let event_handler = {
-            // Latched before the runner starts so peripheral scanning can proceed
-            // as soon as `join3` polls it.
-            crate::split::ble::central::STACK_STARTED.signal(true);
-            crate::split::ble::central::ScanHandler {}
-        };
-        #[cfg(not(feature = "split"))]
-        let event_handler = NoopHandler;
+    #[cfg(feature = "split")]
+    let event_handler = {
+        // Latched before the runner starts so peripheral scanning can proceed
+        // as soon as `join3` polls it.
+        crate::split::ble::central::STACK_STARTED.signal(true);
+        crate::split::ble::central::ScanHandler {}
+    };
+    #[cfg(not(feature = "split"))]
+    let event_handler = NoopHandler;
 
-        // The sleep manager lives here because this is the single always-present
-        // BLE task: split or not, connected or not, it keeps running, so the
-        // sleep state can never get stuck.
-        join3(
-            ble_task(runner, &event_handler),
-            connection_loop,
-            sleep::run_sleep_manager(),
-        )
-        .await;
-        unreachable!("BleTransport sub-tasks must run forever")
-    }
+    // The sleep manager lives here because this is the single always-present
+    // BLE task: split or not, connected or not, it keeps running, so the
+    // sleep state can never get stuck.
+    join3(
+        ble_task(runner, &event_handler),
+        connection_loop,
+        sleep::run_sleep_manager(),
+    )
+    .await;
+    unreachable!("BleTransport sub-tasks must run forever")
 }
 
 /// NoopHandler is used on the device which never scans,
