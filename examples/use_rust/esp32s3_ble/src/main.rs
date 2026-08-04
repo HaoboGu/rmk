@@ -21,7 +21,7 @@ use esp_hal::rng::TrngSource;
 use esp_hal::timer::timg::TimerGroup;
 use esp_radio::ble::controller::BleConnector;
 use esp_storage::FlashStorage;
-use rmk::ble::{BleTransport, build_ble_stack};
+use rmk::ble::BleTransport;
 use rmk::config::{BehaviorConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::host::HostService;
@@ -30,7 +30,7 @@ use rmk::matrix::Matrix;
 use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::storage::async_flash_wrapper;
 use rmk::usb::UsbTransport;
-use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all};
+use rmk::{KeymapData, initialize_keymap_and_storage, run_all};
 
 use crate::keymap::*;
 use crate::vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
@@ -51,8 +51,6 @@ async fn main(_s: Spawner) {
     let connector = BleConnector::new(peripherals.BT, Default::default()).unwrap();
     let controller: ExternalController<_, 20> = ExternalController::new(connector);
     let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
-    let mut host_resources = HostResources::new();
-    let stack = build_ble_stack(controller, central_addr, &mut host_resources).await;
 
     // Initialize USB
     static mut EP_MEMORY: [u8; 1024] = [0; 1024];
@@ -103,7 +101,7 @@ async fn main(_s: Spawner) {
     let host_service = HostService::new(&keymap, &rmk_config);
 
     let mut usb_transport = UsbTransport::new(usb_driver, rmk_config.device_config).with_host_service(&host_service);
-    let mut ble_transport = BleTransport::new(&stack, rmk_config)
+    let mut ble_transport = BleTransport::new(controller, central_addr, rmk_config)
         .await
         .with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();

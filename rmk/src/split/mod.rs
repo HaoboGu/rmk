@@ -22,6 +22,16 @@ pub mod serial;
 /// Maximum size of a split message
 pub const SPLIT_MESSAGE_MAX_SIZE: usize = SplitMessage::POSTCARD_MAX_SIZE + 4;
 
+/// The rectangular region of the central's keymap covered by one split
+/// peripheral: its matrix size, and where it sits.
+#[derive(Debug, Clone, Copy)]
+pub struct PeripheralMatrixConfig {
+    pub rows: u8,
+    pub cols: u8,
+    pub row_offset: u8,
+    pub col_offset: u8,
+}
+
 /// Message used from central & peripheral communication
 #[repr(u8)]
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, MaxSize)]

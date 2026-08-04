@@ -12,21 +12,17 @@ use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
 /// - `const ROW_OFFSET`: row offset of the peripheral's matrix in the whole matrix
 /// - `const COL_OFFSET`: column offset of the peripheral's matrix in the whole matrix
 /// - `S`: a serial port that implements `Read` and `Write` trait in embedded-io-async
-pub(crate) async fn run_serial_peripheral_manager<
-    const ROW: usize,
-    const COL: usize,
-    const ROW_OFFSET: usize,
-    const COL_OFFSET: usize,
-    S: Read + Write,
->(
+pub(crate) async fn run_serial_peripheral_manager<S: Read + Write>(
     id: usize,
     receiver: S,
+    matrix_config: crate::split::PeripheralMatrixConfig,
     #[cfg(feature = "dfu_split")] policy: crate::split::driver::UpdatePolicy,
 ) {
     let split_serial_driver: SerialSplitDriver<S> = SerialSplitDriver::new(receiver);
-    let peripheral_manager = PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(
+    let peripheral_manager = PeripheralManager::new(
         split_serial_driver,
         id,
+        matrix_config,
         #[cfg(feature = "dfu_split")]
         policy,
     );

@@ -103,7 +103,28 @@ pub(crate) fn rmk_entry_select(
 
     let board = &hardware.board;
     let communication = &hardware.communication;
-    let (transport_prelude, transport_tasks) = transport_setup(host, communication);
+    // A BLE split central manages its peripherals inside the BLE transport.
+    let split_attach = match board {
+        BoardConfig::Split(split) if matches!(split.connection, SplitConnection::Ble) => {
+            let matrix_configs = split.peripheral.iter().map(|p| {
+                let rows = p.rows as u8;
+                let cols = p.cols as u8;
+                let row_offset = p.row_offset as u8;
+                let col_offset = p.col_offset as u8;
+                quote! {
+                    ::rmk::split::PeripheralMatrixConfig {
+                        rows: #rows,
+                        cols: #cols,
+                        row_offset: #row_offset,
+                        col_offset: #col_offset,
+                    }
+                }
+            });
+            quote! { .with_split_peripherals(&peripheral_addrs, [#(#matrix_configs),*]) }
+        }
+        _ => quote! {},
+    };
+    let (transport_prelude, transport_tasks) = transport_setup(host, communication, split_attach);
 
     let entry = match board {
         BoardConfig::Split(split_config) => {
@@ -121,23 +142,6 @@ pub(crate) fn rmk_entry_select(
                     if !processors.is_empty() {
                         tasks.push(processors_task);
                     };
-                    split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
-                        let row = p.rows;
-                        let col = p.cols;
-                        let row_offset = p.row_offset;
-                        let col_offset = p.col_offset;
-                        tasks.push(quote! {
-                            ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
-                                #idx,
-                                &peripheral_addrs,
-                                &stack,
-                            )
-                        });
-                    });
-                    let scan_task = quote! {
-                        ::rmk::split::ble::central::scan_peripherals(&stack, &peripheral_addrs)
-                    };
-                    tasks.push(scan_task);
                     let joined = join_all_tasks(tasks);
                     quote! {
                         #transport_prelude
@@ -154,12 +158,17 @@ pub(crate) fn rmk_entry_select(
                         .serial
                         .clone()
                         .expect("No serial defined for central");
-                    split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
-                        let row = p.rows;
-                        let col = p.cols;
-                        let row_offset = p.row_offset;
-                        let col_offset = p.col_offset;
-                        let uart_instance = format_ident!(
+                    split_config
+                        .peripheral
+                        .iter()
+                        .enumerate()
+                        .for_each(|(idx, p)| {
+                            let row = p.rows as u8;
+                            let col = p.cols as u8;
+                            let row_offset = p.row_offset as u8;
+                            let col_offset = p.col_offset as u8;
+                            let uart_instance =
+                                format_ident!(
                             "{}",
                             central_serials
                                 .get(idx)
@@ -167,24 +176,32 @@ pub(crate) fn rmk_entry_select(
                                 .instance
                                 .to_lowercase()
                         );
-                        let rmk_features = get_rmk_features();
-                        let dfu_split_enabled = is_feature_enabled(&rmk_features, "dfu_split");
-                        let policy = if dfu_split_enabled {
-                            match p.update_policy.as_deref() {
-                                Some("force") => quote! { ::rmk::split::central::UpdatePolicy::Force },
-                                _ => quote! { ::rmk::split::central::UpdatePolicy::MatchHash },
-                            }
-                        } else {
-                            quote! {}
-                        };
-                        tasks.push(quote! {
-                            ::rmk::split::central::run_peripheral_manager::<#row, #col, #row_offset, #col_offset, _>(
-                                #idx,
-                                #uart_instance,
-                                #policy
-                            )
+                            let rmk_features = get_rmk_features();
+                            let dfu_split_enabled = is_feature_enabled(&rmk_features, "dfu_split");
+                            let policy = if dfu_split_enabled {
+                                match p.update_policy.as_deref() {
+                                    Some("force") => {
+                                        quote! { ::rmk::split::central::UpdatePolicy::Force }
+                                    }
+                                    _ => quote! { ::rmk::split::central::UpdatePolicy::MatchHash },
+                                }
+                            } else {
+                                quote! {}
+                            };
+                            tasks.push(quote! {
+                                ::rmk::split::central::run_peripheral_manager(
+                                    #idx,
+                                    #uart_instance,
+                                    ::rmk::split::PeripheralMatrixConfig {
+                                        rows: #row,
+                                        cols: #col,
+                                        row_offset: #row_offset,
+                                        col_offset: #col_offset,
+                                    },
+                                    #policy
+                                )
+                            });
                         });
-                    });
 
                     let joined = join_all_tasks(tasks);
                     quote! {
@@ -250,6 +267,7 @@ pub(crate) fn rmk_entry_unibody(
 fn transport_setup(
     host: &Host,
     communication: &CommunicationConfig,
+    split_attach: TokenStream2,
 ) -> (TokenStream2, Vec<TokenStream2>) {
     let wpm_prelude = quote! {
         let mut wpm_processor = ::rmk::processor::builtin::wpm::WpmProcessor::new();
@@ -268,7 +286,7 @@ fn transport_setup(
         let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config)#with_host;
     };
     let ble_prelude = quote! {
-        let mut ble_transport = ::rmk::ble::BleTransport::new(&stack, rmk_config).await #with_host;
+        let mut ble_transport = ::rmk::ble::BleTransport::new(ble_controller, ble_addr, rmk_config).await #split_attach #with_host;
     };
 
     match communication {

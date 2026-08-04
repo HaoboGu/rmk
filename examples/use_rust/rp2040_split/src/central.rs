@@ -24,8 +24,8 @@ use rmk::host::HostService;
 use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::processor::builtin::wpm::WpmProcessor;
-use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
 use rmk::split::central::run_peripheral_manager;
+use rmk::split::{PeripheralMatrixConfig, SPLIT_MESSAGE_MAX_SIZE};
 use rmk::usb::UsbTransport;
 use rmk::watchdog::Rp2040Watchdog;
 use rmk::{KeymapData, initialize_keymap_and_storage, run_all};
@@ -107,7 +107,16 @@ async fn main(_spawner: Spawner) {
     // Start
     join(
         run_all!(matrix, storage, usb_transport, wpm_processor, keyboard, watchdog_runner),
-        run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver),
+        run_peripheral_manager(
+            0,
+            uart_receiver,
+            PeripheralMatrixConfig {
+                rows: 2,
+                cols: 1,
+                row_offset: 2,
+                col_offset: 2,
+            },
+        ),
     )
     .await;
 }

@@ -16,15 +16,14 @@ use embassy_rp::peripherals::{DMA_CH0, DMA_CH1, DMA_CH2, PIO0};
 use embassy_rp::pio::{self, Pio};
 use embassy_time as _;
 use panic_probe as _;
-use rmk::ble::build_ble_stack;
 use rmk::config::StorageConfig;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join;
 use rmk::matrix::Matrix;
+use rmk::run_all;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
 use rmk::watchdog::Rp2040Watchdog;
-use rmk::{HostResources, run_all};
 use static_cell::StaticCell;
 
 bind_interrupts!(struct Irqs {
@@ -105,15 +104,12 @@ async fn main(spawner: Spawner) {
 
     let ble_addr = [0x7e, 0xfe, 0x73, 0x9e, 0x66, 0xe3];
 
-    let mut host_resources = HostResources::new();
-
-    let stack = build_ble_stack(controller, ble_addr, &mut host_resources).await;
     let mut watchdog_runner = Rp2040Watchdog::default_runner(embassy_rp::watchdog::Watchdog::new(p.WATCHDOG));
 
     // Start
     join(
         run_all!(matrix, storage, watchdog_runner),
-        run_rmk_split_peripheral(0, &stack),
+        run_rmk_split_peripheral(0, controller, ble_addr),
     )
     .await;
 }

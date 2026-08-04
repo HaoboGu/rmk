@@ -17,7 +17,7 @@ use crate::event::{EventSubscriber, SleepStateEvent, SubscribableEvent};
 #[cfg(feature = "storage")]
 use crate::split::ble::PeerAddress;
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter, set_peripheral_connected};
-use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
+use crate::split::{PeripheralMatrixConfig, SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
 use crate::storage::FlashOperationMessage;
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
@@ -44,7 +44,7 @@ struct BleSplitCentralServer {
     service: SplitBleCentralService,
 }
 
-pub async fn scan_peripherals<
+pub(crate) async fn scan_peripherals<
     'b,
     's: 'b,
     C: Controller
@@ -161,14 +161,11 @@ pub(crate) async fn run_ble_peripheral_manager<
         + ControllerCmdSync<LeSetScanParams>
         + ControllerCmdAsync<LeSetPhy>
         + ControllerCmdSync<LeReadLocalSupportedFeatures>,
-    const ROW: usize,
-    const COL: usize,
-    const ROW_OFFSET: usize,
-    const COL_OFFSET: usize,
 >(
     peri_id: usize,
     addrs: &RefCell<VecView<Option<[u8; 6]>>>,
     stack: &'b Stack<'s, C, DefaultPacketPool>,
+    matrix_config: PeripheralMatrixConfig,
 ) {
     trace!("SPLIT_MESSAGE_MAX_SIZE: {}", SPLIT_MESSAGE_MAX_SIZE);
 
@@ -222,9 +219,7 @@ pub(crate) async fn run_ble_peripheral_manager<
 
                 set_peripheral_connected(peri_id, true);
 
-                if let Err(e) =
-                    run_central_manager_task::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(peri_id, stack, &conn).await
-                {
+                if let Err(e) = run_central_manager_task(peri_id, stack, &conn, matrix_config).await {
                     #[cfg(feature = "defmt")]
                     let e = defmt::Debug2Format(&e);
                     error!("BLE central error: {:?}", e);
@@ -289,14 +284,11 @@ async fn run_central_manager_task<
     's: 'b,
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
     P: PacketPool,
-    const ROW: usize,
-    const COL: usize,
-    const ROW_OFFSET: usize,
-    const COL_OFFSET: usize,
 >(
     id: usize,
     stack: &'b Stack<'s, C, P>,
     conn: &Connection<'b, P>,
+    matrix_config: PeripheralMatrixConfig,
 ) -> Result<(), BleHostError<C::Error>> {
     let client = GattClient::<C, P, 10>::new(stack, conn).await?;
 
@@ -308,7 +300,7 @@ async fn run_central_manager_task<
 
     match select3(
         ble_central_task(&client, conn),
-        run_peripheral_manager::<_, _, ROW, COL, ROW_OFFSET, COL_OFFSET>(id, &client),
+        run_peripheral_manager(id, &client, matrix_config),
         follow_sleep_state(stack, conn),
     )
     .await
@@ -339,17 +331,10 @@ async fn ble_central_task<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: P
     }
 }
 
-async fn run_peripheral_manager<
-    'a,
-    C: Controller + ControllerCmdAsync<LeSetPhy>,
-    P: PacketPool,
-    const ROW: usize,
-    const COL: usize,
-    const ROW_OFFSET: usize,
-    const COL_OFFSET: usize,
->(
+async fn run_peripheral_manager<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
     id: usize,
     client: &GattClient<'a, C, P, 10>,
+    matrix_config: PeripheralMatrixConfig,
 ) -> Result<(), BleHostError<C::Error>> {
     let services = client
         .services_by_uuid(&Uuid::new_long([
@@ -382,7 +367,7 @@ async fn run_peripheral_manager<
         info!("Subscribing notifications");
         let listener = client.subscribe(&message_to_central, false).await?;
         let split_ble_driver = BleSplitCentralDriver::new(listener, message_to_peripheral, client);
-        let peripheral_manager = PeripheralManager::<ROW, COL, ROW_OFFSET, COL_OFFSET, _>::new(split_ble_driver, id);
+        let peripheral_manager = PeripheralManager::new(split_ble_driver, id, matrix_config);
         peripheral_manager.run().await;
         info!("Peripheral manager stopped");
     };

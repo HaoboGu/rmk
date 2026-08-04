@@ -17,7 +17,6 @@ use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use panic_probe as _;
-use rmk::ble::build_ble_stack;
 use rmk::config::StorageConfig;
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::futures::future::join3;
@@ -25,10 +24,10 @@ use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
 use rmk::input_device::rotary_encoder::RotaryEncoder;
 use rmk::matrix::Matrix;
+use rmk::run_all;
 use rmk::split::peripheral::run_rmk_split_peripheral;
 use rmk::storage::new_storage_for_split_peripheral;
 use rmk::watchdog::Nrf52Watchdog;
-use rmk::{HostResources, run_all};
 use static_cell::StaticCell;
 
 bind_interrupts!(struct Irqs {
@@ -125,9 +124,6 @@ async fn main(spawner: Spawner) {
     let mut sdc_mem = sdc::Mem::<4696>::new();
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
 
-    let mut resources = HostResources::new();
-    let stack = build_ble_stack(sdc, ble_addr(), &mut resources).await;
-
     // Initialize the ADC. We are only using one channel for detecting battery level
     let adc_pin = p.P0_05.degrade_saadc();
     let saadc = init_adc(adc_pin, p.SAADC);
@@ -172,7 +168,7 @@ async fn main(spawner: Spawner) {
     join3(
         run_all!(matrix, encoder, adc_device, storage, watchdog_runner),
         run_all!(battery_processor),
-        run_rmk_split_peripheral(0, &stack),
+        run_rmk_split_peripheral(0, sdc, ble_addr()),
     )
     .await;
 }
