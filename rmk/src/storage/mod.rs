@@ -1485,6 +1485,7 @@ mod tests {
                     profile: Some(4),
                     ble_state: Some(rmk_types::ble::BleState::Advertising),
                     bonded: None,
+                    usb_connected: None,
                 }),
                 effects: None,
             };
