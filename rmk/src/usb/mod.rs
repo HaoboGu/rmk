@@ -158,12 +158,13 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     let mut usb_config = embassy_usb::Config::new(keyboard_config.vid, keyboard_config.pid);
     usb_config.manufacturer = Some(keyboard_config.manufacturer);
     usb_config.product = Some(keyboard_config.product_name);
-    // Prefix Rynk serials so hosts can identify RMK devices cheaply.
+    // Informational tag (visible in `lsusb` & co); host discovery keys on the
+    // Rynk vendor interface triple, not the serial.
     #[cfg(feature = "rynk")]
     let serial_number = {
         static SERIAL: StaticCell<heapless::String<64>> = StaticCell::new();
         let s = SERIAL.init(heapless::String::new());
-        let _ = s.push_str(rmk_types::protocol::rynk::RYNK_SERIAL_MAGIC);
+        let _ = s.push_str(rmk_types::protocol::rynk::RYNK_MAGIC);
         let _ = s.push_str(keyboard_config.serial_number);
         s.as_str()
     };
@@ -192,17 +193,28 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     #[cfg(not(feature = "dfu"))]
     const CONTROL_BUF_SIZE: usize = USB_BUF_SIZE;
 
+    // The rynk MS OS 2.0 descriptor set (WinUSB binding) takes ~178 bytes, and
+    // its BOS platform capability another 28 on top of the 5-byte BOS header.
+    #[cfg(feature = "rynk")]
+    const BOS_BUF_SIZE: usize = 64;
+    #[cfg(not(feature = "rynk"))]
+    const BOS_BUF_SIZE: usize = 16;
+    #[cfg(feature = "rynk")]
+    const MSOS_BUF_SIZE: usize = 256;
+    #[cfg(not(feature = "rynk"))]
+    const MSOS_BUF_SIZE: usize = 16;
+
     static CONFIG_DESC: StaticCell<[u8; USB_BUF_SIZE]> = StaticCell::new();
-    static BOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
-    static MSOS_DESC: StaticCell<[u8; 16]> = StaticCell::new();
+    static BOS_DESC: StaticCell<[u8; BOS_BUF_SIZE]> = StaticCell::new();
+    static MSOS_DESC: StaticCell<[u8; MSOS_BUF_SIZE]> = StaticCell::new();
     static CONTROL_BUF: StaticCell<[u8; CONTROL_BUF_SIZE]> = StaticCell::new();
 
     let mut builder = Builder::new(
         driver,
         usb_config,
         &mut CONFIG_DESC.init([0; USB_BUF_SIZE])[..],
-        &mut BOS_DESC.init([0; 16])[..],
-        &mut MSOS_DESC.init([0; 16])[..],
+        &mut BOS_DESC.init([0; BOS_BUF_SIZE])[..],
+        &mut MSOS_DESC.init([0; MSOS_BUF_SIZE])[..],
         &mut CONTROL_BUF.init([0; CONTROL_BUF_SIZE])[..],
     );
 

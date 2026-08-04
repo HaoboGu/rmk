@@ -1,0 +1,15 @@
+[package]
+name = "rynk-usb"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Vendor bulk USB transport for the Rynk host library"
+license.workspace = true
+repository.workspace = true
+keywords = ["keyboard", "firmware", "rmk", "protocol", "usb"]
+
+[dependencies]
+rynk = { path = ".." }
+nusb = { version = "0.2", features = ["tokio"] }
+embedded-io-adapters = { workspace = true, features = ["tokio-1"] }

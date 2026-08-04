@@ -12,6 +12,10 @@ pub(crate) fn get_serial_number() -> &'static str {
         let device_id = (u64::from(ficr.deviceid(1).read()) << 32) | u64::from(ficr.deviceid(0).read());
 
         let mut result = String::new();
+        // Vial magic first (its sideband discovery reads the serial); the
+        // 20-byte cap below truncates from the tail. Rynk builds carry the
+        // UID alone — their discovery keys on the vendor interface triple.
+        #[cfg(feature = "vial")]
         let _ = result.push_str("vial:f64c2b3c:");
 
         // Hex lookup table

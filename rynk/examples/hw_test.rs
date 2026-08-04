@@ -26,7 +26,7 @@ use rynk::rmk_types::morse::MorseProfile;
 use rynk::rmk_types::protocol::rynk::{MacroData, StorageResetMode};
 use rynk::{Client, RynkDevice, RynkHostError};
 use rynk_ble::BleDevice;
-use rynk_serial::SerialDevice;
+use rynk_usb::UsbDevice;
 
 /// Bounds the handshake so a silent peer can't hang the sweep.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -86,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Discovery is the one transport-specific call; connect + the command sweep
     // below are generic over `RynkDevice`.
     match std::env::args().nth(1).as_deref().unwrap_or("usb") {
-        "usb" => run_first("USB CDC serial", SerialDevice::discover()?, false).await,
+        "usb" => run_first("USB vendor bulk", UsbDevice::discover().await?, false).await,
         "ble" => run_first("BLE GATT", BleDevice::discover().await?, true).await,
         other => Err(format!("unknown transport {other:?}; use 'usb' (default) or 'ble'").into()),
     }
