@@ -197,7 +197,7 @@ JS code that opens and normalizes the browser transport differs.
 - **BLE - WebHID over the OS HID link.** A pure browser cannot reach Rynk's
   custom 128-bit GATT service on an OS-bonded keyboard, and Web Bluetooth cannot
   attach a bonded keyboard at all. WebHID can reach the firmware's vendor HID
-  report (`RynkHidService`, usage page `0xFF60`) via the existing OS HID link, so
+  report (`RynkHidService`, usage page `0xFF14`) via the existing OS HID link, so
   there is no pairing prompt. The page fragments each Rynk frame into fixed
   32-byte reports and reassembles reports back into the clean byte stream before
   wasm sees them.
@@ -233,7 +233,7 @@ select a second wasm build while keeping the same JS byte-link implementations.
   port. Close native `hw_test`, serial monitors, Arduino IDE, and other tabs. On
   Linux, make sure the user is in the `dialout` group.
 - **WebHID chooser empty**: the firmware must expose `RynkHidService` with usage
-  page `0xFF60`; a build without that HID report will not appear.
+  page `0xFF14`; a build without that HID report will not appear.
 - **`port closed` / `device closed` / open failure**: the link is busy or lacks
   permission; another tab or app may hold it.
 - **`bad version reply`**: the page opened the wrong serial port or HID

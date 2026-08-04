@@ -32,7 +32,7 @@
        (layer changes, key presses, WPM, …) stream into the <b>Topics</b> pane from
        the moment the session opens, while requests keep running in the
        <b>Requests</b> pane. WebHID reaches the firmware's
-       <code>RynkHidService</code> (vendor usage page <code>0xFF60</code>) and rides
+       <code>RynkHidService</code> (vendor usage page <code>0xFF14</code>) and rides
        the existing OS bond, so there is no pairing prompt.</p>
     <button id="serial">Connect via Serial (USB)</button>
     <button id="ble">Connect via BLE (WebHID)</button>
@@ -359,7 +359,7 @@
 
       bleBtn.addEventListener("click", () => connectVia(bleBtn, serialBtn, "BLE (WebHID)", async () => {
         // First-time WebHID access requires a user gesture.
-        const devs = await navigator.hid.requestDevice({ filters: [{ usagePage: 0xFF60, usage: 0x61 }] });
+        const devs = await navigator.hid.requestDevice({ filters: [{ usagePage: 0xFF14, usage: 0x61 }] });
         if (!devs.length) throw new Error("no WebHID device chosen");
         device = devs[0];
         if (!device.opened) await device.open();
@@ -433,7 +433,7 @@
       async function grantedHidDevice() {
         try {
           const devs = navigator.hid ? await navigator.hid.getDevices() : [];
-          return devs.find((d) => (d.collections || []).some((c) => c.usagePage === 0xFF60)) || devs[0] || null;
+          return devs.find((d) => (d.collections || []).some((c) => c.usagePage === 0xFF14)) || devs[0] || null;
         } catch { return null; }
       }
 

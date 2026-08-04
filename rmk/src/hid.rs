@@ -63,7 +63,7 @@ pub struct ViaReport {
 /// Vendor HID report carrying the Rynk config protocol over HID.
 #[cfg(feature = "rynk")]
 #[gen_hid_descriptor(
-    (collection = APPLICATION, usage_page = 0xFF60, usage = 0x61) = {
+    (collection = APPLICATION, usage_page = 0xFF14, usage = 0x61) = {
         (usage = 0x62, logical_min = 0x0) = {
             #[item_settings(data,variable,absolute)] input_data=input;
         };
