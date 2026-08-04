@@ -211,7 +211,7 @@ where
 
 /// Advertise→connect→serve forever, joined with the stack runner and the
 /// sleep manager.
-async fn serve<'r, C>(
+async fn serve<#[cfg(feature = "host")] 'r, C>(
     stack: &Stack<'_, C, DefaultPacketPool>,
     server: &Server<'_>,
     product_name: &'static str,
