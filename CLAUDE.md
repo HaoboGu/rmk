@@ -71,6 +71,7 @@ Config is loaded in three layers (later overrides earlier): `event_default.toml`
 
 - Don't use `pub use` for convenient usage **within** the crate
 - Don't add a small helper function (≤ 10 lines) that has only one call site — inline it at the call site
+- Keep comments short: inline comments stay within 1 line, doc comments on items (functions, types, modules) within 3
 - When writing code comments, follow the principles in [Best practices for writing code comments](https://stackoverflow.blog/2021/12/23/best-practices-for-writing-code-comments/)
 - When writing documentation and READMEs, follow the principles in [Best practices for GitHub Docs](https://docs.github.com/en/contributing/writing-for-github-docs/best-practices-for-github-docs)
 - If you need a paragraph-long comment to justify why the workaround is OK, the code is wrong — fix the code.
