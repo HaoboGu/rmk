@@ -25,6 +25,10 @@ use crate::config::{BleBatteryConfig, DeviceConfig, RmkConfig};
 use crate::core_traits::Runnable;
 use crate::event::SubscribableEvent;
 use crate::hid::{HidWriterTrait, run_led_reader};
+#[cfg(feature = "split")]
+use crate::split::PeripheralMatrixConfig;
+#[cfg(feature = "split")]
+use crate::split::ble::central::run_ble_peripheral_manager;
 use crate::state::set_ble_state;
 
 pub(crate) mod battery_service;
@@ -63,7 +67,7 @@ where
     config: BleBatteryConfig<'static>,
     /// One matrix region per split peripheral.
     #[cfg(feature = "split")]
-    matrix_configs: [crate::split::PeripheralMatrixConfig; crate::SPLIT_PERIPHERALS_NUM],
+    peripheral_matrices: [PeripheralMatrixConfig; crate::SPLIT_PERIPHERALS_NUM],
     #[cfg(feature = "host")]
     host_service: Option<&'a crate::host::HostService<'a>>,
     // Keeps `'a` in the type's parameter list across all feature configurations.
@@ -79,7 +83,7 @@ where
         controller: C,
         address: [u8; 6],
         rmk_config: RmkConfig<'static>,
-        #[cfg(feature = "split")] matrix_configs: [crate::split::PeripheralMatrixConfig; crate::SPLIT_PERIPHERALS_NUM],
+        #[cfg(feature = "split")] peripheral_matrices: [PeripheralMatrixConfig; crate::SPLIT_PERIPHERALS_NUM],
     ) -> Self {
         Self {
             controller: Some(controller),
@@ -87,7 +91,7 @@ where
             device_config: rmk_config.device_config,
             config: rmk_config.ble_battery_config,
             #[cfg(feature = "split")]
-            matrix_configs,
+            peripheral_matrices,
             #[cfg(feature = "host")]
             host_service: None,
             #[cfg(not(feature = "host"))]
@@ -167,7 +171,7 @@ where
 
         let managers =
             embassy_futures::join::join_array(core::array::from_fn::<_, { crate::SPLIT_PERIPHERALS_NUM }, _>(|i| {
-                crate::split::ble::central::run_ble_peripheral_manager(i, &addrs[i], &stack, self.matrix_configs[i])
+                run_ble_peripheral_manager(i, &addrs[i], &stack, self.peripheral_matrices[i])
             }));
         join3(
             serve(

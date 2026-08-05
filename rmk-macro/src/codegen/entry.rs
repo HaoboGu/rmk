@@ -104,9 +104,9 @@ pub(crate) fn rmk_entry_select(
     let board = &hardware.board;
     let communication = &hardware.communication;
     // A BLE split central's transport takes one matrix region per peripheral.
-    let split_matrix_configs = match board {
+    let split_peripheral_matrices = match board {
         BoardConfig::Split(split) if matches!(split.connection, SplitConnection::Ble) => {
-            let matrix_configs = split.peripheral.iter().map(|p| {
+            let peripheral_matrices = split.peripheral.iter().map(|p| {
                 let rows = p.rows as u8;
                 let cols = p.cols as u8;
                 let row_offset = p.row_offset as u8;
@@ -120,12 +120,12 @@ pub(crate) fn rmk_entry_select(
                     }
                 }
             });
-            quote! { , [#(#matrix_configs),*] }
+            quote! { , [#(#peripheral_matrices),*] }
         }
         _ => quote! {},
     };
     let (transport_prelude, transport_tasks) =
-        transport_setup(host, communication, split_matrix_configs);
+        transport_setup(host, communication, split_peripheral_matrices);
 
     let entry = match board {
         BoardConfig::Split(split_config) => {
@@ -266,7 +266,7 @@ pub(crate) fn rmk_entry_unibody(
 fn transport_setup(
     host: &Host,
     communication: &CommunicationConfig,
-    split_matrix_configs: TokenStream2,
+    split_peripheral_matrices: TokenStream2,
 ) -> (TokenStream2, Vec<TokenStream2>) {
     let wpm_prelude = quote! {
         let mut wpm_processor = ::rmk::processor::builtin::wpm::WpmProcessor::new();
@@ -285,7 +285,7 @@ fn transport_setup(
         let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config)#with_host;
     };
     let ble_prelude = quote! {
-        let mut ble_transport = ::rmk::ble::BleTransport::new(ble_controller, ble_addr, rmk_config #split_matrix_configs) #with_host;
+        let mut ble_transport = ::rmk::ble::BleTransport::new(ble_controller, ble_addr, rmk_config #split_peripheral_matrices) #with_host;
     };
     let ble_task = quote! { ble_transport.run() };
 
