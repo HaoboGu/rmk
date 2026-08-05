@@ -21,13 +21,12 @@ use nrf_mpsl::Flash;
 use nrf_sdc::mpsl::MultiprotocolServiceLayer;
 use nrf_sdc::{self as sdc, mpsl};
 use panic_probe as _;
-use rmk::ble::{BleTransport, build_ble_stack};
+use rmk::ble::BleTransport;
 use rmk::config::{
     BehaviorConfig, BleBatteryConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig,
 };
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::event::*;
-use rmk::futures::future::join;
 use rmk::host::HostService;
 use rmk::input_device::adc::{AnalogEventType, NrfAdc};
 use rmk::input_device::battery::BatteryProcessor;
@@ -36,11 +35,10 @@ use rmk::keyboard::Keyboard;
 use rmk::matrix::Matrix;
 use rmk::processor::builtin::led_indicator::KeyboardIndicatorProcessor;
 use rmk::processor::builtin::wpm::WpmProcessor;
-use rmk::split::ble::central::scan_peripherals;
-use rmk::split::central::run_peripheral_manager;
+use rmk::split::PeripheralMatrixConfig;
 use rmk::usb::UsbTransport;
 use rmk::watchdog::Nrf52Watchdog;
-use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all};
+use rmk::{KeymapData, initialize_keymap_and_storage, run_all};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -142,8 +140,6 @@ async fn main(spawner: Spawner) {
     let mut rng = rng::Rng::new(p.RNG, Irqs);
     let mut sdc_mem = sdc::Mem::<6080>::new();
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
-    let mut host_resources = HostResources::new();
-    let stack = build_ble_stack(sdc, ble_addr(), &mut host_resources).await;
 
     // Initialize usb driver
     let driver = Driver::new(p.USBD, Irqs, HardwareVbusDetect::new(Irqs));
@@ -210,9 +206,6 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
     let host_service = HostService::new(&keymap, &rmk_config);
 
-    // Read peripheral address from storage
-    let peripheral_addrs = storage.read_peripheral_addresses::<1>().await;
-
     // Initialize the encoder processor
     let mut adc_device = NrfAdc::new(
         saadc,
@@ -258,33 +251,37 @@ async fn main(spawner: Spawner) {
     let mut peripheral_battery_monitor = PeripheralBatteryMonitor {};
 
     let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
-    let mut ble_transport = BleTransport::new(&stack, rmk_config)
-        .await
-        .with_host_service(&host_service);
+    // The other half: 4x7 at row offset 4 (keymap rows 4..8).
+    let mut ble_transport = BleTransport::new(
+        sdc,
+        ble_addr(),
+        rmk_config,
+        [PeripheralMatrixConfig {
+            rows: 4,
+            cols: 7,
+            row_offset: 4,
+            col_offset: 0,
+        }],
+    )
+    .with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();
 
     let mut watchdog_runner = Nrf52Watchdog::default_runner(p.WDT);
 
     // Start
-    join(
-        run_all!(
-            matrix,
-            encoder,
-            adc_device,
-            storage,
-            usb_transport,
-            ble_transport,
-            wpm_processor,
-            batt_proc,
-            keyboard,
-            capslock_led,
-            peripheral_battery_monitor,
-            watchdog_runner
-        ),
-        join(
-            run_peripheral_manager::<4, 7, 4, 0, _>(0, &peripheral_addrs, &stack),
-            scan_peripherals(&stack, &peripheral_addrs),
-        ),
+    run_all!(
+        matrix,
+        encoder,
+        adc_device,
+        storage,
+        usb_transport,
+        ble_transport,
+        wpm_processor,
+        batt_proc,
+        keyboard,
+        capslock_led,
+        peripheral_battery_monitor,
+        watchdog_runner
     )
     .await;
 }

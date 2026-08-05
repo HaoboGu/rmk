@@ -9,7 +9,7 @@ use rmk_types::battery::BatteryStatus;
 #[cfg(feature = "rynk")]
 use rmk_types::protocol::rynk::PeripheralStatus;
 
-use super::SplitMessage;
+use super::{PeripheralMatrixConfig, SplitMessage};
 #[cfg(feature = "_ble")]
 use crate::event::{BatteryStatusEvent, PeripheralBatteryEvent};
 use crate::event::{
@@ -107,19 +107,13 @@ pub(crate) fn current_peripheral_status(id: usize) -> Option<PeripheralStatus> {
 ///
 /// When the central scans the matrix, the scanning thread sends sync signal and gets key state cache back.
 ///
-/// The `ROW` and `COL` are the number of rows and columns of the corresponding peripheral's keyboard matrix.
-/// The `ROW_OFFSET` and `COL_OFFSET` are the offset of the peripheral's matrix in the keyboard's matrix.
-pub(crate) struct PeripheralManager<
-    const ROW: usize,
-    const COL: usize,
-    const ROW_OFFSET: usize,
-    const COL_OFFSET: usize,
-    T: SplitReader + SplitWriter,
-> {
+pub(crate) struct PeripheralManager<T: SplitReader + SplitWriter> {
     /// Receiver
     transceiver: T,
     /// Peripheral id
     id: usize,
+    /// This peripheral's matrix size and placement in the central's keymap
+    matrix_config: PeripheralMatrixConfig,
     #[cfg(feature = "dfu_split")]
     passthrough_crc: crate::crc32::Crc32,
     /// Whether to skip hash comparison and always flash firmware.
@@ -137,12 +131,16 @@ pub enum UpdatePolicy {
     Force,
 }
 
-impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFSET: usize, T: SplitReader + SplitWriter>
-    PeripheralManager<ROW, COL, ROW_OFFSET, COL_OFFSET, T>
-{
-    pub(crate) fn new(transceiver: T, id: usize, #[cfg(feature = "dfu_split")] policy: UpdatePolicy) -> Self {
+impl<T: SplitReader + SplitWriter> PeripheralManager<T> {
+    pub(crate) fn new(
+        transceiver: T,
+        id: usize,
+        matrix_config: PeripheralMatrixConfig,
+        #[cfg(feature = "dfu_split")] policy: UpdatePolicy,
+    ) -> Self {
         Self {
             transceiver,
+            matrix_config,
             id,
             #[cfg(feature = "dfu_split")]
             passthrough_crc: crate::crc32::Crc32::new(),
@@ -270,13 +268,13 @@ impl<const ROW: usize, const COL: usize, const ROW_OFFSET: usize, const COL_OFFS
             SplitMessage::Key(e) => match e.pos {
                 KeyboardEventPos::Key(key_pos) => {
                     // Verify the row/col
-                    if key_pos.row as usize >= ROW || key_pos.col as usize >= COL {
+                    if key_pos.row >= self.matrix_config.rows || key_pos.col >= self.matrix_config.cols {
                         error!("Invalid peripheral row/col: {} {}", key_pos.row, key_pos.col);
                         return;
                     }
                     publish_event_async(KeyboardEvent::key(
-                        key_pos.row + ROW_OFFSET as u8,
-                        key_pos.col + COL_OFFSET as u8,
+                        key_pos.row + self.matrix_config.row_offset,
+                        key_pos.col + self.matrix_config.col_offset,
                         e.pressed,
                     ))
                     .await;

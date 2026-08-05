@@ -174,20 +174,21 @@ import { Rust, Toml, Tab, Tabs } from '@theme'
 <Tab label={<Rust />}>
 
 ```rust title="BLE Split Central"
-// BLE split central, arguments might be different for other microcontrollers, check the API docs or examples for other usages.
-// Read the stored peripheral address list first, and run `scan_peripherals` alongside the peripheral managers to discover peripherals whose addresses are not stored yet.
-// The const generic is the number of peripherals.
-let peripheral_addrs = storage.read_peripheral_addresses::<1>().await;
-join(
-    run_peripheral_manager::<
-        2, // PERIPHERAL_ROW
-        1, // PERIPHERAL_COL
-        2, // PERIPHERAL_ROW_OFFSET
-        2, // PERIPHERAL_COL_OFFSET
-        _,
-    >(peripheral_id, &peripheral_addrs, &stack),
-    scan_peripherals(&stack, &peripheral_addrs),
-)
+// BLE split central: the transport takes one `PeripheralMatrixConfig` per
+// peripheral, loads the peripherals' stored addresses itself, and runs the
+// peripheral managers and the scanner on its own BLE stack.
+let mut ble_transport = BleTransport::new(
+    controller,
+    ble_addr,
+    rmk_config,
+    [PeripheralMatrixConfig {
+        rows: 2,
+        cols: 1,
+        row_offset: 2,
+        col_offset: 2,
+    }],
+);
+run_all!(matrix, storage, ble_transport, keyboard).await;
 ```
 
 </Tab>
@@ -195,13 +196,16 @@ join(
 
 ```rust title="Serial Split Central"
 // UART split central, arguments might be different for other microcontrollers, check the API docs or examples for other usages.
-run_peripheral_manager::<
-    2, // PERIPHERAL_ROW
-    1, // PERIPHERAL_COL
-    2, // PERIPHERAL_ROW_OFFSET
-    2, // PERIPHERAL_COL_OFFSET
-    _,
-  >(peripheral_id, uart_receiver),
+run_peripheral_manager(
+    peripheral_id,
+    uart_receiver,
+    PeripheralMatrixConfig {
+        rows: 2,
+        cols: 1,
+        row_offset: 2,
+        col_offset: 2,
+    },
+),
 ```
 
 </Tab>
@@ -219,8 +223,8 @@ Running split peripheral is simpler. For the peripheral, we don't need to specif
 let mut matrix = Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer);
 
 // BLE split peripheral, arguments might be different for other microcontrollers, check the API docs or examples for other usages.
-// The first argument is the peripheral's id, which should match the id used in the central's `run_peripheral_manager` call.
-run_rmk_split_peripheral(peripheral_id, &stack),
+// The first argument is the peripheral's id, which should match the index of this peripheral in the `PeripheralMatrixConfig` array the central passes to `BleTransport::new`.
+run_rmk_split_peripheral(peripheral_id, controller, ble_addr),
 ```
 
 </Tab>

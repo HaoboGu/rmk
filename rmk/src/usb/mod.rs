@@ -224,9 +224,8 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
     builder
 }
 
-/// USB transport runnable. Owns the embassy-usb device + every HID
-/// reader/writer pair and runs them concurrently for the lifetime of the
-/// program.
+/// USB transport. Owns the embassy-usb device + every HID reader/writer
+/// pair and runs them concurrently for the lifetime of the program.
 pub struct UsbTransport<'a, D: Driver<'static>> {
     device: UsbDevice<'static, D>,
     keyboard_reader: HidReader<'static, D, 1>,
@@ -234,6 +233,7 @@ pub struct UsbTransport<'a, D: Driver<'static>> {
     other_writer: HidWriter<'static, D, 9>,
     #[cfg(feature = "steno")]
     steno_writer: HidWriter<'static, D, 9>,
+    /// Taken by `run`: the logger future consumes the CDC class.
     #[cfg(feature = "usb_log")]
     logger: Option<embassy_usb::class::cdc_acm::CdcAcmClass<'static, D>>,
     /// Host-protocol transport halves: CDC-ACM under `rynk`, 32-byte HID

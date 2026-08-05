@@ -49,15 +49,6 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
     let chip = &hardware.chip;
     let communication = &hardware.communication;
     let peri_num = hardware.board.get_num_peripheral();
-    let set_io_capabilities = if peripheral_id.is_none() {
-        quote! {
-            if ::rmk::ble::passkey::passkey_entry_enabled() {
-                stack.set_io_capabilities(::rmk::IoCapabilities::KeyboardOnly);
-            }
-        }
-    } else {
-        quote! {}
-    };
     match chip.series {
         ChipSeries::Stm32 => quote! {
                 let config = ::embassy_stm32::Config::default();
@@ -127,16 +118,8 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                     );
                     let mut rng = ::embassy_nrf::rng::Rng::new(p.RNG, Irqs);
                     let mut sdc_mem = ::nrf_sdc::Mem::<#sdc_mem_size>::new();
-                    let sdc = ::defmt::unwrap!(build_sdc(sdc_p, &mut rng, &*mpsl, &mut sdc_mem));
+                    let ble_controller = ::defmt::unwrap!(build_sdc(sdc_p, &mut rng, &*mpsl, &mut sdc_mem));
                     let ble_addr = #ble_addr;
-                    let mut host_resources = ::rmk::HostResources::new();
-                    let stack = ::rmk::ble::build_ble_stack(
-                        sdc,
-                        ble_addr,
-                        &mut host_resources,
-                    )
-                    .await;
-                    #set_io_capabilities
                 },
                 _ => quote! {},
             };
@@ -197,16 +180,8 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                     spawner.spawn(cyw43_task(runner).unwrap());
                     control.init(clm).await;
 
-                    let controller: ::bt_hci::controller::ExternalController<_, 10> = ::bt_hci::controller::ExternalController::new(bt_device);
+                    let ble_controller: ::bt_hci::controller::ExternalController<_, 10> = ::bt_hci::controller::ExternalController::new(bt_device);
                     let ble_addr = #ble_addr;
-                    let mut host_resources = ::rmk::HostResources::new();
-                    let stack = ::rmk::ble::build_ble_stack(
-                        controller,
-                        ble_addr,
-                        &mut host_resources,
-                    )
-                    .await;
-                    #set_io_capabilities
                 }
             } else {
                 quote! {
@@ -226,16 +201,8 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                 ::esp_rtos::start(timg0.timer0, software_interrupt.software_interrupt0);
                 let _trng_source = ::esp_hal::rng::TrngSource::new(p.RNG, p.ADC1);
                 let connector = ::esp_radio::ble::controller::BleConnector::new(p.BT, Default::default()).unwrap();
-                let controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
+                let ble_controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
                 let ble_addr = #ble_addr;
-                let mut host_resources = ::rmk::HostResources::new();
-                let stack = ::rmk::ble::build_ble_stack(
-                    controller,
-                    ble_addr,
-                    &mut host_resources,
-                )
-                .await;
-                #set_io_capabilities
             }
         }
     }

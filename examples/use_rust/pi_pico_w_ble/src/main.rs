@@ -21,7 +21,7 @@ use embassy_rp::usb::{self, Driver};
 use embassy_time as _;
 use keymap::{COL, ROW};
 use panic_probe as _;
-use rmk::ble::{BleTransport, build_ble_stack};
+use rmk::ble::BleTransport;
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
 use rmk::debounce::default_debouncer::DefaultDebouncer;
 use rmk::host::HostService;
@@ -30,7 +30,7 @@ use rmk::matrix::Matrix;
 use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::usb::UsbTransport;
 use rmk::watchdog::Rp2040Watchdog;
-use rmk::{HostResources, KeymapData, initialize_keymap_and_storage, run_all};
+use rmk::{KeymapData, initialize_keymap_and_storage, run_all};
 use static_cell::StaticCell;
 use vial::{VIAL_KEYBOARD_DEF, VIAL_KEYBOARD_ID};
 
@@ -154,14 +154,8 @@ async fn main(spawner: Spawner) {
 
     let ble_addr = [0x18, 0xe2, 0x21, 0x88, 0xc0, 0xc7];
 
-    let mut host_resources = HostResources::new();
-
-    let stack = build_ble_stack(controller, ble_addr, &mut host_resources).await;
-
     let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
-    let mut ble_transport = BleTransport::new(&stack, rmk_config)
-        .await
-        .with_host_service(&host_service);
+    let mut ble_transport = BleTransport::new(controller, ble_addr, rmk_config).with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();
     let mut watchdog_runner = Rp2040Watchdog::default_runner(embassy_rp::watchdog::Watchdog::new(p.WATCHDOG));
 

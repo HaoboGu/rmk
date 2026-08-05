@@ -25,7 +25,7 @@ use rmk::matrix::Matrix;
 use rmk::processor::builtin::dfu_led::DfuLedProcessor;
 use rmk::processor::builtin::wpm::WpmProcessor;
 use rmk::split::central::run_peripheral_manager;
-use rmk::split::SPLIT_MESSAGE_MAX_SIZE;
+use rmk::split::{PeripheralMatrixConfig, SPLIT_MESSAGE_MAX_SIZE};
 use rmk::storage::async_flash_wrapper;
 use rmk::usb::UsbTransport;
 use rmk::watchdog::Rp2040Watchdog;
@@ -176,7 +176,17 @@ async fn main(_spawner: Spawner) {
             watchdog_runner
         ),
         // use UpdatePolicy::Force to force the peripheral update at every start of central
-        run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver, rmk::split::central::UpdatePolicy::MatchHash),
+        run_peripheral_manager(
+            0,
+            uart_receiver,
+            PeripheralMatrixConfig {
+                rows: 2,
+                cols: 1,
+                row_offset: 2,
+                col_offset: 2,
+            },
+            rmk::split::central::UpdatePolicy::MatchHash,
+        ),
     )
     .await;
 }

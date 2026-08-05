@@ -22,6 +22,8 @@ use keymap::{COL, ROW, SIZE};
 use lcd_async::Builder;
 use lcd_async::models::GC9107;
 use panic_probe as _;
+use rand_chacha::ChaCha12Rng;
+use rand_core::SeedableRng;
 use renderers::KeyLabelRenderer;
 use rmk::ble::{BleTransport, build_ble_stack};
 use rmk::config::{BehaviorConfig, DeviceConfig, PositionalConfig, RmkConfig, StorageConfig, VialConfig};
@@ -40,6 +42,7 @@ use sifli_hal::efuse::Efuse;
 use sifli_hal::gpio::{Input, Level, Output};
 use sifli_hal::mpi::{BlockingNorFlash, BuiltInProfile, NorConfig, ProfileSource};
 use sifli_hal::peripherals::{EFUSEC, USBC};
+use sifli_hal::rng::Rng;
 use sifli_hal::usb::{Driver, InterruptHandler as UsbInterruptHandler};
 use sifli_hal::{bind_interrupts, ipc, pmu};
 use sifli_radio::bluetooth::{BleController, BleInitConfig};
@@ -144,8 +147,10 @@ async fn main(_spawner: Spawner) {
             }
         }
     };
+    let mut rng = Rng::new_blocking(p.TRNG);
+    let mut rng_gen = ChaCha12Rng::from_rng(&mut rng).unwrap();
     let mut host_resources = HostResources::new();
-    let stack = build_ble_stack(controller, ble_addr, &mut host_resources).await;
+    let stack = build_ble_stack(controller, ble_addr, &mut rng_gen, &mut host_resources).await;
 
     // Initialize USB driver (dual-mode USB + BLE). PA35/PA36 are the USB D+/D- pins.
     let usb_driver = Driver::new(p.USBC, Irqs, p.PA35, p.PA36);
@@ -159,7 +164,7 @@ async fn main(_spawner: Spawner) {
         pid: 0x4644,
         manufacturer: "RMK & SiFli-rs",
         product_name: "RMK SF32LB52",
-        ..DeviceConfig::default()
+        serial_number: "vial:f64c2b3c:000002",
     };
 
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (0, 3)]);
@@ -174,7 +179,8 @@ async fn main(_spawner: Spawner) {
     let debouncer = DefaultDebouncer::new();
     let mut matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, true);
     let mut keyboard = Keyboard::new(&keymap);
-    let host_service = HostService::new(&keymap, &rmk_config);
+    let host_ctx = rmk::host::KeyboardContext::new(&keymap);
+    let mut host_service = HostService::new(&host_ctx, &rmk_config);
 
     // Rotary encoder: PA43 = phase A, PA41 = phase B. Detents short to GND, so pull-ups are required.
     // Resolution 4 collapses the 4 quadrature transitions per detent into a single event;
@@ -248,10 +254,8 @@ async fn main(_spawner: Spawner) {
 
     info!("Starting RMK dual-mode (USB + BLE) runner...");
 
-    let mut usb_transport = UsbTransport::new(usb_driver, rmk_config.device_config).with_host_service(&host_service);
-    let mut ble_transport = BleTransport::new(&stack, rmk_config)
-        .await
-        .with_host_service(&host_service);
+    let mut usb_transport = UsbTransport::new(usb_driver, rmk_config.device_config);
+    let mut ble_transport = BleTransport::new(&stack, rmk_config).await;
     let mut wpm_processor = WpmProcessor::new();
 
     run_all!(
@@ -264,7 +268,8 @@ async fn main(_spawner: Spawner) {
         usb_transport,
         ble_transport,
         wpm_processor,
-        keyboard
+        keyboard,
+        host_service
     )
     .await;
 }

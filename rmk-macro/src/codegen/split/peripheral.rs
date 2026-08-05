@@ -561,7 +561,8 @@ fn expand_split_peripheral_entry(
             let peripheral_run = quote! {
                 ::rmk::split::peripheral::run_rmk_split_peripheral(
                     #id,
-                    &stack,
+                    ble_controller,
+                    ble_addr,
                 )
             };
             // Build task list: device, processor (if any), peripheral, registered_processors, dfu
