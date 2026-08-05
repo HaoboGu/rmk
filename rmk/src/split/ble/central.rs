@@ -132,8 +132,8 @@ pub(crate) struct ScanHandler {}
 impl EventHandler for ScanHandler {
     fn on_adv_reports(&self, mut it: LeAdvReportsIter<'_>) {
         while let Some(Ok(report)) = it.next() {
-            // Check advertisement data
-            if report.data.len() < 25 {
+            // Check advertisement data, `report.data[25]` is read below
+            if report.data.len() < 26 {
                 continue;
             }
             if report.data[4] == 0x07
