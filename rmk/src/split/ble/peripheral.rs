@@ -216,8 +216,8 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
             peer: Address::random(addr),
         };
         // The spec caps one high duty burst at 1.28s and the controller stops it
-        // automatically, so restart the burst to cover a ~19s window.
-        for _ in 0..15 {
+        // automatically, so restart the burst to cover a ~13s window.
+        for _ in 0..10 {
             let advertiser = peripheral
                 .advertise(&AdvertisementParameters::default(), advertisement)
                 .await?;
