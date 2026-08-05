@@ -161,7 +161,7 @@ where
 
         let managers =
             embassy_futures::join::join_array(core::array::from_fn::<_, { crate::SPLIT_PERIPHERALS_NUM }, _>(|i| {
-                crate::split::ble::central::run_ble_peripheral_manager(i, &addrs, &stack, self.matrix_configs[i])
+                crate::split::ble::central::run_ble_peripheral_manager(i, &addrs[i], &stack, self.matrix_configs[i])
             }));
         join3(
             serve(

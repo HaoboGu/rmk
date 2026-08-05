@@ -137,7 +137,7 @@ pub(crate) async fn run_ble_peripheral_manager<
         + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 >(
     peri_id: usize,
-    addrs: &[Cell<Option<[u8; 6]>>],
+    slot: &Cell<Option<[u8; 6]>>,
     stack: &Stack<'_, C, DefaultPacketPool>,
     matrix_config: PeripheralMatrixConfig,
 ) {
@@ -146,7 +146,7 @@ pub(crate) async fn run_ble_peripheral_manager<
     loop {
         // Check until the address is available
         let address = loop {
-            if let Some(addr) = addrs[peri_id].get() {
+            if let Some(addr) = slot.get() {
                 break Address::random(addr);
             }
             if !START_SCANNING.signaled() {
@@ -207,7 +207,7 @@ pub(crate) async fn run_ble_peripheral_manager<
             Err(_) => {
                 // Connect to peripheral timeout
                 warn!("Connect to peripheral {} timeout, clearing", peri_id);
-                addrs[peri_id].set(None);
+                slot.set(None);
             }
         }
         // Reconnect after 500ms
