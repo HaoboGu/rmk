@@ -146,17 +146,11 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'b, 's: 'b, C: Controll
 
     let peri_task = async {
         let server = BleSplitPeripheralServer::new_default("rmk").unwrap();
-        // Once the advertising ladder has expired, the central has given up initiating
-        // and only scans — and a scanner can't see directed advertising (no payload).
-        // So advertising resumed by a key press must start undirected.
-        let mut try_directed = true;
         loop {
             update_status(|c| *c = ConnectionStatus::new());
             publish_event(CentralConnectedEvent { connected: false });
-            match split_peripheral_advertise(id, central_addr.filter(|_| try_directed), &mut peripheral, &server).await
-            {
+            match split_peripheral_advertise(id, &mut peripheral, &server).await {
                 Ok(conn) => {
-                    try_directed = true;
                     info!("Connected to the central");
                     publish_event(CentralConnectedEvent { connected: true });
                     let mut peripheral = SplitPeripheral::new(BleSplitPeripheralDriver::new(&server, &conn));
@@ -182,7 +176,6 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'b, 's: 'b, C: Controll
                     let mut sub = KeyboardEvent::subscriber();
                     sub.clear();
                     let _ = sub.next_message_pure().await;
-                    try_directed = false;
                     continue;
                 }
                 Err(e) => {
@@ -199,43 +192,18 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'b, 's: 'b, C: Controll
     join(crate::ble::ble_task(runner, &crate::ble::NoopHandler), peri_task).await;
 }
 
-/// Create an advertiser to use to connect to a BLE Central, and wait for it to connect.
+/// Advertise to the central and wait for it to connect.
 ///
-/// With a central address, advertise directed first: right after a disconnect the
-/// central still initiates towards our address and connects immediately. Then fall
-/// back to undirected advertising, which both an initiating and a scanning central
-/// can see.
-///
-/// The reconnect-critical phases (directed, and the first 30s undirected) use a
-/// fast advertising interval so a user waiting on a key press reconnects quickly;
-/// the long undirected tail drops back to the default interval to save power.
+/// Undirected advertising serves every reconnect path: an initiating central
+/// connects through its accept list just as fast as to a directed advertisement,
+/// and a scanning central (one that lost the stored address) can only recognize
+/// the undirected payload. The first 30s advertise fast — a user may be waiting
+/// on a key press — then the long tail drops to the default interval to save power.
 async fn split_peripheral_advertise<'a, 'b, C: Controller>(
     id: usize,
-    central_addr: Option<[u8; 6]>,
     peripheral: &mut Peripheral<'a, C, DefaultPacketPool>,
     server: &'b BleSplitPeripheralServer<'_>,
 ) -> Result<GattConnection<'a, 'b, DefaultPacketPool>, BleHostError<C::Error>> {
-    let fast_params = AdvertisementParameters {
-        interval_min: Duration::from_millis(30),
-        interval_max: Duration::from_millis(30),
-        ..Default::default()
-    };
-
-    if let Some(addr) = central_addr {
-        let advertisement = Advertisement::ConnectableNonscannableDirected {
-            peer: Address::random(addr),
-        };
-        let advertiser = peripheral.advertise(&fast_params, advertisement).await?;
-        match with_timeout(Duration::from_secs(5), advertiser.accept()).await {
-            Ok(conn_res) => {
-                let conn = conn_res?.with_attribute_server(server)?;
-                info!("[adv] connection established");
-                return Ok(conn);
-            }
-            Err(_) => warn!("[adv] directed advertising timed out, advertise as undirected"),
-        }
-    }
-
     let mut advertiser_data = [0; 31];
     AdStructure::encode_slice(
         &[
@@ -260,6 +228,11 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
         scan_data: &[],
     };
 
+    let fast_params = AdvertisementParameters {
+        interval_min: Duration::from_millis(30),
+        interval_max: Duration::from_millis(30),
+        ..Default::default()
+    };
     let advertiser = peripheral.advertise(&fast_params, advertisement).await?;
     if let Ok(re) = with_timeout(Duration::from_secs(30), advertiser.accept()).await {
         return Ok(re?.with_attribute_server(server)?);
