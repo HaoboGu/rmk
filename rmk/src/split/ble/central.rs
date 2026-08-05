@@ -13,45 +13,33 @@ use crate::ble::sleep::report_activity;
 use crate::ble::{update_ble_phy, update_conn_params};
 use crate::channel::FLASH_CHANNEL;
 use crate::event::{EventSubscriber, SleepStateEvent, SubscribableEvent};
-#[cfg(feature = "storage")]
 use crate::split::ble::PeerAddress;
 use crate::split::driver::{PeripheralManager, SplitDriverError, SplitReader, SplitWriter, set_peripheral_connected};
 use crate::split::{PeripheralMatrixConfig, SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
 use crate::storage::FlashOperationMessage;
 
 pub(crate) static STACK_STARTED: Signal<crate::RawMutex, bool> = Signal::new();
-pub(crate) static PERIPHERAL_FOUND: Signal<crate::RawMutex, (u8, BdAddr)> = Signal::new();
+static PERIPHERAL_FOUND: Signal<crate::RawMutex, (u8, BdAddr)> = Signal::new();
 
 // Signals and mutex for syncing scanning state between scanning task and peripheral manager
 static START_SCANNING: Signal<crate::RawMutex, ()> = Signal::new();
 static STOP_SCANNING: Signal<crate::RawMutex, ()> = Signal::new();
 static SCANNING_MUTEX: Mutex<crate::RawMutex, ()> = Mutex::new(());
 
-/// Gatt service used in split central to send split message to peripheral
-#[gatt_service(uuid = "4dd5fbaa-18e5-4b07-bf0a-353698659946")]
-struct SplitBleCentralService {
-    #[characteristic(uuid = "0e6313e3-bd0b-45c2-8d2e-37a2e8128bc3", read, notify)]
-    message_to_central: [u8; SPLIT_MESSAGE_MAX_SIZE],
-
-    #[characteristic(uuid = "4b3514fb-cae4-4d38-a097-3a2a3d1c3b9c", write_without_response, read, notify)]
-    message_to_peripheral: [u8; SPLIT_MESSAGE_MAX_SIZE],
-}
-
-/// Gatt server in split peripheral
-#[gatt_server]
-struct BleSplitCentralServer {
-    service: SplitBleCentralService,
-}
+/// The split GATT service (4dd5fbaa-18e5-4b07-bf0a-353698659946) hosted by the
+/// peripheral, little-endian. The central only discovers it, so the service is
+/// defined in `split::ble::peripheral`.
+const SPLIT_SERVICE_UUID: [u8; 16] = [
+    70u8, 153u8, 101u8, 152u8, 54u8, 53u8, 10u8, 191u8, 7u8, 75u8, 229u8, 24u8, 170u8, 251u8, 213u8, 77u8,
+];
 
 pub(crate) async fn scan_peripherals<
-    'b,
-    's: 'b,
     C: Controller
         + ControllerCmdSync<LeSetScanParams>
         + ControllerCmdAsync<LeSetPhy>
         + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 >(
-    stack: &'b Stack<'s, C, DefaultPacketPool>,
+    stack: &Stack<'_, C, DefaultPacketPool>,
     addrs: &RefCell<[Option<[u8; 6]>]>,
 ) {
     loop {
@@ -136,11 +124,7 @@ impl EventHandler for ScanHandler {
                 continue;
             }
             if report.data[4] == 0x07
-                && report.data[5..].starts_with(&[
-                    // uuid: 4dd5fbaa-18e5-4b07-bf0a-353698659946
-                    70u8, 153u8, 101u8, 152u8, 54u8, 53u8, 10u8, 191u8, 7u8, 75u8, 229u8, 24u8, 170u8, 251u8, 213u8,
-                    77u8,
-                ])
+                && report.data[5..].starts_with(&SPLIT_SERVICE_UUID)
                 && report.data[21..25] == [0x04, 0xff, 0x18, 0xe1]
             {
                 // Uuid and manufacturer specific data check passed
@@ -154,8 +138,6 @@ impl EventHandler for ScanHandler {
 }
 
 pub(crate) async fn run_ble_peripheral_manager<
-    'b,
-    's: 'b,
     C: Controller
         + ControllerCmdSync<LeSetScanParams>
         + ControllerCmdAsync<LeSetPhy>
@@ -163,7 +145,7 @@ pub(crate) async fn run_ble_peripheral_manager<
 >(
     peri_id: usize,
     addrs: &RefCell<[Option<[u8; 6]>]>,
-    stack: &'b Stack<'s, C, DefaultPacketPool>,
+    stack: &Stack<'_, C, DefaultPacketPool>,
     matrix_config: PeripheralMatrixConfig,
 ) {
     trace!("SPLIT_MESSAGE_MAX_SIZE: {}", SPLIT_MESSAGE_MAX_SIZE);
@@ -178,7 +160,7 @@ pub(crate) async fn run_ble_peripheral_manager<
                 START_SCANNING.signal(());
             }
             // Check again after 500ms
-            embassy_time::Timer::after_millis(500).await;
+            Timer::after_millis(500).await;
         };
         info!("Peripheral peer address: {:?}", address);
 
@@ -206,7 +188,7 @@ pub(crate) async fn run_ble_peripheral_manager<
                 STOP_SCANNING.signal(());
                 let _guard = SCANNING_MUTEX.lock().await;
                 // Wait a little bit to ensure that the scanning has been fully stopped
-                embassy_time::Timer::after_millis(100).await;
+                Timer::after_millis(100).await;
                 info!("Start connecting to peripheral {}", peri_id);
                 central.connect(&config).await
             }
@@ -238,7 +220,7 @@ pub(crate) async fn run_ble_peripheral_manager<
             }
         }
         // Reconnect after 500ms
-        embassy_time::Timer::after_millis(500).await;
+        Timer::after_millis(500).await;
     }
 }
 
@@ -299,7 +281,7 @@ async fn run_central_manager_task<
 
     match select3(
         ble_central_task(&client, conn),
-        run_peripheral_manager(id, &client, matrix_config),
+        discover_and_run_manager(id, &client, matrix_config),
         follow_sleep_state(stack, conn),
     )
     .await
@@ -330,16 +312,14 @@ async fn ble_central_task<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: P
     }
 }
 
-async fn run_peripheral_manager<'a, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
+/// Discover the split service on the connected peripheral, then run its
+/// [`PeripheralManager`] over the GATT link.
+async fn discover_and_run_manager<C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool>(
     id: usize,
-    client: &GattClient<'a, C, P, 10>,
+    client: &GattClient<'_, C, P, 10>,
     matrix_config: PeripheralMatrixConfig,
 ) -> Result<(), BleHostError<C::Error>> {
-    let services = client
-        .services_by_uuid(&Uuid::new_long([
-            70u8, 153u8, 101u8, 152u8, 54u8, 53u8, 10u8, 191u8, 7u8, 75u8, 229u8, 24u8, 170u8, 251u8, 213u8, 77u8,
-        ]))
-        .await?;
+    let services = client.services_by_uuid(&Uuid::new_long(SPLIT_SERVICE_UUID)).await?;
     info!("Services found");
     if let Some(service) = services.first() {
         let message_to_central = client
@@ -365,7 +345,11 @@ async fn run_peripheral_manager<'a, C: Controller + ControllerCmdAsync<LeSetPhy>
             .await?;
         info!("Subscribing notifications");
         let listener = client.subscribe(&message_to_central, false).await?;
-        let split_ble_driver = BleSplitCentralDriver::new(listener, message_to_peripheral, client);
+        let split_ble_driver = BleSplitCentralDriver {
+            listener,
+            message_to_peripheral,
+            client,
+        };
         let peripheral_manager = PeripheralManager::new(split_ble_driver, id, matrix_config);
         peripheral_manager.run().await;
         info!("Peripheral manager stopped");
@@ -373,33 +357,12 @@ async fn run_peripheral_manager<'a, C: Controller + ControllerCmdAsync<LeSetPhy>
     Ok(())
 }
 
-/// Ble central driver which reads and writes the split message.
-///
-/// Different from serial, BLE split message is processed in a separate service.
-/// The BLE service should keep running, it processes the split message in the callback, which is not async.
-/// It's impossible to implement `SplitReader` or `SplitWriter` for BLE service,
-/// so we need this wrapper to forward split message to channel.
-pub(crate) struct BleSplitCentralDriver<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> {
-    // Listener for split message from peripheral
+/// [`SplitReader`]/[`SplitWriter`] over the peripheral's GATT link: reads are
+/// notifications on `message_to_central`, writes go to `message_to_peripheral`.
+struct BleSplitCentralDriver<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> {
     listener: NotificationListener<'b, 512>,
-    // Characteristic to send split message to peripheral
     message_to_peripheral: Characteristic<GattSplitMessage>,
-    // Client
     client: &'c GattClient<'a, C, P, 10>,
-}
-
-impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> BleSplitCentralDriver<'a, 'b, 'c, C, P> {
-    pub(crate) fn new(
-        listener: NotificationListener<'b, 512>,
-        message_to_peripheral: Characteristic<GattSplitMessage>,
-        client: &'c GattClient<'a, C, P, 10>,
-    ) -> Self {
-        Self {
-            listener,
-            message_to_peripheral,
-            client,
-        }
-    }
 }
 
 impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> SplitReader
@@ -443,17 +406,13 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> Sp
     }
 }
 
-/// Wait for the BLE stack to start.
-///
-/// If the BLE stack has been started, wait 500ms then quit.
-pub(crate) async fn wait_for_stack_started() {
-    loop {
-        if STACK_STARTED.signaled() {
-            embassy_time::Timer::after_millis(500).await;
-            break;
-        }
-        embassy_time::Timer::after_millis(500).await;
+/// Wait until the BLE stack's runner is up (latched by `serve`), plus a 500ms
+/// grace period. Polled because the one-shot latch has multiple waiters.
+async fn wait_for_stack_started() {
+    while !STACK_STARTED.signaled() {
+        Timer::after_millis(500).await;
     }
+    Timer::after_millis(500).await;
 }
 
 /// Keep one peripheral link's connection parameters in sync with the keyboard's
