@@ -153,24 +153,22 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
     let host_service = HostService::new(&keymap, &rmk_config);
 
-    // Read peripheral address from storage
-    let peripheral_addrs = storage.read_peripheral_addresses().await;
-
     let ble_addr = [0x18, 0xe2, 0x21, 0x88, 0xc0, 0xc7];
 
     let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
-    let ble_transport = BleTransport::new(controller, ble_addr, rmk_config)
-        .with_host_service(&host_service)
-        // The other half: 4x7 at row offset 4 (keymap rows 4..8).
-        .with_split_peripherals(
-            peripheral_addrs,
-            [PeripheralMatrixConfig {
-                rows: 4,
-                cols: 7,
-                row_offset: 4,
-                col_offset: 0,
-            }],
-        );
+    // The other half: 4x7 at row offset 4 (keymap rows 4..8).
+    let ble_transport = BleTransport::new(
+        controller,
+        ble_addr,
+        rmk_config,
+        [PeripheralMatrixConfig {
+            rows: 4,
+            cols: 7,
+            row_offset: 4,
+            col_offset: 0,
+        }],
+    )
+    .with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();
     let mut watchdog_runner = Rp2040Watchdog::default_runner(embassy_rp::watchdog::Watchdog::new(p.WATCHDOG));
 

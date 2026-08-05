@@ -208,9 +208,6 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
     let host_service = HostService::new(&keymap, &rmk_config);
 
-    // Read peripheral address from storage
-    let peripheral_addrs = storage.read_peripheral_addresses().await;
-
     // Initialize pointing device
     let pmw3610_config = Pmw3610Config {
         res_cpi: 800,
@@ -256,26 +253,27 @@ async fn main(spawner: Spawner) {
     );
 
     let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
-    let ble_transport = BleTransport::new(sdc, ble_addr(), rmk_config)
-        .with_host_service(&host_service)
-        // Two peripheral halves, both 4x7 at row offset 4.
-        .with_split_peripherals(
-            peripheral_addrs,
-            [
-                PeripheralMatrixConfig {
-                    rows: 4,
-                    cols: 7,
-                    row_offset: 4,
-                    col_offset: 0,
-                },
-                PeripheralMatrixConfig {
-                    rows: 4,
-                    cols: 7,
-                    row_offset: 4,
-                    col_offset: 0,
-                },
-            ],
-        );
+    // Two peripheral halves, both 4x7 at row offset 4.
+    let ble_transport = BleTransport::new(
+        sdc,
+        ble_addr(),
+        rmk_config,
+        [
+            PeripheralMatrixConfig {
+                rows: 4,
+                cols: 7,
+                row_offset: 4,
+                col_offset: 0,
+            },
+            PeripheralMatrixConfig {
+                rows: 4,
+                cols: 7,
+                row_offset: 4,
+                col_offset: 0,
+            },
+        ],
+    )
+    .with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();
 
     let mut watchdog_runner = Nrf52Watchdog::default_runner(p.WDT);

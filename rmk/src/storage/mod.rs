@@ -645,24 +645,6 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
         }
         false
     }
-
-    /// Read all peripheral addresses from flash at startup, one slot per
-    /// peripheral, for
-    /// [`BleTransport::with_split_peripherals`](crate::ble::BleTransport::with_split_peripherals).
-    ///
-    /// Must be called before the storage task starts; once it is running it owns
-    /// `&mut Storage` and no other reader can hold it.
-    #[cfg(all(feature = "_ble", feature = "split"))]
-    pub async fn read_peripheral_addresses(&mut self) -> [Option<[u8; 6]>; crate::SPLIT_PERIPHERALS_NUM] {
-        let mut addrs = [None; crate::SPLIT_PERIPHERALS_NUM];
-        for (id, slot) in addrs.iter_mut().enumerate() {
-            *slot = match self.fetch_data(StorageKey::peer_address(id as u8)).await {
-                Some(StorageData::PeerAddress(addr)) if addr.is_valid => Some(addr.address),
-                _ => None,
-            };
-        }
-        addrs
-    }
 }
 
 impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>

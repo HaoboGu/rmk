@@ -174,20 +174,20 @@ import { Rust, Toml, Tab, Tabs } from '@theme'
 <Tab label={<Rust />}>
 
 ```rust title="BLE Split Central"
-// BLE split central: attach the peripherals' stored addresses and one
-// `PeripheralMatrixConfig` per peripheral. The transport runs the peripheral
-// managers and the scanner on its own BLE stack.
-let peripheral_addrs = storage.read_peripheral_addresses().await;
-let ble_transport = BleTransport::new(controller, ble_addr, rmk_config)
-    .with_split_peripherals(
-        peripheral_addrs,
-        [PeripheralMatrixConfig {
-            rows: 2,
-            cols: 1,
-            row_offset: 2,
-            col_offset: 2,
-        }],
-    );
+// BLE split central: the transport takes one `PeripheralMatrixConfig` per
+// peripheral, loads the peripherals' stored addresses itself, and runs the
+// peripheral managers and the scanner on its own BLE stack.
+let ble_transport = BleTransport::new(
+    controller,
+    ble_addr,
+    rmk_config,
+    [PeripheralMatrixConfig {
+        rows: 2,
+        cols: 1,
+        row_offset: 2,
+        col_offset: 2,
+    }],
+);
 run_all!(matrix, storage, ble_transport, keyboard).await;
 ```
 

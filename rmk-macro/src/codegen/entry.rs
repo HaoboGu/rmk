@@ -103,7 +103,8 @@ pub(crate) fn rmk_entry_select(
 
     let board = &hardware.board;
     let communication = &hardware.communication;
-    let with_split_peripherals = match board {
+    // A BLE split central's transport takes one matrix region per peripheral.
+    let split_matrix_configs = match board {
         BoardConfig::Split(split) if matches!(split.connection, SplitConnection::Ble) => {
             let matrix_configs = split.peripheral.iter().map(|p| {
                 let rows = p.rows as u8;
@@ -119,12 +120,12 @@ pub(crate) fn rmk_entry_select(
                     }
                 }
             });
-            quote! { .with_split_peripherals(peripheral_addrs, [#(#matrix_configs),*]) }
+            quote! { , [#(#matrix_configs),*] }
         }
         _ => quote! {},
     };
     let (transport_prelude, transport_tasks) =
-        transport_setup(host, communication, with_split_peripherals);
+        transport_setup(host, communication, split_matrix_configs);
 
     let entry = match board {
         BoardConfig::Split(split_config) => {
@@ -265,7 +266,7 @@ pub(crate) fn rmk_entry_unibody(
 fn transport_setup(
     host: &Host,
     communication: &CommunicationConfig,
-    with_split_peripherals: TokenStream2,
+    split_matrix_configs: TokenStream2,
 ) -> (TokenStream2, Vec<TokenStream2>) {
     let wpm_prelude = quote! {
         let mut wpm_processor = ::rmk::processor::builtin::wpm::WpmProcessor::new();
@@ -284,7 +285,7 @@ fn transport_setup(
         let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config)#with_host;
     };
     let ble_prelude = quote! {
-        let ble_transport = ::rmk::ble::BleTransport::new(ble_controller, ble_addr, rmk_config) #with_host #with_split_peripherals;
+        let ble_transport = ::rmk::ble::BleTransport::new(ble_controller, ble_addr, rmk_config #split_matrix_configs) #with_host;
     };
     let ble_task = quote! { ble_transport.run() };
 
