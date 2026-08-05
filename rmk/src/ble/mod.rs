@@ -21,7 +21,7 @@ use crate::ble::passkey::{PasskeyInputState, next_gatt_event};
 use crate::ble::profile::{ProfileInfo, ProfileManager, UPDATED_CCCD_TABLE, UPDATED_PROFILE};
 use crate::ble::sleep::{report_activity, request_sleep};
 use crate::channel::{BLE_REPORT_CHANNEL, LED_SIGNAL};
-use crate::config::{BleBatteryConfig, RmkConfig};
+use crate::config::{BleBatteryConfig, DeviceConfig, RmkConfig};
 use crate::core_traits::Runnable;
 use crate::event::SubscribableEvent;
 use crate::hid::{HidWriterTrait, run_led_reader};
@@ -59,7 +59,9 @@ pub struct SplitCentral {
     matrix_configs: [crate::split::PeripheralMatrixConfig; crate::SPLIT_PERIPHERALS_NUM],
 }
 
-/// BLE transport. Owns the whole BLE stack and the trouble-host server.
+/// BLE transport. Owns the whole BLE stack; the GATT server is built inside
+/// `run` — an embedded `Server` would cost its full size once per by-value
+/// move in the task's RAM.
 ///
 /// Running it consumes the transport and joins the background stack runner
 /// with the advertise→connect→serve loop. A BLE split central also runs its
@@ -71,8 +73,7 @@ where
 {
     controller: C,
     address: [u8; 6],
-    server: Server<'static>,
-    product_name: &'static str,
+    device_config: DeviceConfig<'static>,
     config: BleBatteryConfig<'static>,
     #[cfg(feature = "host")]
     host_service: Option<&'a crate::host::HostService<'a>>,
@@ -87,52 +88,10 @@ where
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
     pub async fn new(controller: C, address: [u8; 6], rmk_config: RmkConfig<'static>) -> Self {
-        #[cfg(feature = "_nrf_ble")]
-        let serial_number = crate::ble::nrf::get_serial_number();
-        #[cfg(not(feature = "_nrf_ble"))]
-        let serial_number = rmk_config.device_config.serial_number;
-
-        info!("Starting advertising and GATT service");
-        let server = Server::new_with_config(GapConfig::Peripheral(PeripheralConfig {
-            name: rmk_config.device_config.product_name,
-            appearance: &appearance::human_interface_device::KEYBOARD,
-        }))
-        .unwrap();
-
-        server
-            .set(
-                &server.device_config_service.pnp_id,
-                &PnPID {
-                    vid_source: VidSource::UsbIF,
-                    vendor_id: rmk_config.device_config.vid,
-                    product_id: rmk_config.device_config.pid,
-                    product_version: 0x0001,
-                },
-            )
-            .unwrap();
-        // The serial number characteristic is length limited, so truncate at a char
-        // boundary instead of panicking when the configured serial is too long.
-        let mut serial_number_trimmed = heapless::String::new();
-        for c in serial_number.chars() {
-            if serial_number_trimmed.push(c).is_err() {
-                break;
-            }
-        }
-        server
-            .set(&server.device_config_service.serial_number, &serial_number_trimmed)
-            .unwrap();
-        server
-            .set(
-                &server.device_config_service.manufacturer_name,
-                &heapless::String::try_from(rmk_config.device_config.manufacturer).unwrap(),
-            )
-            .unwrap();
-
         Self {
             controller,
             address,
-            server,
-            product_name: rmk_config.device_config.product_name,
+            device_config: rmk_config.device_config,
             config: rmk_config.ble_battery_config,
             #[cfg(feature = "host")]
             host_service: None,
@@ -156,8 +115,7 @@ where
             .build();
         serve(
             &stack,
-            &self.server,
-            self.product_name,
+            &self.device_config,
             &self.config,
             #[cfg(feature = "host")]
             self.host_service,
@@ -179,8 +137,7 @@ where
         BleTransport {
             controller: self.controller,
             address: self.address,
-            server: self.server,
-            product_name: self.product_name,
+            device_config: self.device_config,
             config: self.config,
             #[cfg(feature = "host")]
             host_service: self.host_service,
@@ -224,8 +181,7 @@ where
         join3(
             serve(
                 &stack,
-                &self.server,
-                self.product_name,
+                &self.device_config,
                 &self.config,
                 #[cfg(feature = "host")]
                 self.host_service,
@@ -253,17 +209,59 @@ where
 }
 
 /// Advertise→connect→serve forever, joined with the stack runner and the
-/// sleep manager.
+/// sleep manager. Builds and owns the GATT server.
 async fn serve<#[cfg(feature = "host")] 'r, C>(
     stack: &Stack<'_, C, DefaultPacketPool>,
-    server: &Server<'_>,
-    product_name: &'static str,
+    device_config: &DeviceConfig<'static>,
     config: &BleBatteryConfig<'static>,
     #[cfg(feature = "host")] host_service: Option<&'r crate::host::HostService<'r>>,
 ) -> !
 where
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
+    let product_name = device_config.product_name;
+    #[cfg(feature = "_nrf_ble")]
+    let serial_number = crate::ble::nrf::get_serial_number();
+    #[cfg(not(feature = "_nrf_ble"))]
+    let serial_number = device_config.serial_number;
+
+    info!("Starting advertising and GATT service");
+    let server = Server::new_with_config(GapConfig::Peripheral(PeripheralConfig {
+        name: product_name,
+        appearance: &appearance::human_interface_device::KEYBOARD,
+    }))
+    .unwrap();
+
+    server
+        .set(
+            &server.device_config_service.pnp_id,
+            &PnPID {
+                vid_source: VidSource::UsbIF,
+                vendor_id: device_config.vid,
+                product_id: device_config.pid,
+                product_version: 0x0001,
+            },
+        )
+        .unwrap();
+    // The serial number characteristic is length limited, so truncate at a char
+    // boundary instead of panicking when the configured serial is too long.
+    let mut serial_number_trimmed = heapless::String::new();
+    for c in serial_number.chars() {
+        if serial_number_trimmed.push(c).is_err() {
+            break;
+        }
+    }
+    server
+        .set(&server.device_config_service.serial_number, &serial_number_trimmed)
+        .unwrap();
+    server
+        .set(
+            &server.device_config_service.manufacturer_name,
+            &heapless::String::try_from(device_config.manufacturer).unwrap(),
+        )
+        .unwrap();
+    let server = &server;
+
     if crate::ble::passkey::passkey_entry_enabled() {
         stack.set_io_capabilities(IoCapabilities::KeyboardOnly);
     }
