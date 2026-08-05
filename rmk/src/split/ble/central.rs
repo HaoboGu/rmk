@@ -253,7 +253,7 @@ fn default_central_conn_param() -> RequestedConnParams {
         min_connection_interval: Duration::from_micros(7500),
         max_connection_interval: Duration::from_micros(7500),
         max_latency: 10, // 75ms
-        supervision_timeout: Duration::from_secs(10),
+        supervision_timeout: Duration::from_secs(5),
         ..Default::default()
     }
 }
