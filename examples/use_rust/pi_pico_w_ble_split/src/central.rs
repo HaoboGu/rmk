@@ -160,7 +160,6 @@ async fn main(spawner: Spawner) {
 
     let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
     let ble_transport = BleTransport::new(controller, ble_addr, rmk_config)
-        .await
         .with_host_service(&host_service)
         // The other half: 4x7 at row offset 4 (keymap rows 4..8).
         .with_split_peripherals(

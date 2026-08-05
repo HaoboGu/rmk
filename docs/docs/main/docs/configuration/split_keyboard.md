@@ -179,7 +179,6 @@ import { Rust, Toml, Tab, Tabs } from '@theme'
 // managers and the scanner on its own BLE stack.
 let peripheral_addrs = storage.read_peripheral_addresses().await;
 let ble_transport = BleTransport::new(controller, ble_addr, rmk_config)
-    .await
     .with_split_peripherals(
         peripheral_addrs,
         [PeripheralMatrixConfig {

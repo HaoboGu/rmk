@@ -284,7 +284,7 @@ fn transport_setup(
         let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config)#with_host;
     };
     let ble_prelude = quote! {
-        let ble_transport = ::rmk::ble::BleTransport::new(ble_controller, ble_addr, rmk_config).await #with_host #with_split_peripherals;
+        let ble_transport = ::rmk::ble::BleTransport::new(ble_controller, ble_addr, rmk_config) #with_host #with_split_peripherals;
     };
     let ble_task = quote! { ble_transport.run() };
 

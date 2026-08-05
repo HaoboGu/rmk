@@ -42,10 +42,10 @@ pub(crate) mod sleep;
 /// Max number of connections of a BLE split central's stack: the host link
 /// plus split peripherals. Every other keyboard's stack is sized to its
 /// single host link.
-pub(crate) const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + 1;
+const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + 1;
 
 /// Max number of L2CAP channels
-pub(crate) const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
+const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
 
 /// A standalone keyboard's BLE role.
 #[doc(hidden)]
@@ -87,7 +87,7 @@ impl<'a, C> BleTransport<'a, C, Standalone>
 where
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
-    pub async fn new(controller: C, address: [u8; 6], rmk_config: RmkConfig<'static>) -> Self {
+    pub fn new(controller: C, address: [u8; 6], rmk_config: RmkConfig<'static>) -> Self {
         Self {
             controller,
             address,
@@ -267,7 +267,6 @@ where
     }
     let mut profile_manager = ProfileManager::new(stack);
     // Load the bonded devices from storage
-    #[cfg(feature = "storage")]
     profile_manager.load_bonded_devices().await;
     profile_manager.update_stack_bonds();
 
@@ -306,7 +305,6 @@ where
                             server,
                             &conn,
                             stack,
-                            #[cfg(feature = "storage")]
                             active_bond_info,
                             config,
                             #[cfg(feature = "host")]
@@ -781,7 +779,7 @@ async fn run_ble_keyboard<
     server: &'b Server<'_>,
     conn: &GattConnection<'a, 'b, DefaultPacketPool>,
     stack: &Stack<'_, C, DefaultPacketPool>,
-    #[cfg(feature = "storage")] active_bond_info: Option<crate::ble::profile::ProfileInfo>,
+    active_bond_info: Option<crate::ble::profile::ProfileInfo>,
     config: &BleBatteryConfig<'a>,
     #[cfg(feature = "host")] host_service: Option<&'r crate::host::HostService<'r>>,
 ) {
@@ -791,7 +789,6 @@ async fn run_ble_keyboard<
 
     // CCCD lookup uses cached bond info to avoid a cancellable flash read while
     // this future is racing other arms of an outer `select`.
-    #[cfg(feature = "storage")]
     if let Some(bond_info) = active_bond_info
         && bond_info.info.identity.match_identity(&conn.raw().peer_identity())
     {
