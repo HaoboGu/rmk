@@ -70,6 +70,7 @@ impl<'a, 'd, D: Driver<'d>> UsbKeyboardWriter<'a, 'd, D> {
             // USB report is pending and the bus is suspended.
             if current_usb_state() == UsbState::Suspended {
                 USB_REMOTE_WAKEUP.signal(());
+                continue;
             }
 
             if let Err(e) = self.write_report(&report).await {
@@ -341,10 +342,9 @@ impl<D: Driver<'static>> Runnable for UsbTransport<'_, D> {
                     Either::First(_) => continue,
                     Either::Second(_) => {
                         info!("USB remote wakeup requested");
-                        if device.remote_wakeup().await.is_ok() {
-                            continue;
+                        if let Err(e) = device.remote_wakeup().await {
+                            warn!("Remote wakeup failed: {:?}", e);
                         }
-                        device.wait_resume().await;
                     }
                 }
             }
