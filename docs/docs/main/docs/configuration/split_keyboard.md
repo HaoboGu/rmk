@@ -177,7 +177,7 @@ import { Rust, Toml, Tab, Tabs } from '@theme'
 // BLE split central: the transport takes one `PeripheralMatrixConfig` per
 // peripheral, loads the peripherals' stored addresses itself, and runs the
 // peripheral managers and the scanner on its own BLE stack.
-let ble_transport = BleTransport::new(
+let mut ble_transport = BleTransport::new(
     controller,
     ble_addr,
     rmk_config,

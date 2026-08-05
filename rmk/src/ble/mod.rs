@@ -54,7 +54,10 @@ pub struct BleTransport<'a, C>
 where
     C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 {
-    controller: C,
+    /// Taken by `run`: the stack it builds consumes the controller.
+    /// The option can be removed by changing to `run(self)`, but it requires
+    /// https://github.com/rust-lang/rust/issues/59087 to be fixed
+    controller: Option<C>,
     address: [u8; 6],
     device_config: DeviceConfig<'static>,
     config: BleBatteryConfig<'static>,
@@ -79,7 +82,7 @@ where
         #[cfg(feature = "split")] matrix_configs: [crate::split::PeripheralMatrixConfig; crate::SPLIT_PERIPHERALS_NUM],
     ) -> Self {
         Self {
-            controller,
+            controller: Some(controller),
             address,
             device_config: rmk_config.device_config,
             config: rmk_config.ble_battery_config,
@@ -100,18 +103,22 @@ where
         self.host_service = Some(service);
         self
     }
+}
 
-    /// Run the BLE transport forever, serving the host link. Consumes the
-    /// transport: the stack it builds takes ownership of the controller.
-    #[cfg(not(feature = "split"))]
-    pub async fn run(self) -> ! {
+#[cfg(not(feature = "split"))]
+impl<'a, C> Runnable for BleTransport<'a, C>
+where
+    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+{
+    async fn run(&mut self) -> ! {
         // Load the preferred connection from storage
         let preferred = crate::state::load_preferred_connection().await;
         crate::state::set_preferred_connection(preferred);
 
+        let controller = self.controller.take().expect("BleTransport::run called twice");
         // Exactly one link — the host.
         let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
-        let stack = trouble_host::new(self.controller, &mut resources)
+        let stack = trouble_host::new(controller, &mut resources)
             .set_random_address(Address::random(self.address))
             .build();
         serve(
@@ -126,20 +133,19 @@ where
 }
 
 #[cfg(feature = "split")]
-impl<'a, C> BleTransport<'a, C>
+impl<'a, C> Runnable for BleTransport<'a, C>
 where
     C: Controller
         + ControllerCmdAsync<LeSetPhy>
         + ControllerCmdSync<LeReadLocalSupportedFeatures>
         + ControllerCmdSync<bt_hci::cmd::le::LeSetScanParams>,
 {
-    /// Run the BLE split central forever, including the host link, peripheral
-    /// managers, and scanner. Consumes the transport because its stack takes
-    /// ownership of the controller.
-    pub async fn run(self) -> ! {
+    async fn run(&mut self) -> ! {
         // Load the preferred connection from storage
         let preferred = crate::state::load_preferred_connection().await;
         crate::state::set_preferred_connection(preferred);
+
+        let controller = self.controller.take().expect("BleTransport::run called twice");
 
         // Load the peripherals' stored addresses through the storage task,
         // the same way a peripheral loads its central's address. The scanner
@@ -155,7 +161,7 @@ where
         let addrs = addrs.map(core::cell::Cell::new);
 
         let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
-        let stack = trouble_host::new(self.controller, &mut resources)
+        let stack = trouble_host::new(controller, &mut resources)
             .set_random_address(Address::random(self.address))
             .build();
 

@@ -12,6 +12,7 @@ use usbd_hid::descriptor::AsInputReport;
 use crate::RawMutex;
 use crate::channel::USB_REPORT_CHANNEL;
 use crate::config::DeviceConfig;
+use crate::core_traits::Runnable;
 #[cfg(feature = "steno")]
 use crate::hid::StenoReport;
 use crate::hid::{
@@ -224,8 +225,7 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(driver: D, keyboard_config: Dev
 }
 
 /// USB transport. Owns the embassy-usb device + every HID reader/writer
-/// pair; running it consumes the transport and drives them concurrently
-/// forever.
+/// pair and runs them concurrently for the lifetime of the program.
 pub struct UsbTransport<'a, D: Driver<'static>> {
     device: UsbDevice<'static, D>,
     keyboard_reader: HidReader<'static, D, 1>,
@@ -233,8 +233,9 @@ pub struct UsbTransport<'a, D: Driver<'static>> {
     other_writer: HidWriter<'static, D, 9>,
     #[cfg(feature = "steno")]
     steno_writer: HidWriter<'static, D, 9>,
+    /// Taken by `run`: the logger future consumes the CDC class.
     #[cfg(feature = "usb_log")]
-    logger: embassy_usb::class::cdc_acm::CdcAcmClass<'static, D>,
+    logger: Option<embassy_usb::class::cdc_acm::CdcAcmClass<'static, D>>,
     /// Host-protocol transport halves: CDC-ACM under `rynk`, 32-byte HID
     /// reports under `vial`.
     #[cfg(feature = "host")]
@@ -274,7 +275,7 @@ impl<'a, D: Driver<'static>> UsbTransport<'a, D> {
         #[cfg(feature = "steno")]
         let steno_writer = add_usb_writer!(&mut builder, StenoReport, 9, 16);
         #[cfg(feature = "usb_log")]
-        let logger = add_usb_logger!(&mut builder);
+        let logger = Some(add_usb_logger!(&mut builder));
 
         #[cfg(feature = "dfu")]
         {
@@ -323,22 +324,23 @@ impl<'a, D: Driver<'static>> UsbTransport<'a, D> {
         self.host_service = Some(service);
         self
     }
+}
 
-    /// Run the USB transport forever. Consumes the transport.
-    pub async fn run(self) -> ! {
+impl<D: Driver<'static>> Runnable for UsbTransport<'_, D> {
+    async fn run(&mut self) -> ! {
         let Self {
-            mut device,
-            mut keyboard_reader,
-            mut keyboard_writer,
-            mut other_writer,
+            device,
+            keyboard_reader,
+            keyboard_writer,
+            other_writer,
             #[cfg(feature = "steno")]
-            mut steno_writer,
+            steno_writer,
             #[cfg(feature = "usb_log")]
             logger,
             #[cfg(any(feature = "rynk", feature = "vial"))]
-            mut host_reader,
+            host_reader,
             #[cfg(any(feature = "rynk", feature = "vial"))]
-            mut host_writer,
+            host_writer,
             #[cfg(feature = "host")]
             host_service,
             #[cfg(not(feature = "host"))]
@@ -361,21 +363,21 @@ impl<'a, D: Driver<'static>> UsbTransport<'a, D> {
         };
 
         let mut writer = UsbKeyboardWriter::new(
-            &mut keyboard_writer,
-            &mut other_writer,
+            keyboard_writer,
+            other_writer,
             #[cfg(feature = "steno")]
-            &mut steno_writer,
+            steno_writer,
         );
         let writer_task = writer.run_writer();
 
-        let mut led_reader = UsbLedReader::new(&mut keyboard_reader);
+        let mut led_reader = UsbLedReader::new(keyboard_reader);
         let led_task = run_led_reader(&mut led_reader, ConnectionType::Usb);
 
         let host_and_extras = async {
             #[cfg(any(feature = "rynk", feature = "vial"))]
             let host_task = async {
-                if let Some(service) = host_service {
-                    run_host_usb(&mut host_reader, &mut host_writer, service).await
+                if let Some(service) = *host_service {
+                    run_host_usb(host_reader, host_writer, service).await
                 } else {
                     core::future::pending::<()>().await
                 }
@@ -385,12 +387,17 @@ impl<'a, D: Driver<'static>> UsbTransport<'a, D> {
 
             #[cfg(feature = "usb_log")]
             {
-                let logger_fut =
-                    embassy_usb_logger::with_custom_style!(1024, log::LevelFilter::Debug, logger, |record, writer| {
+                let logger_class = logger.take().expect("UsbTransport::run called twice");
+                let logger_fut = embassy_usb_logger::with_custom_style!(
+                    1024,
+                    log::LevelFilter::Debug,
+                    logger_class,
+                    |record, writer| {
                         use core::fmt::Write;
                         let ms = embassy_time::Instant::now().as_millis();
                         let _ = write!(writer, "[{:>8}ms {:5}] {}\r\n", ms, record.level(), record.args());
-                    });
+                    }
+                );
                 embassy_futures::join::join(host_task, logger_fut).await;
             }
             #[cfg(not(feature = "usb_log"))]

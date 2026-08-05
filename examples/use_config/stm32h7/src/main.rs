@@ -85,7 +85,7 @@ mod my_keyboard {
     // Use `#[Override(entry)]` to override default rmk keyboard runner
     #[Override(entry)]
     fn run() {
-        let usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
+        let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
         let mut wpm_processor = WpmProcessor::new();
 
         // Start

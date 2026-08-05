@@ -248,7 +248,7 @@ async fn main(_spawner: Spawner) {
 
     info!("Starting RMK dual-mode (USB + BLE) runner...");
 
-    let usb_transport = UsbTransport::new(usb_driver, rmk_config.device_config).with_host_service(&host_service);
+    let mut usb_transport = UsbTransport::new(usb_driver, rmk_config.device_config).with_host_service(&host_service);
     let mut ble_transport = BleTransport::new(&stack, rmk_config)
         .await
         .with_host_service(&host_service);

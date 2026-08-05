@@ -202,7 +202,7 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
     let host_service = HostService::new(&keymap, &rmk_config);
 
-    let ble_transport = BleTransport::new(sdc, ble_addr(), rmk_config).with_host_service(&host_service);
+    let mut ble_transport = BleTransport::new(sdc, ble_addr(), rmk_config).with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();
 
     run_all!(matrix, storage, ble_transport, wpm_processor, keyboard).await;
