@@ -1,4 +1,4 @@
-use core::cell::RefCell;
+use core::cell::Cell;
 
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy, LeSetScanParams};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
@@ -40,13 +40,13 @@ pub(crate) async fn scan_peripherals<
         + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 >(
     stack: &Stack<'_, C, DefaultPacketPool>,
-    addrs: &RefCell<[Option<[u8; 6]>]>,
+    addrs: &[Cell<Option<[u8; 6]>>],
 ) {
     loop {
         // Wait unitil `START_SCANNING` is signaled
         START_SCANNING.wait().await;
         // Check whether the scanning is needed, aka there's empty slot in the addr list.
-        let need_scan = !addrs.borrow().iter().all(|a| a.is_some());
+        let need_scan = !addrs.iter().all(|a| a.get().is_some());
         if need_scan {
             let scanning_fut = async {
                 loop {
@@ -71,25 +71,18 @@ pub(crate) async fn scan_peripherals<
                 loop {
                     let (found_peripheral_id, addr) = PERIPHERAL_FOUND.wait().await;
                     let scanned_addr = addr.into_inner();
-                    if let Some(Some(stored_addr)) = addrs.borrow_mut().get_mut(found_peripheral_id as usize)
-                        && *stored_addr == scanned_addr
-                    {
+                    // The id comes off the air — bounds-check it.
+                    let Some(slot) = addrs.get(found_peripheral_id as usize) else {
+                        continue;
+                    };
+                    if slot.get() == Some(scanned_addr) {
                         continue;
                     }
 
                     info!("Scanned new peripheral {:?}", scanned_addr);
-                    let mut slot_updated = false;
-                    if let Some(slot) = addrs.borrow_mut().get_mut(found_peripheral_id as usize)
-                        && slot.is_none()
-                    {
-                        // Update only when the slot is empty
-                        *slot = Some(scanned_addr);
-                        slot_updated = true;
-                    }
-
-                    // Update stored addr.
-                    // This cannot be put inside the `addrs.borrow_mut()` block because the sending is async
-                    if slot_updated {
+                    // Update only when the slot is empty
+                    if slot.get().is_none() {
+                        slot.set(Some(scanned_addr));
                         FLASH_CHANNEL
                             .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
                                 found_peripheral_id,
@@ -99,7 +92,7 @@ pub(crate) async fn scan_peripherals<
                             .await;
                     }
 
-                    if addrs.borrow().iter().all(|a| a.is_some()) {
+                    if addrs.iter().all(|a| a.get().is_some()) {
                         break;
                     }
                 }
@@ -144,7 +137,7 @@ pub(crate) async fn run_ble_peripheral_manager<
         + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 >(
     peri_id: usize,
-    addrs: &RefCell<[Option<[u8; 6]>]>,
+    addrs: &[Cell<Option<[u8; 6]>>],
     stack: &Stack<'_, C, DefaultPacketPool>,
     matrix_config: PeripheralMatrixConfig,
 ) {
@@ -153,8 +146,8 @@ pub(crate) async fn run_ble_peripheral_manager<
     loop {
         // Check until the address is available
         let address = loop {
-            if let Some(Some(addr)) = addrs.borrow().get(peri_id) {
-                break Address::random(*addr);
+            if let Some(addr) = addrs[peri_id].get() {
+                break Address::random(addr);
             }
             if !START_SCANNING.signaled() {
                 START_SCANNING.signal(());
@@ -214,9 +207,7 @@ pub(crate) async fn run_ble_peripheral_manager<
             Err(_) => {
                 // Connect to peripheral timeout
                 warn!("Connect to peripheral {} timeout, clearing", peri_id);
-                if let Some(addr) = addrs.borrow_mut().get_mut(peri_id) {
-                    *addr = None
-                };
+                addrs[peri_id].set(None);
             }
         }
         // Reconnect after 500ms

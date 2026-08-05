@@ -143,7 +143,8 @@ where
 
         // Load the peripherals' stored addresses through the storage task,
         // the same way a peripheral loads its central's address. The scanner
-        // and the managers then share the slots.
+        // and the managers then share the slots; `Cell` is enough because a
+        // slot is `Copy`.
         let mut addrs = [None; crate::SPLIT_PERIPHERALS_NUM];
         for (id, slot) in addrs.iter_mut().enumerate() {
             *slot = crate::storage::read_peer_address(id as u8)
@@ -151,7 +152,7 @@ where
                 .filter(|peer| peer.is_valid)
                 .map(|peer| peer.address);
         }
-        let addrs = core::cell::RefCell::new(addrs);
+        let addrs = addrs.map(core::cell::Cell::new);
 
         let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
         let stack = trouble_host::new(self.controller, &mut resources)
