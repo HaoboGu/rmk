@@ -212,20 +212,21 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
     server: &'b BleSplitPeripheralServer<'_>,
 ) -> Result<GattConnection<'a, 'b, DefaultPacketPool>, BleHostError<C::Error>> {
     if let Some(addr) = central_addr {
-        let advertisement = Advertisement::ConnectableNonscannableDirected {
+        let advertisement = Advertisement::ConnectableNonscannableDirectedHighDuty {
             peer: Address::random(addr),
         };
-        let advertiser = peripheral
-            .advertise(&AdvertisementParameters::default(), advertisement)
-            .await?;
-        match with_timeout(Duration::from_secs(10), advertiser.accept()).await {
-            Ok(conn_res) => {
-                let conn = conn_res?.with_attribute_server(server)?;
+        // The spec caps one high duty burst at 1.28s and the controller stops it
+        // automatically, so restart the burst to cover a ~10s window.
+        for _ in 0..8 {
+            let advertiser = peripheral
+                .advertise(&AdvertisementParameters::default(), advertisement)
+                .await?;
+            if let Ok(Ok(conn)) = with_timeout(Duration::from_secs(2), advertiser.accept()).await {
                 info!("[adv] connection established");
-                return Ok(conn);
+                return Ok(conn.with_attribute_server(server)?);
             }
-            Err(_) => warn!("[adv] directed advertising timed out, advertise as undirected"),
         }
+        warn!("[adv] directed advertising timed out, advertise as undirected");
     }
 
     let mut advertiser_data = [0; 31];

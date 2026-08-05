@@ -68,7 +68,7 @@ pub async fn scan_peripherals<
                     let mut scanner = Scanner::new(&mut central);
                     let scan_config = ScanConfig {
                         active: false,
-                        interval: Duration::from_millis(100),
+                        interval: Duration::from_millis(60),
                         window: Duration::from_millis(30),
                         ..Default::default()
                     };
@@ -192,7 +192,7 @@ pub(crate) async fn run_ble_peripheral_manager<
             scan_config: ScanConfig {
                 filter_accept_list: &[address],
                 active: false,
-                interval: Duration::from_millis(100),
+                interval: Duration::from_millis(60),
                 window: Duration::from_millis(30),
                 ..Default::default()
             },
@@ -252,7 +252,7 @@ fn default_central_conn_param() -> RequestedConnParams {
     RequestedConnParams {
         min_connection_interval: Duration::from_micros(7500),
         max_connection_interval: Duration::from_micros(7500),
-        max_latency: 10, // 75ms
+        max_latency: 20, // 150ms
         // A hard reset kills the link silently, and the survivor only notices via
         // this timeout — measured to dominate the reset-reconnect time. ZMK uses 4s.
         supervision_timeout: Duration::from_secs(4),
