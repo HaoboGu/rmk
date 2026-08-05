@@ -252,7 +252,7 @@ async fn main(spawner: Spawner) {
         rmk::types::led_indicator::LedIndicatorType::CapsLock,
     );
 
-    let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
+    let usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
     // Two peripheral halves, both 4x7 at row offset 4.
     let ble_transport = BleTransport::new(
         sdc,

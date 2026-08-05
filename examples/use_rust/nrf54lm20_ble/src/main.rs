@@ -220,7 +220,7 @@ async fn main(spawner: Spawner) {
     let mut keyboard = Keyboard::new(&keymap);
     let host_service = HostService::new(&keymap, &rmk_config);
 
-    let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
+    let usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
     let ble_transport = BleTransport::new(sdc, ble_addr(), rmk_config)
         .with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();

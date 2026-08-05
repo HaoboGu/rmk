@@ -282,7 +282,7 @@ fn transport_setup(
     };
 
     let usb_prelude = quote! {
-        let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config)#with_host;
+        let usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config)#with_host;
     };
     let ble_prelude = quote! {
         let ble_transport = ::rmk::ble::BleTransport::new(ble_controller, ble_addr, rmk_config #split_matrix_configs) #with_host;
