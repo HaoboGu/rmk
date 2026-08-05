@@ -267,3 +267,16 @@ async fn lock_gate_rejects_and_reports() {
         Either::Second(()) => {}
     }
 }
+
+/// A silent peer must keep `connect` pending: the client is runtime-free and
+/// owns no handshake timeout — callers wrap one. Inherited from the retired
+/// serial transport's PTY test.
+#[tokio::test(flavor = "current_thread")]
+async fn connect_stays_pending_on_silent_peer() {
+    let h2d = Link::new();
+    let d2h = Link::new();
+    let device = DuplexDevice { rx: &d2h, tx: &h2d };
+
+    let timed_out = tokio::time::timeout(std::time::Duration::from_millis(200), device.connect()).await;
+    assert!(timed_out.is_err(), "connect must not resolve against a silent peer");
+}

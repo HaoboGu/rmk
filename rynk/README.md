@@ -5,7 +5,7 @@ protocol. Use it to read and write a running RMK keyboard's keymap, combos,
 forks, morse, macros, and behavior, and to observe live status.
 
 This crate owns the protocol state machine only. Device discovery, connection,
-and byte I/O live in separate transport crates such as `rynk-serial` and
+and byte I/O live in separate transport crates such as `rynk-usb` and
 `rynk-ble`. The `rynk-kle` crate converts KLE exports / Vial `vial.json` ↔
 RMK's `[layout]` and decodes layouts into `rynk::layout` types — natively and,
 via its `wasm` feature, on the web; the `rmkit layout` CLI in
@@ -31,12 +31,13 @@ via its `wasm` feature, on the web; the `rmkit layout` CLI in
 
 ```rust,no_run
 # async fn run() -> Result<(), Box<dyn std::error::Error>> {
-// Discover marked Rynk keyboards, pick one, and open it (the handshake runs
-// inside `connect`). `rynk-ble` mirrors this flow.
+// Discover Rynk keyboards by their vendor USB interface, pick one, and open
+// it (the handshake runs inside `connect`). `rynk-ble` mirrors this flow.
 use embassy_futures::select::{Either, select};
 use rynk::RynkDevice;
-use rynk_serial::SerialDevice;
-let device = SerialDevice::discover()?
+use rynk_usb::UsbDevice;
+let device = UsbDevice::discover()
+    .await?
     .into_iter()
     .next()
     .ok_or("no Rynk keyboard found")?;

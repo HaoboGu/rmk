@@ -58,7 +58,7 @@ tokio = { version = "1.47", features = ["test-util", "macros", "net", "rt", "rt-
 
 embedded-io-adapters = { workspace = true, features = ["tokio-1"] }
 rynk-ble = { path = "rynk-ble" }
-rynk-serial = { path = "rynk-serial" }
+rynk-usb = { path = "rynk-usb" }
 env_logger = "0.11"
 # Tests hand-compress layout blobs the way the build does.
 miniz_oxide = "0.9"
@@ -66,14 +66,14 @@ miniz_oxide = "0.9"
 [workspace]
 resolver = "2"
 members = [
-    "rynk-serial",
+    "rynk-usb",
     "rynk-ble",
     "rynk-wasm",
     "rynk-kle",
 ]
 default-members = [
     ".",
-    "rynk-serial",
+    "rynk-usb",
     "rynk-ble",
     "rynk-kle",
 ]
@@ -93,6 +93,5 @@ embedded-io-async = "0.7"
 embedded-io-adapters = "0.7"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 log = "0.4"
-tokio-serial = "5.4"
 bluest = "0.6"
 futures-util = "0.3"
