@@ -216,12 +216,12 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
             peer: Address::random(addr),
         };
         // The spec caps one high duty burst at 1.28s and the controller stops it
-        // automatically, so restart the burst to cover a ~10s window.
-        for _ in 0..8 {
+        // automatically, so restart the burst to cover a ~19s window.
+        for _ in 0..15 {
             let advertiser = peripheral
                 .advertise(&AdvertisementParameters::default(), advertisement)
                 .await?;
-            if let Ok(Ok(conn)) = with_timeout(Duration::from_secs(2), advertiser.accept()).await {
+            if let Ok(conn) = advertiser.accept().await {
                 info!("[adv] connection established");
                 return Ok(conn.with_attribute_server(server)?);
             }
