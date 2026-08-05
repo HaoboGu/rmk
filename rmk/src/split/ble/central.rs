@@ -79,9 +79,10 @@ pub(crate) async fn scan_peripherals<
                         continue;
                     }
 
-                    info!("Scanned new peripheral {:?}", scanned_addr);
-                    // Update only when the slot is empty
+                    // Keep the first address seen for a slot; an occupied slot is
+                    // cleared only when connecting to it times out.
                     if slot.get().is_none() {
+                        info!("Scanned new peripheral {:?}", scanned_addr);
                         slot.set(Some(scanned_addr));
                         FLASH_CHANNEL
                             .send(FlashOperationMessage::PeerAddress(PeerAddress::new(
