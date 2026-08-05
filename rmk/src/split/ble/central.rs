@@ -192,8 +192,11 @@ pub(crate) async fn run_ble_peripheral_manager<
             scan_config: ScanConfig {
                 filter_accept_list: &[address],
                 active: false,
+                // Scan continuously while connecting: this state only exists while
+                // the link is down, and a 30% duty cycle can miss several of the
+                // peripheral's slow-phase (160ms) advertisements in a row.
                 interval: Duration::from_millis(100),
-                window: Duration::from_millis(30),
+                window: Duration::from_millis(100),
                 ..Default::default()
             },
         };
