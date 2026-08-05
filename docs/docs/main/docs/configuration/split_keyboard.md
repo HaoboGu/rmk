@@ -223,7 +223,7 @@ Running split peripheral is simpler. For the peripheral, we don't need to specif
 let mut matrix = Matrix::<_, _, _, 4, 7, true>::new(row_pins, col_pins, debouncer);
 
 // BLE split peripheral, arguments might be different for other microcontrollers, check the API docs or examples for other usages.
-// The first argument is the peripheral's id, which should match the index of this peripheral in the central's `with_split_peripherals` list.
+// The first argument is the peripheral's id, which should match the index of this peripheral in the `PeripheralMatrixConfig` array the central passes to `BleTransport::new`.
 run_rmk_split_peripheral(peripheral_id, controller, ble_addr),
 ```
 

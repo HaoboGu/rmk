@@ -298,8 +298,12 @@ rmk::dfu::set_firmware_update_data(0, PERIPHERAL_FW, rmk::crc32::crc32(PERIPHERA
 
 // in the call to run_peripheral_manager, set an update policy
 // use UpdatePolicy::Force to force the peripheral update at every start of central
-run_peripheral_manager::<2, 1, 2, 2, _>(0, uart_receiver, rmk::split::central::UpdatePolicy::MatchHash
-        ),
+run_peripheral_manager(
+    0,
+    uart_receiver,
+    PeripheralMatrixConfig { rows: 2, cols: 1, row_offset: 2, col_offset: 2 },
+    rmk::split::central::UpdatePolicy::MatchHash,
+),
 ```
 
 Where the first argument of `set_firmware_update_data` is the index of the peripheral. (The same as the first argument of `run_peripheral_manager`.)
