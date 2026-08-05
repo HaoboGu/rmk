@@ -253,7 +253,9 @@ fn default_central_conn_param() -> RequestedConnParams {
         min_connection_interval: Duration::from_micros(7500),
         max_connection_interval: Duration::from_micros(7500),
         max_latency: 10, // 75ms
-        supervision_timeout: Duration::from_secs(10),
+        // A hard reset kills the link silently, and the survivor only notices via
+        // this timeout — measured to dominate the reset-reconnect time. ZMK uses 4s.
+        supervision_timeout: Duration::from_secs(4),
         ..Default::default()
     }
 }
