@@ -132,8 +132,8 @@ pub(crate) struct ScanHandler {}
 impl EventHandler for ScanHandler {
     fn on_adv_reports(&self, mut it: LeAdvReportsIter<'_>) {
         while let Some(Ok(report)) = it.next() {
-            // Check advertisement data
-            if report.data.len() < 25 {
+            // Check advertisement data, `report.data[25]` is read below
+            if report.data.len() < 26 {
                 continue;
             }
             if report.data[4] == 0x07
@@ -253,7 +253,7 @@ fn default_central_conn_param() -> RequestedConnParams {
         min_connection_interval: Duration::from_micros(7500),
         max_connection_interval: Duration::from_micros(7500),
         max_latency: 10, // 75ms
-        supervision_timeout: Duration::from_secs(10),
+        supervision_timeout: Duration::from_secs(5),
         ..Default::default()
     }
 }
