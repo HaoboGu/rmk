@@ -212,21 +212,37 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
     server: &'b BleSplitPeripheralServer<'_>,
 ) -> Result<GattConnection<'a, 'b, DefaultPacketPool>, BleHostError<C::Error>> {
     if let Some(addr) = central_addr {
-        let advertisement = Advertisement::ConnectableNonscannableDirectedHighDuty {
+        // One high duty burst (the controller self-terminates it after 1.28s),
+        // then low duty for the rest of the window: restarting bursts
+        // back-to-back races the controller's teardown (Command Disallowed).
+        let advertiser = peripheral
+            .advertise(
+                &AdvertisementParameters::default(),
+                Advertisement::ConnectableNonscannableDirectedHighDuty {
+                    peer: Address::random(addr),
+                },
+            )
+            .await?;
+        if let Ok(conn) = advertiser.accept().await {
+            info!("[adv] connection established");
+            return Ok(conn.with_attribute_server(server)?);
+        }
+        Timer::after_millis(50).await;
+
+        let advertisement = Advertisement::ConnectableNonscannableDirected {
             peer: Address::random(addr),
         };
-        // The spec caps one high duty burst at 1.28s and the controller stops it
-        // automatically, so restart the burst to cover a ~13s window.
-        for _ in 0..10 {
-            let advertiser = peripheral
-                .advertise(&AdvertisementParameters::default(), advertisement)
-                .await?;
-            if let Ok(conn) = advertiser.accept().await {
+        let advertiser = peripheral
+            .advertise(&AdvertisementParameters::default(), advertisement)
+            .await?;
+        match with_timeout(Duration::from_secs(10), advertiser.accept()).await {
+            Ok(conn_res) => {
+                let conn = conn_res?.with_attribute_server(server)?;
                 info!("[adv] connection established");
-                return Ok(conn.with_attribute_server(server)?);
+                return Ok(conn);
             }
+            Err(_) => warn!("[adv] directed advertising timed out, advertise as undirected"),
         }
-        warn!("[adv] directed advertising timed out, advertise as undirected");
     }
 
     let mut advertiser_data = [0; 31];
