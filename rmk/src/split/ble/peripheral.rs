@@ -205,20 +205,28 @@ pub async fn initialize_nrf_ble_split_peripheral_and_run<'b, 's: 'b, C: Controll
 /// central still initiates towards our address and connects immediately. Then fall
 /// back to undirected advertising, which both an initiating and a scanning central
 /// can see.
+///
+/// The reconnect-critical phases (directed, and the first 30s undirected) use a
+/// fast advertising interval so a user waiting on a key press reconnects quickly;
+/// the long undirected tail drops back to the default interval to save power.
 async fn split_peripheral_advertise<'a, 'b, C: Controller>(
     id: usize,
     central_addr: Option<[u8; 6]>,
     peripheral: &mut Peripheral<'a, C, DefaultPacketPool>,
     server: &'b BleSplitPeripheralServer<'_>,
 ) -> Result<GattConnection<'a, 'b, DefaultPacketPool>, BleHostError<C::Error>> {
+    let fast_params = AdvertisementParameters {
+        interval_min: Duration::from_millis(30),
+        interval_max: Duration::from_millis(30),
+        ..Default::default()
+    };
+
     if let Some(addr) = central_addr {
         let advertisement = Advertisement::ConnectableNonscannableDirected {
             peer: Address::random(addr),
         };
-        let advertiser = peripheral
-            .advertise(&AdvertisementParameters::default(), advertisement)
-            .await?;
-        match with_timeout(Duration::from_secs(10), advertiser.accept()).await {
+        let advertiser = peripheral.advertise(&fast_params, advertisement).await?;
+        match with_timeout(Duration::from_secs(5), advertiser.accept()).await {
             Ok(conn_res) => {
                 let conn = conn_res?.with_attribute_server(server)?;
                 info!("[adv] connection established");
@@ -251,10 +259,16 @@ async fn split_peripheral_advertise<'a, 'b, C: Controller>(
         adv_data: &advertiser_data[..],
         scan_data: &[],
     };
+
+    let advertiser = peripheral.advertise(&fast_params, advertisement).await?;
+    if let Ok(re) = with_timeout(Duration::from_secs(30), advertiser.accept()).await {
+        return Ok(re?.with_attribute_server(server)?);
+    }
+
     let advertiser = peripheral
         .advertise(&AdvertisementParameters::default(), advertisement)
         .await?;
-    match with_timeout(Duration::from_secs(300), advertiser.accept()).await {
+    match with_timeout(Duration::from_secs(270), advertiser.accept()).await {
         Ok(re) => Ok(re?.with_attribute_server(server)?),
         Err(_e) => Err(BleHostError::BleHost(Error::Timeout)),
     }
