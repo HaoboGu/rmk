@@ -243,8 +243,8 @@ pub(crate) async fn run_ble_peripheral_manager<
                 };
             }
         }
-        // Reconnect after 500ms
-        embassy_time::Timer::after_millis(500).await;
+        // Reconnect after 100ms
+        embassy_time::Timer::after_millis(100).await;
     }
 }
 
@@ -253,7 +253,9 @@ fn default_central_conn_param() -> RequestedConnParams {
         min_connection_interval: Duration::from_micros(7500),
         max_connection_interval: Duration::from_micros(7500),
         max_latency: 10, // 75ms
-        supervision_timeout: Duration::from_secs(10),
+        // A peripheral reset kills the link silently; the supervision timeout is
+        // how long the central takes to notice, so keep it short (ZMK uses 4s too).
+        supervision_timeout: Duration::from_secs(4),
         ..Default::default()
     }
 }
@@ -461,15 +463,13 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> Sp
 
 /// Wait for the BLE stack to start.
 ///
-/// If the BLE stack has been started, wait 500ms then quit.
+/// The flag is latched just before the runner task starts, so add a small
+/// settle to let the runner get polled before issuing commands.
 pub(crate) async fn wait_for_stack_started() {
-    loop {
-        if STACK_STARTED.signaled() {
-            embassy_time::Timer::after_millis(500).await;
-            break;
-        }
-        embassy_time::Timer::after_millis(500).await;
+    while !STACK_STARTED.signaled() {
+        embassy_time::Timer::after_millis(100).await;
     }
+    embassy_time::Timer::after_millis(100).await;
 }
 
 /// Keep one peripheral link's connection parameters in sync with the keyboard's
