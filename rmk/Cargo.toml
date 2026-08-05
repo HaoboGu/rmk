@@ -165,7 +165,7 @@ defmt = [
 ]
 
 ## Enable logging via usb
-usb_log = ["dep:embassy-usb-logger", "log"]
+usb_log = ["dep:embassy-usb-logger", "log", "log/max_level_debug"]
 ## Use log, this feature cannot be enabled when defmt is enabled
 log = ["dep:log", "trouble-host?/log"]
 

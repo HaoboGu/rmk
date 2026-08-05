@@ -14,6 +14,13 @@ rmk = { version = "0.9", default-features = false, features = [
 ] }
 ```
 
+The default log level is debug. You can change the log level by enabling the `max_level_*` feature for the log crate in `Cargo.toml`:
+```toml
+log = {version = "0.4", features = [
+    "max_level_info",
+]}
+```
+
 ::: tip
 Don't forget to re-enable the other default features you need (such as `storage`, `vial`, `host_lock`, and `watchdog`) — but not `defmt`: `usb_log` is based on the `log` crate, which cannot be enabled together with the `defmt` feature.
 :::
