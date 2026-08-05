@@ -10,7 +10,13 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rmk = { path = "../../../rmk", default-features = false, features = [
+# This example's dependency version is LOCKED, and tracks the `compat/sf32lb52x-bt-hci-08`
+# branch rather than main: sifli-radio implements the bt-hci 0.8 traits, so rmk is pinned to
+# the last revision before it moved to bt-hci 0.9, plus the matrix fix that revision needs to
+# build on current stable. Unpin once sifli-radio moves to bt-hci 0.9.
+# trouble-host must stay on the same git rev that branch's rmk uses, or two copies land in the
+# graph and the Controller impls stop lining up.
+rmk = { git = "https://github.com/rmk-rs/rmk", rev = "70823945638594da4832e7f574e339986c79d35d", default-features = false, features = [
     "sf32lb52x_ble",
     "defmt",
     "storage",
@@ -32,14 +38,16 @@ sifli-radio = { git = "https://github.com/OpenSiFli/sifli-rs", rev = "8b9da60c61
     "defmt",
 ] }
 
-trouble-host = { version = "0.7", features = [
+trouble-host = { git = "https://github.com/haobogu/trouble", rev = "690373fd1166d16225b875435dd0600c92570e7d", features = [
     "defmt",
     "peripheral",
     "gatt",
     "derive",
     "security",
 ] }
-bt-hci = { version = "0.9", features = ["defmt"] }
+bt-hci = { version = "0.8", features = ["defmt"] }
+rand_core = { version = "0.6", default-features = false }
+rand_chacha = { version = "0.3", default-features = false }
 
 embassy-time = { version = "0.5", features = [
     "defmt",

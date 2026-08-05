@@ -3,12 +3,6 @@
 version = 4
 
 [[package]]
-name = "adler2"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
-
-[[package]]
 name = "aes"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -158,22 +152,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40f2166cc54c410ddc0d0dafb3cf8dd536bcbae6bddfcc12c020c5ee4de518de"
 dependencies = [
  "btuuid",
- "embassy-sync 0.7.2",
- "embedded-io 0.7.1",
- "embedded-io-async 0.7.0",
- "futures-intrusive",
- "heapless 0.9.2",
-]
-
-[[package]]
-name = "bt-hci"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f3c66fd0a41a3b3a5906847b1bf5516048ce083e24fa9341a0fa31d3b4cd73d"
-dependencies = [
- "btuuid",
  "defmt 1.0.1",
- "embassy-sync 0.8.0",
+ "embassy-sync 0.7.2",
  "embedded-io 0.7.1",
  "embedded-io-async 0.7.0",
  "futures-intrusive",
@@ -212,13 +192,12 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "cargo_toml"
-version = "1.0.0"
+version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa61aec073ec94791433ddf3df2323ff9d1711557c2a0eefb0f99cb4f8dca520"
+checksum = "374b7c592d9c00c1f4972ea58390ac6b18cbb6ab79011f3bdc90a0b82ca06b77"
 dependencies = [
- "semver 1.0.28",
  "serde",
- "toml 1.1.2+spec-1.1.0",
+ "toml 0.9.12+spec-1.1.0",
 ]
 
 [[package]]
@@ -793,9 +772,9 @@ dependencies = [
 
 [[package]]
 name = "embassy-nrf"
-version = "0.11.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82051f67e8a06a8faebd183f62cfade184c96be68126c5f064abb8223a591ff1"
+checksum = "b715380574504335c40ec3016bc44598fac3c385f82959b26c41b25c30b7648d"
 dependencies = [
  "bitflags 2.11.1",
  "cfg-if",
@@ -810,7 +789,6 @@ dependencies = [
  "embassy-sync 0.8.0",
  "embassy-time",
  "embassy-usb-driver",
- "embassy-usb-synopsys-otg",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
  "embedded-hal-async",
@@ -820,7 +798,6 @@ dependencies = [
  "embedded-storage-async",
  "fixed",
  "nrf-pac",
- "rand_core 0.10.1",
  "rand_core 0.6.4",
  "rand_core 0.9.5",
 ]
@@ -922,20 +899,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "embassy-usb-synopsys-otg"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6efd0c0e0b21bcf91b475b8fa47347c1df32c9a99728ae1e1b0e6625862dfd1a"
-dependencies = [
- "critical-section",
- "defmt 1.0.1",
- "embassy-sync 0.8.0",
- "embassy-time",
- "embassy-usb-driver",
- "portable-atomic",
-]
-
-[[package]]
 name = "embedded-graphics"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -996,12 +959,6 @@ dependencies = [
  "embedded-hal 1.0.0",
  "nb 1.1.0",
 ]
-
-[[package]]
-name = "embedded-io"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef1a6892d9eef45c8fa6b9e0086428a2cca8491aca8f787c534a3d6d0bcb3ced"
 
 [[package]]
 name = "embedded-io"
@@ -1540,15 +1497,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3c8dda44ff03a2f238717214da50f65d5a53b45cd213a7370424ffdb6fae815"
 
 [[package]]
-name = "miniz_oxide"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b63fbc4a50860e98e7b2aa7804ded1db5cbc3aff9193adaff57a6931bf7c4b4c"
-dependencies = [
- "adler2",
-]
-
-[[package]]
 name = "musb"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1580,9 +1528,9 @@ checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 
 [[package]]
 name = "nrf-pac"
-version = "0.4.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83531b9f1e19f493018da9b8b20359e4cedd6d1357553b1ac50f3fa27a0104fa"
+checksum = "bddd547fab92b0553ff37032034fd04ce8b8b60d3f9a83f89ea815dfd0400336"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -1723,8 +1671,6 @@ checksum = "6764c3b5dd454e283a30e6dfe78e9b31096d9e32036b5d1eaac7a6119ccb9a24"
 dependencies = [
  "cobs",
  "defmt 1.0.1",
- "embedded-io 0.4.0",
- "embedded-io 0.6.1",
  "heapless 0.7.17",
  "postcard-derive",
  "serde",
@@ -1831,12 +1777,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c"
 
 [[package]]
-name = "rand_core"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
-
-[[package]]
 name = "regex"
 version = "1.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1868,8 +1808,9 @@ checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 [[package]]
 name = "rmk"
 version = "0.8.2"
+source = "git+https://github.com/rmk-rs/rmk?rev=70823945638594da4832e7f574e339986c79d35d#70823945638594da4832e7f574e339986c79d35d"
 dependencies = [
- "bt-hci 0.9.0",
+ "bt-hci",
  "byteorder",
  "cortex-m",
  "crc32fast",
@@ -1892,26 +1833,26 @@ dependencies = [
  "lcd-async",
  "paste",
  "postcard",
+ "rand_core 0.6.4",
  "rmk-macro",
  "rmk-types",
  "sequential-storage",
  "serde",
  "static_cell",
- "trouble-host 0.7.0 (git+https://github.com/embassy-rs/trouble?rev=088e09c451177d5db50cf3e58c68d05512265ba0)",
+ "trouble-host",
  "usbd-hid",
 ]
 
 [[package]]
 name = "rmk-config"
 version = "0.6.1"
+source = "git+https://github.com/rmk-rs/rmk?rev=70823945638594da4832e7f574e339986c79d35d#70823945638594da4832e7f574e339986c79d35d"
 dependencies = [
  "config",
- "miniz_oxide",
  "once_cell",
  "paste",
  "pest",
  "pest_derive",
- "postcard",
  "serde",
  "serde-inline-default",
  "toml 1.1.2+spec-1.1.0",
@@ -1920,6 +1861,7 @@ dependencies = [
 [[package]]
 name = "rmk-macro"
 version = "0.7.1"
+source = "git+https://github.com/rmk-rs/rmk?rev=70823945638594da4832e7f574e339986c79d35d#70823945638594da4832e7f574e339986c79d35d"
 dependencies = [
  "cargo_toml",
  "darling 0.23.0",
@@ -1935,7 +1877,7 @@ dependencies = [
 name = "rmk-sf32lb52x-ble"
 version = "0.2.0"
 dependencies = [
- "bt-hci 0.9.0",
+ "bt-hci",
  "const-gen",
  "cortex-m",
  "cortex-m-rt",
@@ -1951,11 +1893,13 @@ dependencies = [
  "lcd-async",
  "panic-probe",
  "portable-atomic",
+ "rand_chacha",
+ "rand_core 0.6.4",
  "rmk",
  "sifli-hal",
  "sifli-radio",
  "static_cell",
- "trouble-host 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trouble-host",
  "u8g2-fonts",
  "xz2",
 ]
@@ -1963,6 +1907,7 @@ dependencies = [
 [[package]]
 name = "rmk-types"
 version = "0.2.2"
+source = "git+https://github.com/rmk-rs/rmk?rev=70823945638594da4832e7f574e339986c79d35d#70823945638594da4832e7f574e339986c79d35d"
 dependencies = [
  "bitfield-struct 0.13.0",
  "defmt 1.0.1",
@@ -2079,10 +2024,6 @@ name = "semver"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
-dependencies = [
- "serde",
- "serde_core",
-]
 
 [[package]]
 name = "semver-parser"
@@ -2092,9 +2033,9 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "sequential-storage"
-version = "8.0.1"
+version = "7.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e750f14f4f6e5a81277c66311713a56106c8df0196df62a634d1fc806556832b"
+checksum = "574e5a379bf43653079b34cb4cf32958404b5f42e0ed5b5adcdff02c2de04d4d"
 dependencies = [
  "defmt 1.0.1",
  "embedded-storage-async",
@@ -2283,7 +2224,7 @@ name = "sifli-radio"
 version = "0.1.0"
 source = "git+https://github.com/OpenSiFli/sifli-rs?rev=8b9da60c616a945d444fdd18b80c773f903d2796#8b9da60c616a945d444fdd18b80c773f903d2796"
 dependencies = [
- "bt-hci 0.8.0",
+ "bt-hci",
  "cortex-m",
  "defmt 1.0.1",
  "embassy-futures",
@@ -2445,6 +2386,21 @@ dependencies = [
 
 [[package]]
 name = "toml"
+version = "0.9.12+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf92845e79fc2e2def6a5d828f0801e29a2f8acc037becc5ab08595c7d5e9863"
+dependencies = [
+ "indexmap",
+ "serde_core",
+ "serde_spanned 1.1.1",
+ "toml_datetime 0.7.5+spec-1.1.0",
+ "toml_parser",
+ "toml_writer",
+ "winnow 0.7.15",
+]
+
+[[package]]
+name = "toml"
 version = "1.1.2+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81f3d15e84cbcd896376e6730314d59fb5a87f31e4b038454184435cd57defee"
@@ -2465,6 +2421,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22cddaf88f4fbc13c51aebbf5f8eceb5c7c5a9da2ac40a13519eb5b0a0e8f11c"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "toml_datetime"
+version = "0.7.5+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92e1cfed4a3038bc5a127e35a2d360f145e1f4b971b551a2ba5fd7aedf7e1347"
+dependencies = [
+ "serde_core",
 ]
 
 [[package]]
@@ -2574,36 +2539,11 @@ dependencies = [
 
 [[package]]
 name = "trouble-host"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb9fe2be24000037431b036ba244cdb1d26f40e1719548553fb43c3fc62d496b"
+version = "0.6.0"
+source = "git+https://github.com/haobogu/trouble?rev=690373fd1166d16225b875435dd0600c92570e7d#690373fd1166d16225b875435dd0600c92570e7d"
 dependencies = [
  "aes",
- "bt-hci 0.9.0",
- "cmac",
- "defmt 1.0.1",
- "embassy-futures",
- "embassy-sync 0.8.0",
- "embassy-time",
- "embedded-io 0.7.1",
- "futures",
- "heapless 0.9.2",
- "p256",
- "rand",
- "rand_chacha",
- "rand_core 0.6.4",
- "static_cell",
- "trouble-host-macros 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "zerocopy",
-]
-
-[[package]]
-name = "trouble-host"
-version = "0.7.0"
-source = "git+https://github.com/embassy-rs/trouble?rev=088e09c451177d5db50cf3e58c68d05512265ba0#088e09c451177d5db50cf3e58c68d05512265ba0"
-dependencies = [
- "aes",
- "bt-hci 0.9.0",
+ "bt-hci",
  "cmac",
  "defmt 1.0.1",
  "embassy-futures",
@@ -2618,28 +2558,14 @@ dependencies = [
  "rand_core 0.6.4",
  "serde",
  "static_cell",
- "trouble-host-macros 0.5.0 (git+https://github.com/embassy-rs/trouble?rev=088e09c451177d5db50cf3e58c68d05512265ba0)",
+ "trouble-host-macros",
  "zerocopy",
 ]
 
 [[package]]
 name = "trouble-host-macros"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2562dc74f79ad12f7bf088da55c936d5eb1d022f2caac9849175326307a5eec1"
-dependencies = [
- "convert_case 0.8.0",
- "darling 0.20.11",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
- "uuid",
-]
-
-[[package]]
-name = "trouble-host-macros"
-version = "0.5.0"
-source = "git+https://github.com/embassy-rs/trouble?rev=088e09c451177d5db50cf3e58c68d05512265ba0#088e09c451177d5db50cf3e58c68d05512265ba0"
+version = "0.4.0"
+source = "git+https://github.com/haobogu/trouble?rev=690373fd1166d16225b875435dd0600c92570e7d#690373fd1166d16225b875435dd0600c92570e7d"
 dependencies = [
  "convert_case 0.8.0",
  "darling 0.20.11",
