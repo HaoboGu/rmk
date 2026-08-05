@@ -192,11 +192,8 @@ pub(crate) async fn run_ble_peripheral_manager<
             scan_config: ScanConfig {
                 filter_accept_list: &[address],
                 active: false,
-                // Scan continuously while connecting: this state only exists while
-                // the link is down, and a 30% duty cycle can miss several of the
-                // peripheral's slow-phase (160ms) advertisements in a row.
                 interval: Duration::from_millis(100),
-                window: Duration::from_millis(100),
+                window: Duration::from_millis(30),
                 ..Default::default()
             },
         };
@@ -246,8 +243,8 @@ pub(crate) async fn run_ble_peripheral_manager<
                 };
             }
         }
-        // Reconnect after 100ms
-        embassy_time::Timer::after_millis(100).await;
+        // Reconnect after 500ms
+        embassy_time::Timer::after_millis(500).await;
     }
 }
 
@@ -256,9 +253,7 @@ fn default_central_conn_param() -> RequestedConnParams {
         min_connection_interval: Duration::from_micros(7500),
         max_connection_interval: Duration::from_micros(7500),
         max_latency: 10, // 75ms
-        // A peripheral reset kills the link silently; the supervision timeout is
-        // how long the central takes to notice, so keep it short (ZMK uses 4s too).
-        supervision_timeout: Duration::from_secs(4),
+        supervision_timeout: Duration::from_secs(10),
         ..Default::default()
     }
 }
@@ -466,13 +461,15 @@ impl<'a, 'b, 'c, C: Controller + ControllerCmdAsync<LeSetPhy>, P: PacketPool> Sp
 
 /// Wait for the BLE stack to start.
 ///
-/// The flag is latched just before the runner task starts, so add a small
-/// settle to let the runner get polled before issuing commands.
+/// If the BLE stack has been started, wait 500ms then quit.
 pub(crate) async fn wait_for_stack_started() {
-    while !STACK_STARTED.signaled() {
-        embassy_time::Timer::after_millis(100).await;
+    loop {
+        if STACK_STARTED.signaled() {
+            embassy_time::Timer::after_millis(500).await;
+            break;
+        }
+        embassy_time::Timer::after_millis(500).await;
     }
-    embassy_time::Timer::after_millis(100).await;
 }
 
 /// Keep one peripheral link's connection parameters in sync with the keyboard's
