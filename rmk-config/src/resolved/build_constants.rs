@@ -51,6 +51,9 @@ pub struct BuildConstants {
     pub auto_mouse_layer_max_num: usize,
     /// Rynk RX/TX buffer size (bytes).
     pub rynk_buffer_size: usize,
+    pub dongle_slots_num: usize,
+    pub dongle_links_num: usize,
+    pub dongle_pairing_window_secs: u32,
     pub events: Vec<EventChannel>,
     pub passkey: Option<Passkey>,
 }
@@ -179,6 +182,19 @@ impl crate::KeyboardTomlConfig {
         validate_u8_capability("ble_profiles_num", rmk.ble_profiles_num)?;
         validate_u16_capability("macro_space_size", rmk.macro_space_size)?;
         validate_u16_capability("rynk_buffer_size", rmk.rynk_buffer_size)?;
+        if rmk.dongle_slots_num > protocol_limits::MAX_DONGLE_SLOTS {
+            return Err(format!(
+                "dongle_slots_num ({}) exceeds protocol ceiling MAX_DONGLE_SLOTS ({})",
+                rmk.dongle_slots_num,
+                protocol_limits::MAX_DONGLE_SLOTS
+            ));
+        }
+        if rmk.dongle_links_num == 0 || rmk.dongle_links_num > rmk.dongle_slots_num {
+            return Err(format!(
+                "dongle_links_num ({}) must be between 1 and dongle_slots_num ({})",
+                rmk.dongle_links_num, rmk.dongle_slots_num
+            ));
+        }
         Ok(BuildConstants {
             combo_max_num: rmk.combo_max_num,
             combo_max_length: rmk.combo_max_length,
@@ -199,6 +215,9 @@ impl crate::KeyboardTomlConfig {
             protocol_macro_chunk_size: rmk.protocol_macro_chunk_size,
             auto_mouse_layer_max_num,
             rynk_buffer_size: rmk.rynk_buffer_size,
+            dongle_slots_num: rmk.dongle_slots_num,
+            dongle_links_num: rmk.dongle_links_num,
+            dongle_pairing_window_secs: rmk.dongle_pairing_window_secs,
             events,
             passkey,
         })

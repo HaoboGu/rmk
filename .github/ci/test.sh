@@ -18,6 +18,9 @@ cargo +stable "${nx[@]}" --manifest-path rmk-types/Cargo.toml
 # Exercise the rynk protocol module (gated behind `rynk`).
 cargo +stable "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features host
 cargo +stable "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features steno
+# `dongle` without `host`: the only setup where the dongle rows reach the
+# firmware-side payload-budget assert.
+cargo +stable "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features dongle
 cargo +stable "${nx[@]}" --manifest-path rmk-macro/Cargo.toml --features _simulator
 for feats in "${RMK_TEST_FEATURESETS[@]}"; do
     if [[ -z "$feats" ]]; then

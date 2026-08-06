@@ -178,6 +178,8 @@ fn round_trip_rynk_error_and_result() {
     round_trip(&RynkError::Invalid);
     round_trip(&RynkError::UnknownCmd);
     round_trip(&RynkError::Locked);
+    round_trip(&RynkError::Busy);
+    round_trip(&RynkError::NoTarget);
     let ok: Result<(), RynkError> = Ok(());
     let err: Result<(), RynkError> = Err(RynkError::StorageFault);
     let _ = round_trip(&ok);
@@ -212,6 +214,8 @@ struct Exemplars {
     morse: Morse,
     macro_data: MacroData,
     encoder: EncoderAction,
+    dongle_info: DongleInfo,
+    dongle_slots: DongleSlots,
 }
 
 fn exemplars() -> Exemplars {
@@ -304,6 +308,37 @@ fn exemplars() -> Exemplars {
     let macro_data = MacroData { data: macro_bytes };
     let encoder = EncoderAction::new(KeyAction::Morse(3), KeyAction::No);
 
+    // Fixed version (not CURRENT) so a version bump alone doesn't flip these bytes.
+    let dongle_info = DongleInfo {
+        version: ProtocolVersion { major: 1, minor: 2 },
+        slots_num: 3,
+        links_num: 4,
+    };
+    let mut dongle_slot_vec = heapless::Vec::new();
+    dongle_slot_vec
+        .push(DongleSlot {
+            slot: 0,
+            connected: true,
+            name: heapless::String::try_from("Corne").unwrap(),
+            battery: BatteryStatus::Available {
+                charge_state: ChargeState::Discharging,
+                level: Some(85),
+            },
+        })
+        .unwrap();
+    dongle_slot_vec
+        .push(DongleSlot {
+            slot: 1,
+            connected: false,
+            name: heapless::String::try_from("Lily58").unwrap(),
+            battery: BatteryStatus::Unavailable,
+        })
+        .unwrap();
+    let dongle_slots = DongleSlots {
+        slots: dongle_slot_vec,
+        target: Some(0),
+    };
+
     Exemplars {
         matrix,
         capabilities,
@@ -316,6 +351,8 @@ fn exemplars() -> Exemplars {
         morse,
         macro_data,
         encoder,
+        dongle_info,
+        dongle_slots,
     }
 }
 
@@ -365,6 +402,8 @@ fn wire_values_locked() {
         ("RynkError::StorageFault", encode(&RynkError::StorageFault)),
         ("RynkError::Unimplemented", encode(&RynkError::Unimplemented)),
         ("RynkError::UnknownCmd", encode(&RynkError::UnknownCmd)),
+        ("RynkError::Busy", encode(&RynkError::Busy)),
+        ("RynkError::NoTarget", encode(&RynkError::NoTarget)),
         // --- KeyAction: every variant tag (positional) ---
         ("KeyAction::No", encode(&KeyAction::No)),
         ("KeyAction::Transparent", encode(&KeyAction::Transparent)),
@@ -496,6 +535,9 @@ fn wire_values_locked() {
         ("UsbState::Suspended", encode(&UsbState::Suspended)),
         ("StorageResetMode::Full", encode(&StorageResetMode::Full)),
         ("StorageResetMode::LayoutOnly", encode(&StorageResetMode::LayoutOnly)),
+        // --- Dongle (0x09xx payloads) ---
+        ("DongleInfo{1.2,3,4}", encode(&ex.dongle_info)),
+        ("DongleSlots{[Corne,Lily58],Some(0)}", encode(&ex.dongle_slots)),
         // --- Request payloads: pin field order of the Get/Set structs ---
         (
             "SetKeyRequest{{0,5,13},Morse(7)}",
@@ -575,7 +617,7 @@ fn wire_values_locked() {
 ///
 /// Requests and replies use SEQ 1 (a reply echoes its request's SEQ); topics
 /// always use SEQ 0. The `GetVersion` probe and reply are frozen across all
-/// majors. Feature-gated commands (`bulk`, `_ble`, split) are excluded so
+/// majors. Feature-gated commands (`bulk`, `_ble`, split, `dongle`) are excluded so
 /// every `rynk` feature set yields the same file. Payloads reuse the shared
 /// [`exemplars`], so a frame and its bare-payload entry in
 /// `wire_values.snap` stay in lockstep.

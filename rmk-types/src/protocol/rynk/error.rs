@@ -31,4 +31,8 @@ pub enum RynkError {
     /// beside pipelined requests still queued in the session buffer. The
     /// request itself was valid — retry once in-flight requests complete.
     Busy,
+    /// A dongle with multiple bonded keyboards refused a forwarded command
+    /// because no target was selected; issue `SelectDongleTarget` first.
+    /// Never emitted by a keyboard.
+    NoTarget,
 }

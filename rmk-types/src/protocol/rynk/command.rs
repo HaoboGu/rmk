@@ -14,11 +14,11 @@ use serde::de::DeserializeOwned;
 
 use super::message::{RynkHeader, encode_frame};
 use super::{
-    BehaviorConfig, DeviceCapabilities, DeviceInfo, GetComboBulkRequest, GetComboBulkResponse, GetEncoderRequest,
-    GetKeymapBulkRequest, GetKeymapBulkResponse, GetMacroRequest, GetMorseBulkRequest, GetMorseBulkResponse,
-    KeyPosition, LayoutChunk, LockStatus, MacroData, MatrixState, ProtocolVersion, RynkError, SetComboBulkRequest,
-    SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetKeymapBulkRequest, SetMacroRequest,
-    SetMorseBulkRequest, SetMorseRequest, StorageResetMode,
+    BehaviorConfig, DeviceCapabilities, DeviceInfo, DongleInfo, DongleSlots, GetComboBulkRequest, GetComboBulkResponse,
+    GetEncoderRequest, GetKeymapBulkRequest, GetKeymapBulkResponse, GetMacroRequest, GetMorseBulkRequest,
+    GetMorseBulkResponse, KeyPosition, LayoutChunk, LockStatus, MacroData, MatrixState, ProtocolVersion, RynkError,
+    SetComboBulkRequest, SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetKeymapBulkRequest,
+    SetMacroRequest, SetMorseBulkRequest, SetMorseRequest, StorageResetMode,
 };
 use crate::action::{EncoderAction, KeyAction};
 #[cfg(feature = "_ble")]
@@ -233,6 +233,7 @@ macro_rules! topics {
             $( $(#[$meta])* $name($payload), )*
         }
 
+        #[allow(unused_doc_comments)] // row docs also land on the match arms
         impl TopicEvent {
             /// Decode a topic frame's `payload` as the topic named by `cmd`.
             /// `None` for a `cmd` outside the topic table, or a payload that
@@ -337,6 +338,22 @@ endpoints! {
     GetSleepState = 0x0806: () => bool;
     /// Latest HID LED bitmap, sourced from the `LedIndicatorChange` topic snapshot.
     GetLedIndicator = 0x0807: () => LedIndicator;
+
+    // Dongle (0x09xx) — answered by a tri-mode dongle itself, never forwarded to
+    // a keyboard. Gated so `DongleSlots` stays out of a keyboard's payload budget.
+    /// Dongle probe: a keyboard answers `UnknownCmd`, a dongle its slot/link
+    /// limits and its own protocol version.
+    #[cfg(feature = "dongle")]
+    GetDongleInfo = 0x0901: () => DongleInfo;
+    /// Snapshot of the dongle's slot table.
+    #[cfg(feature = "dongle")]
+    GetDongleSlots = 0x0902: () => DongleSlots;
+    /// Route subsequent forwarded commands to this slot.
+    #[cfg(feature = "dongle")]
+    SelectDongleTarget = 0x0903: u8 => ();
+    /// Delete a slot's bond.
+    #[cfg(feature = "dongle")]
+    ForgetDongleSlot = 0x0904: u8 => ();
 }
 
 // Define topics: `Name = value: Payload;`
@@ -349,6 +366,12 @@ topics! {
     LedIndicatorChange = 0x8005: LedIndicator;
     #[cfg(feature = "_ble")]
     BatteryStatusChange = 0x8006: BatteryStatus;
+
+    // Dongle topics (0x89xx), pushed by a dongle, never by a keyboard. Gated
+    // so the keyboard-side `TopicEvent` doesn't grow to `DongleSlots` size.
+    /// Pushed when a slot's bond or connection state changes.
+    #[cfg(feature = "dongle")]
+    DongleSlotsChange = 0x8901: DongleSlots;
 }
 
 /// The payload budget advertised to hosts must cover the largest payload

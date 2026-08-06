@@ -73,6 +73,31 @@ pub const RYNK_MAX_PAYLOAD_SIZE: usize = {
     frame_size - RYNK_HEADER_SIZE
 };
 
+/// Decode just the 3-byte header out of a COBS-encoded frame, leaving the
+/// frame bytes untouched — a dongle peeks the CMD to route a frame without
+/// re-encoding it. `None` when the bytes don't decode to a full header
+/// (truncated frame, or a stray delimiter inside the prefix).
+pub fn decode_header(encoded: &[u8]) -> Option<RynkHeader> {
+    let mut out = [0u8; RYNK_HEADER_SIZE];
+    let mut n = 0;
+    let mut state = cobs::DecoderState::Idle;
+    for &byte in encoded {
+        match state.feed(byte).ok()? {
+            cobs::DecodeResult::NoData => {}
+            // The frame's delimiter arrived before a full header was decoded.
+            cobs::DecodeResult::DataComplete => return None,
+            cobs::DecodeResult::DataContinue(b) => {
+                out[n] = b;
+                n += 1;
+                if n == RYNK_HEADER_SIZE {
+                    return Some(RynkHeader::parse(&out));
+                }
+            }
+        }
+    }
+    None
+}
+
 /// COBS-encode the frame `header ++ postcard(value)` into `buf`, returning the
 /// total framed length. The header goes through the COBS encoder too, so a
 /// `0x00` in it never aliases the delimiter.
@@ -287,6 +312,56 @@ mod tests {
         assert_eq!(
             RYNK_MAX_PAYLOAD_SIZE,
             max_frame_size(crate::constants::RYNK_BUFFER_SIZE) - RYNK_HEADER_SIZE
+        );
+    }
+
+    #[test]
+    fn decode_header_reads_the_prefix_without_touching_the_frame() {
+        // Headers with and without interior zeros, with and without payload —
+        // the header must decode from the COBS prefix and the frame bytes stay put.
+        for (cmd, seq, payload) in [
+            (Cmd::GetVersion, 0x42u8, &[1u8, 2, 3, 4][..]), // cmd_hi = 0x00
+            (Cmd::from_raw(0x0901), 0x00, &[][..]),         // seq = 0x00, empty payload
+            (Cmd::from_raw(0x7FFF), 0xFF, &[0u8, 0][..]),   // no zeros in the header
+        ] {
+            let mut buf = [0u8; 64];
+            let n = encode_frame(&mut buf, RynkHeader { cmd, seq }, &payload).unwrap();
+            let copy = buf;
+            let header = decode_header(&buf[..n]).expect("header decodes");
+            assert_eq!(header.cmd, cmd);
+            assert_eq!(header.seq, seq);
+            assert_eq!(buf, copy, "input frame must not be modified");
+            // Also without the trailing delimiter, as a raw splitter may hand it over.
+            let header = decode_header(&buf[..n - 1]).unwrap();
+            assert_eq!(header.cmd, cmd);
+        }
+    }
+
+    #[test]
+    fn decode_header_survives_a_254_byte_first_group() {
+        // An all-nonzero frame longer than 254 bytes makes the first COBS group
+        // 0xFF-coded; the header must not gain a phantom zero at the group edge.
+        let payload = [0x41u8; 300];
+        let mut buf = [0u8; 400];
+        let header = RynkHeader {
+            cmd: Cmd::from_raw(0x0101),
+            seq: 7,
+        };
+        let n = encode_frame(&mut buf, header, &payload.as_slice()).unwrap();
+        let decoded = decode_header(&buf[..n]).unwrap();
+        assert_eq!(decoded.cmd.raw(), 0x0101);
+        assert_eq!(decoded.seq, 7);
+    }
+
+    #[test]
+    fn decode_header_rejects_truncated_or_empty_input() {
+        assert!(decode_header(&[]).is_none());
+        // A bare delimiter or a frame cut before 3 decoded bytes.
+        assert!(decode_header(&[0x00]).is_none());
+        assert!(decode_header(&[0x02, 0xAA]).is_none());
+        assert!(
+            decode_header(&[0x03, 0xAA, 0xBB]).is_none(),
+            "only 2 decoded bytes + EOF"
         );
     }
 
