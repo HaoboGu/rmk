@@ -9,8 +9,7 @@ use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
 use super::system::ProtocolVersion;
-use crate::battery::BatteryStatus;
-use crate::constants::DONGLE_SLOTS_NUM;
+use crate::constants::MAX_DONGLE_SLOTS;
 
 /// Maximum byte length of a slot's stored keyboard name — sized to hold the
 /// `DeviceInfo::product_name` captured during the pairing handshake.
@@ -28,7 +27,10 @@ pub struct DongleInfo {
     pub links_num: u8,
 }
 
-/// One bonded keyboard in the dongle's slot table.
+/// One bonded keyboard in the dongle's slot table. Carries only what survives
+/// the keyboard being off: its identity and whether it is linked right now.
+/// Everything else — battery, layer, keymap — is the keyboard's own protocol
+/// surface, which the host reaches by forwarding to the selected target.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
@@ -38,17 +40,13 @@ pub struct DongleSlot {
     /// Keyboard name captured from `GetDeviceInfo` during the pairing handshake.
     #[cfg_attr(feature = "wasm", tsify(type = "string"))]
     pub name: String<DONGLE_SLOT_NAME_SIZE>,
-    /// Latest battery status notified by the keyboard.
-    pub battery: BatteryStatus,
 }
 
 // A str encodes as varint length + UTF-8 bytes — the same wire shape as
 // `Vec<u8, N>`, so the Vec bound covers the name field.
 impl MaxSize for DongleSlot {
-    const POSTCARD_MAX_SIZE: usize = u8::POSTCARD_MAX_SIZE
-        + bool::POSTCARD_MAX_SIZE
-        + crate::heapless_vec_max_size::<u8, DONGLE_SLOT_NAME_SIZE>()
-        + BatteryStatus::POSTCARD_MAX_SIZE;
+    const POSTCARD_MAX_SIZE: usize =
+        u8::POSTCARD_MAX_SIZE + bool::POSTCARD_MAX_SIZE + crate::heapless_vec_max_size::<u8, DONGLE_SLOT_NAME_SIZE>();
 }
 
 /// Slot-table snapshot, returned by `GetDongleSlots` and pushed as the
@@ -57,8 +55,10 @@ impl MaxSize for DongleSlot {
 #[cfg_attr(feature = "wasm", derive(tsify::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct DongleSlots {
+    /// Bonded slots only, sized by the protocol ceiling: this is a decoder's
+    /// bound, not the producing dongle's `DONGLE_SLOTS_NUM`.
     #[cfg_attr(feature = "wasm", tsify(type = "DongleSlot[]"))]
-    pub slots: Vec<DongleSlot, DONGLE_SLOTS_NUM>,
+    pub slots: Vec<DongleSlot, MAX_DONGLE_SLOTS>,
     /// The slot configuration traffic is routed to; `None` when ambiguous
     /// (multiple bonded slots and no `SelectDongleTarget` yet).
     pub target: Option<u8>,
@@ -66,7 +66,7 @@ pub struct DongleSlots {
 
 impl MaxSize for DongleSlots {
     const POSTCARD_MAX_SIZE: usize =
-        crate::heapless_vec_max_size::<DongleSlot, DONGLE_SLOTS_NUM>() + <Option<u8>>::POSTCARD_MAX_SIZE;
+        crate::heapless_vec_max_size::<DongleSlot, MAX_DONGLE_SLOTS>() + <Option<u8>>::POSTCARD_MAX_SIZE;
 }
 
 #[cfg(test)]
@@ -98,10 +98,6 @@ mod tests {
             slot: u8::MAX,
             connected: true,
             name: full_name,
-            battery: BatteryStatus::Available {
-                charge_state: crate::battery::ChargeState::Charging,
-                level: Some(u8::MAX),
-            },
         };
         round_trip(&slot);
         assert_max_size_bound(&slot);

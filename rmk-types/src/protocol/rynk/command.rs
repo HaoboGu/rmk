@@ -14,12 +14,14 @@ use serde::de::DeserializeOwned;
 
 use super::message::{RynkHeader, encode_frame};
 use super::{
-    BehaviorConfig, DeviceCapabilities, DeviceInfo, DongleInfo, DongleSlots, GetComboBulkRequest, GetComboBulkResponse,
-    GetEncoderRequest, GetKeymapBulkRequest, GetKeymapBulkResponse, GetMacroRequest, GetMorseBulkRequest,
-    GetMorseBulkResponse, KeyPosition, LayoutChunk, LockStatus, MacroData, MatrixState, ProtocolVersion, RynkError,
-    SetComboBulkRequest, SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetKeymapBulkRequest,
-    SetMacroRequest, SetMorseBulkRequest, SetMorseRequest, StorageResetMode,
+    BehaviorConfig, DeviceCapabilities, DeviceInfo, GetComboBulkRequest, GetComboBulkResponse, GetEncoderRequest,
+    GetKeymapBulkRequest, GetKeymapBulkResponse, GetMacroRequest, GetMorseBulkRequest, GetMorseBulkResponse,
+    KeyPosition, LayoutChunk, LockStatus, MacroData, MatrixState, ProtocolVersion, RynkError, SetComboBulkRequest,
+    SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetKeymapBulkRequest, SetMacroRequest,
+    SetMorseBulkRequest, SetMorseRequest, StorageResetMode,
 };
+#[cfg(feature = "dongle")]
+use super::{DongleInfo, DongleSlots};
 use crate::action::{EncoderAction, KeyAction};
 #[cfg(feature = "_ble")]
 use crate::battery::BatteryStatus;
@@ -341,8 +343,7 @@ endpoints! {
 
     // Dongle (0x09xx) — answered by a tri-mode dongle itself, never forwarded to
     // a keyboard. Gated so `DongleSlots` stays out of a keyboard's payload budget.
-    /// Dongle probe: a keyboard answers `UnknownCmd`, a dongle its slot/link
-    /// limits and its own protocol version.
+    /// Dongle probe: a keyboard answers `UnknownCmd`.
     #[cfg(feature = "dongle")]
     GetDongleInfo = 0x0901: () => DongleInfo;
     /// Snapshot of the dongle's slot table.

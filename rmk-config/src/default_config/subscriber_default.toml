@@ -82,16 +82,6 @@ events = [
     { name = "led_indicator" },
 ]
 
-# --- Dongle firmware internal subscribers ---
-
-[[subscriber]]
-features = ["dongle"]
-events = [
-    # dongle/link.rs: LedIndicatorEvent::subscriber() per link task.
-    # Covers the default dongle_links_num = 2; for more links override subs in keyboard.toml
-    { name = "led_indicator", count = 2 },
-]
-
 # --- Split-gated internal subscribers ---
 
 [[subscriber]]

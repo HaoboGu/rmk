@@ -124,6 +124,15 @@ impl crate::KeyboardTomlConfig {
         // Declarations live in subscriber_default.toml.
         apply_feature_subscriber_bumps(&mut events, active_features);
 
+        // A dongle's link tasks each hold a `led_indicator` subscriber, so the
+        // count follows `dongle_links_num` and can't be declared in the static
+        // table above.
+        if active_features.contains(&"dongle")
+            && let Some(led) = events.iter_mut().find(|e| e.name == "led_indicator")
+        {
+            led.subs += rmk.dongle_links_num;
+        }
+
         // Only validate passkey settings when the build will emit passkey constants.
         let passkey = if active_features.contains(&"passkey_entry") {
             self.ble.as_ref().map(resolve_passkey_enabled).transpose()?
@@ -295,6 +304,29 @@ mod tests {
 
         // Three indicator processors, the display, two split peripherals, and USB/BLE Rynk sessions.
         assert_eq!(led_indicator.subs, 8);
+    }
+
+    #[test]
+    fn dongle_led_subscribers_follow_the_configured_link_count() {
+        // One subscriber per link task, so a raised dongle_links_num must raise
+        // the reservation with it — a static count would exhaust the channel.
+        let config: KeyboardTomlConfig = toml::from_str("[rmk]\ndongle_links_num = 4\n").unwrap();
+        let base = config.build_constants(&["dongle"]).unwrap();
+        let with_dongle = base
+            .events
+            .iter()
+            .find(|event| event.name == "led_indicator")
+            .unwrap()
+            .subs;
+        let without_dongle = config
+            .build_constants(&[])
+            .unwrap()
+            .events
+            .iter()
+            .find(|event| event.name == "led_indicator")
+            .unwrap()
+            .subs;
+        assert_eq!(with_dongle - without_dongle, 4);
     }
 
     #[test]

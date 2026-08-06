@@ -120,10 +120,6 @@ fn generate_constants(bc: &BuildConstants, config: &KeyboardTomlConfig) -> Strin
             "pub const MACRO_DATA_SIZE: usize = {};",
             protocol_limits::MAX_MACRO_DATA_SIZE
         ));
-        lines.push(format!(
-            "pub const DONGLE_SLOTS_NUM: usize = {};",
-            protocol_limits::MAX_DONGLE_SLOTS
-        ));
     } else {
         // Firmware: per-item constants from keyboard.toml / defaults.
         lines.push(format!("pub const COMBO_SIZE: usize = {};", bc.combo_max_length));
@@ -132,13 +128,11 @@ fn generate_constants(bc: &BuildConstants, config: &KeyboardTomlConfig) -> Strin
             "pub const MACRO_DATA_SIZE: usize = {};",
             bc.protocol_macro_chunk_size
         ));
-        lines.push(format!("pub const DONGLE_SLOTS_NUM: usize = {};", bc.dongle_slots_num));
         // Firmware Vec sizes must not exceed protocol ceilings (rynk builds only).
         if env::var("CARGO_FEATURE_RYNK").is_ok() {
             lines.push("const _: () = assert!(COMBO_SIZE <= MAX_COMBO_SIZE, \"firmware COMBO_SIZE exceeds protocol ceiling MAX_COMBO_SIZE\");".to_string());
             lines.push("const _: () = assert!(MORSE_SIZE <= MAX_MORSE_SIZE, \"firmware MORSE_SIZE exceeds protocol ceiling MAX_MORSE_SIZE\");".to_string());
             lines.push("const _: () = assert!(MACRO_DATA_SIZE <= MAX_MACRO_DATA_SIZE, \"firmware MACRO_DATA_SIZE exceeds protocol ceiling MAX_MACRO_DATA_SIZE\");".to_string());
-            lines.push("const _: () = assert!(DONGLE_SLOTS_NUM <= MAX_DONGLE_SLOTS, \"firmware DONGLE_SLOTS_NUM exceeds protocol ceiling MAX_DONGLE_SLOTS\");".to_string());
         }
     }
 
@@ -156,8 +150,12 @@ fn generate_constants(bc: &BuildConstants, config: &KeyboardTomlConfig) -> Strin
         lines.push(format!("pub const LAYOUT_BLOB: &[u8] = b\"{}\";", blob.escape_ascii()));
     }
 
-    // Dongle firmware limits, unlike DONGLE_SLOTS_NUM these carry no wire meaning.
+    // Dongle firmware limits: how many keyboards this dongle remembers and how
+    // many it keeps linked. `MAX_DONGLE_SLOTS` above is the wire ceiling any
+    // decoder must hold; these size the dongle's own tables and tasks.
     if env::var("CARGO_FEATURE_DONGLE").is_ok() {
+        lines.push(format!("pub const DONGLE_SLOTS_NUM: usize = {};", bc.dongle_slots_num));
+        lines.push("const _: () = assert!(DONGLE_SLOTS_NUM <= MAX_DONGLE_SLOTS, \"dongle_slots_num exceeds protocol ceiling MAX_DONGLE_SLOTS\");".to_string());
         lines.push(format!("pub const DONGLE_LINKS_NUM: usize = {};", bc.dongle_links_num));
         lines.push(format!(
             "pub const DONGLE_PAIRING_WINDOW_SECS: u32 = {};",
