@@ -27,6 +27,7 @@ use crate::host::transport::HostTransportError;
 pub(crate) struct HostGattHandler {
     custom_output_handle: u16,
     custom_input_cccd_handle: u16,
+    dongle_ctrl_cccd_handle: u16,
     hid_output_handle: u16,
     hid_input_cccd_handle: u16,
     hid_control_point_handle: u16,
@@ -41,6 +42,11 @@ impl HostGattHandler {
                 .input_data
                 .cccd_handle
                 .expect("No CCCD for Rynk input"),
+            dongle_ctrl_cccd_handle: server
+                .rynk_service
+                .dongle_ctrl
+                .cccd_handle
+                .expect("No CCCD for dongle_ctrl"),
             hid_output_handle: server.rynk_hid_service.output_data.handle,
             hid_input_cccd_handle: server
                 .rynk_hid_service
@@ -52,6 +58,9 @@ impl HostGattHandler {
     }
 
     pub(crate) async fn handle_write(&mut self, handle: u16, data: &[u8], encrypted: bool) -> HostWriteOutcome {
+        if handle == self.dongle_ctrl_cccd_handle {
+            return HostWriteOutcome::CccdUpdated;
+        }
         if handle == self.custom_output_handle {
             if !data.is_empty() {
                 if encrypted {

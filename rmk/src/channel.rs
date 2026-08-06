@@ -107,6 +107,11 @@ pub async fn drain_flash_channel_for_test() {
 #[cfg(feature = "_ble")]
 pub(crate) static BLE_PROFILE_CHANNEL: Channel<RawMutex, BleProfileAction, 1> = Channel::new();
 
+/// Signaled by a 5s hold of the dongle key while the dongle link is active:
+/// the keyboard notifies `dongle_ctrl` so its dongle opens a pairing window.
+#[cfg(all(feature = "rynk", feature = "_ble"))]
+pub(crate) static DONGLE_AUTH_SIGNAL: Signal<RawMutex, ()> = Signal::new();
+
 /// Vial RX from BLE GATT `output_data` writes — one 32-byte chunk per write.
 /// Pushed by `gatt_events_task`, drained by [`crate::ble::host::HostGattHandler::run`].
 #[cfg(all(feature = "vial", feature = "_ble"))]

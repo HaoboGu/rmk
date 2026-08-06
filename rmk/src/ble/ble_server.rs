@@ -15,7 +15,8 @@ pub(crate) const CCCD_TABLE_SIZE: usize = trouble_host::config::CLIENT_ATT_TABLE
 
 #[cfg(feature = "rynk")]
 use rmk_types::protocol::rynk::{
-    RYNK_BLE_CHUNK_SIZE, RYNK_HID_REPORT_SIZE, RYNK_INPUT_CHAR_UUID, RYNK_OUTPUT_CHAR_UUID, RYNK_SERVICE_UUID,
+    RYNK_BLE_CHUNK_SIZE, RYNK_DONGLE_CTRL_CHAR_UUID, RYNK_HID_REPORT_SIZE, RYNK_INPUT_CHAR_UUID, RYNK_OUTPUT_CHAR_UUID,
+    RYNK_SERVICE_UUID,
 };
 
 #[cfg(feature = "vial")]
@@ -61,6 +62,11 @@ pub(crate) struct RynkGattService {
     pub(crate) input_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
     #[characteristic(uuid = RYNK_OUTPUT_CHAR_UUID, read, write, write_without_response, permissions(encrypted))]
     pub(crate) output_data: heapless::Vec<u8, RYNK_BLE_CHUNK_SIZE>,
+    /// Dongle pairing authorization: the keyboard notifies `0x01`
+    /// (OpenPairingWindow) over the encrypted dongle link. Kept out of the
+    /// pass-through `input_data` stream so the dongle never has to inspect it.
+    #[characteristic(uuid = RYNK_DONGLE_CTRL_CHAR_UUID, notify, permissions(encrypted))]
+    pub(crate) dongle_ctrl: u8,
 }
 
 /// Rynk HID-over-GATT service.
