@@ -270,16 +270,16 @@ The `layer.keys` string follows several rules:
 
 4. RMK supports many advanced layer operations:
    1. `DF(n)` — switch the default layer to layer `n`.
-   2. `PDF(n)` — switch the default layer to layer `n` and persist it to storage, so it survives reboots.
-   3. `MO(n)` — momentarily activate layer `n`.
-   4. `LM(n, modifier)` — activate layer `n` with a modifier held. The modifier chains like `WM`.
-   5. `LT(n, key, <profile_name>)` — activate layer `n` on hold, or tap `key` (tap/hold). `key` is an RMK [`KeyCode`](./keymap_configuration/keycodes); the optional `profile_name` sets the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning).
-   6. `OSL(n)` — one-shot layer `n`.
-   7. `OSM(modifier)` — one-shot modifier. The modifier chains like `WM`.
-   8. `TT(n)` — activate layer `n`, or tap-toggle it.
-   9. `TG(n)` — toggle layer `n`.
-   10. `TO(n)` — activate layer `n` and deactivate all other layers.
-
+   2. `MO(n)` — momentarily activate layer `n`.
+   3. `LM(n, modifier)` — activate layer `n` with a modifier held. The modifier chains like `WM`.
+   4. `LT(n, key, <profile_name>)` — activate layer `n` on hold, or tap `key` (tap/hold). `key` is an RMK [`KeyCode`](./keymap_configuration/keycodes); the optional `profile_name` sets the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning).
+   5. `OSL(n)` — compatibility alias for the sticky layer `SK(MO(n))`.
+   6. `OSM(modifier)` — compatibility alias for the sticky modifier `SK(modifier)`. The modifier chains like `WM`.
+   7. `TT(n)` — activate layer `n`, or tap-toggle it.
+   8. `TG(n)` — toggle layer `n`.
+   9. `TO(n)` — activate layer `n` and deactivate all other layers.
+   11. `PDF(n)` — switch the default layer to layer `n` and persist it to storage, so it survives reboots.
+   
    These match QMK's definitions; see the [QMK layer docs](https://docs.qmk.fm/#/feature_layers). If you need another action, please [file an issue](https://github.com/rmk-rs/rmk/issues/new).
 
 5. For modifier-tap-hold, use `MT(key, modifier, <profile_name>)`, where the modifier can be a chain as in rule 1. The optional `profile_name` sets the key's [profile](./behavior#per-key-profiles-for-morse-tapdance-tap-hold-fine-tuning).
@@ -294,6 +294,8 @@ The `layer.keys` string follows several rules:
 8. For Morse/Tap Dance, use `TD(n)` or `Morse(n)` — they are the same.
 
 9. For keyboard macros, use `Macro(n)`.
+
+10. For a configurable Sticky Key, use `SK(modifier)`, `SK(MO(n))`, or `SK(key, [modifiers])`. An optional named profile is written as the final `@profile` argument: `SK(LShift, @quick)` or `SK(Tab, [LAlt], @alt_tab)`. See [Sticky Keys](./behavior#sticky-keys).
 
 ## Aliases
 

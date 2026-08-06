@@ -3,11 +3,12 @@ use heapless::Vec;
 use rmk_types::fork::Fork;
 use rmk_types::keycode::KeyCode;
 use rmk_types::morse::{Morse, MorseMode, MorseProfile};
+pub use rmk_types::sticky_key::StickyKeyReleaseMode;
 
 use crate::keyboard::combo::Combo;
 use crate::{
     AUTO_MOUSE_LAYER_MAX_NUM, COMBO_MAX_NUM, FORK_MAX_NUM, MACRO_SPACE_SIZE, MORSE_MAX_NUM, MORSE_PROFILE_MAX_NUM,
-    MOUSE_KEY_INTERVAL, MOUSE_WHEEL_INTERVAL,
+    MOUSE_KEY_INTERVAL, MOUSE_WHEEL_INTERVAL, STICKY_KEY_PROFILE_MAX_NUM,
 };
 
 /// Config for configurable action behavior
@@ -24,6 +25,7 @@ pub struct BehaviorConfig {
     pub morse: MorsesConfig,
     pub keyboard_macros: KeyboardMacrosConfig,
     pub mouse_key: MouseKeyConfig,
+    pub sticky_key: StickyKeyConfig,
     pub auto_mouse_layer: Vec<AutoMouseLayerConfig, AUTO_MOUSE_LAYER_MAX_NUM>,
 }
 
@@ -144,6 +146,69 @@ impl Default for MorsesConfig {
             default_profile: MorseProfile::new(Some(false), Some(MorseMode::Normal), Some(250u16), Some(250u16)),
             profiles: Vec::new(),
             morses: Vec::new(),
+        }
+    }
+}
+
+/// Compact runtime representation of the optional physical-hold threshold.
+///
+/// Configuration parsing keeps using `Option`, while firmware profiles use one
+/// `Duration`-sized value instead of a niche-less `Option<Duration>`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StickyKeyHoldDuration(u64);
+
+const _: [(); core::mem::size_of::<Duration>()] = [(); core::mem::size_of::<StickyKeyHoldDuration>()];
+
+impl StickyKeyHoldDuration {
+    const DISABLED_TICKS: u64 = u64::MAX;
+
+    pub const DISABLED: Self = Self(Self::DISABLED_TICKS);
+
+    pub const fn from_duration(duration: Duration) -> Self {
+        Self(duration.as_ticks())
+    }
+
+    pub(crate) const fn duration(self) -> Option<Duration> {
+        if self.0 == Self::DISABLED_TICKS {
+            None
+        } else {
+            Some(Duration::from_ticks(self.0))
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct StickyKeyProfile {
+    pub timeout: Duration,
+    pub activate_on_keypress: bool,
+    pub release_after_hold: StickyKeyHoldDuration,
+    pub max_repeat: u16,
+    pub release_mode: Option<StickyKeyReleaseMode>,
+}
+
+impl Default for StickyKeyProfile {
+    fn default() -> Self {
+        Self {
+            timeout: Duration::from_secs(1),
+            activate_on_keypress: false,
+            release_after_hold: StickyKeyHoldDuration::DISABLED,
+            max_repeat: 0,
+            release_mode: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct StickyKeyConfig {
+    pub default_profile: StickyKeyProfile,
+    pub profiles: Vec<StickyKeyProfile, STICKY_KEY_PROFILE_MAX_NUM>,
+}
+
+impl Default for StickyKeyConfig {
+    fn default() -> Self {
+        Self {
+            default_profile: StickyKeyProfile::default(),
+            profiles: Vec::new(),
         }
     }
 }

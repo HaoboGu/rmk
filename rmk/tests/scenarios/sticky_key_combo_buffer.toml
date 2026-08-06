@@ -1,0 +1,28 @@
+[layout]
+rows = 1
+cols = 2
+map = "(0,0) (0,1)"
+
+[keymap]
+layers = 1
+
+[[keymap.layer]]
+keys = "SK(LShift) A"
+
+[behavior.sticky_key]
+activate_on_keypress = true
+release_after_hold = "75ms"
+
+[behavior.combo]
+timeout = "100ms"
+combos = [{ actions = ["SK(LShift)", "A"], output = "B" }]
+
+[[test]]
+name = "hold_threshold_uses_press_time_before_combo_buffering"
+steps = [
+  { press = [0, 0] },
+  { delay = 150 },
+  { release = [0, 0] },
+  { tap = { pos = [0, 1], duration = 10 } },
+]
+expect = [["LShift"], [], ["A"], []]

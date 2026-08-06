@@ -140,6 +140,37 @@ expect = [
   [],
 ]
 
+# An OSL held beyond its key-up hold threshold does not latch the layer again
+# when physically released, even though its normal timeout has not elapsed.
+[[test]]
+name = "osl_releases_on_keyup_after_hold_threshold"
+behavior.sticky_key = { timeout = "1s", release_after_hold = "100ms" }
+steps = [
+  { press = [0, 1] },
+  { delay = 150 },
+  { release = [0, 1] },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [
+  ["A"],  # A from layer 0 because releasing OSL also released layer 1
+  [],
+]
+
+# The default remains compatible: releasing a held, timed-out OSL starts a new
+# timeout and leaves layer 1 latched for the next key.
+[[test]]
+name = "osl_default_restarts_timeout_on_keyup_after_elapsed_timeout"
+steps = [
+  { press = [0, 1] },
+  { delay = 1100 },
+  { release = [0, 1] },
+  { tap = { pos = [0, 2], duration = 10 } },
+]
+expect = [
+  ["C"],  # C from the still-latched layer 1
+  [],
+]
+
 # Only the first key after the OSL sees layer 1.
 [[test]]
 name = "osl_multiple_keys"
@@ -150,7 +181,7 @@ steps = [
 ]
 expect = [["C"], [], ["B"], []]
 
-# OSM consumed by the OSL keypress, so the layer-1 key arrives unshifted.
+# Sticky modifier and layer latches coexist, so the layer-1 key is shifted.
 [[test]]
 name = "osm_then_osl"
 steps = [
@@ -158,10 +189,10 @@ steps = [
   { tap = { pos = [0, 1], duration = 10 } },
   { tap = { pos = [0, 2], duration = 10 } },
 ]
-expect = [["C"], []]
+expect = [["LShift", "C"], []]
 
-# OSL first, so (0,0) resolves to layer 1's OSM(LShift | LCtrl); the layer is
-# spent by then, so the next key comes from layer 0.
+# OSL first, so (0,0) resolves to layer 1's OSM(LShift | LCtrl). The modifier
+# and layer latches coexist, so the next key still comes from layer 1.
 [[test]]
 name = "osl_then_osm"
 steps = [
@@ -169,7 +200,7 @@ steps = [
   { tap = { pos = [0, 0], duration = 10 } },
   { tap = { pos = [0, 2], duration = 10 } },
 ]
-expect = [["LShift", "LCtrl", "A"], []]
+expect = [["LShift", "LCtrl", "C"], []]
 
 # Both the OSM and the OSL expire before the next key.
 [[test]]
@@ -189,9 +220,18 @@ expect = [
 # Quick-release mode (quick_release = true): the modifier drops on key PRESS,
 # so each key report is followed by an unmodified one.
 #
-# `test_osm_quick_release_rolling` was dropped before this port: OSM combined
-# with a morse/tap-hold key has a known bug where the OSM deadline loop times
-# out before the tap resolves.
+[[test]]
+name = "osm_quick_release_rolling_with_tap_hold"
+behavior.one_shot = { timeout = "100ms" }
+behavior.one_shot_modifiers = { quick_release = true }
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { press = [0, 3] },
+  { delay = 150 },
+  { release = [0, 3] },
+]
+expect = [["LShift", "B"], ["B"], []]
+
 [[test]]
 name = "osm_quick_release_multiple_keys"
 behavior.one_shot_modifiers = { quick_release = true }

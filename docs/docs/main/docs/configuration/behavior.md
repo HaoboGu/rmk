@@ -24,46 +24,38 @@ adjust = 3
 
 In this example, when both layers 1 (`upper`) and 2 (`lower`) are active, layer 3 (`adjust`) will also be enabled.
 
-## One-Shot
+## Sticky Keys
 
-The `one_shot` sub-table contains common one-shot configuration (for both OSM and OSL)
-
-Currently, there are only `timeout` field that specifies how long the one-shot modifier/layer remains active. When no key is pressed within this time, the one-shot modifier/layer will be canceled. `timeout` value is a string suffixed with `s` or `ms` (default: `1s`).
-
-## One-Shot Modifiers
-
-The `one_shot_modifiers` sub-table configures one-shot modifiers (OSM).
-
-By default, one-shot modifiers do not activate on keypress and will be sent only when other key is pressed. You can change this behavior by setting `activate_on_keypress` to `true`. This behavior is also known as One-Shot Sticky Modifiers (OSSM).
-
-If you press One-Shot Modifier again, it will be sent as a normal modifier key press and, therefore, released.
-
-The `quick_release` option controls when the one-shot modifier is released:
-
-- `false` (default): the modifier is released when the next key is **released** (chain mode, equivalent to ZMK `&skn`). The modifier stays active for the entire duration of the next keypress, including key repeat.
-- `true`: the modifier is released when the next key is **pressed** (equivalent to ZMK `&skq`). Only the initial press of the next key is modified; key repeat will not include the modifier.
-
-Default values:
+Sticky Keys unify one-shot modifiers, one-shot layers, and repeated modified keys. Use `SK(LShift)` for a modifier, `SK(MO(1))` for a layer, or `SK(Tab, [LAlt])` for an Alt-Tab-style key. `OSM(...)` and `OSL(...)` remain compatibility aliases for the first two forms.
 
 ```toml
-[behavior.one_shot_modifiers]
-activate_on_keypress = false
-quick_release = false
-```
-
-OSSM example:
-
-```toml
-[behavior.one_shot_modifiers]
+[behavior.sticky_key]
+timeout = "1s"
 activate_on_keypress = true
+release_after_hold = "500ms"
+max_repeat = 0
+release_mode = "other_key_release"
+
+[behavior.sticky_key.profiles.quick]
+release_mode = "other_key_press | double_tap"
+
+[behavior.sticky_key.profiles.alt_tab]
+timeout = "5s"
+max_repeat = 8
+release_mode = "other_key_press | layer_exit"
 ```
 
-Quick-release example:
+Each field may be omitted. Named profiles inherit omitted fields from `[behavior.sticky_key]` and are selected with `@name`, for example `SK(LShift, @quick)` or `SK(Tab, [LAlt], @alt_tab)`.
 
-```toml
-[behavior.one_shot_modifiers]
-quick_release = true
-```
+- `timeout`: releases an unused latch after this duration; the default is `1s`.
+- `activate_on_keypress`: reports a pure modifier immediately instead of waiting for the next key.
+- `release_after_hold`: for modifiers or layers held for at least this duration, releases the modifier or layer when the Sticky Key is physically released instead of latching it. A shorter tap receives the full `timeout` starting from key-up. This hold threshold is independent of `timeout` and may be shorter or longer. Pure modifiers must also set `activate_on_keypress = true` to be reported while physically held. Modified tap keys are unaffected. The default is disabled.
+- `max_repeat`: limits tap-key repetitions; `0` means unlimited.
+- `release_mode`: a `|`-separated set of `other_key_press`, `other_key_release`, `layer_enter`, `layer_exit`, and `double_tap`.
+
+The legacy `[behavior.one_shot] timeout` and `[behavior.one_shot_modifiers]` settings are still accepted and feed the default Sticky profile. `quick_release = true` maps to `other_key_press` for pure-modifier aliases.
+
+Sticky layers use RMK's normal boolean layer state: when multiple actions target the same layer, the latest activate or deactivate command determines its state.
 
 ## Combo
 

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
 use rmk_config::resolved::KEYCODE_ALIAS;
-use rmk_config::resolved::behavior::MorseProfile;
+use rmk_config::resolved::behavior::{MorseProfile, StickyKeyProfile};
 use strum::VariantNames;
 
 struct ModifierCombinationMacro {
@@ -166,6 +166,31 @@ pub(crate) fn expand_profile_name(
     }
 }
 
+pub(crate) fn sorted_sticky_profile_names(
+    profiles: Option<&HashMap<String, StickyKeyProfile>>,
+) -> Vec<String> {
+    let mut names: Vec<String> = profiles
+        .map(|profiles| profiles.keys().cloned().collect())
+        .unwrap_or_default();
+    names.sort();
+    names
+}
+
+fn sticky_profile_index(
+    name: Option<&str>,
+    profiles: &Option<HashMap<String, StickyKeyProfile>>,
+) -> TokenStream2 {
+    let Some(name) = name else {
+        return quote! { ::core::primitive::u8::MAX };
+    };
+    let names = sorted_sticky_profile_names(profiles.as_ref());
+    let Some(index) = names.iter().position(|candidate| candidate == name) else {
+        panic!("\n❌ `{name}` profile name is not found in behavior.sticky_key.profiles");
+    };
+    let index = index as u8;
+    quote! { #index }
+}
+
 /// Split `s` on commas that are *not* nested inside parentheses.
 ///
 /// Each piece is trimmed and empty pieces are dropped. This lets an argument
@@ -205,6 +230,94 @@ fn strip_call(s: &str) -> &str {
     })
 }
 
+fn parse_sticky_action(
+    key: &str,
+    sticky_profiles: &Option<HashMap<String, StickyKeyProfile>>,
+) -> Option<TokenStream2> {
+    let lower = key.to_lowercase();
+    let (inner, alias) = if lower.starts_with("osm(") {
+        (strip_call(key).trim(), Some("modifier"))
+    } else if lower.starts_with("osl(") {
+        (strip_call(key).trim(), Some("layer"))
+    } else if lower.starts_with("sk(") {
+        (strip_call(key).trim(), None)
+    } else {
+        return None;
+    };
+
+    let args = split_top_level(inner);
+    let profile_name = args
+        .last()
+        .filter(|part| part.starts_with('@'))
+        .map(|part| part.trim_start_matches('@'));
+    let profile = sticky_profile_index(profile_name, sticky_profiles);
+    let action_args = if profile_name.is_some() {
+        &args[..args.len() - 1]
+    } else {
+        &args[..]
+    };
+    let action = action_args.join(", ");
+
+    let action = match alias {
+        Some("modifier") => {
+            let modifiers = parse_modifiers(&action);
+            if modifiers.is_empty() {
+                panic!("\n❌ keyboard.toml: OSM(modifier) is not valid");
+            }
+            quote! { ::rmk::types::action::Action::Modifier(#modifiers) }
+        }
+        Some("layer") => {
+            let layer = action.parse::<u8>().unwrap();
+            quote! { ::rmk::types::action::Action::LayerOn(#layer) }
+        }
+        None if action.to_lowercase().starts_with("mo(") => {
+            let layer = parse_layer(&action);
+            quote! { ::rmk::types::action::Action::LayerOn(#layer) }
+        }
+        None if action.contains('[') => {
+            let start = action.find('[').unwrap();
+            let end = action
+                .find(']')
+                .unwrap_or_else(|| panic!("\n❌ keyboard.toml: SK has unclosed '['"));
+            let key_ident = get_key_with_alias(
+                action[..start]
+                    .trim()
+                    .trim_end_matches(',')
+                    .trim()
+                    .to_string(),
+            );
+            let after = action[end + 1..].trim_start_matches(',').trim();
+            if !after.is_empty() {
+                panic!(
+                    "\n❌ keyboard.toml: the 5-positional SK(...) form is removed; use SK(key, [mods])."
+                );
+            }
+            let modifiers = if action[start + 1..end].trim().is_empty() {
+                ModifierCombinationMacro::new()
+            } else {
+                parse_modifiers(&action[start + 1..end])
+            };
+            quote! { ::rmk::types::action::Action::KeyWithModifier(::rmk::types::keycode::HidKeyCode::#key_ident, #modifiers) }
+        }
+        None => {
+            if action.contains('(') {
+                panic!(
+                    "\n❌ keyboard.toml: SK only supports MO(n) as its layer shape (got `{action}`)."
+                );
+            }
+            let modifiers = parse_modifiers(&action);
+            if modifiers.is_empty() {
+                panic!("\n❌ keyboard.toml: SK(modifier) is not valid");
+            }
+            quote! { ::rmk::types::action::Action::Modifier(#modifiers) }
+        }
+        _ => unreachable!(),
+    };
+    Some(quote! {
+        ::rmk::types::action::KeyAction::Sticky(#action, #profile)
+    })
+}
+
 /// Parse a single "action expression" into an [`rmk_types::action::Action`] token stream.
 ///
 /// These forms each map to exactly one `Action`, so they may appear both at the
@@ -212,10 +325,17 @@ fn strip_call(s: &str) -> &str {
 /// tap/hold slots of `MT`/`TH`/`LT`. Composite forms (`MT`/`TH`/`LT`/`TT`/`TD`)
 /// and `Transparent` are *not* handled here — they only exist at the top level
 /// and are dispatched by [`parse_key`].
-pub(crate) fn parse_action(key: &str) -> TokenStream2 {
+fn parse_action_with_profiles(
+    key: &str,
+    sticky_profiles: &Option<HashMap<String, StickyKeyProfile>>,
+) -> TokenStream2 {
     let lower = key.to_lowercase();
 
-    if lower == "no" {
+    if parse_sticky_action(key, sticky_profiles).is_some() {
+        panic!(
+            "\n❌ keyboard.toml: Sticky Keys are key actions and cannot be nested inside MT/TH/LT"
+        );
+    } else if lower == "no" {
         return quote! { ::rmk::types::action::Action::No };
     } else if lower.starts_with("mod(") {
         let modifiers = parse_modifiers(strip_call(key));
@@ -245,14 +365,6 @@ pub(crate) fn parse_action(key: &str) -> TokenStream2 {
                 #modifiers,
             )
         };
-    } else if lower.starts_with("osm(") {
-        let modifiers = parse_modifiers(strip_call(key));
-        if modifiers.is_empty() {
-            panic!(
-                "\n\u{274c} keyboard.toml: modifier in OSM(modifier) is not valid! Please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
-            );
-        }
-        return quote! { ::rmk::types::action::Action::OneShotModifier(#modifiers) };
     } else if lower.starts_with("lm(") {
         let keys = split_top_level(strip_call(key));
         if keys.len() != 2 {
@@ -271,9 +383,6 @@ pub(crate) fn parse_action(key: &str) -> TokenStream2 {
     } else if lower.starts_with("mo(") {
         let layer = parse_layer(key);
         return quote! { ::rmk::types::action::Action::LayerOn(#layer) };
-    } else if lower.starts_with("osl(") {
-        let layer = parse_layer(key);
-        return quote! { ::rmk::types::action::Action::OneShotLayer(#layer) };
     } else if lower.starts_with("tg(") {
         let layer = parse_layer(key);
         return quote! { ::rmk::types::action::Action::LayerToggle(#layer) };
@@ -378,6 +487,10 @@ pub(crate) fn parse_action(key: &str) -> TokenStream2 {
     }
 }
 
+pub(crate) fn parse_action(key: &str) -> TokenStream2 {
+    parse_action_with_profiles(key, &None)
+}
+
 /// Parse the key string at a single position into a [`KeyAction`] token stream.
 ///
 /// Composite tap/hold/morse forms (`MT`/`TH`/`LT`/`TT`/`TD`) and the
@@ -388,6 +501,7 @@ pub(crate) fn parse_action(key: &str) -> TokenStream2 {
 pub(crate) fn parse_key(
     key: String,
     profiles: &Option<HashMap<String, MorseProfile>>,
+    sticky_profiles: &Option<HashMap<String, StickyKeyProfile>>,
 ) -> TokenStream2 {
     if !key.is_empty() && (key.trim_start_matches("_").is_empty() || key.to_lowercase() == "trns") {
         return quote! { ::rmk::a!(Transparent) };
@@ -397,6 +511,10 @@ pub(crate) fn parse_key(
 
     let lower = key.to_lowercase();
 
+    if let Some(action) = parse_sticky_action(&key, sticky_profiles) {
+        return action;
+    }
+
     if lower.starts_with("mt(") {
         let keys = split_top_level(strip_call(&key));
         if keys.len() < 2 || keys.len() > 3 {
@@ -404,7 +522,7 @@ pub(crate) fn parse_key(
                 "\n\u{274c} keyboard.toml: MT(key, modifier) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
             );
         }
-        let tap = parse_action(&keys[0]);
+        let tap = parse_action_with_profiles(&keys[0], sticky_profiles);
         let modifiers = parse_modifiers(&keys[1]);
         if modifiers.is_empty() {
             panic!(
@@ -422,8 +540,8 @@ pub(crate) fn parse_key(
                 "\n\u{274c} keyboard.toml: TH(key_tap, key_hold) invalid, please check the documentation: https://rmk.rs/docs/features/configuration/layout.html"
             );
         }
-        let tap = parse_action(&keys[0]);
-        let hold = parse_action(&keys[1]);
+        let tap = parse_action_with_profiles(&keys[0], sticky_profiles);
+        let hold = parse_action_with_profiles(&keys[1], sticky_profiles);
         let profile = morse_profile(keys.get(2), profiles);
         quote! { ::rmk::types::action::KeyAction::TapHold(#tap, #hold, #profile) }
     } else if lower.starts_with("lt(") {
@@ -434,7 +552,7 @@ pub(crate) fn parse_key(
             );
         }
         let layer = keys[0].parse::<u8>().unwrap();
-        let tap = parse_action(&keys[1]);
+        let tap = parse_action_with_profiles(&keys[1], sticky_profiles);
         let profile = morse_profile(keys.get(2), profiles);
         quote! {
             ::rmk::types::action::KeyAction::TapHold(#tap, ::rmk::types::action::Action::LayerOn(#layer), #profile)
@@ -446,7 +564,7 @@ pub(crate) fn parse_key(
         let index = strip_call(&key).trim().parse::<u8>().unwrap();
         quote! { ::rmk::types::action::KeyAction::Morse(#index) }
     } else {
-        let action = parse_action(&key);
+        let action = parse_action_with_profiles(&key, sticky_profiles);
         quote! { ::rmk::types::action::KeyAction::Single(#action) }
     }
 }
@@ -525,7 +643,7 @@ mod tests {
     use rmk_config::resolved::behavior::MorseProfile;
 
     fn expand(key: &str) -> String {
-        parse_key(key.to_string(), &None).to_string()
+        parse_key(key.to_string(), &None, &None).to_string()
     }
 
     fn profile(enable_flow_tap: Option<bool>) -> MorseProfile {
@@ -631,7 +749,7 @@ mod tests {
         );
         assert!(squash(&expand("WM(C,LCtrl)")).contains("Action::KeyWithModifier"));
         assert!(squash(&expand("MOD(LCtrl | LAlt | LGui)")).contains("Action::Modifier"));
-        assert!(squash(&expand("OSM(LShift)")).contains("Action::OneShotModifier"));
+        assert!(squash(&expand("OSM(LShift)")).contains("KeyAction::Sticky"));
     }
 
     #[test]

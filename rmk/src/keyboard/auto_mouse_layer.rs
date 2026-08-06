@@ -313,7 +313,7 @@ fn keypress_step(entries: &mut [EntryState], action: Action, now: Instant) -> Ve
                     KeyCode::Hid(hid) if hid.is_mouse_key() => false,
                     _ => !cfg.extra_mouse_keys.contains(&kc),
                 },
-                Action::KeyWithModifier(hid, _) | Action::OneShotKey(hid) => {
+                Action::KeyWithModifier(hid, _) => {
                     if hid.is_mouse_key() {
                         false
                     } else {
@@ -1026,13 +1026,9 @@ mod tests {
 
     #[test]
     fn keypress_step_keeps_layer_active_for_non_key_actions() {
-        // Layer switches, macros, and one-shot modifiers emit no keycode and
+        // Layer switches and macros emit no keycode and
         // must never deactivate; the timeout path handles clearing.
-        for action in [
-            Action::LayerOn(2),
-            Action::TriggerMacro(0),
-            Action::OneShotModifier(ModifierCombination::LCTRL),
-        ] {
+        for action in [Action::LayerOn(2), Action::TriggerMacro(0)] {
             let mut entries = [holding_entry_with_deactivate(3, &[])];
             let released = keypress_step(&mut entries, action, at(2000));
             assert!(released.is_empty(), "{:?} should not release layer", action);

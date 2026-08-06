@@ -323,7 +323,7 @@ macro_rules! thp {
 #[macro_export]
 macro_rules! osl {
     ($x: literal) => {
-        $crate::types::action::KeyAction::Single($crate::types::action::Action::OneShotLayer($x))
+        $crate::types::action::KeyAction::Sticky($crate::types::action::Action::LayerOn($x), u8::MAX)
     };
 }
 
@@ -347,7 +347,44 @@ macro_rules! osl {
 #[macro_export]
 macro_rules! osm {
     ($m: expr) => {
-        $crate::types::action::KeyAction::Single($crate::types::action::Action::OneShotModifier($m))
+        $crate::types::action::KeyAction::Sticky($crate::types::action::Action::Modifier($m), u8::MAX)
+    };
+}
+
+/// Create a Sticky Key from a supported action using the default profile.
+///
+/// Sticky Keys support `Action::Modifier`, `Action::LayerOn`, and
+/// `Action::KeyWithModifier`. Prefer [`sk_mod!`] and [`sk_layer!`] where they
+/// fit; unsupported actions are ignored by the runtime.
+#[macro_export]
+macro_rules! sk {
+    ($action: expr) => {
+        $crate::types::action::KeyAction::Sticky($action, u8::MAX)
+    };
+    ($action: expr, $profile: expr) => {
+        $crate::types::action::KeyAction::Sticky($action, $profile)
+    };
+}
+
+/// Create a sticky modifier using the default profile.
+#[macro_export]
+macro_rules! sk_mod {
+    ($modifiers: expr) => {
+        $crate::sk!($crate::types::action::Action::Modifier($modifiers))
+    };
+    ($modifiers: expr, $profile: expr) => {
+        $crate::sk!($crate::types::action::Action::Modifier($modifiers), $profile)
+    };
+}
+
+/// Create a sticky layer using the default profile.
+#[macro_export]
+macro_rules! sk_layer {
+    ($layer: expr) => {
+        $crate::sk!($crate::types::action::Action::LayerOn($layer))
+    };
+    ($layer: expr, $profile: expr) => {
+        $crate::sk!($crate::types::action::Action::LayerOn($layer), $profile)
     };
 }
 

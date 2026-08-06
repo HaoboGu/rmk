@@ -20,6 +20,8 @@ fork_max_num = 8
 morse_max_num = 8
 # Maximum number of named morse profiles, shared by morse and tap-hold keys (max 255)
 morse_profile_max_num = 16
+# Maximum number of named Sticky Key profiles (max 255). If omitted, RMK derives it.
+# sticky_key_profile_max_num = 4
 # Maximum number of patterns a morse key can handle (default: 8, min: 4, max 65536)
 max_patterns_per_key = 8
 # Macro space size in bytes for storing sequences. The maximum number of Macros depends on the size of each sequence: All sequences combined need to fit into macro_space_size, the number of macro sequences doesn't matter.
@@ -66,7 +68,8 @@ Increasing the number of combos, forks, morses (tap dances), and macros will inc
 - `fork_max_num`: Maximum number of forks for conditional key actions, default value is 8. This value must be between 0 and 255.
 - `morse_max_num`: Maximum number of morses that can be stored, default value is 8. This value must be between 0 and 255.
 - `morse_profile_max_num`: Capacity of the morse profile table (the named profiles in `[behavior.morse.profiles]`, referenced by morse and tap-hold keys), default value is 16. This value must be between 0 and 255.
-- `max_patterns_per_key` : Maximum number of tap/hold patterns a morse key can handle, default value is 8. This value must be between 4 and 65536. (Automatically raised to fit the largest `tap_actions` + `hold_actions` + `morse_actions` count among the configured morse keys.)
+- `sticky_key_profile_max_num`: Capacity of the named Sticky Key profile table. If omitted, RMK derives a sufficient value from the configured profiles with a small Rust-API fallback; an explicit value must be between 0 and 255.
+- `max_patterns_per_key` : Maximum number of tap/hold patterns a morse key can handle, default value is 8. This value must be between 4 and 65536. (Will be automatically set to the maximum length of `tap_actions` + `hold_actions` or `morse_actions`.)
 - `macro_space_size`: Space size in bytes for storing macro sequences, default value is 256.
 
 ### Matrix Configuration

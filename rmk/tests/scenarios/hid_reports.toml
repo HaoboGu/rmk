@@ -1,36 +1,68 @@
 # Consumer, system-control and mouse keys each report on their own HID page
 # rather than in the keyboard report, and each sends an all-released report on
-# key up. Three keys, three pages — this file carries its own keyboard instead
-# of the shared board because none of these keys is a fixture anyone else needs.
+# key up. The visible Sticky modifier cases additionally verify that consuming
+# a latch on any non-keyboard page sends the balancing keyboard report. This
+# file carries its own keyboard rather than using the shared board because none
+# of these keys is a fixture anyone else needs.
 
 [layout]
 rows = 1
-cols = 3
-map = "(0,0)  (0,1)  (0,2)"
+cols = 5
+map = "(0,0)  (0,1)  (0,2)  (0,3)  (0,4)"
 
 [[keymap.layer]]
-keys = "AudioVolUp  SystemSleep  MouseRight"
+keys = "SK(LShift)  AudioVolUp  SystemSleep  MouseRight  A"
+
+[behavior.sticky_key]
+activate_on_keypress = true
 
 [[test]]
 name = "consumer_key_reports_on_the_consumer_page"
 steps = [
-  { press = [0, 0] },
-  { release = [0, 0] },
+  { press = [0, 1] },
+  { release = [0, 1] },
 ]
 expect = [{ consumer = ["AudioVolUp"] }, { consumer = [] }]
 
 [[test]]
 name = "system_key_reports_on_the_system_control_page"
 steps = [
-  { press = [0, 1] },
-  { release = [0, 1] },
+  { press = [0, 2] },
+  { release = [0, 2] },
 ]
 expect = [{ system = ["SystemSleep"] }, { system = [] }]
 
 [[test]]
 name = "mouse_key_reports_a_movement_delta"
 steps = [
-  { press = [0, 2] },
-  { release = [0, 2] },
+  { press = [0, 3] },
+  { release = [0, 3] },
 ]
 expect = [{ mouse = { x = 5 } }, { mouse = { } }]
+
+[[test]]
+name = "consumer_key_consumes_visible_sticky_modifier"
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 1], duration = 10 } },
+  { tap = { pos = [0, 4], duration = 10 } },
+]
+expect = [["LShift"], { consumer = ["AudioVolUp"] }, { consumer = [] }, [], ["A"], []]
+
+[[test]]
+name = "system_key_consumes_visible_sticky_modifier"
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 2], duration = 10 } },
+  { tap = { pos = [0, 4], duration = 10 } },
+]
+expect = [["LShift"], { system = ["SystemSleep"] }, { system = [] }, [], ["A"], []]
+
+[[test]]
+name = "mouse_key_consumes_visible_sticky_modifier"
+steps = [
+  { tap = { pos = [0, 0], duration = 10 } },
+  { tap = { pos = [0, 3], duration = 10 } },
+  { tap = { pos = [0, 4], duration = 10 } },
+]
+expect = [["LShift"], { mouse = { x = 5 } }, { mouse = {} }, [], ["A"], []]

@@ -205,63 +205,77 @@ impl KeyboardTomlConfig {
     fn alias_resolver(keys: &str, aliases: &HashMap<String, String>) -> Result<String, String> {
         let mut current_keys = keys.to_string();
 
-        let mut iterations = 0;
-
-        loop {
-            let mut next_keys = String::with_capacity(current_keys.capacity());
-            let mut made_replacement = false;
-            let mut last_index = 0;
-
-            while let Some(at_index) = current_keys[last_index..].find('@') {
-                let start_index = last_index + at_index;
-
-                next_keys.push_str(&current_keys[last_index..start_index]);
-
-                // The name ends at the grammar's delimiters, so `LM(1, @mods)`
-                // resolves `mods` — not a bogus `mods)`.
-                let mut end_index = start_index + 1;
-                while let Some(&c) = current_keys.as_bytes().get(end_index) {
-                    if c.is_ascii_whitespace() || matches!(c, b'(' | b')' | b',' | b'@') {
+        for _ in 0..MAX_ALIAS_RESOLUTION_DEPTH {
+            let mut next = String::with_capacity(current_keys.len());
+            let mut replaced = false;
+            let mut cursor = 0;
+            while let Some(offset) = current_keys[cursor..].find('@') {
+                let start = cursor + offset;
+                next.push_str(&current_keys[cursor..start]);
+                let mut end = start + 1;
+                while let Some(&byte) = current_keys.as_bytes().get(end) {
+                    if byte.is_ascii_whitespace() || matches!(byte, b'(' | b')' | b',' | b'@') {
                         break;
                     }
-                    end_index += 1;
+                    end += 1;
                 }
-
-                let alias_key = &current_keys[start_index + 1..end_index];
-                if alias_key.is_empty() {
-                    // A bare `@` (trailing, or right before a delimiter) is literal.
-                    next_keys.push('@');
-                    last_index = start_index + 1;
+                if end == start + 1 {
+                    next.push('@');
+                    cursor = end;
                     continue;
                 }
-                match aliases.get(alias_key) {
-                    Some(value) => {
-                        next_keys.push_str(value);
-                        made_replacement = true;
-                    }
-                    None => return Err(format!("Undefined alias: {}", alias_key)),
+                let name = &current_keys[start + 1..end];
+                if Self::is_sticky_profile_reference(&current_keys, start) {
+                    next.push_str(&current_keys[start..end]);
+                } else if let Some(value) = aliases.get(name) {
+                    next.push_str(value);
+                    replaced = true;
+                } else {
+                    return Err(format!("Undefined alias: {name}"));
                 }
-                last_index = end_index;
+                cursor = end;
             }
-
-            next_keys.push_str(&current_keys[last_index..]);
-
-            iterations += 1;
-            if iterations >= MAX_ALIAS_RESOLUTION_DEPTH {
-                return Err(format!(
-                    "Alias resolution exceeded maximum depth ({}), potential infinite loop detected in '{}'",
-                    MAX_ALIAS_RESOLUTION_DEPTH, keys
-                ));
+            next.push_str(&current_keys[cursor..]);
+            if !replaced {
+                return Ok(current_keys);
             }
-
-            if !made_replacement {
-                break;
-            }
-
-            current_keys = next_keys;
+            current_keys = next;
         }
 
-        Ok(current_keys)
+        Err(format!(
+            "Alias resolution exceeded maximum depth ({}), potential infinite loop detected in '{}'",
+            MAX_ALIAS_RESOLUTION_DEPTH, keys
+        ))
+    }
+
+    fn is_sticky_profile_reference(input: &str, at: usize) -> bool {
+        let Some(previous) = input[..at].bytes().rev().find(|byte| !byte.is_ascii_whitespace()) else {
+            return false;
+        };
+        if previous != b',' {
+            return false;
+        }
+
+        let bytes = input.as_bytes();
+        let mut depth = 0usize;
+        for index in (0..at).rev() {
+            match bytes[index] {
+                b')' => depth += 1,
+                b'(' if depth > 0 => depth -= 1,
+                b'(' => {
+                    let mut name_start = index;
+                    while name_start > 0 && bytes[name_start - 1].is_ascii_alphabetic() {
+                        name_start -= 1;
+                    }
+                    return matches!(
+                        input[name_start..index].to_ascii_lowercase().as_str(),
+                        "sk" | "osm" | "osl"
+                    );
+                }
+                _ => {}
+            }
+        }
+        false
     }
 
     /// Reconstruct an action string from a parsed pair, resolving every named
