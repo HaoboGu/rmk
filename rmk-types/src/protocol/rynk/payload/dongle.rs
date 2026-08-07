@@ -11,8 +11,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::constants::MAX_DONGLE_SLOTS;
 
-/// Maximum byte length of a slot's stored keyboard name — sized to hold the
-/// `DeviceInfo::product_name` captured during the pairing handshake.
+/// Maximum byte length of a slot's stored keyboard name. A keyboard publishes
+/// one string as both its GAP device name and its `DeviceInfo::product_name`,
+/// so one size covers however the dongle reads it.
 pub const DONGLE_SLOT_NAME_SIZE: usize = super::system::DEVICE_INFO_STRING_SIZE;
 
 /// One bonded keyboard in the dongle's slot table. Carries only what survives
@@ -24,7 +25,8 @@ pub const DONGLE_SLOT_NAME_SIZE: usize = super::system::DEVICE_INFO_STRING_SIZE;
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct DongleSlot {
     pub connected: bool,
-    /// Keyboard name captured from `GetDeviceInfo` during the pairing handshake.
+    /// Keyboard name the dongle read over GAP when it linked, then persisted —
+    /// so a slot stays named while its keyboard is off.
     #[cfg_attr(feature = "wasm", tsify(type = "string"))]
     pub name: String<DONGLE_SLOT_NAME_SIZE>,
 }
