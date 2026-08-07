@@ -113,7 +113,7 @@ mod snapshot {
             "# {title} — DO NOT edit by hand.\n\
              # File: {rel_path}\n\
              {blurb}\n\
-             #   UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rynk {test_filter}\n\
+             #   UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features host {test_filter}\n\
              # Format: <label>  <hex bytes>\n\
              \n",
         ));
@@ -178,6 +178,8 @@ fn round_trip_rynk_error_and_result() {
     round_trip(&RynkError::Invalid);
     round_trip(&RynkError::UnknownCmd);
     round_trip(&RynkError::Locked);
+    round_trip(&RynkError::Busy);
+    round_trip(&RynkError::NoTarget);
     let ok: Result<(), RynkError> = Ok(());
     let err: Result<(), RynkError> = Err(RynkError::StorageFault);
     let _ = round_trip(&ok);
@@ -212,6 +214,8 @@ struct Exemplars {
     morse: Morse,
     macro_data: MacroData,
     encoder: EncoderAction,
+    battery: BatteryStatus,
+    dongle_slots: DongleSlots,
 }
 
 fn exemplars() -> Exemplars {
@@ -304,6 +308,27 @@ fn exemplars() -> Exemplars {
     let macro_data = MacroData { data: macro_bytes };
     let encoder = EncoderAction::new(KeyAction::Morse(3), KeyAction::No);
 
+    // A dense table with a hole: index is the slot number, so the empty slot 1
+    // has to survive the round trip for slot 2 to stay addressable.
+    let mut dongle_slot_vec = heapless::Vec::new();
+    dongle_slot_vec
+        .push(Some(DongleSlot {
+            connected: true,
+            name: heapless::String::try_from("Corne").unwrap(),
+        }))
+        .unwrap();
+    dongle_slot_vec.push(None).unwrap();
+    dongle_slot_vec
+        .push(Some(DongleSlot {
+            connected: false,
+            name: heapless::String::try_from("Lily58").unwrap(),
+        }))
+        .unwrap();
+    let dongle_slots = DongleSlots {
+        slots: dongle_slot_vec,
+        target: Some(0),
+    };
+
     Exemplars {
         matrix,
         capabilities,
@@ -316,6 +341,11 @@ fn exemplars() -> Exemplars {
         morse,
         macro_data,
         encoder,
+        battery: BatteryStatus::Available {
+            charge_state: ChargeState::Discharging,
+            level: Some(85),
+        },
+        dongle_slots,
     }
 }
 
@@ -365,6 +395,8 @@ fn wire_values_locked() {
         ("RynkError::StorageFault", encode(&RynkError::StorageFault)),
         ("RynkError::Unimplemented", encode(&RynkError::Unimplemented)),
         ("RynkError::UnknownCmd", encode(&RynkError::UnknownCmd)),
+        ("RynkError::Busy", encode(&RynkError::Busy)),
+        ("RynkError::NoTarget", encode(&RynkError::NoTarget)),
         // --- KeyAction: every variant tag (positional) ---
         ("KeyAction::No", encode(&KeyAction::No)),
         ("KeyAction::Transparent", encode(&KeyAction::Transparent)),
@@ -496,6 +528,8 @@ fn wire_values_locked() {
         ("UsbState::Suspended", encode(&UsbState::Suspended)),
         ("StorageResetMode::Full", encode(&StorageResetMode::Full)),
         ("StorageResetMode::LayoutOnly", encode(&StorageResetMode::LayoutOnly)),
+        // --- Dongle (0x09xx payloads) ---
+        ("DongleSlots{[Corne,_,Lily58],Some(0)}", encode(&ex.dongle_slots)),
         // --- Request payloads: pin field order of the Get/Set structs ---
         (
             "SetKeyRequest{{0,5,13},Morse(7)}",
@@ -575,10 +609,15 @@ fn wire_values_locked() {
 ///
 /// Requests and replies use SEQ 1 (a reply echoes its request's SEQ); topics
 /// always use SEQ 0. The `GetVersion` probe and reply are frozen across all
-/// majors. Feature-gated commands (`bulk`, `_ble`, split) are excluded so
-/// every `rynk` feature set yields the same file. Payloads reuse the shared
-/// [`exemplars`], so a frame and its bare-payload entry in
-/// `wire_values.snap` stay in lockstep.
+/// majors. Payloads reuse the shared [`exemplars`], so a frame and its
+/// bare-payload entry in `wire_values.snap` stay in lockstep.
+///
+/// Gated on `host`, the feature superset (`_ble` + `split` + `steno` +
+/// `dongle`): the file then holds every gated row exactly once instead of
+/// dropping the rows a lesser feature set can't name. Only `bulk` stays out —
+/// its payload types differ between host and firmware. Regenerate with
+/// `UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features host`.
+#[cfg(feature = "host")]
 #[test]
 fn wire_frames_locked() {
     let ex = exemplars();
@@ -911,6 +950,85 @@ fn wire_frames_locked() {
             "GetLedIndicator reply Ok(LedIndicator(Num|Scroll))",
             encode_frame(Cmd::GetLedIndicator, SEQ, &Ok::<LedIndicator, RynkError>(led)),
         ),
+        // Connection / status rows behind `_ble` and `split`.
+        ("GetBleStatus request ()", encode_frame(Cmd::GetBleStatus, SEQ, &())),
+        (
+            "GetBleStatus reply Ok(BleStatus{1,Advertising})",
+            encode_frame(Cmd::GetBleStatus, SEQ, &Ok::<BleStatus, RynkError>(ex.connection.ble)),
+        ),
+        (
+            "SwitchBleProfile request 1",
+            encode_frame(Cmd::SwitchBleProfile, SEQ, &1u8)
+        ),
+        (
+            "SwitchBleProfile reply Ok(())",
+            encode_frame(Cmd::SwitchBleProfile, SEQ, &Ok::<(), RynkError>(())),
+        ),
+        (
+            "ClearBleProfile request 1",
+            encode_frame(Cmd::ClearBleProfile, SEQ, &1u8)
+        ),
+        (
+            "ClearBleProfile reply Ok(())",
+            encode_frame(Cmd::ClearBleProfile, SEQ, &Ok::<(), RynkError>(())),
+        ),
+        (
+            "GetBatteryStatus request ()",
+            encode_frame(Cmd::GetBatteryStatus, SEQ, &())
+        ),
+        (
+            "GetBatteryStatus reply Ok(Available{Discharging,85})",
+            encode_frame(Cmd::GetBatteryStatus, SEQ, &Ok::<BatteryStatus, RynkError>(ex.battery)),
+        ),
+        (
+            "GetPeripheralStatus request 1",
+            encode_frame(Cmd::GetPeripheralStatus, SEQ, &1u8)
+        ),
+        (
+            "GetPeripheralStatus reply Ok(PeripheralStatus{true,Available{Discharging,85}})",
+            encode_frame(
+                Cmd::GetPeripheralStatus,
+                SEQ,
+                &Ok::<PeripheralStatus, RynkError>(PeripheralStatus {
+                    connected: true,
+                    battery: ex.battery,
+                }),
+            ),
+        ),
+        // Dongle (0x09xx), answered by a dongle itself and never forwarded.
+        ("GetDongleSlots request ()", encode_frame(Cmd::GetDongleSlots, SEQ, &())),
+        (
+            "GetDongleSlots reply Ok(DongleSlots{[Corne,_,Lily58],Some(0)})",
+            encode_frame(
+                Cmd::GetDongleSlots,
+                SEQ,
+                &Ok::<DongleSlots, RynkError>(ex.dongle_slots.clone())
+            ),
+        ),
+        (
+            "SelectDongleTarget request 1",
+            encode_frame(Cmd::SelectDongleTarget, SEQ, &1u8)
+        ),
+        (
+            "SelectDongleTarget reply Ok(())",
+            encode_frame(Cmd::SelectDongleTarget, SEQ, &Ok::<(), RynkError>(())),
+        ),
+        (
+            "ForgetDongleSlot request 1",
+            encode_frame(Cmd::ForgetDongleSlot, SEQ, &1u8)
+        ),
+        (
+            "ForgetDongleSlot reply Ok(())",
+            encode_frame(Cmd::ForgetDongleSlot, SEQ, &Ok::<(), RynkError>(())),
+        ),
+        (
+            "forwarded reply Err(NoTarget)",
+            encode_frame(
+                Cmd::GetVersion,
+                SEQ,
+                &Err::<ProtocolVersion, RynkError>(RynkError::NoTarget)
+            ),
+        ),
         // Topics (0x80xx, server→host push, SEQ 0).
         ("LayerChange topic 3", encode_frame(Cmd::LayerChange, 0, &3u8)),
         ("WpmUpdate topic 42", encode_frame(Cmd::WpmUpdate, 0, &42u16)),
@@ -922,6 +1040,14 @@ fn wire_frames_locked() {
         (
             "LedIndicatorChange topic LedIndicator(Num|Scroll)",
             encode_frame(Cmd::LedIndicatorChange, 0, &led)
+        ),
+        (
+            "BatteryStatusChange topic Available{Discharging,85}",
+            encode_frame(Cmd::BatteryStatusChange, 0, &ex.battery)
+        ),
+        (
+            "DongleSlotsChange topic DongleSlots{[Corne,_,Lily58],Some(0)}",
+            encode_frame(Cmd::DongleSlotsChange, 0, &ex.dongle_slots)
         ),
     ];
     let view: alloc::vec::Vec<(&str, &[u8])> = entries.iter().map(|(l, b)| (*l, b.as_slice())).collect();
@@ -1088,7 +1214,9 @@ mod protocol_reference {
              ## Compatibility\n\n\
              - `GetVersion` (`0x0001`) and its `Result<ProtocolVersion, RynkError>` reply are frozen across all versions.\n\
              - Within a major version, adding a CMD or topic is a `minor` bump: old firmware answers `UnknownCmd`, old hosts ignore unknown topics.\n\
-             - Reshaping an existing request/response — including appending a field — is a `major` bump.\n",
+             - Appending a `RynkError` variant is also a `minor` bump: an old host fails to decode the new tag and must surface it as a generic failure.\n\
+             - Reshaping an existing request/response — including appending a field — is a `major` bump.\n\
+             - `0.x` is pre-release and not covered by the rules above: while the protocol is unpublished it stays at `0.1`, whole command segments included.\n",
             header = "<!-- GENERATED — do not edit. Rendered from the `endpoints!`/`topics!` tables in\n     rmk-types/src/protocol/rynk/command.rs. Regenerate with:\n     UPDATE_SNAPSHOTS=1 cargo test -p rmk-types --features rynk protocol_reference -->",
             major = v.major,
             minor = v.minor,

@@ -21,6 +21,9 @@ nx=(nextest run --config-file "$repo_root/.config/nextest.toml")
 cargo "${nx[@]}" --manifest-path rmk-types/Cargo.toml
 cargo "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features host
 cargo "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features steno
+# `dongle` without `host`: the only setup where the dongle rows reach the
+# firmware-side payload-budget assert.
+cargo "${nx[@]}" --manifest-path rmk-types/Cargo.toml --features dongle
 
 for feats in "${RMK_TEST_FEATURESETS[@]}"; do
     if [[ -z "$feats" ]]; then

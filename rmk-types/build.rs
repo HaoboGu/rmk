@@ -101,6 +101,10 @@ fn generate_constants(bc: &BuildConstants, config: &KeyboardTomlConfig) -> Strin
         "pub const MAX_MACRO_DATA_SIZE: usize = {};",
         protocol_limits::MAX_MACRO_DATA_SIZE
     ));
+    lines.push(format!(
+        "pub const MAX_DONGLE_SLOTS: usize = {};",
+        protocol_limits::MAX_DONGLE_SLOTS
+    ));
 
     if is_host {
         // Host: Vec capacities equal protocol ceilings for wire compatibility with any firmware.
@@ -144,6 +148,19 @@ fn generate_constants(bc: &BuildConstants, config: &KeyboardTomlConfig) -> Strin
             .unwrap_or_else(|err| panic!("Failed to resolve the layout blob: {err}"))
             .blob;
         lines.push(format!("pub const LAYOUT_BLOB: &[u8] = b\"{}\";", blob.escape_ascii()));
+    }
+
+    // Dongle firmware limits: how many keyboards this dongle remembers and how
+    // many it keeps linked. `MAX_DONGLE_SLOTS` above is the wire ceiling any
+    // decoder must hold; these size the dongle's own tables and tasks.
+    if env::var("CARGO_FEATURE_DONGLE").is_ok() {
+        lines.push(format!("pub const DONGLE_SLOTS_NUM: usize = {};", bc.dongle_slots_num));
+        lines.push("const _: () = assert!(DONGLE_SLOTS_NUM <= MAX_DONGLE_SLOTS, \"dongle_slots_num exceeds protocol ceiling MAX_DONGLE_SLOTS\");".to_string());
+        lines.push(format!("pub const DONGLE_LINKS_NUM: usize = {};", bc.dongle_links_num));
+        lines.push(format!(
+            "pub const DONGLE_PAIRING_WINDOW_SECS: u32 = {};",
+            bc.dongle_pairing_window_secs
+        ));
     }
 
     // Event channels

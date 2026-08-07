@@ -51,6 +51,9 @@ pub struct BuildConstants {
     pub auto_mouse_layer_max_num: usize,
     /// Rynk RX/TX buffer size (bytes).
     pub rynk_buffer_size: usize,
+    pub dongle_slots_num: usize,
+    pub dongle_links_num: usize,
+    pub dongle_pairing_window_secs: u32,
     pub events: Vec<EventChannel>,
     pub passkey: Option<Passkey>,
 }
@@ -121,6 +124,15 @@ impl crate::KeyboardTomlConfig {
         // Declarations live in subscriber_default.toml.
         apply_feature_subscriber_bumps(&mut events, active_features);
 
+        // A dongle's link tasks each hold a `led_indicator` subscriber, so the
+        // count follows `dongle_links_num` and can't be declared in the static
+        // table above.
+        if active_features.contains(&"dongle")
+            && let Some(led) = events.iter_mut().find(|e| e.name == "led_indicator")
+        {
+            led.subs += rmk.dongle_links_num;
+        }
+
         // Only validate passkey settings when the build will emit passkey constants.
         let passkey = if active_features.contains(&"passkey_entry") {
             self.ble.as_ref().map(resolve_passkey_enabled).transpose()?
@@ -179,6 +191,19 @@ impl crate::KeyboardTomlConfig {
         validate_u8_capability("ble_profiles_num", rmk.ble_profiles_num)?;
         validate_u16_capability("macro_space_size", rmk.macro_space_size)?;
         validate_u16_capability("rynk_buffer_size", rmk.rynk_buffer_size)?;
+        if rmk.dongle_slots_num > protocol_limits::MAX_DONGLE_SLOTS {
+            return Err(format!(
+                "dongle_slots_num ({}) exceeds protocol ceiling MAX_DONGLE_SLOTS ({})",
+                rmk.dongle_slots_num,
+                protocol_limits::MAX_DONGLE_SLOTS
+            ));
+        }
+        if rmk.dongle_links_num == 0 || rmk.dongle_links_num > rmk.dongle_slots_num {
+            return Err(format!(
+                "dongle_links_num ({}) must be between 1 and dongle_slots_num ({})",
+                rmk.dongle_links_num, rmk.dongle_slots_num
+            ));
+        }
         Ok(BuildConstants {
             combo_max_num: rmk.combo_max_num,
             combo_max_length: rmk.combo_max_length,
@@ -199,6 +224,9 @@ impl crate::KeyboardTomlConfig {
             protocol_macro_chunk_size: rmk.protocol_macro_chunk_size,
             auto_mouse_layer_max_num,
             rynk_buffer_size: rmk.rynk_buffer_size,
+            dongle_slots_num: rmk.dongle_slots_num,
+            dongle_links_num: rmk.dongle_links_num,
+            dongle_pairing_window_secs: rmk.dongle_pairing_window_secs,
             events,
             passkey,
         })
@@ -276,6 +304,29 @@ mod tests {
 
         // Three indicator processors, the display, two split peripherals, and USB/BLE Rynk sessions.
         assert_eq!(led_indicator.subs, 8);
+    }
+
+    #[test]
+    fn dongle_led_subscribers_follow_the_configured_link_count() {
+        // One subscriber per link task, so a raised dongle_links_num must raise
+        // the reservation with it — a static count would exhaust the channel.
+        let config: KeyboardTomlConfig = toml::from_str("[rmk]\ndongle_links_num = 4\n").unwrap();
+        let base = config.build_constants(&["dongle"]).unwrap();
+        let with_dongle = base
+            .events
+            .iter()
+            .find(|event| event.name == "led_indicator")
+            .unwrap()
+            .subs;
+        let without_dongle = config
+            .build_constants(&[])
+            .unwrap()
+            .events
+            .iter()
+            .find(|event| event.name == "led_indicator")
+            .unwrap()
+            .subs;
+        assert_eq!(with_dongle - without_dongle, 4);
     }
 
     #[test]

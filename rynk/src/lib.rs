@@ -99,7 +99,7 @@ mod driver;
 pub mod layout;
 
 pub use device::RynkDevice;
-pub use driver::{Client, Driver, RynkHostError};
+pub use driver::{Client, Driver, Peer, RynkHostError};
 pub use embedded_io_async as io;
 #[cfg(feature = "alloc")]
 pub use layout::LayoutInfo;

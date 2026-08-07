@@ -66,7 +66,7 @@ pub use self::command::{Cmd, TopicEvent};
 pub use self::deframer::Deframer;
 pub use self::error::RynkError;
 pub use self::message::{
-    RYNK_HEADER_SIZE, RYNK_MAX_PAYLOAD_SIZE, RynkHeader, RynkMessage, encode_frame, max_wire_size,
+    RYNK_HEADER_SIZE, RYNK_MAX_PAYLOAD_SIZE, RynkHeader, RynkMessage, decode_header, encode_frame, max_wire_size,
 };
 pub use self::payload::*;
 
@@ -82,6 +82,12 @@ pub const RYNK_SERVICE_UUID: u128 = 0x10900067_537f_4f0a_9b55_929e271f61ab;
 pub const RYNK_INPUT_CHAR_UUID: u128 = 0x80f9319b_0c74_43a5_9738_c59d6dda3db9;
 /// Rynk `output_data` characteristic UUID.
 pub const RYNK_OUTPUT_CHAR_UUID: u128 = 0x19802524_6f90_4346_93c2_63dbc509ab55;
+/// Rynk `dongle_ctrl` characteristic UUID (1 byte, notify, encrypted): the
+/// keyboard→dongle pairing-authorization channel.
+pub const RYNK_DONGLE_CTRL_CHAR_UUID: u128 = 0x4b4f5b27_fbf3_45aa_9e64_bdebd62896f0;
+/// `dongle_ctrl` value a keyboard notifies to authorize its dongle to pair
+/// another keyboard.
+pub const DONGLE_CTRL_OPEN_PAIRING_WINDOW: u8 = 0x01;
 
 /// Informational marker the `rynk` firmware prepends to its USB serial number.
 /// Host discovery keys on the vendor interface triple below, not on this.

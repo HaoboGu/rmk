@@ -43,6 +43,8 @@ pub mod protocol_limits {
     pub const MAX_MACRO_DATA_SIZE: usize = 256;
     /// Max key positions in an unlock challenge.
     pub const MAX_UNLOCK_KEYS_SIZE: usize = 4;
+    /// Max keyboards a dongle remembers — ceiling for `DONGLE_SLOTS_NUM`
+    pub const MAX_DONGLE_SLOTS: usize = 8;
 }
 
 pub(crate) fn validate_unlock_keys(
@@ -309,6 +311,17 @@ pub(crate) struct RmkConstantsConfig {
     /// Default 488 fills exactly two BLE notifications.
     #[serde_inline_default(488)]
     pub rynk_buffer_size: usize,
+    /// Number of keyboards a dongle remembers (dongle firmware only, ≤ 8)
+    #[serde_inline_default(4)]
+    pub dongle_slots_num: usize,
+    /// Number of keyboard links a dongle keeps connected at once (dongle firmware only).
+    /// Drives `CONNECTIONS_MAX` and the SDC central count, so it directly costs RAM.
+    #[serde_inline_default(2)]
+    pub dongle_links_num: usize,
+    /// Seconds the dongle's pairing window stays open after power-on or a
+    /// keyboard's authorization (dongle firmware only)
+    #[serde_inline_default(30)]
+    pub dongle_pairing_window_secs: u32,
 }
 
 fn check_combo_max_num<'de, D>(deserializer: D) -> Result<usize, D::Error>
@@ -400,6 +413,9 @@ impl Default for RmkConstantsConfig {
             protocol_macro_chunk_size: 64,
             auto_mouse_layer_max_num: None,
             rynk_buffer_size: 488,
+            dongle_slots_num: 4,
+            dongle_links_num: 2,
+            dongle_pairing_window_secs: 30,
         }
     }
 }
