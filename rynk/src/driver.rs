@@ -104,6 +104,11 @@ pub enum RynkHostError {
     /// The device's capabilities lack this command, so nothing was sent.
     #[error("device does not support {0:?}: {1}")]
     Unsupported(Cmd, &'static str),
+    /// A dongle is connected but no keyboard is selected, so a keyboard command
+    /// has nowhere to go. Recoverable: pick a live slot with
+    /// [`Client::select_dongle_target`] and reconnect.
+    #[error("dongle has no selected target for {0:?}")]
+    NoDongleTarget(Cmd),
 }
 
 /// Convert a host error into a JS `Error` whose `name` is a stable kind
@@ -117,6 +122,7 @@ impl From<RynkHostError> for wasm_bindgen::JsValue {
             RynkHostError::DeviceNotFound(_) => "DeviceNotFound",
             RynkHostError::Rejected(_) => "Rejected",
             RynkHostError::Unsupported(..) => "Unsupported",
+            RynkHostError::NoDongleTarget(_) => "NoDongleTarget",
             RynkHostError::VersionMismatch { .. } => "VersionMismatch",
             RynkHostError::Encode(_) => "RequestEncodeError",
             RynkHostError::Deserialize { .. } => "ResponseDecodeError",
@@ -181,10 +187,42 @@ pub struct Client {
     topics: Channel<CS, TopicEvent, TOPIC_QUEUE_CAPACITY>,
     /// Request SEQ, cycling through `1..=255`.
     next_seq: AtomicU8,
-    /// Capability snapshot from the connect handshake;
+    /// What the connect handshake found on the other end;
     /// [`RynkDevice::connect`](crate::RynkDevice::connect) fills it in before
     /// the client is shared.
-    pub(crate) capabilities: DeviceCapabilities,
+    pub(crate) peer: Peer,
+}
+
+/// What the connect handshake found on the other end of the link.
+///
+/// A dongle answers its own `0x09xx` segment and forwards everything else, so
+/// the keyboard endpoints can be unreachable while the link itself is healthy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Peer {
+    /// A keyboard, reached directly.
+    Keyboard(DeviceCapabilities),
+    /// A dongle relaying to a live target; the capabilities are that keyboard's.
+    Dongle(DeviceCapabilities),
+    /// A dongle with no usable target: no slot bonded, several bonded and none
+    /// selected, or the selected keyboard is off. Only the dongle's own segment
+    /// answers until [`Client::select_dongle_target`] picks a live slot.
+    DongleUnselected,
+}
+
+impl Peer {
+    /// The target keyboard's capabilities, absent while a dongle has no target.
+    pub fn capabilities(&self) -> Option<DeviceCapabilities> {
+        match self {
+            Peer::Keyboard(caps) | Peer::Dongle(caps) => Some(*caps),
+            Peer::DongleUnselected => None,
+        }
+    }
+
+    /// Whether the link runs through a dongle, and the `0x09xx` segment is
+    /// therefore available.
+    pub fn is_dongle(&self) -> bool {
+        matches!(self, Peer::Dongle(_) | Peer::DongleUnselected)
+    }
 }
 
 impl Client {
@@ -202,7 +240,7 @@ impl Client {
             free,
             topics: Channel::new(),
             next_seq: AtomicU8::new(1),
-            capabilities: DeviceCapabilities::default(),
+            peer: Peer::Keyboard(DeviceCapabilities::default()),
         }
     }
 
@@ -276,7 +314,10 @@ impl Client {
     async fn send_frame<Req: Serialize>(&self, cmd: Cmd, seq: u8, req: &Req) -> Result<(), RynkHostError> {
         // The buffer fits the largest allowed request in COBS-encoded form,
         // so an oversized request fails to encode and never reaches the link.
-        let limit = max_wire_size(RYNK_HEADER_SIZE + self.capabilities.max_payload_size as usize);
+        // A dongle without a target advertises no capabilities; the default
+        // budget covers its own segment, whose requests are `()` or `u8`.
+        let budget = self.peer.capabilities().unwrap_or_default().max_payload_size;
+        let limit = max_wire_size(RYNK_HEADER_SIZE + budget as usize);
         #[cfg(feature = "alloc")]
         let mut buf: FrameBytes = vec![0; limit];
         #[cfg(not(feature = "alloc"))]

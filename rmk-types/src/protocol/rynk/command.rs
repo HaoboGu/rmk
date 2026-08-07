@@ -12,6 +12,8 @@ use postcard::experimental::max_size::MaxSize;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+#[cfg(feature = "dongle")]
+use super::DongleSlots;
 use super::message::{RynkHeader, encode_frame};
 use super::{
     BehaviorConfig, DeviceCapabilities, DeviceInfo, GetComboBulkRequest, GetComboBulkResponse, GetEncoderRequest,
@@ -20,8 +22,6 @@ use super::{
     SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetKeymapBulkRequest, SetMacroRequest,
     SetMorseBulkRequest, SetMorseRequest, StorageResetMode,
 };
-#[cfg(feature = "dongle")]
-use super::{DongleInfo, DongleSlots};
 use crate::action::{EncoderAction, KeyAction};
 #[cfg(feature = "_ble")]
 use crate::battery::BatteryStatus;
@@ -343,18 +343,16 @@ endpoints! {
 
     // Dongle (0x09xx) — answered by a tri-mode dongle itself, never forwarded to
     // a keyboard. Gated so `DongleSlots` stays out of a keyboard's payload budget.
-    /// Dongle probe: a keyboard answers `UnknownCmd`.
+    /// Snapshot of the dongle's slot table. Doubles as the dongle probe, since
+    /// a keyboard answers the whole segment with `UnknownCmd`.
     #[cfg(feature = "dongle")]
-    GetDongleInfo = 0x0901: () => DongleInfo;
-    /// Snapshot of the dongle's slot table.
-    #[cfg(feature = "dongle")]
-    GetDongleSlots = 0x0902: () => DongleSlots;
+    GetDongleSlots = 0x0901: () => DongleSlots;
     /// Route subsequent forwarded commands to this slot.
     #[cfg(feature = "dongle")]
-    SelectDongleTarget = 0x0903: u8 => ();
+    SelectDongleTarget = 0x0902: u8 => ();
     /// Delete a slot's bond.
     #[cfg(feature = "dongle")]
-    ForgetDongleSlot = 0x0904: u8 => ();
+    ForgetDongleSlot = 0x0903: u8 => ();
 }
 
 // Define topics: `Name = value: Payload;`

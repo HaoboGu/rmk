@@ -6,7 +6,7 @@ use rmk_types::action::KeyAction;
 use rmk_types::battery::BatteryStatus;
 use rmk_types::connection::{ConnectionStatus, ConnectionType};
 use rmk_types::protocol::rynk::{
-    GetComboBulkResponse, GetKeymapBulkResponse, GetMorseBulkResponse, PeripheralStatus, ProtocolVersion,
+    DongleSlots, GetComboBulkResponse, GetKeymapBulkResponse, GetMorseBulkResponse, PeripheralStatus, ProtocolVersion,
     SetComboBulkRequest, SetKeymapBulkRequest, SetMorseBulkRequest,
 };
 use tokio::time::timeout;
@@ -125,7 +125,10 @@ impl Write for MockWrite {
 /// exercise the wire without `connect`.
 fn raw_session(steps: Vec<Step>) -> (Client, Driver<MockRead, MockWrite>) {
     let mut client = Client::new();
-    client.capabilities.max_payload_size = 4096;
+    client.peer = Peer::Keyboard(DeviceCapabilities {
+        max_payload_size: 4096,
+        ..Default::default()
+    });
     let (reader, writer) = mock_halves(steps, false);
     (client, Driver::new(reader, writer))
 }
@@ -196,13 +199,20 @@ fn keymap_page(base: u8, n: u8) -> GetKeymapBulkResponse {
     }
 }
 
-/// The handshake reply pair every `connect` consumes first.
+/// The handshake replies every `connect` consumes first: version, capabilities,
+/// and the dongle probe a keyboard rejects as unknown.
 fn handshake_steps(capabilities: DeviceCapabilities) -> Vec<Step> {
     vec![
         Step::AwaitWrites(1),
         Step::Chunk(reply(Cmd::GetVersion, 1, ProtocolVersion::CURRENT)),
         Step::AwaitWrites(2),
         Step::Chunk(reply(Cmd::GetCapabilities, 2, capabilities)),
+        Step::AwaitWrites(3),
+        Step::Chunk(frame(
+            Cmd::GetDongleSlots,
+            3,
+            &Err::<DongleSlots, RynkError>(RynkError::UnknownCmd),
+        )),
     ]
 }
 
@@ -269,8 +279,8 @@ async fn multi_kilobyte_reply_round_trips() {
     let (client, mut driver) = connect_session(
         handshake_steps(supported),
         vec![
-            Step::AwaitWrites(3),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, big.clone())),
+            Step::AwaitWrites(4),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, big.clone())),
             Step::Hang,
         ],
     )
@@ -319,7 +329,10 @@ async fn eof_ends_driver() {
 #[tokio::test]
 async fn send_failure_ends_driver() {
     let mut client = Client::new();
-    client.capabilities.max_payload_size = 4096;
+    client.peer = Peer::Keyboard(DeviceCapabilities {
+        max_payload_size: 4096,
+        ..Default::default()
+    });
     let (reader, writer) = mock_halves(vec![Step::Hang], true);
     let mut driver = Driver::new(reader, writer);
     match select(driver.run(&client), client.get_wpm()).await {
@@ -433,7 +446,7 @@ async fn connect_session(mut steps: Vec<Step>, trailing: Vec<Step>) -> (Client, 
 #[tokio::test]
 async fn capability_gate_rejects_without_wire_send() {
     let (client, _driver) = connect_session(handshake_steps(caps()), vec![Step::Hang]).await;
-    assert!(!client.capabilities.ble_enabled);
+    assert!(!client.peer().capabilities().unwrap().ble_enabled);
     let r = client.get_battery_status().await;
     assert!(matches!(r, Err(RynkHostError::Unsupported(Cmd::GetBatteryStatus, _))));
 }
@@ -450,8 +463,8 @@ async fn wired_split_peripheral_status_is_supported() {
     let (client, mut driver) = connect_session(
         handshake_steps(capabilities),
         vec![
-            Step::AwaitWrites(3),
-            Step::Chunk(reply(Cmd::GetPeripheralStatus, 3, status)),
+            Step::AwaitWrites(4),
+            Step::Chunk(reply(Cmd::GetPeripheralStatus, 4, status)),
             Step::Hang,
         ],
     )
@@ -476,7 +489,7 @@ async fn oversized_request_rejected_locally() {
 #[tokio::test]
 async fn bulk_methods_gate_without_wire_send() {
     let (client, _driver) = connect_session(handshake_steps(caps()), vec![Step::Hang]).await;
-    assert!(!client.capabilities.bulk_transfer_supported);
+    assert!(!client.peer().capabilities().unwrap().bulk_transfer_supported);
 
     let keymap_req = SetKeymapBulkRequest {
         layer: 0,
@@ -537,18 +550,18 @@ async fn bulk_methods_round_trip_when_supported() {
     let (client, mut driver) = connect_session(
         handshake_steps(supported),
         vec![
-            Step::AwaitWrites(3),
-            Step::Chunk(reply(Cmd::SetKeymapBulk, 3, ())),
             Step::AwaitWrites(4),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, keymap_resp.clone())),
+            Step::Chunk(reply(Cmd::SetKeymapBulk, 4, ())),
             Step::AwaitWrites(5),
-            Step::Chunk(reply(Cmd::SetComboBulk, 5, ())),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 5, keymap_resp.clone())),
             Step::AwaitWrites(6),
-            Step::Chunk(reply(Cmd::GetComboBulk, 6, combo_resp.clone())),
+            Step::Chunk(reply(Cmd::SetComboBulk, 6, ())),
             Step::AwaitWrites(7),
-            Step::Chunk(reply(Cmd::SetMorseBulk, 7, ())),
+            Step::Chunk(reply(Cmd::GetComboBulk, 7, combo_resp.clone())),
             Step::AwaitWrites(8),
-            Step::Chunk(reply(Cmd::GetMorseBulk, 8, morse_resp.clone())),
+            Step::Chunk(reply(Cmd::SetMorseBulk, 8, ())),
+            Step::AwaitWrites(9),
+            Step::Chunk(reply(Cmd::GetMorseBulk, 9, morse_resp.clone())),
             Step::Hang,
         ],
     )
@@ -593,13 +606,13 @@ async fn read_all_keymap_concatenates_pages() {
     let (client, mut driver) = connect_session(
         handshake_steps(ten_key_caps()),
         vec![
-            Step::AwaitWrites(6),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, keymap_page(0, 4))),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, keymap_page(3, 4))),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 5, keymap_page(6, 4))),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 6, keymap_page(9, 1))),
             Step::AwaitWrites(7),
-            Step::Chunk(reply(Cmd::GetWpm, 7, 42u16)),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, keymap_page(0, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 5, keymap_page(3, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 6, keymap_page(6, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 7, keymap_page(9, 1))),
+            Step::AwaitWrites(8),
+            Step::Chunk(reply(Cmd::GetWpm, 8, 42u16)),
             Step::Hang,
         ],
     )
@@ -620,15 +633,15 @@ async fn read_all_refetches_a_squeezed_page() {
     let (client, mut driver) = connect_session(
         handshake_steps(ten_key_caps()),
         vec![
-            Step::AwaitWrites(6),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, keymap_page(0, 2))),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, keymap_page(3, 4))),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 5, keymap_page(6, 4))),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 6, keymap_page(9, 1))),
             Step::AwaitWrites(7),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 7, keymap_page(2, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, keymap_page(0, 2))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 5, keymap_page(3, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 6, keymap_page(6, 4))),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 7, keymap_page(9, 1))),
             Step::AwaitWrites(8),
-            Step::Chunk(reply(Cmd::GetWpm, 8, 42u16)),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 8, keymap_page(2, 4))),
+            Step::AwaitWrites(9),
+            Step::Chunk(reply(Cmd::GetWpm, 9, 42u16)),
             Step::Hang,
         ],
     )
@@ -648,13 +661,13 @@ async fn read_all_stops_on_clamped_empty_page() {
     let (client, mut driver) = connect_session(
         handshake_steps(ten_key_caps()),
         vec![
-            Step::AwaitWrites(6),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 3, keymap_page(0, 4))),
-            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, keymap_page(0, 0))),
+            Step::AwaitWrites(7),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 4, keymap_page(0, 4))),
             Step::Chunk(reply(Cmd::GetKeymapBulk, 5, keymap_page(0, 0))),
             Step::Chunk(reply(Cmd::GetKeymapBulk, 6, keymap_page(0, 0))),
-            Step::AwaitWrites(7),
-            Step::Chunk(reply(Cmd::GetWpm, 7, 7u16)),
+            Step::Chunk(reply(Cmd::GetKeymapBulk, 7, keymap_page(0, 0))),
+            Step::AwaitWrites(8),
+            Step::Chunk(reply(Cmd::GetWpm, 8, 7u16)),
             Step::Hang,
         ],
     )
@@ -680,14 +693,14 @@ async fn write_all_keymap_packs_pages_to_the_payload_budget() {
     let (client, mut driver) = connect_session(
         handshake_steps(supported),
         vec![
-            Step::AwaitWrites(3),
-            Step::Chunk(reply(Cmd::SetKeymapBulk, 3, ())),
             Step::AwaitWrites(4),
             Step::Chunk(reply(Cmd::SetKeymapBulk, 4, ())),
             Step::AwaitWrites(5),
             Step::Chunk(reply(Cmd::SetKeymapBulk, 5, ())),
             Step::AwaitWrites(6),
-            Step::Chunk(reply(Cmd::GetWpm, 6, 99u16)),
+            Step::Chunk(reply(Cmd::SetKeymapBulk, 6, ())),
+            Step::AwaitWrites(7),
+            Step::Chunk(reply(Cmd::GetWpm, 7, 99u16)),
             Step::Hang,
         ],
     )
@@ -706,12 +719,17 @@ async fn connect_rejects_newer_major() {
         major: ProtocolVersion::CURRENT.major + 1,
         minor: 0,
     };
-    // The firmware answers both handshake requests (they ride one round
+    // The firmware answers all three handshake requests (they ride one round
     // trip); the version gate must still reject before caps are released.
     let err = MockDevice(vec![
-        Step::AwaitWrites(2),
+        Step::AwaitWrites(3),
         Step::Chunk(reply(Cmd::GetVersion, 1, newer)),
         Step::Chunk(reply(Cmd::GetCapabilities, 2, caps())),
+        Step::Chunk(frame(
+            Cmd::GetDongleSlots,
+            3,
+            &Err::<DongleSlots, RynkError>(RynkError::UnknownCmd),
+        )),
         Step::Hang,
     ])
     .connect()
@@ -732,11 +750,81 @@ async fn connect_accepts_newer_minor() {
         Step::Chunk(reply(Cmd::GetVersion, 1, newer)),
         Step::AwaitWrites(2),
         Step::Chunk(reply(Cmd::GetCapabilities, 2, caps())),
+        Step::AwaitWrites(3),
+        Step::Chunk(frame(
+            Cmd::GetDongleSlots,
+            3,
+            &Err::<DongleSlots, RynkError>(RynkError::UnknownCmd),
+        )),
         Step::Hang,
     ])
     .connect()
     .await
     .expect("same-major newer-minor must connect");
+}
+
+#[tokio::test]
+async fn connect_identifies_a_dongle_that_has_a_target() {
+    // The dongle answers its own segment and forwards the rest, so the peer is
+    // a dongle while the capabilities are the target keyboard's.
+    let (client, _driver) = connect_session(
+        vec![
+            Step::AwaitWrites(1),
+            Step::Chunk(reply(Cmd::GetVersion, 1, ProtocolVersion::CURRENT)),
+            Step::AwaitWrites(2),
+            Step::Chunk(reply(Cmd::GetCapabilities, 2, caps())),
+            Step::AwaitWrites(3),
+            Step::Chunk(reply(
+                Cmd::GetDongleSlots,
+                3,
+                DongleSlots {
+                    slots: Default::default(),
+                    target: Some(0),
+                },
+            )),
+        ],
+        vec![Step::Hang],
+    )
+    .await;
+    assert!(client.peer().is_dongle());
+    assert_eq!(client.peer().capabilities().unwrap().num_cols, 14);
+}
+
+#[tokio::test]
+async fn dongle_without_a_target_connects_and_gates_keyboard_commands() {
+    // The forwarded pair fails while the dongle's own segment answers: a state
+    // to report, not a failed connect.
+    let (client, _driver) = connect_session(
+        vec![
+            Step::AwaitWrites(3),
+            Step::Chunk(frame(
+                Cmd::GetVersion,
+                1,
+                &Err::<ProtocolVersion, RynkError>(RynkError::NoTarget),
+            )),
+            Step::Chunk(frame(
+                Cmd::GetCapabilities,
+                2,
+                &Err::<DeviceCapabilities, RynkError>(RynkError::NoTarget),
+            )),
+            Step::Chunk(reply(
+                Cmd::GetDongleSlots,
+                3,
+                DongleSlots {
+                    slots: Default::default(),
+                    target: None,
+                },
+            )),
+        ],
+        vec![Step::Hang],
+    )
+    .await;
+    assert_eq!(client.peer(), Peer::DongleUnselected);
+    // Keyboard endpoints need capabilities, so they fail without a wire send.
+    assert!(matches!(
+        client.read_all_keymap().await,
+        Err(RynkHostError::NoDongleTarget(Cmd::GetKeymapBulk))
+    ));
 }
 
 #[tokio::test(start_paused = true)]
@@ -751,7 +839,7 @@ async fn rynk_device_trait_drives_lifecycle() {
     async fn run_first<D: RynkDevice>(d: D) -> u16 {
         assert_eq!(d.label(), "mock");
         let (client, mut driver) = d.connect().await.unwrap();
-        assert_eq!(client.capabilities.num_cols, 14);
+        assert_eq!(client.peer().capabilities().unwrap().num_cols, 14);
         match select(driver.run(&client), client.get_wpm()).await {
             Either::First(err) => panic!("driver died: {err}"),
             Either::Second(wpm) => wpm.unwrap(),
@@ -760,8 +848,8 @@ async fn rynk_device_trait_drives_lifecycle() {
 
     let mut steps = handshake_steps(caps());
     steps.extend([
-        Step::AwaitWrites(3),
-        Step::Chunk(reply(Cmd::GetWpm, 3, 7u16)),
+        Step::AwaitWrites(4),
+        Step::Chunk(reply(Cmd::GetWpm, 4, 7u16)),
         Step::Hang,
     ]);
     assert_eq!(run_first(MockDevice(steps)).await, 7);

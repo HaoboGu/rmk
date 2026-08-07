@@ -21,11 +21,11 @@ use rmk_types::fork::Fork;
 use rmk_types::led_indicator::LedIndicator;
 use rmk_types::morse::Morse;
 use rmk_types::protocol::rynk::{
-    BehaviorConfig, Cmd, DeviceCapabilities, DeviceInfo, GetComboBulkRequest, GetComboBulkResponse, GetEncoderRequest,
-    GetKeymapBulkRequest, GetKeymapBulkResponse, GetMacroRequest, GetMorseBulkRequest, GetMorseBulkResponse,
-    KeyPosition, LockStatus, MacroData, MatrixState, PeripheralStatus, ProtocolVersion, SetComboBulkRequest,
-    SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetKeymapBulkRequest, SetMacroRequest,
-    SetMorseBulkRequest, SetMorseRequest, StorageResetMode, command,
+    BehaviorConfig, Cmd, DeviceCapabilities, DeviceInfo, DongleSlots, GetComboBulkRequest, GetComboBulkResponse,
+    GetEncoderRequest, GetKeymapBulkRequest, GetKeymapBulkResponse, GetMacroRequest, GetMorseBulkRequest,
+    GetMorseBulkResponse, KeyPosition, LockStatus, MacroData, MatrixState, PeripheralStatus, ProtocolVersion,
+    SetComboBulkRequest, SetComboRequest, SetEncoderRequest, SetForkRequest, SetKeyRequest, SetKeymapBulkRequest,
+    SetMacroRequest, SetMorseBulkRequest, SetMorseRequest, StorageResetMode, command,
 };
 #[cfg(feature = "alloc")]
 use rmk_types::protocol::rynk::{RYNK_HEADER_SIZE, RynkError, max_wire_size};
@@ -34,7 +34,7 @@ use serde::Serialize;
 
 #[cfg(feature = "alloc")]
 use crate::driver::MAX_IN_FLIGHT;
-use crate::driver::{Client, RynkHostError};
+use crate::driver::{Client, Peer, RynkHostError};
 #[cfg(feature = "alloc")]
 use crate::layout::LayoutInfo;
 
@@ -48,8 +48,15 @@ use crate::layout::LayoutInfo;
 const PARKED_REQUEST_BYTES: usize = max_wire_size(RYNK_HEADER_SIZE + GetKeymapBulkRequest::POSTCARD_MAX_SIZE);
 
 impl Client {
+    /// The target keyboard's capabilities. Every keyboard endpoint needs them,
+    /// and a dongle without a selected target has none — hence the `cmd`, which
+    /// names what could not be sent.
+    fn caps(&self, cmd: Cmd) -> Result<DeviceCapabilities, RynkHostError> {
+        self.peer.capabilities().ok_or(RynkHostError::NoDongleTarget(cmd))
+    }
+
     fn require_bulk_transfer(&self, cmd: Cmd) -> Result<(), RynkHostError> {
-        if self.capabilities.bulk_transfer_supported {
+        if self.caps(cmd)?.bulk_transfer_supported {
             Ok(())
         } else {
             Err(RynkHostError::Unsupported(cmd, "bulk transfer not supported"))
@@ -57,11 +64,17 @@ impl Client {
     }
 
     fn require_ble(&self, cmd: Cmd) -> Result<(), RynkHostError> {
-        if self.capabilities.ble_enabled {
+        if self.caps(cmd)?.ble_enabled {
             Ok(())
         } else {
             Err(RynkHostError::Unsupported(cmd, "BLE not enabled"))
         }
+    }
+
+    /// What the connect handshake found on the other end: a keyboard, or a
+    /// dongle and whether it has a usable target.
+    pub fn peer(&self) -> Peer {
+        self.peer
     }
 
     /// Read the firmware's protocol version.
@@ -72,7 +85,7 @@ impl Client {
     /// Return the capability set saved during the connect handshake.
     /// Capabilities are firmware constants, so nothing is sent to the device.
     pub async fn get_capabilities(&self) -> Result<DeviceCapabilities, RynkHostError> {
-        Ok(self.capabilities)
+        self.caps(Cmd::GetCapabilities)
     }
 
     /// Read the firmware and device identity.
@@ -95,7 +108,7 @@ impl Client {
     /// Reset persistent storage. Requires [`DeviceCapabilities::storage_enabled`]:
     /// without storage the wipe would silently do nothing, so nothing is sent.
     pub async fn storage_reset(&self, mode: StorageResetMode) -> Result<(), RynkHostError> {
-        if !self.capabilities.storage_enabled {
+        if !self.caps(Cmd::StorageReset)?.storage_enabled {
             return Err(RynkHostError::Unsupported(Cmd::StorageReset, "storage not enabled"));
         }
         self.request::<command::StorageReset>(&mode).await
@@ -334,7 +347,7 @@ impl Client {
     /// Read one split peripheral's status by slot. Requires [`DeviceCapabilities::is_split`];
     /// nothing is sent otherwise.
     pub async fn get_peripheral_status(&self, slot: u8) -> Result<PeripheralStatus, RynkHostError> {
-        if !self.capabilities.is_split {
+        if !self.caps(Cmd::GetPeripheralStatus)?.is_split {
             return Err(RynkHostError::Unsupported(
                 Cmd::GetPeripheralStatus,
                 "not a split keyboard",
@@ -391,6 +404,28 @@ impl Client {
         self.require_ble(Cmd::ClearBleProfile)?;
         self.request::<command::ClearBleProfile>(&slot).await
     }
+
+    /// Read the dongle's slot table. Answered by the dongle itself, so it works
+    /// even while [`Peer::DongleUnselected`] leaves every keyboard endpoint
+    /// unreachable. A keyboard rejects it with [`RynkError::UnknownCmd`], which
+    /// is what [`RynkDevice::connect`](crate::RynkDevice::connect) probes with.
+    pub async fn get_dongle_slots(&self) -> Result<DongleSlots, RynkHostError> {
+        self.request::<command::GetDongleSlots>(&()).await
+    }
+
+    /// Route subsequent forwarded commands to this slot. The selection lasts
+    /// for this session only — a dongle re-resolves its target on each new one.
+    ///
+    /// The capability snapshot was taken at connect time, so after selecting a
+    /// different keyboard reconnect to pick up that keyboard's capabilities.
+    pub async fn select_dongle_target(&self, slot: u8) -> Result<(), RynkHostError> {
+        self.request::<command::SelectDongleTarget>(&slot).await
+    }
+
+    /// Delete a slot's bond. The keyboard has to pair again to come back.
+    pub async fn forget_dongle_slot(&self, slot: u8) -> Result<(), RynkHostError> {
+        self.request::<command::ForgetDongleSlot>(&slot).await
+    }
 }
 
 #[cfg(feature = "alloc")]
@@ -398,10 +433,10 @@ impl Client {
     /// Read the whole keymap — every layer, in [`get_keymap_bulk`](Self::get_keymap_bulk)
     /// order — with concurrent paged reads. A short page ends the read early.
     pub async fn read_all_keymap(&self) -> Result<Vec<KeyAction>, RynkHostError> {
-        let caps = self.capabilities;
+        let caps = self.caps(Cmd::GetKeymapBulk)?;
         let (rows, cols) = (caps.num_rows as u16, caps.num_cols as u16);
         let total = caps.num_layers as usize * rows as usize * cols as usize;
-        self.read_all(total, caps.max_bulk_keys, async |c, start| {
+        self.read_all(total, caps.max_bulk_keys, caps.max_payload_size, async |c, start| {
             let (layer, row, col) = keymap_pos(start, rows, cols);
             c.get_keymap_bulk(layer, row, col).await.map(|r| r.actions)
         })
@@ -410,26 +445,32 @@ impl Client {
 
     /// Read every combo slot with concurrent paged reads. A short page ends the read early.
     pub async fn read_all_combos(&self) -> Result<Vec<Combo>, RynkHostError> {
-        let total = self.capabilities.max_combos as usize;
-        self.read_all(total, self.capabilities.max_bulk_items, async |c, start| {
-            c.get_combo_bulk(start as u8).await.map(|r| r.configs)
-        })
+        let caps = self.caps(Cmd::GetComboBulk)?;
+        self.read_all(
+            caps.max_combos as usize,
+            caps.max_bulk_items,
+            caps.max_payload_size,
+            async |c, start| c.get_combo_bulk(start as u8).await.map(|r| r.configs),
+        )
         .await
     }
 
     /// Read every morse slot with concurrent paged reads. A short page ends the read early.
     pub async fn read_all_morses(&self) -> Result<Vec<Morse>, RynkHostError> {
-        let total = self.capabilities.max_morse as usize;
-        self.read_all(total, self.capabilities.max_bulk_items, async |c, start| {
-            c.get_morse_bulk(start as u8).await.map(|r| r.configs)
-        })
+        let caps = self.caps(Cmd::GetMorseBulk)?;
+        self.read_all(
+            caps.max_morse as usize,
+            caps.max_bulk_items,
+            caps.max_payload_size,
+            async |c, start| c.get_morse_bulk(start as u8).await.map(|r| r.configs),
+        )
         .await
     }
 
     /// Write the whole keymap with concurrent paged writes, each page filled up to the
     /// device's payload limit. A failure leaves the earlier pages applied.
     pub async fn write_all_keymap(&self, actions: Vec<KeyAction>) -> Result<(), RynkHostError> {
-        let caps = self.capabilities;
+        let caps = self.caps(Cmd::SetKeymapBulk)?;
         let (rows, cols) = (caps.num_rows as u16, caps.num_cols as u16);
         // 3 fixed bytes before the items: layer, start_row, start_col.
         self.write_all(Cmd::SetKeymapBulk, 3, actions, async |c, start, actions| {
@@ -474,7 +515,8 @@ impl Client {
     }
 
     /// Read a whole resource on [`MAX_IN_FLIGHT`] lanes concurrently.
-    /// `advertised` is the device's max items per page (`max_bulk_items`/`max_bulk_keys`).
+    /// `advertised` is the device's max items per page (`max_bulk_items`/`max_bulk_keys`),
+    /// `max_payload` its `max_payload_size`; both come from the caller's capability snapshot.
     ///
     /// Each lane claims a `spacing`-size "window" and the windows together cover all the data.
     /// The parked size is considered when calculating the window. See [`PARKED_REQUEST_BYTES`].
@@ -482,9 +524,10 @@ impl Client {
         &self,
         total: usize,
         advertised: u8,
+        max_payload: u16,
         fetch: impl AsyncFn(&Self, u16) -> Result<Vec<Item>, RynkHostError>,
     ) -> Result<Vec<Item>, RynkHostError> {
-        let frame = RYNK_HEADER_SIZE + self.capabilities.max_payload_size as usize;
+        let frame = RYNK_HEADER_SIZE + max_payload as usize;
         let spacing = (advertised as usize * frame.saturating_sub(MAX_IN_FLIGHT * PARKED_REQUEST_BYTES) / frame).max(1);
         let next = AtomicUsize::new(0);
         let lanes = join_array(core::array::from_fn::<_, MAX_IN_FLIGHT, _>(|_| async {
@@ -544,7 +587,8 @@ impl Client {
         items: Vec<Item>,
         store: impl AsyncFn(&Self, u16, Vec<Item>) -> Result<(), RynkHostError>,
     ) -> Result<(), RynkHostError> {
-        let mut pages = split_pages(cmd, fixed, self.capabilities.max_payload_size as usize, items)?;
+        let max_payload = self.caps(cmd)?.max_payload_size as usize;
+        let mut pages = split_pages(cmd, fixed, max_payload, items)?;
         // One round trip per page however full, so an even static split balances the lanes.
         let chunk = pages.len().div_ceil(MAX_IN_FLIGHT);
         let lanes: [Vec<_>; MAX_IN_FLIGHT] = core::array::from_fn(|_| pages.drain(..chunk.min(pages.len())).collect());

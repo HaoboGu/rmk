@@ -11,9 +11,9 @@ use alloc::string::String;
 
 use embassy_futures::select::{Either, select};
 use embedded_io_async::{Read, Write};
-use rmk_types::protocol::rynk::{DeviceCapabilities, ProtocolVersion, command};
+use rmk_types::protocol::rynk::{ProtocolVersion, RynkError, command};
 
-use crate::driver::{Client, Driver, RynkHostError};
+use crate::driver::{Client, Driver, Peer, RynkHostError};
 
 /// A keyboard recognized as Rynk's but not yet connected: an inert handle,
 /// produced by a transport's `discover()`, that [`connect`](Self::connect)s
@@ -37,9 +37,9 @@ pub trait RynkDevice: Sized {
     async fn open(self) -> Result<(Self::Read, Self::Write), RynkHostError>;
 
     /// Connect this recognized device into a live session: open the link and
-    /// complete the Rynk handshake (version check and capability snapshot)
-    /// over the normal pumps — topics arriving meanwhile queue up for
-    /// `next_topic` as usual.
+    /// complete the Rynk handshake (version check, capability snapshot, and
+    /// dongle probe) over the normal pumps — topics arriving meanwhile queue up
+    /// for `next_topic` as usual.
     ///
     /// Runtime-free, so no handshake timeout: a silent peer hangs here. Callers
     /// that need a bound wrap this in their runtime's timeout.
@@ -47,26 +47,48 @@ pub trait RynkDevice: Sized {
         let (reader, writer) = self.open().await?;
         let mut client = Client::new();
         let mut driver = Driver::new(reader, writer);
-        let capabilities = match select(driver.run(&client), handshake(&client)).await {
+        let peer = match select(driver.run(&client), handshake(&client)).await {
             Either::First(err) => return Err(err),
-            Either::Second(caps) => caps?,
+            Either::Second(peer) => peer?,
         };
-        client.capabilities = capabilities;
+        client.peer = peer;
         Ok((client, driver))
     }
 }
 
-/// Negotiate the version, then fetch device capabilities.
+/// Negotiate the version, fetch device capabilities, and identify what answered.
 ///
 /// Rejects only major-version mismatches; same-major minors connect.
-async fn handshake(client: &Client) -> Result<DeviceCapabilities, RynkHostError> {
-    // Both requests ride one round trip; the version gate still runs
-    // before the capabilities are released.
-    let (version, capabilities) = embassy_futures::join::join(
+async fn handshake(client: &Client) -> Result<Peer, RynkHostError> {
+    // All three ride one round trip. `GetDongleSlots` is the dongle probe: the
+    // `0x09xx` segment is answered by a dongle and never forwarded, so only a
+    // keyboard rejects it as unknown.
+    let (version, capabilities, slots) = embassy_futures::join::join3(
         client.request::<command::GetVersion>(&()),
         client.request::<command::GetCapabilities>(&()),
+        client.request::<command::GetDongleSlots>(&()),
     )
     .await;
+
+    let is_dongle = match slots {
+        Ok(_) => true,
+        Err(RynkHostError::Rejected(RynkError::UnknownCmd)) => false,
+        Err(err) => return Err(err),
+    };
+
+    // A dongle answers its own segment while the target keyboard is unreachable,
+    // so the forwarded pair failing is a state to report, not a failed connect.
+    // The version gate runs once a target exists — the dongle parses the frames
+    // either way, and its own segment is what stays usable here.
+    if is_dongle
+        && matches!(
+            version,
+            Err(RynkHostError::Rejected(RynkError::NoTarget | RynkError::NotReady))
+        )
+    {
+        return Ok(Peer::DongleUnselected);
+    }
+
     let version = version?;
     let supported = ProtocolVersion::CURRENT;
     if version.major != supported.major {
@@ -86,5 +108,11 @@ async fn handshake(client: &Client) -> Result<DeviceCapabilities, RynkHostError>
             supported.minor
         );
     }
-    capabilities
+    // The version gate runs before the capabilities are released.
+    let capabilities = capabilities?;
+    Ok(if is_dongle {
+        Peer::Dongle(capabilities)
+    } else {
+        Peer::Keyboard(capabilities)
+    })
 }

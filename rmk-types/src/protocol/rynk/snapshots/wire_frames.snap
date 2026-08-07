@@ -13,9 +13,9 @@ BootloaderJump request ()                                                       
 ClearBleProfile reply Ok(())                                                    04 05 07 01 01 00
 ClearBleProfile request 1                                                       05 05 07 01 01 00
 ConnectionChange topic ConnectionStatus{Configured,{1,Adv},Ble}                 03 03 80 03 02 01 02 01 00
-DongleSlotsChange topic DongleSlots{[Corne,Lily58],Some(0)}                     03 01 89 02 02 09 01 05 43 6f 72 6e 65 01 09 06 4c 69 6c 79 35 38 01 01 00
-ForgetDongleSlot reply Ok(())                                                   04 04 09 01 01 00
-ForgetDongleSlot request 1                                                      05 04 09 01 01 00
+DongleSlotsChange topic DongleSlots{[Corne,_,Lily58],Some(0)}                   03 01 89 0a 03 01 01 05 43 6f 72 6e 65 02 01 09 06 4c 69 6c 79 35 38 01 01 00
+ForgetDongleSlot reply Ok(())                                                   04 03 09 01 01 00
+ForgetDongleSlot request 1                                                      05 03 09 01 01 00
 GetBatteryStatus reply Ok(Available{Discharging,85})                            04 03 08 01 05 01 01 01 55 00
 GetBatteryStatus request ()                                                     04 03 08 01 00
 GetBehaviorConfig reply Ok(BehaviorConfig{50,500,200,20})                       04 01 06 01 07 32 f4 03 c8 01 14 00
@@ -36,10 +36,8 @@ GetDefaultLayer reply Ok(2)                                                     
 GetDefaultLayer request ()                                                      04 03 01 01 00
 GetDeviceInfo reply Ok(DeviceInfo{1.2.3,4,5,RMK,..})                            02 0a 02 01 21 01 02 03 04 05 03 52 4d 4b 0c 52 4d 4b 20 4b 65 79 62 6f 61 72 64 09 72 79 6e 6b 3a 30 30 30 31 00
 GetDeviceInfo request ()                                                        02 0a 02 01 00
-GetDongleInfo reply Ok(DongleInfo{1.2,3,4})                                     04 01 09 01 05 01 02 03 04 00
-GetDongleInfo request ()                                                        04 01 09 01 00
-GetDongleSlots reply Ok(DongleSlots{[Corne,Lily58],Some(0)})                    04 02 09 01 02 02 09 01 05 43 6f 72 6e 65 01 09 06 4c 69 6c 79 35 38 01 01 00
-GetDongleSlots request ()                                                       04 02 09 01 00
+GetDongleSlots reply Ok(DongleSlots{[Corne,_,Lily58],Some(0)})                  04 01 09 01 0a 03 01 01 05 43 6f 72 6e 65 02 01 09 06 4c 69 6c 79 35 38 01 01 00
+GetDongleSlots request ()                                                       04 01 09 01 00
 GetEncoderAction reply Ok(EncoderAction{Morse(3),No})                           04 05 01 01 03 05 03 01 00
 GetEncoderAction request GetEncoderRequest{1,2}                                 06 05 01 01 01 02 00
 GetFork reply Ok(Fork{Single(A),No,Morse(2)})                                   04 01 05 01 03 02 01 02 04 06 05 02 01 02 01 01 01 03 02 01 00
@@ -70,8 +68,8 @@ Lock reply Ok(())                                                               
 Lock request ()                                                                 02 08 02 01 00
 Reboot reply Ok(())                                                             02 03 02 01 01 00
 Reboot request ()                                                               02 03 02 01 00
-SelectDongleTarget reply Ok(())                                                 04 03 09 01 01 00
-SelectDongleTarget request 1                                                    05 03 09 01 01 00
+SelectDongleTarget reply Ok(())                                                 04 02 09 01 01 00
+SelectDongleTarget request 1                                                    05 02 09 01 01 00
 SetBehaviorConfig reply Ok(())                                                  04 02 06 01 01 00
 SetBehaviorConfig request BehaviorConfig{50,500,200,20}                         0a 02 06 01 32 f4 03 c8 01 14 00
 SetCombo reply Ok(())                                                           04 02 03 01 01 00

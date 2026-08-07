@@ -215,7 +215,6 @@ struct Exemplars {
     macro_data: MacroData,
     encoder: EncoderAction,
     battery: BatteryStatus,
-    dongle_info: DongleInfo,
     dongle_slots: DongleSlots,
 }
 
@@ -309,26 +308,21 @@ fn exemplars() -> Exemplars {
     let macro_data = MacroData { data: macro_bytes };
     let encoder = EncoderAction::new(KeyAction::Morse(3), KeyAction::No);
 
-    // Fixed version (not CURRENT) so a version bump alone doesn't flip these bytes.
-    let dongle_info = DongleInfo {
-        version: ProtocolVersion { major: 1, minor: 2 },
-        slots_num: 3,
-        links_num: 4,
-    };
+    // A dense table with a hole: index is the slot number, so the empty slot 1
+    // has to survive the round trip for slot 2 to stay addressable.
     let mut dongle_slot_vec = heapless::Vec::new();
     dongle_slot_vec
-        .push(DongleSlot {
-            slot: 0,
+        .push(Some(DongleSlot {
             connected: true,
             name: heapless::String::try_from("Corne").unwrap(),
-        })
+        }))
         .unwrap();
+    dongle_slot_vec.push(None).unwrap();
     dongle_slot_vec
-        .push(DongleSlot {
-            slot: 1,
+        .push(Some(DongleSlot {
             connected: false,
             name: heapless::String::try_from("Lily58").unwrap(),
-        })
+        }))
         .unwrap();
     let dongle_slots = DongleSlots {
         slots: dongle_slot_vec,
@@ -351,7 +345,6 @@ fn exemplars() -> Exemplars {
             charge_state: ChargeState::Discharging,
             level: Some(85),
         },
-        dongle_info,
         dongle_slots,
     }
 }
@@ -536,8 +529,7 @@ fn wire_values_locked() {
         ("StorageResetMode::Full", encode(&StorageResetMode::Full)),
         ("StorageResetMode::LayoutOnly", encode(&StorageResetMode::LayoutOnly)),
         // --- Dongle (0x09xx payloads) ---
-        ("DongleInfo{1.2,3,4}", encode(&ex.dongle_info)),
-        ("DongleSlots{[Corne,Lily58],Some(0)}", encode(&ex.dongle_slots)),
+        ("DongleSlots{[Corne,_,Lily58],Some(0)}", encode(&ex.dongle_slots)),
         // --- Request payloads: pin field order of the Get/Set structs ---
         (
             "SetKeyRequest{{0,5,13},Morse(7)}",
@@ -1004,14 +996,9 @@ fn wire_frames_locked() {
             ),
         ),
         // Dongle (0x09xx), answered by a dongle itself and never forwarded.
-        ("GetDongleInfo request ()", encode_frame(Cmd::GetDongleInfo, SEQ, &())),
-        (
-            "GetDongleInfo reply Ok(DongleInfo{1.2,3,4})",
-            encode_frame(Cmd::GetDongleInfo, SEQ, &Ok::<DongleInfo, RynkError>(ex.dongle_info)),
-        ),
         ("GetDongleSlots request ()", encode_frame(Cmd::GetDongleSlots, SEQ, &())),
         (
-            "GetDongleSlots reply Ok(DongleSlots{[Corne,Lily58],Some(0)})",
+            "GetDongleSlots reply Ok(DongleSlots{[Corne,_,Lily58],Some(0)})",
             encode_frame(
                 Cmd::GetDongleSlots,
                 SEQ,
@@ -1059,7 +1046,7 @@ fn wire_frames_locked() {
             encode_frame(Cmd::BatteryStatusChange, 0, &ex.battery)
         ),
         (
-            "DongleSlotsChange topic DongleSlots{[Corne,Lily58],Some(0)}",
+            "DongleSlotsChange topic DongleSlots{[Corne,_,Lily58],Some(0)}",
             encode_frame(Cmd::DongleSlotsChange, 0, &ex.dongle_slots)
         ),
     ];
