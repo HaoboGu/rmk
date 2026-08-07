@@ -164,6 +164,23 @@ pub(crate) enum FlashOperationMessage {
     #[cfg(feature = "_ble")]
     // Read the persisted active BLE profile number; storage task replies via `ACTIVE_BLE_PROFILE_RESPONSE`.
     ReadActiveBleProfile,
+    #[cfg(feature = "dongle")]
+    // Dongle slot metadata (name + recency) to be saved beside the slot's bond
+    DongleSlotMeta {
+        slot: u8,
+        meta: DongleSlotMeta,
+    },
+}
+
+/// Dongle per-slot metadata persisted beside the bond (`StorageKey::DongleSlotMeta`).
+#[cfg(feature = "dongle")]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct DongleSlotMeta {
+    pub name: heapless::String<{ rmk_types::protocol::rynk::DONGLE_SLOT_NAME_SIZE }>,
+    /// Logical recency counter (Lamport-style, not a timestamp): bumped on
+    /// connect and clean disconnect, smallest value = eviction candidate.
+    pub last_seen: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -198,6 +215,8 @@ pub(crate) enum StorageKey {
     ActiveBleProfile,
     #[cfg(feature = "_ble")]
     BondInfo(u8),
+    #[cfg(feature = "dongle")]
+    DongleSlotMeta(u8),
 }
 
 impl StorageKey {
@@ -279,6 +298,8 @@ pub(crate) enum StorageData {
     BondInfo(ProfileInfo),
     #[cfg(feature = "_ble")]
     ActiveBleProfile(u8),
+    #[cfg(feature = "dongle")]
+    DongleSlotMeta(DongleSlotMeta),
 }
 
 impl<'a> PostcardValue<'a> for StorageData {}
@@ -364,6 +385,46 @@ pub async fn new_storage_for_split_peripheral<F: AsyncNorFlash>(
 }
 
 type StorageCache = Cache<Uncached, Uncached, Uncached, StorageKey>;
+
+/// Keymap-less storage for the dongle firmware, plus the persisted slot table
+/// (bond + metadata per slot) read out before the storage task takes over.
+#[cfg(feature = "dongle")]
+pub async fn new_storage_for_dongle<F: AsyncNorFlash>(
+    flash: F,
+    storage_config: StorageConfig,
+) -> (Storage<F, 0, 0, 0, 0>, crate::dongle::DongleSlotsInit) {
+    let mut storage = Storage::<F, 0, 0, 0, 0>::new(
+        flash,
+        #[cfg(feature = "host")]
+        &[],
+        #[cfg(feature = "host")]
+        &None,
+        &storage_config,
+        &config::BehaviorConfig::default(),
+    )
+    .await;
+    let mut slots = crate::dongle::DongleSlotsInit::new();
+    for slot in 0..crate::DONGLE_SLOTS_NUM as u8 {
+        let bond = match storage.fetch_data(StorageKey::bond_info(slot)).await {
+            Some(StorageData::BondInfo(info)) if !info.removed => Some(info.info),
+            _ => None,
+        };
+        let entry = if let Some(bond) = bond {
+            let meta = match storage.fetch_data(StorageKey::DongleSlotMeta(slot)).await {
+                Some(StorageData::DongleSlotMeta(meta)) => meta,
+                _ => DongleSlotMeta {
+                    name: heapless::String::new(),
+                    last_seen: 0,
+                },
+            };
+            Some((bond, meta))
+        } else {
+            None
+        };
+        let _ = slots.push(entry);
+    }
+    (storage, slots)
+}
 
 pub struct Storage<
     F: AsyncNorFlash,
@@ -803,6 +864,11 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
                 }
                 FlashOperationMessage::MorseDefaultProfile(morse_default_profile) => {
                     update_storage_field!(&mut self.flash, &mut self.buffer, BehaviorConfig, morse_default_profile)
+                }
+                #[cfg(feature = "dongle")]
+                FlashOperationMessage::DongleSlotMeta { slot, meta } => {
+                    self.store_data(StorageKey::DongleSlotMeta(slot), &StorageData::DongleSlotMeta(meta))
+                        .await
                 }
             };
 
