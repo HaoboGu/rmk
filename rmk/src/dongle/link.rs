@@ -1,5 +1,5 @@
 //! One dongle link: claim a slot (or a pairing candidate), connect, secure,
-//! handshake over Rynk, then forward in both directions until disconnect.
+//! read the keyboard's name, then forward in both directions until disconnect.
 
 use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy, LeSetScanParams};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
@@ -7,11 +7,8 @@ use bt_hci::param::{AddrKind, BdAddr};
 use embassy_futures::select::{Either, Either3, select, select3};
 use embassy_time::{Duration, Timer, with_timeout};
 use rmk_types::protocol::rynk::{
-    Cmd, Deframer, DeviceInfo, ProtocolVersion, RYNK_BLE_CHUNK_SIZE, RYNK_HEADER_SIZE, RYNK_INPUT_CHAR_UUID,
-    RYNK_OUTPUT_CHAR_UUID, RYNK_SERVICE_UUID, RynkError, RynkHeader, encode_frame,
+    DONGLE_SLOT_NAME_SIZE, RYNK_BLE_CHUNK_SIZE, RYNK_INPUT_CHAR_UUID, RYNK_OUTPUT_CHAR_UUID, RYNK_SERVICE_UUID,
 };
-use serde::Serialize;
-use serde::de::DeserializeOwned;
 use trouble_host::prelude::*;
 
 use super::{LinkState, Slot, merge, router};
@@ -66,7 +63,6 @@ fn claim(t: &mut super::SlotTable, idx: u8) -> Option<Job> {
         let i = (idx as usize + k) % n;
         let s = &mut t.slots[i];
         if s.link == LinkState::Free
-            && !s.version_bad
             && let Some(bond) = &s.bond
         {
             let addr = bond.identity.addr;
@@ -319,7 +315,6 @@ async fn secure(
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 enum SessionError {
     Discovery,
-    VersionMismatch,
     Handshake,
     SlotsFull,
 }
@@ -374,28 +369,29 @@ where
     }
     let mut listener = client.listen_all().map_err(|_| SessionError::Discovery)?;
 
-    // Version gate + identity, over the keyboard's own Rynk service. The
-    // config pass-through only opens after this, so no seq can collide.
-    let chunk = rynk_chunk_size(conn);
-    let version: ProtocolVersion = rynk_request(client, &mut listener, &chars, chunk, Cmd::GetVersion, 0, &())
-        .await
-        .map_err(|_| SessionError::Handshake)?;
-    if version.major != ProtocolVersion::CURRENT.major {
-        warn!(
-            "[dongle] link {}: keyboard protocol {}.{} != ours",
-            idx, version.major, version.minor
-        );
-        if let Some(slot) = bonded_slot {
-            super::update_slots(|t| t.slots[slot as usize].version_bad = true);
+    // Identity from the GAP service, so the dongle never decodes a Rynk
+    // payload: typing rides HOGP whatever Rynk major the keyboard speaks, and
+    // the host is the one that gates on version once it connects through us.
+    // An unnamed slot beats a dropped link, so every failure here is ignored.
+    let mut name = heapless::String::new();
+    if let Ok(services) = client.services_by_uuid(&Uuid::new_short(0x1800)).await
+        && let Some(gap) = services.first()
+    {
+        let mut buf = [0u8; DONGLE_SLOT_NAME_SIZE];
+        if let Ok(n) = client
+            .read_characteristic_by_uuid(gap, &Uuid::new_short(0x2A00), &mut buf)
+            .await
+        {
+            // A name longer than the slot holds arrives truncated; back off to
+            // the last UTF-8 boundary so a split char doesn't void all of it.
+            let valid = core::str::from_utf8(&buf[..n])
+                .unwrap_or_else(|e| core::str::from_utf8(&buf[..e.valid_up_to()]).unwrap());
+            let _ = name.push_str(valid);
         }
-        return Err(SessionError::VersionMismatch);
     }
-    let info: DeviceInfo = rynk_request(client, &mut listener, &chars, chunk, Cmd::GetDeviceInfo, 1, &())
-        .await
-        .map_err(|_| SessionError::Handshake)?;
 
     // Commit: allocate a slot for a fresh pairing, refresh a bonded one.
-    let slot = commit_slot(idx, stack, conn, bonded_slot, info.product_name).await?;
+    let slot = commit_slot(idx, stack, conn, bonded_slot, name).await?;
 
     info!("[dongle] link {}: serving slot {}", idx, slot);
     serve(idx, slot, stack, conn, client, &mut listener, &chars).await;
@@ -408,7 +404,7 @@ async fn commit_slot<C: Controller>(
     stack: &Stack<'_, C, DefaultPacketPool>,
     conn: &Connection<'_, DefaultPacketPool>,
     bonded_slot: Option<u8>,
-    name: heapless::String<{ rmk_types::protocol::rynk::DEVICE_INFO_STRING_SIZE }>,
+    name: heapless::String<DONGLE_SLOT_NAME_SIZE>,
 ) -> Result<u8, SessionError> {
     let mut evicted = None;
     let committed = super::update_slots(|t| {
@@ -424,7 +420,6 @@ async fn commit_slot<C: Controller>(
                     name: heapless::String::new(),
                     last_seen: 0,
                     link: LinkState::Free,
-                    version_bad: false,
                 };
                 slot
             }
@@ -521,53 +516,6 @@ fn rynk_chunk_size(conn: &Connection<'_, DefaultPacketPool>) -> usize {
     RYNK_BLE_CHUNK_SIZE
         .min((conn.att_mtu() as usize).saturating_sub(3))
         .max(1)
-}
-
-/// One dongle-originated Rynk request over the keyboard's GATT service.
-async fn rynk_request<C: Controller, T: DeserializeOwned>(
-    client: &Client<'_, C>,
-    listener: &mut NotificationListener<'_, 512>,
-    chars: &KeyboardChars,
-    chunk: usize,
-    cmd: Cmd,
-    seq: u8,
-    request: &impl Serialize,
-) -> Result<T, RynkError> {
-    let mut buf = [0u8; 512];
-    let n = encode_frame(&mut buf, RynkHeader { cmd, seq }, request)?;
-    for part in buf[..n].chunks(chunk) {
-        client
-            .write_characteristic_without_response(&chars.rynk_output, part)
-            .await
-            .map_err(|_| RynkError::NotReady)?;
-    }
-
-    let mut rx = [0u8; 512];
-    let mut df = Deframer::new();
-    let read = async {
-        loop {
-            let notification = listener.next().await;
-            if notification.handle() != chars.rynk_input.handle {
-                continue; // typing may already be flowing; not ours
-            }
-            let data = notification.as_ref();
-            let tail = df.tail(&mut rx);
-            let take = data.len().min(tail.len());
-            tail[..take].copy_from_slice(&data[..take]);
-            df.commit(take);
-            while let Some(len) = df.next(&mut rx) {
-                let header = RynkHeader::parse(rx[..RYNK_HEADER_SIZE].try_into().unwrap());
-                if header.cmd == cmd && header.seq == seq {
-                    return postcard::from_bytes::<Result<T, RynkError>>(&rx[RYNK_HEADER_SIZE..len])
-                        .map_err(|_| RynkError::Malformed)?;
-                }
-            }
-        }
-    };
-    match with_timeout(Duration::from_secs(5), read).await {
-        Ok(r) => r,
-        Err(_) => Err(RynkError::NotReady),
-    }
 }
 
 /// Forward until the link dies: notifications out to USB/router, LED state and
@@ -674,7 +622,6 @@ async fn forget_slot(slot: u8) {
     let identity = super::update_slots(|t| {
         let s = &mut t.slots[slot as usize];
         s.name = heapless::String::new();
-        s.version_bad = false;
         s.link = LinkState::Free;
         s.bond.take().map(|b| b.identity)
     });

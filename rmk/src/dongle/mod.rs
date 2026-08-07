@@ -71,8 +71,6 @@ pub(crate) struct Slot {
     /// clean disconnect; the smallest unconnected slot is the eviction victim.
     pub(crate) last_seen: u32,
     pub(crate) link: LinkState,
-    /// Rynk major mismatch: don't redial until re-pairing or reboot.
-    pub(crate) version_bad: bool,
 }
 
 impl Slot {
@@ -82,7 +80,6 @@ impl Slot {
             name: heapless::String::new(),
             last_seen: 0,
             link: LinkState::Free,
-            version_bad: false,
         }
     }
 }
@@ -202,15 +199,14 @@ pub(crate) async fn wait_for_stack_started() {
 /// Wire snapshot of the slot table for `GetDongleSlots` / `DongleSlotsChange`.
 pub(crate) fn slots_snapshot() -> DongleSlotsPayload {
     read_slots(|t| {
+        // Dense: the index is the slot number the host addresses, so unbonded
+        // slots keep their place instead of shifting the ones behind them.
         let mut slots = heapless::Vec::new();
-        for (i, s) in t.slots.iter().enumerate() {
-            if s.bond.is_some() {
-                let _ = slots.push(DongleSlotPayload {
-                    slot: i as u8,
-                    connected: matches!(s.link, LinkState::Connected(_)),
-                    name: s.name.clone(),
-                });
-            }
+        for s in t.slots.iter() {
+            let _ = slots.push(s.bond.is_some().then(|| DongleSlotPayload {
+                connected: matches!(s.link, LinkState::Connected(_)),
+                name: s.name.clone(),
+            }));
         }
         DongleSlotsPayload {
             slots,
@@ -368,7 +364,6 @@ impl<C> Dongle<C> {
                         name: meta.name,
                         last_seen: meta.last_seen,
                         link: LinkState::Free,
-                        version_bad: false,
                     };
                 }
             }

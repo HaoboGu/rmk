@@ -10,8 +10,7 @@ use embassy_sync::pipe::Pipe;
 use embedded_io_async::{Read, Write};
 use rmk_types::constants::RYNK_BUFFER_SIZE;
 use rmk_types::protocol::rynk::{
-    Cmd, Deframer, DongleInfo, ProtocolVersion, RYNK_HEADER_SIZE, RynkError, RynkHeader, TopicEvent, decode_header,
-    encode_frame,
+    Cmd, Deframer, RYNK_HEADER_SIZE, RynkError, RynkHeader, TopicEvent, decode_header, encode_frame,
 };
 
 use super::LinkState;
@@ -75,7 +74,8 @@ impl DongleRouter {
         // self-answer never lands inside a split keyboard frame.
         let mut kb_buf = [0u8; RYNK_BUFFER_SIZE];
         let mut kb_len = 0;
-        // Topics stay muted until the host has probed with GetDongleInfo.
+        // Topics stay muted until the host has read the slot table: only then
+        // does a `DongleSlotsChange` push have a baseline to be a delta of.
         let mut probed = false;
 
         loop {
@@ -214,20 +214,10 @@ impl DongleRouter {
         let payload = &buf[RYNK_HEADER_SIZE..len];
 
         match header.cmd {
-            Cmd::GetDongleInfo => {
+            Cmd::GetDongleSlots => {
                 *probed = true;
-                write_reply(
-                    tx,
-                    header,
-                    &Ok::<_, RynkError>(DongleInfo {
-                        version: ProtocolVersion::CURRENT,
-                        slots_num: DONGLE_SLOTS_NUM as u8,
-                        links_num: DONGLE_LINKS_NUM as u8,
-                    }),
-                )
-                .await
+                write_reply(tx, header, &Ok::<_, RynkError>(super::slots_snapshot())).await
             }
-            Cmd::GetDongleSlots => write_reply(tx, header, &Ok::<_, RynkError>(super::slots_snapshot())).await,
             Cmd::SelectDongleTarget => {
                 let reply = match postcard::from_bytes::<u8>(payload) {
                     Ok(slot) if (slot as usize) < DONGLE_SLOTS_NUM => super::update_slots_quiet(|t| {
@@ -249,7 +239,6 @@ impl DongleRouter {
                         let identity = super::update_slots(|t| {
                             let s = &mut t.slots[slot as usize];
                             s.name = heapless::String::new();
-                            s.version_bad = false;
                             if t.explicit_target == Some(slot) {
                                 t.explicit_target = None;
                             }
@@ -398,7 +387,6 @@ mod tests {
                 name: heapless::String::try_from("kb").unwrap(),
                 last_seen: idx as u32,
                 link,
-                version_bad: false,
             };
         });
     }
@@ -411,26 +399,21 @@ mod tests {
     }
 
     #[test]
-    fn answers_get_dongle_info_and_slots() {
+    fn answers_get_dongle_slots_densely() {
         set_slot(1, LinkState::Connected(0));
         let mut chunks = VecDeque::new();
-        chunks.push_back(frame(Cmd::GetDongleInfo, 1, &()));
-        chunks.push_back(frame(Cmd::GetDongleSlots, 2, &()));
+        chunks.push_back(frame(Cmd::GetDongleSlots, 1, &()));
         let resp = decode_frames(&run(chunks, 0));
 
-        assert_eq!(resp.len(), 2);
-        assert_eq!(resp[0].0, Cmd::GetDongleInfo.raw());
-        let info = postcard::from_bytes::<Result<DongleInfo, RynkError>>(&resp[0].2)
+        assert_eq!(resp.len(), 1);
+        assert_eq!(resp[0].0, Cmd::GetDongleSlots.raw());
+        let slots = postcard::from_bytes::<Result<DongleSlots, RynkError>>(&resp[0].2)
             .unwrap()
             .unwrap();
-        assert_eq!(info.slots_num as usize, crate::DONGLE_SLOTS_NUM);
-        assert_eq!(info.links_num as usize, crate::DONGLE_LINKS_NUM);
-        let slots = postcard::from_bytes::<Result<DongleSlots, RynkError>>(&resp[1].2)
-            .unwrap()
-            .unwrap();
-        assert_eq!(slots.slots.len(), 1);
-        assert_eq!(slots.slots[0].slot, 1);
-        assert!(slots.slots[0].connected);
+        // Dense: every slot has an entry, so the index addresses it directly.
+        assert_eq!(slots.slots.len(), crate::DONGLE_SLOTS_NUM);
+        assert!(slots.slots[0].is_none(), "unbonded slots keep their place");
+        assert!(slots.slots[1].as_ref().unwrap().connected);
         assert_eq!(slots.target, Some(1), "the only bonded slot is the implicit target");
     }
 
