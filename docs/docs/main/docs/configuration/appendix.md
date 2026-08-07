@@ -264,8 +264,10 @@ enabled = true
 # Note: When the `dfu_rp` or `dfu_nrf` feature is enabled, this value is ignored.
 # The storage partition is automatically placed after the DFU download slot.
 start_addr = 0xA0000
-# Number of sectors used for storage, >= 2
+# Number of sectors used for storage, >= 2 (defaults to 8 when DFU is enabled)
 num_sectors = 16
+# Note: When the `dfu_rp` or `dfu_nrf` feature is enabled, this value is ignored.
+# The storage partition is automatically placed after the DFU download slot (from rmk-boot.x).
 # Clear storage at keyboard boot.
 # Set it to true will reset the storage(including keymap, BLE bond info, etc.) at each reboot.
 # This option is useful when testing the firmware.

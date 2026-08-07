@@ -183,7 +183,7 @@ ERROR Keymap reading aborted!
 └─ rmk::keymap::{impl#0}::new_from_storage::{async_fn#0} @ /Users/haobogu/Projects/keyboard/rmk/rmk/src/keymap.rs:38
 ```
 
-If you have more sectors available in your internal flash, you can increase `num_sectors` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk/latest/rmk/config/struct.RmkConfig.html) if you're using Rust API.
+If you have more sectors available in your internal flash, you can increase `num_sectors` in `[storage]` section of your `keyboard.toml`, or change `storage_config` in your [`RmkConfig`](https://docs.rs/rmk/latest/rmk/config/struct.RmkConfig.html) if you're using Rust API. When using DFU (`dfu_rp` / `dfu_nrf`), the storage partition is placed after the DFU slot (via `rmk-boot.x`) and the default is 8 sectors (32 KB).
 
 ### OUTDATED: panicked at embassy-executor: task arena is full.
 
