@@ -52,6 +52,8 @@ RMK_FEATURESETS=(
     "rynk,_ble,split,storage,async_matrix"
     "rynk,storage"
     "rynk"
+    "rynk,lighting"
+    "rynk,storage,lighting"
 )
 
 # Behavioral coverage only; RMK_FEATURESETS remains the compile/clippy matrix.
@@ -59,6 +61,7 @@ RMK_TEST_FEATURESETS=(
     ""
     "vial,host_lock,_no_usb,steno,passkey_entry"
     "rynk,_ble,split,async_matrix,storage"
+    "rynk,storage,lighting"
 )
 
 # Examples auto-discovery skiplist. Reasons:
