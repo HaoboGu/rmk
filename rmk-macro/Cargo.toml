@@ -30,7 +30,7 @@ watchdog = []
 ## Expose the `run_tests!` simulator-scenario macro (rmk test suite only)
 _simulator = ["dep:toml", "dep:serde", "dep:serde_json"]
 dfu_rp = []
-## Enable nRF DFU firmware update code generation
+dfu_ext = []
 dfu_nrf = []
 dfu_split = []
 

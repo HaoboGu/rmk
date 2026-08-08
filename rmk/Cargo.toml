@@ -242,6 +242,10 @@ dfu_nrf = ["dfu", "dep:embassy-boot", "dep:embassy-nrf", "rmk-macro/dfu_nrf"]
 ## Enable split firmware update support — forward firmware to peripherals over split link
 dfu_split = ["dfu", "rmk-macro/dfu_split"]
 
+## Enable DFU writing to external SPI flash instead of internal DFU partition.
+## Adds the W25qNorFlash driver and allows external flash DFU configuration.
+dfu_ext = ["dfu", "dep:embedded-storage", "rmk-macro/dfu_ext"]
+
 ## Enable Plover HID stenography support: adds the steno HID descriptor,
 ## the steno USB writer endpoint, and the `Action::Steno` variant.
 steno = ["rmk-types/steno"]

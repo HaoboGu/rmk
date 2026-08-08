@@ -1,10 +1,11 @@
 //! Initialize flash boilerplate of RMK, including USB or BLE
 //!
 
+use crate::codegen::feature::is_feature_enabled;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{format_ident, quote};
 use rmk_config::resolved::Hardware;
-use rmk_config::resolved::hardware::ChipSeries;
+use rmk_config::resolved::hardware::{ChipSeries, ExternalFlashDriver, SpiConfig};
 
 #[cfg(any(feature = "dfu_rp", feature = "dfu_nrf"))]
 use rmk_config::resolved::hardware::DfuConfig;
@@ -51,28 +52,28 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                     let dfu = hardware.dfu.as_ref().expect(
                         "[dfu] section is required in keyboard.toml (or chip default) when dfu_nrf is enabled"
                     );
-                    let storage_num_sectors = hardware.storage.as_ref().map(|s| s.num_sectors).unwrap_or(32) as u32;
-                    let erase_size = dfu.page_size;
-                    let storage_offset = dfu.dfu_offset + dfu.dfu_size;
-                    let storage_size = storage_num_sectors * erase_size;
-                    let state_offset = dfu.state_offset;
-                    let state_size = dfu.state_size;
-                    let dfu_offset = dfu.dfu_offset;
-                    let dfu_size = dfu.dfu_size;
                     let dfu_unlock_keys = expand_dfu_unlock_keys(dfu);
+                    let external_dfu = expand_external_flash_init(hardware);
+                    let flash_let = if external_dfu.is_some() {
+                        quote! {
+                            let flash = ::rmk::storage::async_flash_wrapper(
+                                ::rmk::dfu::init_flash_from_linkerscript_with_external_dfu(
+                                    p.NVMC,
+                                    dfu_mutex,
+                                )
+                            );
+                        }
+                    } else {
+                        quote! {
+                            let flash = ::rmk::storage::async_flash_wrapper(
+                                ::rmk::dfu::init_flash_from_linkerscript(p.NVMC)
+                            );
+                        }
+                    };
                     quote! {
                         #dfu_unlock_keys
-                        let flash = ::rmk::storage::async_flash_wrapper(
-                            ::rmk::dfu::init_flash(
-                                p.NVMC,
-                                #storage_offset,
-                                #storage_size,
-                                #state_offset,
-                                #state_size,
-                                #dfu_offset,
-                                #dfu_size,
-                            )
-                        );
+                        #external_dfu
+                        #flash_let
                     }
                 };
                 #[cfg(not(feature = "dfu_nrf"))]
@@ -96,28 +97,28 @@ pub(crate) fn expand_flash_init(hardware: &Hardware) -> TokenStream2 {
                 let dfu = hardware.dfu.as_ref().expect(
                     "[dfu] section is required in keyboard.toml (or chip default) when dfu_rp is enabled"
                 );
-                let storage_num_sectors = hardware.storage.as_ref().map(|s| s.num_sectors).unwrap_or(32) as u32;
-                let erase_size = dfu.page_size;
-                let storage_offset = dfu.dfu_offset + dfu.dfu_size;
-                let storage_size = storage_num_sectors * erase_size;
-                let state_offset = dfu.state_offset;
-                let state_size = dfu.state_size;
-                let dfu_offset = dfu.dfu_offset;
-                let dfu_size = dfu.dfu_size;
                 let dfu_unlock_keys = expand_dfu_unlock_keys(dfu);
+                let external_dfu = expand_external_flash_init(hardware);
+                let flash_let = if external_dfu.is_some() {
+                    quote! {
+                        let flash = ::rmk::storage::async_flash_wrapper(
+                            ::rmk::dfu::init_flash_from_linkerscript_with_external_dfu(
+                                p.FLASH,
+                                dfu_mutex,
+                            )
+                        );
+                    }
+                } else {
+                    quote! {
+                        let flash = ::rmk::storage::async_flash_wrapper(
+                            ::rmk::dfu::init_flash_from_linkerscript(p.FLASH)
+                        );
+                    }
+                };
                 quote! {
                     #dfu_unlock_keys
-                    let flash = ::rmk::storage::async_flash_wrapper(
-                        ::rmk::dfu::init_flash(
-                            p.FLASH,
-                            #storage_offset,
-                            #storage_size,
-                            #state_offset,
-                            #state_size,
-                            #dfu_offset,
-                            #dfu_size,
-                        )
-                    );
+                    #external_dfu
+                    #flash_let
                 }
             }
             }
@@ -160,5 +161,120 @@ fn expand_dfu_unlock_keys(dfu: &DfuConfig) -> TokenStream2 {
         .collect::<Vec<_>>();
     quote! {
         const DFU_UNLOCK_KEYS: &[(u8, u8)] = &[#(#keys_expr), *];
+    }
+}
+
+/// Generate external SPI flash initialization for DFU.
+///
+/// Creates the external flash and wraps it in a `'static` mutex. The tokens
+/// must run inside `expand_flash_init`, directly before
+/// `init_flash_from_linkerscript_with_external_dfu`.
+///
+/// Returns `None` if `dfu_ext` is not enabled or no external flash is
+/// configured.
+fn expand_external_flash_init(hardware: &Hardware) -> Option<TokenStream2> {
+    let rmk_features = crate::codegen::feature::get_rmk_features();
+    if !is_feature_enabled(&rmk_features, "dfu_ext") {
+        return None;
+    }
+    let ext_flash = hardware.dfu.as_ref()?.external_flash.as_ref()?;
+    let spi_init = expand_spi_init(&hardware.chip.series, &ext_flash.spi);
+    let (spi_ty, cs_ty) = expand_flash_driver_type(&hardware.chip.series, &ext_flash.spi);
+    let flash_ty = quote! {
+        ::rmk::driver::w25q::W25qNorFlash<#spi_ty, #cs_ty>
+    };
+    let flash_init = match &ext_flash.driver {
+        ExternalFlashDriver::W25q => {
+            let size = ext_flash.flash_size;
+            quote! {
+                let ext_flash = ::rmk::driver::w25q::W25qNorFlash::new(dfu_spi, dfu_cs, #size);
+            }
+        }
+        ExternalFlashDriver::Custom => {
+            panic!(
+                "[dfu.external_flash] driver = \"custom\" is not supported by #[rmk_keyboard]; \
+                 use a `use_rust` setup calling `rmk::dfu::init_flash_from_linkerscript_with_external_dfu` manually"
+            )
+        }
+    };
+    Some(quote! {
+        #spi_init
+        #flash_init
+        static EXT_DFU_MUTEX: ::static_cell::StaticCell<
+            ::embassy_sync::blocking_mutex::Mutex<
+                ::embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex,
+                core::cell::RefCell<#flash_ty>,
+            >
+        > = ::static_cell::StaticCell::new();
+        let dfu_mutex = EXT_DFU_MUTEX.init(
+            ::embassy_sync::blocking_mutex::Mutex::new(core::cell::RefCell::new(ext_flash))
+        );
+    })
+}
+
+/// The concrete SPI and CS driver types, per chip series.
+///
+/// `instance` is the SPI peripheral name from the config (e.g. `"SPI1"`),
+/// formatted into an identifier.
+fn expand_flash_driver_type(
+    chip_series: &ChipSeries,
+    spi: &SpiConfig,
+) -> (TokenStream2, TokenStream2) {
+    let instance = format_ident!("{}", spi.instance);
+    match chip_series {
+        ChipSeries::Rp2040 => (
+            quote! { ::embassy_rp::spi::Spi<'static, ::embassy_rp::peripherals::#instance, ::embassy_rp::spi::Blocking> },
+            quote! { ::embassy_rp::gpio::Output<'static> },
+        ),
+        ChipSeries::Nrf52 => (
+            quote! { ::embassy_nrf::spim::Spim<'static> },
+            quote! { ::embassy_nrf::gpio::Output<'static> },
+        ),
+        _ => panic!("External flash DFU is only supported on RP2040 and nRF52"),
+    }
+}
+
+fn expand_spi_init(chip_series: &ChipSeries, spi: &SpiConfig) -> TokenStream2 {
+    let instance = format_ident!("{}", spi.instance);
+    match chip_series {
+        ChipSeries::Rp2040 => {
+            let sck = format_ident!("{}", spi.sck);
+            let mosi = format_ident!("{}", spi.mosi);
+            let miso = format_ident!("{}", spi.miso);
+            let cs = format_ident!("{}", spi.cs.as_ref().unwrap());
+            quote! {
+                let dfu_spi = ::embassy_rp::spi::Spi::new_blocking(
+                    p.#instance,
+                    p.#sck,
+                    p.#mosi,
+                    p.#miso,
+                    ::embassy_rp::spi::Config::default(),
+                );
+                let dfu_cs = ::embassy_rp::gpio::Output::new(
+                    p.#cs,
+                    ::embassy_rp::gpio::Level::High,
+                );
+            }
+        }
+        ChipSeries::Nrf52 => {
+            let sck = format_ident!("{}", spi.sck);
+            let mosi = format_ident!("{}", spi.mosi);
+            let miso = format_ident!("{}", spi.miso);
+            let cs = format_ident!("{}", spi.cs.as_ref().unwrap());
+            quote! {
+                let mut dfu_spi_cfg = ::embassy_nrf::spim::Config::default();
+                dfu_spi_cfg.frequency = ::embassy_nrf::spim::Frequency::M8;
+                let dfu_spi = ::embassy_nrf::spim::Spim::new(
+                    p.#instance, Irqs,
+                    p.#sck, p.#miso, p.#mosi, dfu_spi_cfg,
+                );
+                let dfu_cs = ::embassy_nrf::gpio::Output::new(
+                    p.#cs,
+                    ::embassy_nrf::gpio::Level::High,
+                    ::embassy_nrf::gpio::OutputDrive::Standard,
+                );
+            }
+        }
+        _ => panic!("External flash DFU is only supported on RP2040 and nRF52"),
     }
 }

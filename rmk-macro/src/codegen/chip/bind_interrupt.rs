@@ -114,6 +114,25 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
     };
     let iqs5xx_interrupt = expand_iqs5xx_interrupts(&chip.series, &iqs5xx_config);
 
+    // External DFU flash SPI interrupt for nRF52
+    let ext_flash_spi_interrupt = {
+        let dfu = hardware.dfu.as_ref();
+        let ext_flash = dfu.and_then(|d| d.external_flash.as_ref());
+        if let Some(ext_flash) = ext_flash {
+            match chip.series {
+                rmk_config::resolved::hardware::ChipSeries::Nrf52 => {
+                    let instance = format_ident!("{}", ext_flash.spi.instance);
+                    quote! {
+                        #instance => ::embassy_nrf::spim::InterruptHandler<::embassy_nrf::peripherals::#instance>;
+                    }
+                }
+                _ => quote! {},
+            }
+        } else {
+            quote! {}
+        }
+    };
+
     match chip.series {
         rmk_config::resolved::hardware::ChipSeries::Stm32 => {
             // For stm32, bind USB interrupt and EXTI interrupts (if async_matrix is enabled)
@@ -266,6 +285,7 @@ pub(crate) fn bind_interrupt_default(hardware: &Hardware, item_mod: &ItemMod) ->
                     TIMER0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     RTC0 => ::nrf_sdc::mpsl::HighPrioInterruptHandler;
                     #pmw33xx_spi_interrupts
+                    #ext_flash_spi_interrupt
                     #iqs5xx_interrupt
                     #display_interrupt
                     #extern_irqs
