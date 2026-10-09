@@ -34,12 +34,16 @@ impl PointingProcessorController {
                 publish_event(PointingProcessorEvent {
                     device_id: 255,
                     mode: PointingMode::Scroll(rmk::input_device::pointing::ScrollConfig {
-                        multiplier_x: 1,
-                        divisor_x: 16,
-                        multiplier_y: 1,
-                        divisor_y: 16,
-                        invert_x: false,
-                        invert_y: false,
+                        wheel: rmk::input_device::pointing::ScrollAxis {
+                            multiplier: 1,
+                            divisor: 16,
+                            invert: false,
+                        },
+                        pan: rmk::input_device::pointing::ScrollAxis {
+                            multiplier: 1,
+                            divisor: 16,
+                            invert: false,
+                        },
                     }),
                 });
             }
