@@ -80,31 +80,22 @@ impl KeyboardTomlConfig {
         // Distinguish "USB not enabled" from "chip unknown to the USB map":
         // silently dropping USB here would misreport the user's config as the cause.
         let usb_info = if usb_enabled {
-            match get_usb_info(&chip.chip) {
-                Some(info) => Some(info),
-                None => {
-                    return Err(format!(
-                        "`usb_enable = true`, but chip \"{}\" has no USB mapping in RMK — set `usb_enable = false` in [keyboard], or report the missing chip at https://github.com/rmk-rs/rmk/issues",
-                        chip.chip
-                    ));
-                }
-            }
+            Some(get_usb_info(&chip.chip).ok_or_else(|| {
+                format!(
+                    "`usb_enable = true`, but chip \"{}\" has no USB mapping in RMK — set `usb_enable = false` in [keyboard], or report the missing chip at https://github.com/rmk-rs/rmk/issues",
+                    chip.chip
+                )
+            })?)
         } else {
             None
         };
-        let ble_config = self.ble.clone();
+        let ble_config = self.ble.as_ref().filter(|config| config.enabled).cloned();
 
         match (usb_info, ble_config) {
             (Some(usb_info), None) => Ok(CommunicationConfig::Usb(usb_info)),
-            (Some(usb_info), Some(ble_config)) => {
-                if !ble_config.enabled {
-                    Ok(CommunicationConfig::Usb(usb_info))
-                } else {
-                    Ok(CommunicationConfig::Both(usb_info, ble_config))
-                }
-            }
-            (None, Some(c)) if c.enabled => Ok(CommunicationConfig::Ble(c)),
-            _ => Err(
+            (Some(usb_info), Some(ble_config)) => Ok(CommunicationConfig::Both(usb_info, ble_config)),
+            (None, Some(ble_config)) => Ok(CommunicationConfig::Ble(ble_config)),
+            (None, None) => Err(
                 "keyboard.toml: no transport is enabled — set `usb_enable = true` in [keyboard], or `enabled = true` in [ble]"
                     .to_string(),
             ),
