@@ -68,6 +68,20 @@ steps = [
 ]
 expect = [["C"], []]
 
+# After quick-tap expires, typing B then using the same key for Shift+E must
+# resolve a fresh hold, even while the previous tap's gap window is still open.
+[[test]]
+name = "mod_tap_after_quick_tap_window_holds_on_other_press"
+behavior.morse = { profiles = { p0 = { quick_tap_timeout = "150ms" } } }
+steps = [
+  { tap = { pos = [3, 6], duration = 50 } },
+  { delay = 200 },
+  { press = [3, 6] },
+  { tap = { pos = [1, 4], duration = 30 } },
+  { release = [3, 6] },
+]
+expect = [["B"], [], ["LShift"], ["LShift", "E"], ["LShift"], []]
+
 # A mod-tap has no continuations, so its first release fires the tap and stashes
 # the key; the held re-press must then send the tap key rather than the modifier.
 [[test]]

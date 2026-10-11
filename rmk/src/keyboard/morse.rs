@@ -91,7 +91,12 @@ impl<'a> Keyboard<'a> {
                                 }
                             }
 
-                            k.state = KeyState::Pressed(pattern);
+                            // Simple tap-holds have no continuation once quick-tap is ruled out.
+                            k.state = KeyState::Pressed(if matches!(key_action, KeyAction::TapHold(..)) {
+                                MorsePattern::default()
+                            } else {
+                                pattern
+                            });
                             k.press_time = event_time;
                             k.timeout_time = timeout_time;
                         }
