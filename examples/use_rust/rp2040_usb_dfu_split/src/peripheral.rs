@@ -36,7 +36,8 @@ bind_interrupts!(struct Irqs {
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     info!("RMK peripheral start!");
-    let p = embassy_rp::init(Default::default());
+    let mut p = embassy_rp::init(Default::default());
+    let serial_number = rmk::config::rp2040_serial_number(p.FLASH.reborrow());
 
     let (row_pins, col_pins) = config_matrix_pins_rp!(peripherals: p, input: [PIN_9, PIN_11], output: [PIN_10, PIN_12]);
 
@@ -51,11 +52,11 @@ async fn main(_spawner: Spawner) {
     let dfu_driver = Driver::new(p.USB, Irqs);
 
     let dfu_device_config = DeviceConfig {
+        serial_number,
         vid: 0x4c4b,
         pid: 0x4643,
         manufacturer: "Haobo",
         product_name: "RMK Keyboard Peripheral",
-        serial_number: "vial:f64c2b3c:000001",
     };
 
     let mut dfu_led = DfuLedProcessor::new(Output::new(p.PIN_25, Level::Low), false);

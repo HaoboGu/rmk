@@ -174,7 +174,8 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
             if communication.ble_enabled() {
                 quote! {
                     let config = ::embassy_rp::config::Config::default();
-                    let p = ::embassy_rp::init(config);
+                    #[allow(unused_mut)]
+                    let mut p = ::embassy_rp::init(config);
 
                     #[cfg(feature = "skip-cyw43-firmware")]
                     let (fw, clm, btfw, nvram) = {
@@ -224,7 +225,8 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
             } else {
                 quote! {
                     let config = ::embassy_rp::config::Config::default();
-                    let p = ::embassy_rp::init(config);
+                    #[allow(unused_mut)]
+                    let mut p = ::embassy_rp::init(config);
                 }
             }
         }

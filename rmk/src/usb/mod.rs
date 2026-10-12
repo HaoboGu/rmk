@@ -7,6 +7,7 @@ use embassy_usb::class::hid::{HidProtocolMode, HidReader, HidReaderWriter, HidWr
 use embassy_usb::control::OutResponse;
 use embassy_usb::driver::{Driver, EndpointError};
 use embassy_usb::{Builder, Handler, UsbDevice};
+use rmk_types::DEVICE_INFO_STRING_MAX_LEN;
 use rmk_types::connection::{ConnectionType, UsbState};
 use static_cell::StaticCell;
 use usbd_hid::descriptor::AsInputReport;
@@ -197,19 +198,8 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(
     let mut usb_config = embassy_usb::Config::new(keyboard_config.vid, keyboard_config.pid);
     usb_config.manufacturer = Some(keyboard_config.manufacturer);
     usb_config.product = Some(keyboard_config.product_name);
-    // Informational tag (visible in `lsusb` & co); host discovery keys on the
-    // Rynk vendor interface triple, not the serial.
-    #[cfg(any(feature = "rynk", all(feature = "dongle", not(feature = "vial"))))]
-    let serial_number = {
-        static SERIAL: StaticCell<heapless::String<64>> = StaticCell::new();
-        let s = SERIAL.init(heapless::String::new());
-        let _ = s.push_str(rmk_types::protocol::rynk::RYNK_MAGIC);
-        let _ = s.push_str(keyboard_config.serial_number);
-        s.as_str()
-    };
-    #[cfg(not(any(feature = "rynk", all(feature = "dongle", not(feature = "vial")))))]
-    let serial_number = keyboard_config.serial_number;
-    usb_config.serial_number = Some(serial_number);
+    static SERIAL: StaticCell<heapless::String<DEVICE_INFO_STRING_MAX_LEN>> = StaticCell::new();
+    usb_config.serial_number = Some(SERIAL.init(keyboard_config.serial_number).as_str());
     usb_config.max_power = 450;
     usb_config.supports_remote_wakeup = true;
 
@@ -338,14 +328,8 @@ impl<D: Driver<'static>> UsbTransportBuilder<D> {
         config_descriptor: &'static mut [u8],
         #[cfg(feature = "dfu_split")] num_peripherals: usize,
     ) -> Self {
-        // nRF chips don't have a stable USB serial number unless one is derived
-        // from the FICR. Override here so user code doesn't have to know.
-        #[cfg(feature = "_nrf_ble")]
-        let device_config = {
-            let mut device_config = device_config;
-            device_config.serial_number = crate::ble::nrf::get_serial_number();
-            device_config
-        };
+        #[cfg(feature = "_dfu")]
+        let product_name = device_config.product_name;
         let mut builder: Builder<'static, D> = new_usb_builder(driver, device_config, config_descriptor);
         // Linux's usbhid driver auto-enables power/wakeup when it probes a
         // boot-protocol keyboard, so advertise Boot/Keyboard on the primary
@@ -368,7 +352,7 @@ impl<D: Driver<'static>> UsbTransportBuilder<D> {
         #[cfg(feature = "_dfu")]
         dfu::register_dfu_iface(
             &mut builder,
-            device_config.product_name,
+            product_name,
             #[cfg(feature = "dfu_split")]
             num_peripherals,
         );
@@ -539,6 +523,8 @@ async fn run_usb_logger<D: Driver<'static>>(logger_class: CdcAcmClass<'static, D
 
 #[cfg(any(feature = "usb_log", feature = "_dfu"))]
 pub async fn run_peripheral_usb<D: Driver<'static>>(driver: D, config: DeviceConfig<'static>) {
+    #[cfg(feature = "_dfu")]
+    let product_name = config.product_name;
     let mut builder = new_usb_builder(driver, config, default_config_descriptor());
 
     #[cfg(feature = "usb_log")]
@@ -549,7 +535,7 @@ pub async fn run_peripheral_usb<D: Driver<'static>>(driver: D, config: DeviceCon
     #[cfg(feature = "_dfu")]
     dfu::register_dfu_iface(
         &mut builder,
-        config.product_name,
+        product_name,
         #[cfg(feature = "dfu_split")]
         0,
     );
