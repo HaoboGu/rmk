@@ -6,11 +6,8 @@ use heapless::{String, Vec};
 use postcard::experimental::max_size::MaxSize;
 use serde::{Deserialize, Serialize};
 
-use crate::SERIAL_NUMBER_MAX_LEN;
+use crate::DEVICE_INFO_STRING_MAX_LEN;
 use crate::morse::MorseProfile;
-
-/// Maximum byte length of the `DeviceInfo` manufacturer and product name fields.
-pub const DEVICE_INFO_STRING_SIZE: usize = 32;
 
 /// Protocol version advertised during the connection handshake.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]
@@ -100,11 +97,11 @@ pub struct DeviceInfo {
     pub vendor_id: u16,
     pub product_id: u16,
     #[cfg_attr(feature = "wasm", tsify(type = "string"))]
-    pub manufacturer: String<DEVICE_INFO_STRING_SIZE>,
+    pub manufacturer: String<DEVICE_INFO_STRING_MAX_LEN>,
     #[cfg_attr(feature = "wasm", tsify(type = "string"))]
-    pub product_name: String<DEVICE_INFO_STRING_SIZE>,
+    pub product_name: String<DEVICE_INFO_STRING_MAX_LEN>,
     #[cfg_attr(feature = "wasm", tsify(type = "string"))]
-    pub serial_number: String<SERIAL_NUMBER_MAX_LEN>,
+    pub serial_number: String<DEVICE_INFO_STRING_MAX_LEN>,
 }
 
 impl MaxSize for DeviceInfo {
@@ -112,8 +109,7 @@ impl MaxSize for DeviceInfo {
     // `Vec<u8, N>`, so the Vec bound covers each string field.
     const POSTCARD_MAX_SIZE: usize = FirmwareVersion::POSTCARD_MAX_SIZE
         + 2 * u16::POSTCARD_MAX_SIZE
-        + 2 * crate::heapless_vec_max_size::<u8, DEVICE_INFO_STRING_SIZE>()
-        + crate::heapless_vec_max_size::<u8, SERIAL_NUMBER_MAX_LEN>();
+        + 3 * crate::heapless_vec_max_size::<u8, DEVICE_INFO_STRING_MAX_LEN>();
 }
 
 /// Current lock/unlock state of this Rynk session, returned by `GetLockStatus`
@@ -240,8 +236,8 @@ mod tests {
     #[test]
     fn round_trip_device_info() {
         // Fill strings and ids so varints take their full width.
-        let full: String<DEVICE_INFO_STRING_SIZE> = String::try_from("🦀🦀🦀🦀🦀🦀🦀🦀").unwrap();
-        assert_eq!(full.len(), DEVICE_INFO_STRING_SIZE);
+        let full: String<DEVICE_INFO_STRING_MAX_LEN> = String::try_from("🦀🦀🦀🦀🦀🦀🦀🦀").unwrap();
+        assert_eq!(full.len(), DEVICE_INFO_STRING_MAX_LEN);
         let info = DeviceInfo {
             rmk_version: FirmwareVersion {
                 major: 255,

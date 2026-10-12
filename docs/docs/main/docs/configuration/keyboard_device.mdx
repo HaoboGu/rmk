@@ -48,6 +48,8 @@ let rmk_config = RmkConfig {
 </Tab>
 </Tabs>
 
+For BLE keyboards, `manufacturer` can contain up to 32 UTF-8 bytes. The advertised `product_name` must fit in 16 UTF-8 bytes with RMK's advertising data.
+
 ## Selecting the chip or board
 
 Set either `chip` or `board` in the `[keyboard]` section, but not both. A `board` also selects its chip and applies the board's default settings.

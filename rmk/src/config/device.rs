@@ -1,5 +1,5 @@
 use embassy_sync::once_lock::OnceLock;
-use rmk_types::SERIAL_NUMBER_MAX_LEN;
+use rmk_types::DEVICE_INFO_STRING_MAX_LEN;
 
 /// Keyboard device identity for USB descriptors and BLE advertising
 #[derive(Clone, Copy, Debug)]
@@ -15,7 +15,7 @@ pub struct DeviceConfig<'a> {
     /// Stable per-device ID. Hosts see it after the host protocol's marker (`vial:f64c2b3c:` or
     /// `rynk:`), which replaces any marker already in it, or `RMK` when it is empty. The default
     /// derives it from the hardware UID on nRF and ESP32 BLE builds.
-    /// The ID and protocol marker together must fit in [`SERIAL_NUMBER_MAX_LEN`] bytes.
+    /// The ID and protocol marker together must fit in [`DEVICE_INFO_STRING_MAX_LEN`] bytes.
     pub serial_number: &'a str,
 }
 
@@ -29,7 +29,7 @@ const PROTOCOL_MARKER: &str = "";
 
 impl DeviceConfig<'_> {
     /// The serial number hosts see: the protocol marker, then the device ID or `RMK`.
-    pub(crate) fn host_serial_number(&self) -> heapless::String<SERIAL_NUMBER_MAX_LEN> {
+    pub(crate) fn host_serial_number(&self) -> heapless::String<DEVICE_INFO_STRING_MAX_LEN> {
         // Accept IDs that still carry a marker, including the older `vial:f64c2b3c;` form.
         let id = match self.serial_number.strip_prefix("vial:f64c2b3c") {
             Some(rest) => rest.trim_start_matches([':', ';']),
@@ -40,7 +40,7 @@ impl DeviceConfig<'_> {
         serial
             .push_str(PROTOCOL_MARKER)
             .and_then(|_| serial.push_str(id))
-            .expect("serial_number exceeds SERIAL_NUMBER_MAX_LEN including its protocol marker");
+            .expect("serial_number exceeds DEVICE_INFO_STRING_MAX_LEN including its protocol marker");
         serial
     }
 }
@@ -126,9 +126,9 @@ impl Default for DeviceConfig<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{DeviceConfig, PROTOCOL_MARKER, SERIAL_NUMBER_MAX_LEN, device_id};
+    use super::{DEVICE_INFO_STRING_MAX_LEN, DeviceConfig, PROTOCOL_MARKER, device_id};
 
-    fn host_serial(serial_number: &str) -> heapless::String<SERIAL_NUMBER_MAX_LEN> {
+    fn host_serial(serial_number: &str) -> heapless::String<DEVICE_INFO_STRING_MAX_LEN> {
         DeviceConfig {
             serial_number,
             ..DeviceConfig::default()
@@ -136,7 +136,7 @@ mod tests {
         .host_serial_number()
     }
 
-    fn marked(id: &str) -> heapless::String<SERIAL_NUMBER_MAX_LEN> {
+    fn marked(id: &str) -> heapless::String<DEVICE_INFO_STRING_MAX_LEN> {
         let mut serial = heapless::String::new();
         serial.push_str(PROTOCOL_MARKER).unwrap();
         serial.push_str(id).unwrap();
@@ -177,16 +177,16 @@ mod tests {
     #[test]
     fn serial_number_fills_the_shared_capacity() {
         let id = "0123456789abcdef0123456789abcdef";
-        let id = &id[..SERIAL_NUMBER_MAX_LEN - PROTOCOL_MARKER.len()];
+        let id = &id[..DEVICE_INFO_STRING_MAX_LEN - PROTOCOL_MARKER.len()];
         let serial = host_serial(id);
-        assert_eq!(serial.len(), SERIAL_NUMBER_MAX_LEN);
+        assert_eq!(serial.len(), DEVICE_INFO_STRING_MAX_LEN);
         assert_eq!(serial, marked(id));
     }
 
     #[test]
-    #[should_panic(expected = "serial_number exceeds SERIAL_NUMBER_MAX_LEN including its protocol marker")]
+    #[should_panic(expected = "serial_number exceeds DEVICE_INFO_STRING_MAX_LEN including its protocol marker")]
     fn serial_number_rejects_one_byte_over_capacity() {
         let id = "0123456789abcdef0123456789abcdef0";
-        host_serial(&id[..SERIAL_NUMBER_MAX_LEN + 1 - PROTOCOL_MARKER.len()]);
+        host_serial(&id[..DEVICE_INFO_STRING_MAX_LEN + 1 - PROTOCOL_MARKER.len()]);
     }
 }

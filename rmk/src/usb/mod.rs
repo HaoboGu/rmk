@@ -8,7 +8,7 @@ use embassy_usb::class::hid::{HidProtocolMode, HidReader, HidReaderWriter, HidWr
 use embassy_usb::control::OutResponse;
 use embassy_usb::driver::{Driver, EndpointError};
 use embassy_usb::{Builder, Handler, UsbDevice};
-use rmk_types::SERIAL_NUMBER_MAX_LEN;
+use rmk_types::DEVICE_INFO_STRING_MAX_LEN;
 use rmk_types::connection::{ConnectionType, UsbState};
 use static_cell::StaticCell;
 use usbd_hid::descriptor::AsInputReport;
@@ -200,7 +200,7 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(
     usb_config.manufacturer = Some(keyboard_config.manufacturer);
     usb_config.product = Some(keyboard_config.product_name);
     // Firmware builds one USB device, so the first serial number is the only one.
-    static SERIAL: OnceLock<heapless::String<SERIAL_NUMBER_MAX_LEN>> = OnceLock::new();
+    static SERIAL: OnceLock<heapless::String<DEVICE_INFO_STRING_MAX_LEN>> = OnceLock::new();
     usb_config.serial_number = Some(SERIAL.get_or_init(|| keyboard_config.host_serial_number()).as_str());
     usb_config.max_power = 450;
     usb_config.supports_remote_wakeup = true;

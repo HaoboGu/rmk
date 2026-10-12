@@ -1,13 +1,13 @@
 //! System handlers — handshake, device identity, reboot, bootloader jump, storage reset.
 
-use rmk_types::constants;
 use rmk_types::protocol::rynk::command::{
     BootloaderJump, GetCapabilities, GetDeviceInfo, GetLockStatus, GetVersion, Lock, Reboot, StorageReset, UnlockPoll,
 };
 use rmk_types::protocol::rynk::{
-    DEVICE_INFO_STRING_SIZE, DeviceCapabilities, DeviceInfo, FirmwareVersion, LockStatus, MAX_BULK_ITEMS,
-    MAX_BULK_KEYS, ProtocolVersion, RYNK_MAX_PAYLOAD_SIZE, RynkError, StorageResetMode,
+    DeviceCapabilities, DeviceInfo, FirmwareVersion, LockStatus, MAX_BULK_ITEMS, MAX_BULK_KEYS, ProtocolVersion,
+    RYNK_MAX_PAYLOAD_SIZE, RynkError, StorageResetMode,
 };
+use rmk_types::{DEVICE_INFO_STRING_MAX_LEN, constants};
 
 use super::super::RynkService;
 use super::Handle;
@@ -143,7 +143,7 @@ impl Handle<GetDeviceInfo> for RynkService<'_> {
 
 /// Copy `s` into the bounded wire string; over-long input is cut at the last
 /// whole char that fits, so multi-byte content can never panic or split.
-fn truncated(s: &str) -> heapless::String<DEVICE_INFO_STRING_SIZE> {
+fn truncated(s: &str) -> heapless::String<DEVICE_INFO_STRING_MAX_LEN> {
     let mut out = heapless::String::new();
     for c in s.chars() {
         if out.push(c).is_err() {

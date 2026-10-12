@@ -1,5 +1,4 @@
-use rmk_types::SERIAL_NUMBER_MAX_LEN;
-use rmk_types::ble::BLE_DIS_STRING_MAX_LEN;
+use rmk_types::DEVICE_INFO_STRING_MAX_LEN;
 use trouble_host::prelude::*;
 
 #[repr(u8)]
@@ -46,7 +45,7 @@ pub(crate) struct DeviceConfigurationService {
     #[characteristic(uuid = "2a50", read)]
     pub(crate) pnp_id: PnPID,
     #[characteristic(uuid = "2a25", read)]
-    pub(crate) serial_number: heapless::String<SERIAL_NUMBER_MAX_LEN>,
+    pub(crate) serial_number: heapless::String<DEVICE_INFO_STRING_MAX_LEN>,
     #[characteristic(uuid = "2a29", read)]
-    pub(crate) manufacturer_name: heapless::String<BLE_DIS_STRING_MAX_LEN>,
+    pub(crate) manufacturer_name: heapless::String<DEVICE_INFO_STRING_MAX_LEN>,
 }
