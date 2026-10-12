@@ -90,10 +90,8 @@ pub struct Fork {
     pub match_none: StateBits,
     /// Modifiers to keep active when the fork fires.
     pub kept_modifiers: ModifierCombination,
-    /// Whether this fork can be rebound via protocol.
-    /// This is a firmware-enforced policy — the protocol itself does not
-    /// reject writes to non-bindable forks; enforcement happens in the
-    /// firmware's SetFork handler.
+    /// Whether this fork's output is checked against other forks that have not
+    /// yet triggered, allowing chained replacements.
     pub bindable: bool,
 }
 
