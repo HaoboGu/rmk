@@ -461,6 +461,7 @@ Fork configuration includes the following parameters:
   - `trigger`: Defines the triggering key.
   - `negative_output`: A string defining the output action to be triggered when the conditions are not met
   - `positive_output`: A string defining the output action to be triggered when the conditions are met
+  - `layers`: A list of layers the trigger key must come from. Defaults to all layers (optional)
   - `match_any`: A string defining a combination of modifier keys, lock LEDs, mouse buttons (optional)
   - `match_none`: A string defining a combination of modifier keys, lock LEDs, mouse buttons (optional)
   - `kept_modifiers`: A string defining a combination of modifier keys, which should not be 'suppressed' from the keyboard state for the time the replacement action is executed (optional)
@@ -500,6 +501,9 @@ forks = [
 
   # Shift + Backspace output Delete key (inside a layer tap/hold)
   { trigger = "LT(2, Backspace)", negative_output = "LT(2, Backspace)", positive_output = "LT(2, Delete)", match_any = "LShift|RShift" },
+
+  # Shift + Backspace output Delete key, but only on layer 0
+  { trigger = "Backspace", negative_output = "Backspace", positive_output = "Delete", match_any = "LShift|RShift", layers = [0] },
 
   # Ctrl + play/pause will send next track. MediaPlayPause -> MediaNextTrack
   # Ctrl + Shift + play/pause will send previous track. MediaPlayPause -> MediaPrevTrack

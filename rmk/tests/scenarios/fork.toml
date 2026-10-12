@@ -3,19 +3,19 @@
 
 [layout]
 rows = 1
-cols = 4
+cols = 6
 map = """
-(0,0)  (0,1)  (0,2)  (0,3)
+(0,0)  (0,1)  (0,2)  (0,3)  (0,4)  (0,5)
 """
 
 [[keymap.layer]]
 keys = """
-LM(1, LShift)  LCtrl  Equal  Delete
+LM(1, LShift)  LCtrl  Equal  Delete  Kc1  No
 """
 
 [[keymap.layer]]
 keys = """
-_  _  Kp9  _
+_  _  Kp9  _  _  Kc1
 """
 
 [behavior.fork]
@@ -53,3 +53,15 @@ steps = [
   { release = [0, 0] },
 ]
 expect = [["LShift"], [], ["Kc9"], [], ["LShift"], ["LShift", "Delete"], ["LShift"], []]
+
+# Kc1 at (0,5) comes from layer 1; at (0,4) it falls through to layer 0.
+[[test]]
+name = "layers_match_source_layer"
+behavior.fork = { forks = [{ trigger = "Kc1", positive_output = "Kc2", negative_output = "Kc1", layers = [1], match_any = "LShift" }] }
+steps = [
+  { press = [0, 0] },
+  { tap = { pos = [0, 5], duration = 30 } },
+  { tap = { pos = [0, 4], duration = 30 } },
+  { release = [0, 0] },
+]
+expect = [["LShift"], [], ["Kc2"], [], ["LShift"], ["LShift", "Kc1"], ["LShift"], []]

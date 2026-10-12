@@ -468,12 +468,18 @@ fn expand_forks(
                 let match_none = fork.match_none.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
                 let kept = fork.kept_modifiers.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
                 let bindable = fork.bindable;
+                let layers = fork.layers;
 
                 if match_any.is_empty() && match_none.is_empty() {
                     panic!("\n❌ keyboard.toml: fork configuration missing match conditions!");
                 }
 
-                quote! { ::rmk::types::fork::Fork::new(#trigger, #negative_output, #positive_output, #match_any, #match_none, #kept.modifiers, #bindable) }
+                quote! {
+                    ::rmk::types::fork::Fork {
+                        layers: #layers,
+                        ..::rmk::types::fork::Fork::new(#trigger, #negative_output, #positive_output, #match_any, #match_none, #kept.modifiers, #bindable)
+                    }
+                }
             });
 
             quote! {

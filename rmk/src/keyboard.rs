@@ -893,6 +893,7 @@ impl<'a> Keyboard<'a> {
             leds: LedIndicator::from_bits(LOCK_LED_STATES.load(core::sync::atomic::Ordering::Relaxed)),
             mouse: MouseButtons::from_bits(self.mouse.report.buttons),
         };
+        let layer_bit = 1u32.checked_shl(self.keymap.pressed_layer(event.pos).into());
 
         let fork_states = &self.fork_states;
         let fork_keep_mask = &mut self.fork_keep_mask;
@@ -904,7 +905,11 @@ impl<'a> Keyboard<'a> {
 
             'bind: loop {
                 for (i, fork) in forks.iter().enumerate() {
-                    if !triggered_forks[i] && fork_states[i].is_none() && fork.trigger == replacement {
+                    if !triggered_forks[i]
+                        && fork_states[i].is_none()
+                        && fork.trigger == replacement
+                        && (fork.layers == u32::MAX || layer_bit.is_some_and(|bit| fork.layers & bit != 0))
+                    {
                         let decision = (fork.match_any & decision_state) != StateBits::default()
                             && (fork.match_none & decision_state) == StateBits::default();
 
@@ -2367,6 +2372,7 @@ mod test {
                 match_none: StateBits::default(),
                 kept_modifiers: ModifierCombination::default(),
                 bindable: false,
+                layers: u32::MAX,
             };
 
             //{ trigger = "Comma", negative_output = "Comma", positive_output = "Semicolon", match_any = "LShift|RShift" },
@@ -2384,6 +2390,7 @@ mod test {
                 match_none: StateBits::default(),
                 kept_modifiers: ModifierCombination::default(),
                 bindable: false,
+                layers: u32::MAX,
             };
 
             let mut keyboard = create_test_keyboard_with_forks(fork1, fork2);
@@ -2474,6 +2481,7 @@ mod test {
                     .with_left_shift(true)
                     .with_right_shift(true),
                 bindable: false,
+                layers: u32::MAX,
             };
 
             //{ trigger = "A", negative_output = "S", positive_output = "D", match_any = "MouseBtn5" },
@@ -2489,6 +2497,7 @@ mod test {
                 match_none: StateBits::default(),
                 kept_modifiers: ModifierCombination::default(),
                 bindable: false,
+                layers: u32::MAX,
             };
 
             let mut keyboard = create_test_keyboard_with_forks(fork1, fork2);
