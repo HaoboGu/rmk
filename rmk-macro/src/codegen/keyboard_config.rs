@@ -33,7 +33,7 @@ pub(crate) fn expand_device_config(
     let product_name = identity.product_name.clone();
     let manufacturer = identity.manufacturer.clone();
     let serial_number_tokens = match (&identity.serial_number, &hardware.chip.series) {
-        (Some(s), _) => quote! { ::rmk::config::build_serial_number(Some(#s), &[]) },
+        (Some(s), _) => quote! { ::rmk::config::build_serial_number(#s) },
         // RMK reads the nRF device ID or the ESP32 MAC address itself on BLE builds.
         (None, ChipSeries::Nrf52 | ChipSeries::Esp32) => {
             quote! { ::rmk::config::DeviceConfig::default().serial_number }
@@ -42,7 +42,7 @@ pub(crate) fn expand_device_config(
             quote! { ::rmk::config::rp2040_serial_number(p.FLASH.reborrow()) }
         }
         (None, ChipSeries::Stm32) => {
-            quote! { ::rmk::config::build_serial_number(None, &::embassy_stm32::uid::uid()) }
+            quote! { ::rmk::config::build_serial_number(&::embassy_stm32::uid::uid()) }
         }
     };
 

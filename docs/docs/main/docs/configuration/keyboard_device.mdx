@@ -128,7 +128,7 @@ If you don't set `serial_number`, RMK derives a 6-digit hex device serial ID fro
 | ESP32 | Last 3 bytes of the factory MAC address | Automatic |
 | nRF, BLE builds | Top 24 bits of the FICR device ID, or of the device address on nRF54 | Automatic |
 | RP2040 | Hash of the external flash's unique ID | Call `rp2040_serial_number` |
-| STM32 | Hash of the 96-bit unique ID | Call `build_serial_number(None, &uid)` |
+| STM32 | Hash of the 96-bit unique ID | Call `build_serial_number(&uid)` |
 
 ::: warning
 
@@ -153,7 +153,7 @@ serial_number = "board-0001"
 
 ```rust title="main.rs"
 let keyboard_device_config = DeviceConfig {
-    serial_number: rmk::config::build_serial_number(Some("board-0001"), &[]),
+    serial_number: rmk::config::build_serial_number("board-0001"),
     ..Default::default()
 };
 ```
@@ -163,7 +163,7 @@ let keyboard_device_config = DeviceConfig {
 
 RMK adds the protocol marker, so one value works with any host protocol. If the value already starts with `vial:f64c2b3c` or `rynk:`, as earlier RMK versions required for Vial, RMK replaces that marker.
 
-With the Rust API, `DeviceConfig.serial_number` owns the complete serial number, including the marker. Use `build_serial_number` to construct it before passing the configuration to USB, BLE, or Rynk. These components report the stored value without changing it.
+With the Rust API, `DeviceConfig.serial_number` owns the complete serial number, including the marker. `build_serial_number` accepts one input: a custom ID as `&str`, or a hardware UID as `&[u8]` or `&[u8; N]`. Construct the serial number before passing the configuration to USB, BLE, or Rynk. These components report the stored value without changing it.
 
 A device serial ID has two limits:
 
@@ -181,7 +181,7 @@ For STM32, pass the 96-bit unique ID to `build_serial_number`:
 ```rust title="main.rs"
 let uid = embassy_stm32::uid::uid();
 let keyboard_device_config = DeviceConfig {
-    serial_number: rmk::config::build_serial_number(None, &uid),
+    serial_number: rmk::config::build_serial_number(&uid),
     ..Default::default()
 };
 ```
@@ -197,4 +197,6 @@ let keyboard_device_config = DeviceConfig {
 };
 ```
 
-For another chip, call `build_serial_number(None, &uid)` with a stable UID. It uses a UID of up to 3 bytes as is and hashes a longer one, then adds the protocol marker. An empty UID falls back to `RMK`. Each call returns its own string without caching earlier inputs. A configured ID passed as `Some(id)` takes precedence over the UID; `Some("")` selects the `RMK` fallback.
+For another chip, call `build_serial_number(&uid)` with a stable UID. It uses a UID of up to 3 bytes as is and hashes a longer one, then adds the protocol marker. An empty string or UID falls back to `RMK`. Each call returns its own string without caching earlier inputs.
+
+The input type determines the conversion: `build_serial_number("123")` uses the custom ID `123`, while `build_serial_number(b"123")` encodes the UID bytes as `313233`. Pass a byte slice or array reference directly; do not convert a hardware UID to UTF-8 text.

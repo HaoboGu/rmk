@@ -349,13 +349,13 @@ mod tests {
         let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
         let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
 
-        for (configured, uid, expected) in [
-            (Some("vial:f64c2b3c;board-1"), &[0x01, 0x23, 0xab], "rynk:board-1"),
-            (None, &[0x01, 0x23, 0xab], "rynk:0123ab"),
+        for (serial_number, expected) in [
+            (build_serial_number("vial:f64c2b3c;board-1"), "rynk:board-1"),
+            (build_serial_number(&[0x01, 0x23, 0xab]), "rynk:0123ab"),
         ] {
             let config = RmkConfig {
                 device_config: DeviceConfig {
-                    serial_number: build_serial_number(configured, uid),
+                    serial_number,
                     ..Default::default()
                 },
                 ..Default::default()

@@ -67,7 +67,7 @@ async fn main(_spawner: Spawner) {
     let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH0, Irqs);
 
     let keyboard_device_config = DeviceConfig {
-        serial_number: rmk::config::build_serial_number(None, &embassy_rp::otp::get_chipid().unwrap().to_be_bytes()),
+        serial_number: rmk::config::build_serial_number(&embassy_rp::otp::get_chipid().unwrap().to_be_bytes()),
         vid: 0x4c4b,
         pid: 0x4643,
         manufacturer: "Haobo",
