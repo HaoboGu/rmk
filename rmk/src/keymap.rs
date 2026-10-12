@@ -334,40 +334,26 @@ impl KeyMapInner<'_> {
     }
 
     fn pop_layer_from_cache(&mut self, pos: KeyboardEventPos) -> u8 {
-        match pos {
+        let default_layer = self.behavior.default_layer;
+        let cache = match pos {
             KeyboardEventPos::Key(key_pos) => {
                 let ci = self.cache_index(key_pos.row as usize, key_pos.col as usize);
-                if let Some(cache) = self.layer_cache.get_mut(ci) {
-                    let layer = *cache;
-                    *cache = self.behavior.default_layer;
-                    return layer;
-                }
-                self.behavior.default_layer
+                self.layer_cache.get_mut(ci)
             }
-            KeyboardEventPos::RotaryEncoder(encoder_pos) => {
-                if encoder_pos.direction != Direction::None {
-                    let ci = self.encoder_cache_index(encoder_pos.id as usize, encoder_pos.direction as usize);
-                    if let Some(cache) = self.encoder_layer_cache.get_mut(ci) {
-                        let layer = *cache;
-                        *cache = self.behavior.default_layer;
-                        return layer;
-                    }
-                }
-                self.behavior.default_layer
+            KeyboardEventPos::RotaryEncoder(encoder_pos) if encoder_pos.direction != Direction::None => {
+                let ci = self.encoder_cache_index(encoder_pos.id as usize, encoder_pos.direction as usize);
+                self.encoder_layer_cache.get_mut(ci)
             }
             KeyboardEventPos::Touch(touch_pos) => {
                 let ci = self.touch_cache_index(touch_pos.id as usize, touch_pos.gesture);
-                if let Some(cache) = self.touch_layer_cache.get_mut(ci) {
-                    let layer = *cache;
-                    *cache = self.behavior.default_layer;
-                    return layer;
-                }
-                self.behavior.default_layer
+                self.touch_layer_cache.get_mut(ci)
             }
-            KeyboardEventPos::Combo(_) | KeyboardEventPos::Macro | KeyboardEventPos::Virtual(_) => {
-                self.behavior.default_layer
-            }
-        }
+            KeyboardEventPos::RotaryEncoder(_)
+            | KeyboardEventPos::Combo(_)
+            | KeyboardEventPos::Macro
+            | KeyboardEventPos::Virtual(_) => None,
+        };
+        cache.map_or(default_layer, |cache| core::mem::replace(cache, default_layer))
     }
 
     fn save_layer_cache(&mut self, pos: KeyboardEventPos, layer_num: u8) {
