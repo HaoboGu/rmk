@@ -56,6 +56,9 @@ pub mod protocol;
 #[cfg(feature = "steno")]
 pub mod steno;
 
+/// Maximum serial number length in bytes, including the host protocol marker.
+pub const SERIAL_NUMBER_MAX_LEN: usize = 32;
+
 /// Compute the maximum varint-encoded length for a given max value.
 /// Mirrors `postcard`'s internal `varint_size`.
 pub(crate) const fn varint_max_size(max_n: usize) -> usize {

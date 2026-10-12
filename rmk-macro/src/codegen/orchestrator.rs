@@ -5,7 +5,8 @@ use rmk_config::resolved::hardware::{
     BoardConfig, ChipSeries, KeyInfo, MatrixConfig, MatrixType, UniBodyConfig,
 };
 use rmk_config::resolved::{Behavior, Hardware, Host, Identity, Keymap, Layout};
-use rmk_types::ble::{BLE_ADV_NAME_MAX_LEN, BLE_DIS_SERIAL_NUMBER_MAX_LEN, BLE_DIS_STRING_MAX_LEN};
+use rmk_types::SERIAL_NUMBER_MAX_LEN;
+use rmk_types::ble::{BLE_ADV_NAME_MAX_LEN, BLE_DIS_STRING_MAX_LEN};
 
 use super::behavior::expand_behavior_config;
 use super::chip::bind_interrupt::expand_bind_interrupt;
@@ -70,7 +71,7 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
     )
     .unwrap_or_else(|err| panic!("{err}"));
 
-    // Over-budget strings would leave the keyboard undiscoverable or truncate its serial number.
+    // Over-budget strings would leave the keyboard undiscoverable or panic it on boot.
     let name_len = identity.product_name.len();
     let vendor_len = identity.manufacturer.len();
     // RMK replaces a protocol marker in the configured ID with the one for this build.
@@ -95,14 +96,9 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
         0
     };
     let serial_len = marker_len + serial_id.len();
-    let serial_max = if host.rynk_enabled {
-        32 // Rynk's `DEVICE_INFO_STRING_SIZE`
-    } else {
-        BLE_DIS_SERIAL_NUMBER_MAX_LEN
-    };
-    if serial_len > serial_max {
+    if serial_len > SERIAL_NUMBER_MAX_LEN {
         let msg = format!(
-            "keyboard.toml: `serial_number` is {serial_len} bytes with its protocol marker, but at most {serial_max} fit."
+            "keyboard.toml: `serial_number` is {serial_len} bytes with its protocol marker, but at most {SERIAL_NUMBER_MAX_LEN} fit."
         );
         return quote! { compile_error!(#msg); };
     }

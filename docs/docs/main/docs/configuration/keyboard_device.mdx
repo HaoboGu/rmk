@@ -164,9 +164,9 @@ RMK adds the protocol marker, so one value works with any host protocol. If the 
 A device serial ID has two limits:
 
 - It can contain only printable ASCII characters, without commas. Windows ignores a serial number with any other character.
-- It must fit in 46 bytes together with its protocol marker, or in 32 bytes with Rynk.
+- It must fit in 32 bytes together with its protocol marker: up to 18 bytes for the ID with Vial, 27 with Rynk, or 32 without a marker.
 
-RMK checks a `keyboard.toml` value when it builds the firmware. With the Rust API, RMK shortens a value that's too long.
+RMK checks a `keyboard.toml` value when it builds the firmware. With the Rust API, a value that's too long causes a panic when RMK constructs the serial number. RMK never truncates the serial number.
 
 ### Reading the hardware UID with the Rust API
 
