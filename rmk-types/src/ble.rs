@@ -7,8 +7,11 @@ use serde::{Deserialize, Serialize};
 /// UUIDs (6) and the appearance (4) claim the rest of its 31 bytes.
 pub const BLE_ADV_NAME_MAX_LEN: usize = 16;
 
-/// Capacity of a Device Information Service string, in static RAM whatever it holds.
+/// Capacity of the Device Information Service manufacturer string, in static RAM.
 pub const BLE_DIS_STRING_MAX_LEN: usize = 24;
+
+/// Longest serial number: the Vial discovery marker followed by a 32-byte device ID.
+pub const BLE_DIS_SERIAL_NUMBER_MAX_LEN: usize = 46;
 
 /// BLE state (what the BLE subsystem is currently doing).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MaxSize)]

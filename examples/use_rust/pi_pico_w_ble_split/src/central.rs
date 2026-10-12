@@ -52,7 +52,8 @@ const FLASH_SIZE: usize = 2 * 1024 * 1024;
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    let p = embassy_rp::init(Default::default());
+    let mut p = embassy_rp::init(Default::default());
+    let serial_number = rmk::config::rp2040_serial_number(p.FLASH.reborrow());
 
     #[cfg(feature = "skip-cyw43-firmware")]
     let (fw, clm, btfw, nvram) = {
@@ -112,6 +113,7 @@ async fn main(spawner: Spawner) {
     let flash = Flash::<_, Async, FLASH_SIZE>::new(p.FLASH, p.DMA_CH1, Irqs);
 
     let keyboard_device_config = DeviceConfig {
+        serial_number,
         vid: 0x4c4c,
         pid: 0x464c,
         manufacturer: "Haobo",

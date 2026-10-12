@@ -1,12 +1,12 @@
 # Keyboard Device
 
-Keyboard device configuration contains keyboard name, USB VID/PID, etc, which is the information about your keyboard that appears to the operating system or identifies your device.
-
-## Basic Configuration
-
-The keyboard device info is defined in `[keyboard]` section of `keyboard.toml`, or `device_config` field in `RmkConfig` struct:
-
 import { Rust, Toml, Tab, Tabs } from '@theme'
+
+Keyboard device settings control how your keyboard identifies itself to computers: its USB vendor and product IDs, manufacturer, product name, and serial number. In `keyboard.toml`, they also select the chip or board that RMK builds for.
+
+## Configuring the keyboard device
+
+Set device information in the `[keyboard]` section of `keyboard.toml`. With the Rust API, set it in the `device_config` field of `RmkConfig`.
 
 <Tabs>
 <Tab label={<Toml />}>
@@ -18,7 +18,7 @@ vendor_id = 0x4c4b                # USB vendor ID (16-bit hex)
 product_id = 0x4643               # USB product ID (16-bit hex)
 manufacturer = "YourName"         # (Optional) Manufacturer string, defaults to "RMK"
 product_name = "KeyboardName"     # (Optional) USB product string and BLE device name, defaults to "RMK Keyboard"
-serial_number = "my-firmware-v1"  # (Optional) Serial number; defaults to rmk:<version> (with a vial: prefix for Vial builds)
+# serial_number = "board-0001"    # (Optional) Device Serial ID; defaults to one derived from the hardware UID
 chip = "nrf52840"                 # Target microcontroller
 usb_enable = true                 # (Optional) Enable USB functionality. If omitted, RMK uses the board/chip default.
 ```
@@ -34,8 +34,8 @@ let keyboard_device_config = DeviceConfig {
     pid: 0x4643,
     manufacturer: "Haobo",
     product_name: "RMK Keyboard",
-    // Omit serial_number to use RMK's default version stamp (Vial builds get the
-    // vial: marker automatically).
+    // nRF BLE and ESP32 BLE builds derive the device serial ID from the hardware UID;
+    // other targets fall back to `RMK`.
     ..Default::default()
 };
 
@@ -48,81 +48,149 @@ let rmk_config = RmkConfig {
 </Tab>
 </Tabs>
 
+## Selecting the chip or board
+
+Set either `chip` or `board` in the `[keyboard]` section, but not both. A `board` also selects its chip and applies the board's default settings.
+
+To build for a chip, set `chip`:
+
+```toml title="keyboard.toml"
+[keyboard]
+chip = "nrf52840"
+```
+
+To build for a supported development board, set `board`:
+
+```toml title="keyboard.toml"
+[keyboard]
+board = "nice!nano_v2"
+```
+
+### Supported chips
+
+The `chip` setting accepts chips from four families:
+
+- **Espressif ESP32**: `esp32c3`, `esp32c6`, `esp32h2`, `esp32s3`
+- **Nordic nRF52**: `nrf52840`, `nrf52833`, `nrf52832`, `nrf52811`, `nrf52810`
+- **Raspberry Pi**: `rp2040`
+- **STM32**: Any STM32 chip with USB that [embassy-stm32](https://github.com/embassy-rs/embassy/blob/main/embassy-stm32/Cargo.toml) supports
+
 ::: info
 
-If `serial_number` is omitted, RMK embeds a version stamp automatically. For Vial builds (the
-default), this is `vial:f64c2b3c;rmk:<version>`, which lets Vial discover the keyboard without a
-hardcoded serial override. Non-Vial builds use `rmk:<version>` without the Vial marker; builds with
-the `rynk` feature (or `dongle` without `vial`) prepend `rynk:` to the USB serial number, giving
-`rynk:rmk:<version>`. The Vial marker comes first because BLE's serial number characteristic is
-length limited, so a trailing marker can be truncated away.
+`keyboard.toml` recognizes `rp2040` but not `rp2350` yet. To build for an RP2350, use the Rust API.
 
 :::
 
-::: tip Overriding the serial number
+### Supported development boards
 
-Set `serial_number` explicitly in `DeviceConfig` to use your own value instead of the RMK default.
-For Vial to discover the keyboard, the value must start with `vial:f64c2b3c`:
+The `board` setting accepts seven development boards. Board names are case-sensitive.
+
+- `bluemicro840`: nRF52840-based Pro Micro replacement
+- `nice!nano`: nRF52840-based wireless board
+- `nice!nano_v2`: Updated version of nice!nano
+- `nrfmicro`: nRF52840-based Pro Micro replacement
+- `pi_pico_w`: Raspberry Pi Pico W with Wi-Fi and BLE
+- `puchi_ble`: nRF52840-based wireless board
+- `XIAO BLE`: Seeed Studio XIAO nRF52840
+
+## Disabling USB
+
+Chips without full USB device support, such as the nRF52832 and ESP32-C3, have USB off by default. To turn off USB on a chip that has it, for example for a BLE-only keyboard, set `usb_enable = false`:
+
+```toml title="keyboard.toml"
+[keyboard]
+chip = "nrf52840"
+usb_enable = false
+```
+
+## About serial numbers
+
+Your keyboard reports a serial number over USB and BLE. RMK keeps a board's serial number the same across firmware upgrades and makes it differ between boards, so computers and tools can tell your boards apart.
+
+A serial number is a protocol marker followed by a device serial ID. Vial finds keyboards by the marker, so the marker depends on the host protocol the firmware uses:
+
+| Host protocol                  | Protocol marker  |
+| ------------------------------ | ---------------- |
+| Vial                           | `vial:f64c2b3c:` |
+| Rynk, or a dongle without Vial | `rynk:`          |
+| No host protocol               | None             |
+
+For example, a Vial keyboard with the device serial ID `0a1b2c` reports `vial:f64c2b3c:0a1b2c`. Rynk reports the same serial number in its device information.
+
+### Default device serial IDs
+
+If you don't set `serial_number`, RMK derives a 6-digit hex device serial ID from the chip's hardware UID. `keyboard.toml` projects read the UID automatically. With the Rust API, some chips need an extra call. For more information, see [Reading the hardware UID with the Rust API](#reading-the-hardware-uid-with-the-rust-api).
+
+| Chip | Hardware UID | With the Rust API |
+| --- | --- | --- |
+| ESP32 | Last 3 bytes of the factory MAC address | Automatic |
+| nRF, BLE builds | Top 24 bits of the FICR device ID, or of the device address on nRF54 | Automatic |
+| RP2040 | Hash of the external flash's unique ID | Call `rp2040_serial_number` |
+| STM32 | Hash of the 96-bit unique ID | Call `serial_number_from_uid` |
+
+::: warning
+
+If RMK can't read a UID, the device serial ID is `RMK`, and every such board reports the same serial number. Windows can mix up two connected boards that share a VID, PID, and serial number, so give each of these boards its own `serial_number`.
+
+:::
+
+### Setting a device serial ID
+
+Set `serial_number` to give a board a fixed device serial ID, for example to keep the serial number it reports today. Every board flashed with the same firmware reports this value, so set it only in firmware for a single board.
+
+<Tabs>
+<Tab label={<Toml />}>
+
+```toml title="keyboard.toml"
+[keyboard]
+serial_number = "board-0001"
+```
+
+</Tab>
+<Tab label={<Rust />}>
 
 ```rust title="main.rs"
-use rmk::config::DeviceConfig;
-
 let keyboard_device_config = DeviceConfig {
-    serial_number: "vial:f64c2b3c;my-firmware:1.0.0",
-    ..DeviceConfig::default()
+    serial_number: "board-0001",
+    ..Default::default()
 };
 ```
 
-:::
+</Tab>
+</Tabs>
 
-## Hardware Selection
+RMK adds the protocol marker, so one value works with any host protocol. If the value already starts with `vial:f64c2b3c` or `rynk:`, as earlier RMK versions required for Vial, RMK replaces that marker.
 
-You must specify either a `chip` or `board` in `keyboard.toml`, but not both:
+A device serial ID has two limits:
 
-**Option 1: Specify Chip**
+- It can contain only printable ASCII characters, without commas. Windows ignores a serial number with any other character.
+- It must fit in 46 bytes together with its protocol marker, or in 32 bytes with Rynk.
 
-```toml
-[keyboard]
-chip = "nrf52840"  # Direct chip specification
+RMK checks a `keyboard.toml` value when it builds the firmware. With the Rust API, RMK shortens a value that's too long.
+
+### Reading the hardware UID with the Rust API
+
+With the Rust API, `DeviceConfig::default()` reads the hardware UID only on nRF and ESP32 BLE builds. On other chips, read the UID and pass it to RMK.
+
+For STM32, pass the 96-bit unique ID to `serial_number_from_uid`:
+
+```rust title="main.rs"
+let uid = embassy_stm32::uid::uid();
+let keyboard_device_config = DeviceConfig {
+    serial_number: rmk::config::serial_number_from_uid(&uid),
+    ..Default::default()
+};
 ```
 
-**Option 2: Specify Board**
+For RP2040, call `rp2040_serial_number` before you pass `p.FLASH` to a storage or DFU driver:
 
-```toml
-[keyboard]
-board = "nice!nano_v2"  # Pre-configured board
+```rust title="main.rs"
+let mut p = embassy_rp::init(Default::default());
+let serial_number = rmk::config::rp2040_serial_number(p.FLASH.reborrow());
+let keyboard_device_config = DeviceConfig {
+    serial_number,
+    ..Default::default()
+};
 ```
 
-### Supported Hardware
-
-#### Supported Chips
-
-- **Nordic nRF52 Series**: `nrf52840`, `nrf52833`, `nrf52832`, `nrf52811`, `nrf52810`
-- **Espressif ESP32 Series**: `esp32c3`, `esp32c6`, `esp32h2`, `esp32s3`
-- **Raspberry Pi**: `rp2040`
-- **STM32 Series**: Any STM32 chip supported by [embassy-stm32](https://github.com/embassy-rs/embassy/blob/main/embassy-stm32/Cargo.toml) with USB capability
-
-::: info `rp2350` is currently supported via the Rust API examples, but `keyboard.toml` chip selection only recognizes `rp2040` for now. :::
-
-#### Supported Development Boards
-
-- `nice!nano` - nRF52840-based wireless board
-- `nice!nano_v2` - Updated version of nice!nano
-- `pi_pico_w` - Raspberry Pi Pico W with WiFi/BLE
-- `XIAO BLE` - Seeed Studio XIAO nRF52840
-- `nrfmicro` - nRF52840-based Pro Micro replacement
-- `bluemicro840` - nRF52840-based Pro Micro replacement
-- `puchi_ble` - nRF52840-based wireless board
-
-::: tip Board names are case-sensitive. :::
-
-## USB Configuration
-
-For microcontrollers that lack full USB device functionality (such as the nRF52832 or ESP32-C3), the chip default config already disables USB, so `usb_enable = false` only needs to be set explicitly when your chip's default enables it:
-
-```toml
-[keyboard]
-chip = "nrf52832"
-usb_enable = false  # Disable USB for chips without USB support
-```
-
+For another chip, pass any stable UID to `serial_number_from_uid`. It uses a UID of up to 3 bytes as is and hashes a longer one. It keeps its first result, so later calls return the same ID.

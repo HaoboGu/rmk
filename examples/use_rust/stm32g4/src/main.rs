@@ -42,7 +42,13 @@ async fn main(_spawner: Spawner) {
     let driver = Driver::new(p.USB, Irqs, p.PA12, p.PA11);
 
     // Keyboard config
-    let rmk_config = RmkConfig::default();
+    let rmk_config = RmkConfig {
+        device_config: rmk::config::DeviceConfig {
+            serial_number: rmk::config::serial_number_from_uid(&embassy_stm32::uid::uid()),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
 
     // Initialize the keymap
     let mut keymap_data = KeymapData::new(keymap::get_default_keymap());

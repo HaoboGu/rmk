@@ -1,5 +1,6 @@
 use embassy_futures::join::join5;
 use embassy_futures::select::{Either, select};
+use embassy_sync::once_lock::OnceLock;
 use embassy_sync::signal::Signal;
 #[cfg(feature = "usb_log")]
 use embassy_usb::class::cdc_acm::CdcAcmClass;
@@ -7,6 +8,7 @@ use embassy_usb::class::hid::{HidProtocolMode, HidReader, HidReaderWriter, HidWr
 use embassy_usb::control::OutResponse;
 use embassy_usb::driver::{Driver, EndpointError};
 use embassy_usb::{Builder, Handler, UsbDevice};
+use rmk_types::ble::BLE_DIS_SERIAL_NUMBER_MAX_LEN;
 use rmk_types::connection::{ConnectionType, UsbState};
 use static_cell::StaticCell;
 use usbd_hid::descriptor::AsInputReport;
@@ -197,19 +199,9 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(
     let mut usb_config = embassy_usb::Config::new(keyboard_config.vid, keyboard_config.pid);
     usb_config.manufacturer = Some(keyboard_config.manufacturer);
     usb_config.product = Some(keyboard_config.product_name);
-    // Informational tag (visible in `lsusb` & co); host discovery keys on the
-    // Rynk vendor interface triple, not the serial.
-    #[cfg(any(feature = "rynk", all(feature = "dongle", not(feature = "vial"))))]
-    let serial_number = {
-        static SERIAL: StaticCell<heapless::String<64>> = StaticCell::new();
-        let s = SERIAL.init(heapless::String::new());
-        let _ = s.push_str(rmk_types::protocol::rynk::RYNK_MAGIC);
-        let _ = s.push_str(keyboard_config.serial_number);
-        s.as_str()
-    };
-    #[cfg(not(any(feature = "rynk", all(feature = "dongle", not(feature = "vial")))))]
-    let serial_number = keyboard_config.serial_number;
-    usb_config.serial_number = Some(serial_number);
+    // Firmware builds one USB device, so the first serial number is the only one.
+    static SERIAL: OnceLock<heapless::String<BLE_DIS_SERIAL_NUMBER_MAX_LEN>> = OnceLock::new();
+    usb_config.serial_number = Some(SERIAL.get_or_init(|| keyboard_config.host_serial_number()).as_str());
     usb_config.max_power = 450;
     usb_config.supports_remote_wakeup = true;
 
@@ -338,14 +330,6 @@ impl<D: Driver<'static>> UsbTransportBuilder<D> {
         config_descriptor: &'static mut [u8],
         #[cfg(feature = "dfu_split")] num_peripherals: usize,
     ) -> Self {
-        // nRF chips don't have a stable USB serial number unless one is derived
-        // from the FICR. Override here so user code doesn't have to know.
-        #[cfg(feature = "_nrf_ble")]
-        let device_config = {
-            let mut device_config = device_config;
-            device_config.serial_number = crate::ble::nrf::get_serial_number();
-            device_config
-        };
         let mut builder: Builder<'static, D> = new_usb_builder(driver, device_config, config_descriptor);
         // Linux's usbhid driver auto-enables power/wakeup when it probes a
         // boot-protocol keyboard, so advertise Boot/Keyboard on the primary

@@ -1,8 +1,5 @@
-use rmk_types::ble::BLE_DIS_STRING_MAX_LEN;
+use rmk_types::ble::{BLE_DIS_SERIAL_NUMBER_MAX_LEN, BLE_DIS_STRING_MAX_LEN};
 use trouble_host::prelude::*;
-
-// The one string RMK supplies itself; `rmk_macro` rejects over-long ones from keyboard.toml.
-const _: () = core::assert!(crate::config::RMK_BUILD_INFO.len() <= BLE_DIS_STRING_MAX_LEN);
 
 #[repr(u8)]
 #[derive(Clone, Copy)]
@@ -47,12 +44,8 @@ impl Default for PnPID {
 pub(crate) struct DeviceConfigurationService {
     #[characteristic(uuid = "2a50", read)]
     pub(crate) pnp_id: PnPID,
-    #[characteristic(
-        uuid = "2a25",
-        read,
-        value = heapless::String::try_from("vial:f64c2b3c:000001").unwrap()
-    )]
-    pub(crate) serial_number: heapless::String<BLE_DIS_STRING_MAX_LEN>,
+    #[characteristic(uuid = "2a25", read)]
+    pub(crate) serial_number: heapless::String<BLE_DIS_SERIAL_NUMBER_MAX_LEN>,
     #[characteristic(uuid = "2a29", read)]
     pub(crate) manufacturer_name: heapless::String<BLE_DIS_STRING_MAX_LEN>,
 }

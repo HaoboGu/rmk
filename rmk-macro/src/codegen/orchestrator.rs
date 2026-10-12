@@ -5,7 +5,7 @@ use rmk_config::resolved::hardware::{
     BoardConfig, ChipSeries, KeyInfo, MatrixConfig, MatrixType, UniBodyConfig,
 };
 use rmk_config::resolved::{Behavior, Hardware, Host, Identity, Keymap, Layout};
-use rmk_types::ble::{BLE_ADV_NAME_MAX_LEN, BLE_DIS_STRING_MAX_LEN};
+use rmk_types::ble::{BLE_ADV_NAME_MAX_LEN, BLE_DIS_SERIAL_NUMBER_MAX_LEN, BLE_DIS_STRING_MAX_LEN};
 
 use super::behavior::expand_behavior_config;
 use super::chip::bind_interrupt::expand_bind_interrupt;
@@ -19,7 +19,8 @@ use super::feature::{get_rmk_features, is_feature_enabled};
 use super::import::expand_custom_imports;
 use super::input_device::expand_input_device_config;
 use super::keyboard_config::{
-    expand_keyboard_info, expand_lock_config, expand_vial_config, read_keyboard_toml_config,
+    expand_device_config, expand_keyboard_info, expand_lock_config, expand_vial_config,
+    read_keyboard_toml_config,
 };
 use super::keymap::expand_default_keymap;
 use super::matrix::{expand_bootmagic_check, expand_matrix_config};
@@ -69,14 +70,45 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
     )
     .unwrap_or_else(|err| panic!("{err}"));
 
-    // Over-budget strings would leave the keyboard undiscoverable or panic it on boot.
+    // Over-budget strings would leave the keyboard undiscoverable or truncate its serial number.
     let name_len = identity.product_name.len();
     let vendor_len = identity.manufacturer.len();
-    let serial_len = identity.serial_number.as_ref().map_or(0, String::len);
+    // RMK replaces a protocol marker in the configured ID with the one for this build.
+    let serial_id = identity.serial_number.as_deref().map_or("", |serial| {
+        match serial.strip_prefix("vial:f64c2b3c") {
+            Some(rest) => rest.trim_start_matches([':', ';']),
+            None => serial.strip_prefix("rynk:").unwrap_or(serial),
+        }
+    });
+    // Windows ignores a serial number containing any other byte.
+    if !serial_id
+        .bytes()
+        .all(|b| (0x20..0x7f).contains(&b) && b != b',')
+    {
+        return quote! { compile_error!("keyboard.toml: `serial_number` must be printable ASCII without commas."); };
+    }
+    let marker_len = if host.vial_enabled {
+        "vial:f64c2b3c:".len()
+    } else if host.rynk_enabled || is_feature_enabled(&rmk_features, "dongle") {
+        "rynk:".len()
+    } else {
+        0
+    };
+    let serial_len = marker_len + serial_id.len();
+    let serial_max = if host.rynk_enabled {
+        32 // Rynk's `DEVICE_INFO_STRING_SIZE`
+    } else {
+        BLE_DIS_SERIAL_NUMBER_MAX_LEN
+    };
+    if serial_len > serial_max {
+        let msg = format!(
+            "keyboard.toml: `serial_number` is {serial_len} bytes with its protocol marker, but at most {serial_max} fit."
+        );
+        return quote! { compile_error!(#msg); };
+    }
     for (field, len, max) in [
         ("product_name", name_len, BLE_ADV_NAME_MAX_LEN),
         ("manufacturer", vendor_len, BLE_DIS_STRING_MAX_LEN),
-        ("serial_number", serial_len, BLE_DIS_STRING_MAX_LEN),
     ] {
         if hardware.communication.ble_enabled() && len > max {
             let msg =
@@ -86,11 +118,11 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
     }
 
     // Generate imports and statics
-    let imports_and_statics =
-        expand_imports_and_constants(&identity, &host, &hardware, &behavior, &keymap);
+    let imports_and_statics = expand_imports_and_constants(&host, &hardware, &behavior, &keymap);
 
     // Generate main function body
     let main_function = expand_main(
+        &identity,
         &host,
         &hardware,
         &behavior,
@@ -154,14 +186,13 @@ fn validate_feature_config_parity(
 }
 
 pub(crate) fn expand_imports_and_constants(
-    identity: &Identity,
     host: &Host,
     hardware: &Hardware,
     behavior: &Behavior,
     keymap: &Keymap,
 ) -> TokenStream2 {
     // Generate keyboard info and number of rows/cols/layers
-    let keyboard_info_static_var = expand_keyboard_info(identity, keymap);
+    let keyboard_info_static_var = expand_keyboard_info(keymap);
     // Generate default keymap
     let default_keymap = expand_default_keymap(keymap, behavior);
     // Generate vial config
@@ -211,7 +242,9 @@ pub(crate) fn expand_imports_and_constants(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn expand_main(
+    identity: &Identity,
     host: &Host,
     hardware: &Hardware,
     behavior: &Behavior,
@@ -224,6 +257,7 @@ fn expand_main(
     let imports = expand_custom_imports(&item_mod);
     let bind_interrupt = expand_bind_interrupt(hardware, &item_mod, hardware.dfu.as_ref());
     let chip_init = expand_chip_init(hardware, None, &item_mod);
+    let device_config = expand_device_config(identity, hardware);
     let usb_init = expand_usb_init(hardware, &item_mod);
     let flash_init = expand_flash_init(hardware, hardware.dfu.as_ref());
     let behavior_config = expand_behavior_config(behavior);
@@ -322,7 +356,7 @@ fn expand_main(
         quote! {
             #[allow(clippy::needless_update)]
             let rmk_config = ::rmk::config::RmkConfig {
-                device_config: KEYBOARD_DEVICE_CONFIG,
+                device_config: keyboard_device_config,
                 #vial_config
                 #lock_config
                 #rynk_layout_field
@@ -334,7 +368,7 @@ fn expand_main(
         quote! {
             #[allow(clippy::needless_update)]
             let rmk_config = ::rmk::config::RmkConfig {
-                device_config: KEYBOARD_DEVICE_CONFIG,
+                device_config: keyboard_device_config,
                 #vial_config
                 #lock_config
                 #rynk_layout_field
@@ -363,6 +397,8 @@ fn expand_main(
         #main_function_sig {
             // Initialize peripherals as `p`
             #chip_init
+
+            #device_config
 
             // Initialize usb driver as `driver`
             #usb_init

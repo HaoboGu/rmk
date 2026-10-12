@@ -23,7 +23,7 @@ use crate::codegen::input_device::encoder::expand_encoder_device;
 use crate::codegen::input_device::iqs5xx::{expand_iqs5xx_device, expand_iqs5xx_interrupts};
 use crate::codegen::input_device::pmw33xx::expand_pmw33xx_device;
 use crate::codegen::input_device::pmw3610::expand_pmw3610_device;
-use crate::codegen::keyboard_config::read_keyboard_toml_config;
+use crate::codegen::keyboard_config::{expand_device_config, read_keyboard_toml_config};
 use crate::codegen::matrix::{
     expand_bootmagic_check, expand_matrix_direct_pins, expand_matrix_input_output_pins,
 };
@@ -60,30 +60,6 @@ pub(crate) fn parse_split_peripheral_mod(
         .split_side_dfu(Some(id))
         .expect("failed to resolve split-side dfu config");
     hardware.dfu = dfu;
-
-    let dfu_enabled = cfg!(feature = "_dfu");
-    let usb_log_enabled = is_feature_enabled(&rmk_features, "usb_log");
-    let device_config = if dfu_enabled || usb_log_enabled {
-        let vid = identity.vendor_id;
-        let pid = identity.product_id;
-        let manufacturer = &identity.manufacturer;
-        let product_name = &identity.product_name;
-        let serial_number_tokens = match &identity.serial_number {
-            Some(s) => quote! { #s },
-            None => quote! { ::rmk::config::RMK_BUILD_INFO },
-        };
-        quote! {
-            const KEYBOARD_DEVICE_CONFIG: ::rmk::config::DeviceConfig = ::rmk::config::DeviceConfig {
-                vid: #vid,
-                pid: #pid,
-                manufacturer: #manufacturer,
-                product_name: #product_name,
-                serial_number: #serial_number_tokens,
-            };
-        }
-    } else {
-        quote! {}
-    };
 
     let main_function = expand_split_peripheral(
         id,
@@ -123,7 +99,6 @@ pub(crate) fn parse_split_peripheral_mod(
     };
 
     quote! {
-        #device_config
         #main_function_sig {
             // ::defmt::info!("RMK start!");
             #main_function
@@ -366,7 +341,7 @@ fn expand_bind_interrupt_for_split_peripheral(
 
 fn expand_split_peripheral(
     id: usize,
-    _identity: &Identity,
+    identity: &Identity,
     hardware: &Hardware,
     item_mod: ItemMod,
     rmk_features: &Option<Vec<String>>,
@@ -390,6 +365,9 @@ fn expand_split_peripheral(
 
     let imports = expand_custom_imports(&item_mod);
     let mut chip_init = expand_chip_init(hardware, Some(id), &item_mod);
+    if dfu_enabled || is_feature_enabled(rmk_features, "usb_log") {
+        chip_init.extend(expand_device_config(identity, hardware));
+    }
     if split_config.connection == SplitConnection::Ble {
         // Add storage when using BLE split
         let flash_init = expand_flash_init(hardware, dfu);
@@ -414,14 +392,14 @@ fn expand_split_peripheral(
             chip_init.extend(quote! { #dfu_interface });
             (
                 Some(quote! {
-                    ::rmk::usb::run_peripheral_usb(driver, KEYBOARD_DEVICE_CONFIG)
+                    ::rmk::usb::run_peripheral_usb(driver, keyboard_device_config)
                 }),
                 Some(quote! { dfu_iface.run() }),
             )
         } else {
             (
                 Some(quote! {
-                    ::rmk::usb::run_peripheral_usb(driver, KEYBOARD_DEVICE_CONFIG)
+                    ::rmk::usb::run_peripheral_usb(driver, keyboard_device_config)
                 }),
                 None,
             )

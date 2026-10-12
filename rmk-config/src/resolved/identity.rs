@@ -6,7 +6,7 @@ pub struct Identity {
     pub manufacturer: String,
     pub product_name: String,
     /// `None` when `serial_number` is absent from `keyboard.toml`; the codegen will
-    /// substitute `::rmk::config::RMK_BUILD_INFO` so the default is version-stamped.
+    /// generate a stable serial from the board's hardware UID.
     pub serial_number: Option<String>,
 }
 
