@@ -1,22 +1,21 @@
 use rmk_types::DEVICE_INFO_STRING_MAX_LEN;
 
-/// Keyboard device identity for USB descriptors and BLE advertising
+/// Device identity reported over USB, BLE, and Rynk.
 #[derive(Clone, Debug)]
 pub struct DeviceConfig<'a> {
-    /// Vender id
+    /// USB vendor ID.
     pub vid: u16,
-    /// Product id
+    /// USB product ID.
     pub pid: u16,
-    /// Manufacturer
+    /// Manufacturer name.
     pub manufacturer: &'a str,
-    /// Product name
+    /// Product name.
     pub product_name: &'a str,
-    /// Complete serial number reported over USB, BLE, and Rynk, including the protocol marker.
-    /// Use [`build_serial_number`] to construct it from a configured ID or hardware UID.
+    /// Complete serial number, including the protocol marker. See [`build_serial_number`].
     pub serial_number: heapless::String<DEVICE_INFO_STRING_MAX_LEN>,
 }
 
-// Serial number prefix for the enabled host protocol; Vial discovers keyboards by its marker.
+// Vial discovers keyboards by this prefix.
 #[cfg(feature = "vial")]
 const PROTOCOL_MARKER: &str = "vial:f64c2b3c:";
 #[cfg(all(not(feature = "vial"), any(feature = "rynk", feature = "dongle")))]
@@ -24,16 +23,15 @@ const PROTOCOL_MARKER: &str = rmk_types::protocol::rynk::RYNK_MAGIC;
 #[cfg(not(any(feature = "vial", feature = "rynk", feature = "dongle")))]
 const PROTOCOL_MARKER: &str = "";
 
-/// A custom device ID (`&str`) or hardware UID (`&[u8]` or `&[u8; N]`).
+/// A custom ID or hardware UID accepted by [`build_serial_number`].
 pub trait SerialNumberInput {
-    /// Convert the input to a complete serial number, including the protocol marker.
-    /// Panics if the result exceeds [`DEVICE_INFO_STRING_MAX_LEN`] bytes.
+    /// Build a serial number using the rules in [`build_serial_number`].
     fn into_serial_number(self) -> heapless::String<DEVICE_INFO_STRING_MAX_LEN>;
 }
 
 impl SerialNumberInput for &str {
     fn into_serial_number(self) -> heapless::String<DEVICE_INFO_STRING_MAX_LEN> {
-        // Accept IDs that still carry a marker, including the older `vial:f64c2b3c;` form.
+        // Older Vial serials used a semicolon before the device ID.
         let id = match self.strip_prefix("vial:f64c2b3c") {
             Some(rest) => rest.trim_start_matches([':', ';']),
             None => self.strip_prefix("rynk:").unwrap_or(self),
@@ -77,19 +75,21 @@ impl<const N: usize> SerialNumberInput for &[u8; N] {
     }
 }
 
-/// Build the complete host-visible serial number from a custom ID or hardware UID.
-/// Pass `&str` for a custom ID, or a byte slice/array reference for a UID. A UID of up
-/// to 3 bytes is encoded as six hex digits; a longer UID is hashed. Empty inputs fall
-/// back to `RMK`. Existing protocol markers are replaced with the marker for this build.
+/// Build a serial number with the current protocol marker.
 ///
-/// Panics if the result exceeds [`DEVICE_INFO_STRING_MAX_LEN`] bytes.
+/// Pass `&str` for a custom ID, or `&[u8]` / `&[u8; N]` for a UID. UIDs become six
+/// hex digits, hashing inputs longer than three bytes. Empty IDs fall back to `RMK`.
+/// Existing protocol markers are replaced.
+///
+/// # Panics
+///
+/// Panics if the result, including its marker, exceeds [`DEVICE_INFO_STRING_MAX_LEN`] bytes.
 pub fn build_serial_number(input: impl SerialNumberInput) -> heapless::String<DEVICE_INFO_STRING_MAX_LEN> {
     input.into_serial_number()
 }
 
-/// Build the serial number from the RP2040's external flash UID, falling back to `RMK`
-/// with the protocol marker when unavailable. Pass `p.FLASH.reborrow()` before constructing
-/// the storage driver.
+/// Build a serial number from the RP2040 flash UID, using `RMK` if unavailable.
+/// Pass `p.FLASH.reborrow()` before creating a storage or DFU driver.
 #[cfg(feature = "rp2040")]
 pub fn rp2040_serial_number(
     flash: embassy_rp::Peri<'_, embassy_rp::peripherals::FLASH>,
@@ -118,10 +118,10 @@ impl Default for DeviceConfig<'_> {
             let id = embassy_nrf::pac::FICR.deviceaddr(1).read();
             #[cfg(not(any(feature = "nrf54l15_ble", feature = "nrf54lm20_ble")))]
             let id = embassy_nrf::pac::FICR.deviceid(1).read();
-            // The top 24 bits keep the serial numbers nRF keyboards already report.
+            // Keep the 24 bits used by existing nRF device IDs.
             build_serial_number(&id.to_be_bytes()[..3])
         };
-        // The first three bytes are Espressif's OUI, shared across chips.
+        // Skip the vendor prefix shared by Espressif chips.
         #[cfg(feature = "_esp_ble")]
         let serial_number = build_serial_number(&esp_hal::efuse::base_mac_address().as_bytes()[3..]);
         #[cfg(not(any(feature = "_nrf_ble", feature = "_esp_ble")))]

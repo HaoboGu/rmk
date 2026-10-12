@@ -34,7 +34,7 @@ pub(crate) fn expand_device_config(
     let manufacturer = identity.manufacturer.clone();
     let serial_number_tokens = match (&identity.serial_number, &hardware.chip.series) {
         (Some(s), _) => quote! { ::rmk::config::build_serial_number(#s) },
-        // RMK reads the nRF device ID or the ESP32 MAC address itself on BLE builds.
+        // nRF and ESP32 BLE defaults read the hardware ID.
         (None, ChipSeries::Nrf52 | ChipSeries::Esp32) => {
             quote! { ::rmk::config::DeviceConfig::default().serial_number }
         }

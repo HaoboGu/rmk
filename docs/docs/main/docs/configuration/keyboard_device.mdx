@@ -107,9 +107,9 @@ usb_enable = false
 
 ## About serial numbers
 
-Your keyboard reports a serial number over USB and BLE. RMK keeps a board's serial number the same across firmware upgrades and makes it differ between boards, so computers and tools can tell your boards apart.
+RMK reports the same serial number over USB, BLE, and Rynk. It contains a protocol marker and a device ID, so an RMK version change alone does not change it.
 
-A serial number is a protocol marker followed by a device serial ID. Vial finds keyboards by the marker, so the marker depends on the host protocol the firmware uses:
+The host protocol selects the marker. Vial uses its marker to discover keyboards.
 
 | Host protocol                  | Protocol marker  |
 | ------------------------------ | ---------------- |
@@ -117,28 +117,28 @@ A serial number is a protocol marker followed by a device serial ID. Vial finds 
 | Rynk, or a dongle without Vial | `rynk:`          |
 | No host protocol               | None             |
 
-For example, a Vial keyboard with the device serial ID `0a1b2c` reports `vial:f64c2b3c:0a1b2c`. Rynk reports the same serial number in its device information.
+For example, Vial reports `vial:f64c2b3c:0a1b2c` for the device ID `0a1b2c`.
 
 ### Default device serial IDs
 
-If you don't set `serial_number`, RMK derives a 6-digit hex device serial ID from the chip's hardware UID. `keyboard.toml` projects read the UID automatically. With the Rust API, some chips need an extra call. For more information, see [Reading the hardware UID with the Rust API](#reading-the-hardware-uid-with-the-rust-api).
+Omit `serial_number` to derive a six-digit hex ID from hardware where available. TOML projects read the UID automatically; the Rust API needs the calls listed below.
 
 | Chip | Hardware UID | With the Rust API |
 | --- | --- | --- |
-| ESP32 | Last 3 bytes of the factory MAC address | Automatic |
+| ESP32, BLE builds | Last 3 bytes of the factory MAC address | Automatic |
 | nRF, BLE builds | Top 24 bits of the FICR device ID, or of the device address on nRF54 | Automatic |
 | RP2040 | Hash of the external flash's unique ID | Call `rp2040_serial_number` |
 | STM32 | Hash of the 96-bit unique ID | Call `build_serial_number(&uid)` |
 
 ::: warning
 
-If RMK can't read a UID, the device serial ID is `RMK`, and every such board reports the same serial number. Windows can mix up two connected boards that share a VID, PID, and serial number, so give each of these boards its own `serial_number`.
+Without a usable UID, RMK uses `RMK` as the device ID. Windows can confuse boards with the same VID, PID, and serial number; give each such board a distinct ID.
 
 :::
 
 ### Setting a device serial ID
 
-Set `serial_number` to give a board a fixed device serial ID, for example to keep the serial number it reports today. Every board flashed with the same firmware reports this value, so set it only in firmware for a single board.
+Set `serial_number` to assign a fixed device ID. Every board flashed with the same value reports the same ID.
 
 <Tabs>
 <Tab label={<Toml />}>
@@ -161,22 +161,22 @@ let keyboard_device_config = DeviceConfig {
 </Tab>
 </Tabs>
 
-RMK adds the protocol marker, so one value works with any host protocol. If the value already starts with `vial:f64c2b3c` or `rynk:`, as earlier RMK versions required for Vial, RMK replaces that marker.
+RMK replaces existing Vial or Rynk markers, including Vial's legacy semicolon form, with the current protocol marker.
 
-With the Rust API, `DeviceConfig.serial_number` owns the complete serial number, including the marker. `build_serial_number` accepts one input: a custom ID as `&str`, or a hardware UID as `&[u8]` or `&[u8; N]`. Construct the serial number before passing the configuration to USB, BLE, or Rynk. These components report the stored value without changing it.
+In Rust, `DeviceConfig.serial_number` stores the complete, owned string returned by `build_serial_number`.
 
 A device serial ID has two limits:
 
 - It can contain only printable ASCII characters, without commas. Windows ignores a serial number with any other character.
 - It must fit in 32 bytes together with its protocol marker: up to 18 bytes for the ID with Vial, 27 with Rynk, or 32 without a marker.
 
-RMK checks a `keyboard.toml` value when it builds the firmware. With the Rust API, a value that's too long causes a panic when RMK constructs the serial number. RMK never truncates the serial number.
+RMK checks TOML values at build time. The Rust builder panics if the final string is too long; it never truncates.
 
 ### Reading the hardware UID with the Rust API
 
-With the Rust API, `DeviceConfig::default()` reads the hardware UID only on nRF and ESP32 BLE builds. On other chips, read the UID and pass it to RMK.
+Only nRF and ESP32 BLE builds read the UID in `DeviceConfig::default()`. Use the following calls on other targets.
 
-For STM32, pass the 96-bit unique ID to `build_serial_number`:
+For STM32:
 
 ```rust title="main.rs"
 let uid = embassy_stm32::uid::uid();
@@ -186,7 +186,7 @@ let keyboard_device_config = DeviceConfig {
 };
 ```
 
-For RP2040, call `rp2040_serial_number` before you pass `p.FLASH` to a storage or DFU driver:
+For RP2040, read the flash UID before creating a storage or DFU driver:
 
 ```rust title="main.rs"
 let mut p = embassy_rp::init(Default::default());
@@ -197,6 +197,6 @@ let keyboard_device_config = DeviceConfig {
 };
 ```
 
-For another chip, call `build_serial_number(&uid)` with a stable UID. It uses a UID of up to 3 bytes as is and hashes a longer one, then adds the protocol marker. An empty string or UID falls back to `RMK`. Each call returns its own string without caching earlier inputs.
+For other chips, pass a stable UID as `&[u8]` or `&[u8; N]`. UIDs of up to three bytes become six hex digits; longer UIDs are hashed to the same length. Empty strings or UIDs use `RMK`.
 
-The input type determines the conversion: `build_serial_number("123")` uses the custom ID `123`, while `build_serial_number(b"123")` encodes the UID bytes as `313233`. Pass a byte slice or array reference directly; do not convert a hardware UID to UTF-8 text.
+The input type selects the conversion: `build_serial_number("123")` uses the custom ID `123`, while `build_serial_number(b"123")` encodes the UID as `313233` before adding the marker.

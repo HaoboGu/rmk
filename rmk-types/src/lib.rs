@@ -56,7 +56,7 @@ pub mod protocol;
 #[cfg(feature = "steno")]
 pub mod steno;
 
-/// Capacity of device information string buffers in bytes, including any serial number marker.
+/// Maximum device information string length in bytes, including serial number markers.
 pub const DEVICE_INFO_STRING_MAX_LEN: usize = 32;
 
 /// Compute the maximum varint-encoded length for a given max value.

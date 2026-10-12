@@ -5,8 +5,7 @@ pub struct Identity {
     pub product_id: u16,
     pub manufacturer: String,
     pub product_name: String,
-    /// `None` when `serial_number` is absent from `keyboard.toml`; the codegen will
-    /// generate a stable serial from the board's hardware UID.
+    /// Optional device ID; omitted values use the hardware UID when available.
     pub serial_number: Option<String>,
 }
 

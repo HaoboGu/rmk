@@ -71,17 +71,17 @@ pub(crate) fn parse_keyboard_mod(item_mod: syn::ItemMod) -> TokenStream2 {
     )
     .unwrap_or_else(|err| panic!("{err}"));
 
-    // Over-budget strings would leave the keyboard undiscoverable or panic it on boot.
+    // Reject oversized strings before firmware initialization.
     let name_len = identity.product_name.len();
     let vendor_len = identity.manufacturer.len();
-    // RMK replaces a protocol marker in the configured ID with the one for this build.
+    // Match the marker normalization in build_serial_number.
     let serial_id = identity.serial_number.as_deref().map_or("", |serial| {
         match serial.strip_prefix("vial:f64c2b3c") {
             Some(rest) => rest.trim_start_matches([':', ';']),
             None => serial.strip_prefix("rynk:").unwrap_or(serial),
         }
     });
-    // Windows ignores a serial number containing any other byte.
+    // Windows requires printable ASCII without commas.
     if !serial_id
         .bytes()
         .all(|b| (0x20..0x7f).contains(&b) && b != b',')
