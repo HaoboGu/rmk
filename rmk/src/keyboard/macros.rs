@@ -14,7 +14,7 @@
 #[cfg(feature = "host")]
 use core::ops::Range;
 
-use heapless::Deque;
+use heapless::{Deque, Vec};
 #[cfg(feature = "host")]
 use rmk_types::constants::MACRO_CHUNK_SIZE;
 use rmk_types::keyboard_macros::MacroOp;
@@ -75,6 +75,9 @@ pub(crate) struct Macros<'a> {
     #[cfg(all(feature = "host", feature = "storage"))]
     stored: bool,
     queue: Deque<Cursor, 4>,
+    /// The slots held at their pause, each keeping a place in `queue` for the
+    /// ops after it.
+    held: Vec<u8, 4>,
 }
 
 impl<'a> Macros<'a> {
@@ -91,6 +94,7 @@ impl<'a> Macros<'a> {
             #[cfg(all(feature = "host", feature = "storage"))]
             stored,
             queue: Deque::new(),
+            held: Vec::new(),
         }
     }
 
@@ -100,6 +104,13 @@ impl<'a> Macros<'a> {
         // Past the last slot the buffer holds whatever a longer save left behind.
         if slot as usize >= crate::MACRO_MAX_NUM {
             return true;
+        }
+        // Only a press that kept a place gets its release half.
+        if !pressed {
+            let Some(i) = self.held.iter().position(|&s| s == slot) else {
+                return true;
+            };
+            self.held.swap_remove(i);
         }
         let buf = &*self.buf;
         // Without Vial a host's buffer is lossless, so the defaults only seed it.
@@ -153,7 +164,18 @@ impl<'a> Macros<'a> {
             }
             (false, None) => return true,
         }
-        half.pos >= half.end || self.queue.push_back(half).is_ok()
+        let hold = pressed && pause.is_some();
+        let places = (half.pos < half.end) as usize + hold as usize;
+        if self.queue.len() + self.held.len() + places > self.queue.capacity() {
+            return false;
+        }
+        if hold {
+            let _ = self.held.push(slot);
+        }
+        if half.pos < half.end {
+            let _ = self.queue.push_back(half);
+        }
+        true
     }
 
     /// Pop the next queued op, dropping halves that ran out.
