@@ -44,7 +44,7 @@ async fn main(_spawner: Spawner) {
     // Keyboard config
     let rmk_config = RmkConfig {
         device_config: rmk::config::DeviceConfig {
-            serial_number: rmk::config::serial_number_from_uid(&embassy_stm32::uid::uid()),
+            serial_number: rmk::config::build_serial_number(None, &embassy_stm32::uid::uid()),
             ..Default::default()
         },
         ..Default::default()

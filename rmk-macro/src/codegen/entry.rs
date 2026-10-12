@@ -305,23 +305,28 @@ fn transport_setup(
     };
 
     let dfu_split_enabled = is_feature_enabled(&get_rmk_features(), "dfu_split");
+    let usb_device_config = if matches!(communication, CommunicationConfig::Both(_, _)) {
+        quote! { rmk_config.device_config.clone() }
+    } else {
+        quote! { rmk_config.device_config }
+    };
     let usb_prelude = if dfu_split_enabled && !dfu_interface.is_empty() {
         quote! {
             #dfu_interface
             let mut usb_transport = ::rmk::usb::UsbTransport::new(
                 driver,
-                rmk_config.device_config,
+                #usb_device_config,
                 #num_peripherals,
             )#with_host;
         }
     } else if !dfu_interface.is_empty() {
         quote! {
             #dfu_interface
-            let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config)#with_host;
+            let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, #usb_device_config)#with_host;
         }
     } else {
         quote! {
-            let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config)#with_host;
+            let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, #usb_device_config)#with_host;
         }
     };
     let ble_prelude = quote! {

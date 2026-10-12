@@ -251,7 +251,7 @@ async fn run_ble_keyboard<
     server
         .set(
             &server.device_config_service.serial_number,
-            &device_config.host_serial_number(),
+            &device_config.serial_number,
         )
         .unwrap();
     server

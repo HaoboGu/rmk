@@ -16,7 +16,7 @@ pub use behavior::{
 pub use ble_battery::BleBatteryConfig;
 #[cfg(feature = "rp2040")]
 pub use device::rp2040_serial_number;
-pub use device::{DeviceConfig, serial_number_from_uid};
+pub use device::{DeviceConfig, build_serial_number};
 #[cfg(feature = "rynk")]
 pub use lock::LockConfig;
 pub use positional::{Hand, PositionalConfig};

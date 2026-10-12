@@ -199,7 +199,7 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(
     usb_config.manufacturer = Some(keyboard_config.manufacturer);
     usb_config.product = Some(keyboard_config.product_name);
     static SERIAL: StaticCell<heapless::String<DEVICE_INFO_STRING_MAX_LEN>> = StaticCell::new();
-    usb_config.serial_number = Some(SERIAL.init(keyboard_config.host_serial_number()).as_str());
+    usb_config.serial_number = Some(SERIAL.init(keyboard_config.serial_number).as_str());
     usb_config.max_power = 450;
     usb_config.supports_remote_wakeup = true;
 
@@ -328,6 +328,8 @@ impl<D: Driver<'static>> UsbTransportBuilder<D> {
         config_descriptor: &'static mut [u8],
         #[cfg(feature = "dfu_split")] num_peripherals: usize,
     ) -> Self {
+        #[cfg(feature = "_dfu")]
+        let product_name = device_config.product_name;
         let mut builder: Builder<'static, D> = new_usb_builder(driver, device_config, config_descriptor);
         // Linux's usbhid driver auto-enables power/wakeup when it probes a
         // boot-protocol keyboard, so advertise Boot/Keyboard on the primary
@@ -350,7 +352,7 @@ impl<D: Driver<'static>> UsbTransportBuilder<D> {
         #[cfg(feature = "_dfu")]
         dfu::register_dfu_iface(
             &mut builder,
-            device_config.product_name,
+            product_name,
             #[cfg(feature = "dfu_split")]
             num_peripherals,
         );
@@ -521,6 +523,8 @@ async fn run_usb_logger<D: Driver<'static>>(logger_class: CdcAcmClass<'static, D
 
 #[cfg(any(feature = "usb_log", feature = "_dfu"))]
 pub async fn run_peripheral_usb<D: Driver<'static>>(driver: D, config: DeviceConfig<'static>) {
+    #[cfg(feature = "_dfu")]
+    let product_name = config.product_name;
     let mut builder = new_usb_builder(driver, config, default_config_descriptor());
 
     #[cfg(feature = "usb_log")]
@@ -531,7 +535,7 @@ pub async fn run_peripheral_usb<D: Driver<'static>>(driver: D, config: DeviceCon
     #[cfg(feature = "_dfu")]
     dfu::register_dfu_iface(
         &mut builder,
-        config.product_name,
+        product_name,
         #[cfg(feature = "dfu_split")]
         0,
     );

@@ -136,7 +136,7 @@ impl Handle<GetDeviceInfo> for RynkService<'_> {
             product_id: self.device.pid,
             manufacturer: truncated(self.device.manufacturer),
             product_name: truncated(self.device.product_name),
-            serial_number: self.device.host_serial_number(),
+            serial_number: self.device.serial_number.clone(),
         })
     }
 }
