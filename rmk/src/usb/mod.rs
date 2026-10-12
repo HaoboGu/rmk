@@ -1,6 +1,5 @@
 use embassy_futures::join::join5;
 use embassy_futures::select::{Either, select};
-use embassy_sync::once_lock::OnceLock;
 use embassy_sync::signal::Signal;
 #[cfg(feature = "usb_log")]
 use embassy_usb::class::cdc_acm::CdcAcmClass;
@@ -199,9 +198,8 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(
     let mut usb_config = embassy_usb::Config::new(keyboard_config.vid, keyboard_config.pid);
     usb_config.manufacturer = Some(keyboard_config.manufacturer);
     usb_config.product = Some(keyboard_config.product_name);
-    // Firmware builds one USB device, so the first serial number is the only one.
-    static SERIAL: OnceLock<heapless::String<DEVICE_INFO_STRING_MAX_LEN>> = OnceLock::new();
-    usb_config.serial_number = Some(SERIAL.get_or_init(|| keyboard_config.host_serial_number()).as_str());
+    static SERIAL: StaticCell<heapless::String<DEVICE_INFO_STRING_MAX_LEN>> = StaticCell::new();
+    usb_config.serial_number = Some(SERIAL.init(keyboard_config.host_serial_number()).as_str());
     usb_config.max_power = 450;
     usb_config.supports_remote_wakeup = true;
 
