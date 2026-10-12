@@ -362,10 +362,11 @@ fn expand_split_peripheral(
 
     // True exactly when the flash init defines `state_partition`/`dfu_partition`.
     let dfu_enabled = cfg!(feature = "_dfu");
+    let usb_enabled = dfu_enabled || is_feature_enabled(rmk_features, "usb_log");
 
     let imports = expand_custom_imports(&item_mod);
     let mut chip_init = expand_chip_init(hardware, Some(id), &item_mod);
-    if dfu_enabled || is_feature_enabled(rmk_features, "usb_log") {
+    if usb_enabled {
         chip_init.extend(expand_device_config(identity, hardware));
     }
     if split_config.connection == SplitConnection::Ble {
@@ -380,30 +381,23 @@ fn expand_split_peripheral(
         chip_init.extend(quote! { #flash_init });
     }
 
-    let usb_log_enabled = is_feature_enabled(rmk_features, "usb_log");
-    let usb_enabled = dfu_enabled || usb_log_enabled;
-
     // Run usb device if dfu or usb_log is enabled.
     let (usb_task_future, dfu_task) = if usb_enabled {
         let usb_init = expand_usb_init(hardware, &item_mod);
         chip_init.extend(usb_init);
-        if dfu_enabled {
+        let dfu_task = if dfu_enabled {
             let dfu_interface = expand_dfu_interface(dfu);
             chip_init.extend(quote! { #dfu_interface });
-            (
-                Some(quote! {
-                    ::rmk::usb::run_peripheral_usb(driver, keyboard_device_config)
-                }),
-                Some(quote! { dfu_iface.run() }),
-            )
+            Some(quote! { dfu_iface.run() })
         } else {
-            (
-                Some(quote! {
-                    ::rmk::usb::run_peripheral_usb(driver, keyboard_device_config)
-                }),
-                None,
-            )
-        }
+            None
+        };
+        (
+            Some(quote! {
+                ::rmk::usb::run_peripheral_usb(driver, keyboard_device_config)
+            }),
+            dfu_task,
+        )
     } else {
         (None, None)
     };

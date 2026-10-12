@@ -310,24 +310,11 @@ fn transport_setup(
     } else {
         quote! { rmk_config.device_config }
     };
-    let usb_prelude = if dfu_split_enabled && !dfu_interface.is_empty() {
-        quote! {
-            #dfu_interface
-            let mut usb_transport = ::rmk::usb::UsbTransport::new(
-                driver,
-                #usb_device_config,
-                #num_peripherals,
-            )#with_host;
-        }
-    } else if !dfu_interface.is_empty() {
-        quote! {
-            #dfu_interface
-            let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, #usb_device_config)#with_host;
-        }
-    } else {
-        quote! {
-            let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, #usb_device_config)#with_host;
-        }
+    let dfu_split_arg =
+        (dfu_split_enabled && !dfu_interface.is_empty()).then(|| quote! { , #num_peripherals });
+    let usb_prelude = quote! {
+        #dfu_interface
+        let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, #usb_device_config #dfu_split_arg)#with_host;
     };
     let ble_prelude = quote! {
         let mut ble_transport = ::rmk::ble::BleTransport::new(ble_controller, ble_addr, rmk_config #split_peripheral_matrices) #with_host;
