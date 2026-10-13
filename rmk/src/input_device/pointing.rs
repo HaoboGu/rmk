@@ -253,6 +253,7 @@ impl<S: PointingDriver> PointingDevice<S> {
         }
 
         loop {
+            embassy_futures::yield_now().await;
             let poll_wait = async {
                 if let Some(gpio) = self.sensor.motion_gpio() {
                     let _ = gpio.wait_for_low().await;
