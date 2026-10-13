@@ -290,18 +290,11 @@ impl<
     async fn read_keyboard_event(&mut self) -> KeyboardEvent {
         // Read until a valid rotary encoder event is detected
         if let Some(last_action) = self.last_action {
-            embassy_time::Timer::after_millis(5).await;
             self.last_action = None;
             return KeyboardEvent::rotary_encoder(self.id, last_action, false);
         }
 
         loop {
-            #[cfg(feature = "async_matrix")]
-            {
-                let (pin_a, pin_b) = self.pins();
-                embassy_futures::select::select(pin_a.wait_for_any_edge(), pin_b.wait_for_any_edge()).await;
-            }
-
             let direction = self.update();
 
             if direction != Direction::None && self.debounce_check() {
@@ -309,10 +302,14 @@ impl<
                 return KeyboardEvent::rotary_encoder(self.id, direction, true);
             }
 
+            #[cfg(feature = "async_matrix")]
+            {
+                let (pin_a, pin_b) = self.pins();
+                embassy_futures::select::select(pin_a.wait_for_any_edge(), pin_b.wait_for_any_edge()).await;
+            }
             #[cfg(not(feature = "async_matrix"))]
             {
-                // Wait for 20ms to avoid busy loop
-                embassy_time::Timer::after_millis(20).await;
+                embassy_time::Timer::after_millis(1).await;
             }
         }
     }
@@ -321,6 +318,24 @@ impl<
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    #[cfg(not(feature = "async_matrix"))]
+    fn polls_and_releases_without_missing_a_fast_transition() {
+        use embedded_hal_mock::eh1::digital::{Mock, State, Transaction};
+        crate::test_support::test_block_on(async {
+            let a = Mock::new(&[Transaction::get(State::High), Transaction::get(State::Low)]);
+            let b = Mock::new(&[Transaction::get(State::High), Transaction::get(State::High)]);
+            let mut encoder = RotaryEncoder::new(a, b, 0);
+            let start = embassy_time::Instant::now();
+            assert!(encoder.read_keyboard_event().await.pressed);
+            assert!(start.elapsed() < embassy_time::Duration::from_millis(2));
+            assert!(!encoder.read_keyboard_event().await.pressed);
+            assert!(start.elapsed() < embassy_time::Duration::from_millis(2));
+            encoder.pin_a.done();
+            encoder.pin_b.done();
+        });
+    }
 
     #[test]
     fn test_resolutin_phase() {
