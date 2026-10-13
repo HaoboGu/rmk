@@ -130,9 +130,8 @@ mod tests {
     }
 }
 
-/// Runs on the central, relaying one peripheral's input events and sending state changes back.
-///
-/// Peripheral key positions are translated into the central's keymap using `matrix_config`.
+/// PeripheralManager runs on the central and manages communication with one split peripheral.
+/// It publishes input events from that peripheral and sends the central's state changes back.
 pub(crate) struct PeripheralManager<T: SplitReader + SplitWriter> {
     /// Receiver
     pub(crate) transceiver: T,
