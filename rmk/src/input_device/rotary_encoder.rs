@@ -312,6 +312,7 @@ impl<
             {
                 embassy_time::Timer::after_millis(1).await;
             }
+            embassy_futures::yield_now().await;
         }
     }
 }
