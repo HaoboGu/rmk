@@ -4,5 +4,6 @@ version = "0.8.2"
 edition = "2024"
 
 [dependencies]
+embassy-futures = "0.1.2"
 futures = { version = "0.3", default-features = false, features = ["async-await"] }
 rmk-macro = { path = "../.." }

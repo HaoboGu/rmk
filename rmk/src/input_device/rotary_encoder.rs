@@ -324,15 +324,18 @@ mod test {
     #[cfg(not(feature = "async_matrix"))]
     fn polls_and_releases_without_missing_a_fast_transition() {
         use embedded_hal_mock::eh1::digital::{Mock, State, Transaction};
+
+        use crate::core_traits::Runnable;
         crate::test_support::test_block_on(async {
-            let a = Mock::new(&[Transaction::get(State::High), Transaction::get(State::Low)]);
-            let b = Mock::new(&[Transaction::get(State::High), Transaction::get(State::High)]);
+            let a = Mock::new(&[State::High, State::Low, State::High].map(Transaction::get));
+            let b = Mock::new(&[State::High; 3].map(Transaction::get));
             let mut encoder = RotaryEncoder::new(a, b, 0);
             let start = embassy_time::Instant::now();
             assert!(encoder.read_keyboard_event().await.pressed);
             assert!(start.elapsed() < embassy_time::Duration::from_millis(2));
             assert!(!encoder.read_keyboard_event().await.pressed);
             assert!(start.elapsed() < embassy_time::Duration::from_millis(2));
+            assert!(embassy_futures::poll_once(encoder.run()).is_pending());
             encoder.pin_a.done();
             encoder.pin_b.done();
         });
