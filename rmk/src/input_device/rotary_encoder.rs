@@ -295,6 +295,12 @@ impl<
         }
 
         loop {
+            #[cfg(feature = "async_matrix")]
+            {
+                let (pin_a, pin_b) = self.pins();
+                embassy_futures::select::select(pin_a.wait_for_any_edge(), pin_b.wait_for_any_edge()).await;
+            }
+
             let direction = self.update();
 
             if direction != Direction::None && self.debounce_check() {
@@ -302,11 +308,6 @@ impl<
                 return KeyboardEvent::rotary_encoder(self.id, direction, true);
             }
 
-            #[cfg(feature = "async_matrix")]
-            {
-                let (pin_a, pin_b) = self.pins();
-                embassy_futures::select::select(pin_a.wait_for_any_edge(), pin_b.wait_for_any_edge()).await;
-            }
             #[cfg(not(feature = "async_matrix"))]
             {
                 embassy_time::Timer::after_millis(1).await;
