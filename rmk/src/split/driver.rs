@@ -130,11 +130,8 @@ mod tests {
     }
 }
 
-/// PeripheralManager runs in central.
-/// It reads split message from peripheral and updates key matrix cache of the peripheral.
-///
-/// When the central scans the matrix, the scanning thread sends sync signal and gets key state cache back.
-///
+/// PeripheralManager runs on the central and manages communication with one split peripheral.
+/// It publishes input events from that peripheral and sends the central's state changes back.
 pub(crate) struct PeripheralManager<T: SplitReader + SplitWriter> {
     /// Receiver
     pub(crate) transceiver: T,
