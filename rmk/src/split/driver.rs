@@ -220,6 +220,21 @@ impl<T: SplitReader + SplitWriter> PeripheralManager<T> {
             return;
         }
 
+        use core::sync::atomic::Ordering::Relaxed;
+        for message in [
+            SplitMessage::Layer(crate::state::ACTIVE_LAYER.load(Relaxed)),
+            SplitMessage::KeyboardIndicator(crate::keyboard::current_led_indicator().into_bits()),
+            SplitMessage::SleepState(crate::state::current_sleep_state()),
+            #[cfg(feature = "display")]
+            SplitMessage::Wpm(crate::processor::builtin::wpm::current_wpm()),
+            #[cfg(feature = "display")]
+            SplitMessage::Modifier(crate::state::HELD_MODIFIERS.load(Relaxed)),
+        ] {
+            if self.send(&message).await.is_err() {
+                return;
+            }
+        }
+
         #[cfg(feature = "dfu_split")]
         self.check_firmware_update().await;
 
