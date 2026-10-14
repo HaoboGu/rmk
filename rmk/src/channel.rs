@@ -17,10 +17,6 @@ use crate::{REPORT_CHANNEL_SIZE, RawMutex};
 
 type ReportChannel = Channel<RawMutex, Report, REPORT_CHANNEL_SIZE>;
 
-/// Serializes caret taps with reports emitted by Keyboard.
-pub(crate) static KEYBOARD_REPORT: embassy_sync::mutex::Mutex<RawMutex, Option<KeyboardReport>> =
-    embassy_sync::mutex::Mutex::new(None);
-
 /// Signal for LED indicator, used in BLE keyboards only since BLE receiving is not async
 #[cfg(feature = "_ble")]
 pub(crate) static LED_SIGNAL: Signal<RawMutex, LedIndicator> = Signal::new();
