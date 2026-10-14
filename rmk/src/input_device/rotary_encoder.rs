@@ -296,7 +296,7 @@ impl<
         }
         // Read until a valid rotary encoder event is detected
         if let Some(last_action) = self.last_action {
-            embassy_futures::yield_now().await;
+            embassy_time::Timer::after_millis(1).await;
             self.last_action = None;
             return KeyboardEvent::rotary_encoder(self.id, last_action, false);
         }
@@ -322,11 +322,7 @@ impl<
                 return KeyboardEvent::rotary_encoder(self.id, direction, true);
             }
 
-            #[cfg(not(feature = "async_matrix"))]
-            {
-                embassy_time::Timer::after_millis(1).await;
-            }
-            embassy_futures::yield_now().await;
+            embassy_time::Timer::after_millis(1).await;
         }
     }
 }
