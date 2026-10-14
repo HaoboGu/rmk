@@ -157,7 +157,6 @@ mod basic {
             loop {
                 let event = self.read_event().await;
                 publish_event_async(event).await;
-                ::rmk::embassy_futures::yield_now().await;
             }
         }
     }
@@ -186,7 +185,6 @@ mod multi_event {
             loop {
                 let event = self.read_event().await;
                 publish_event_async(event).await;
-                ::rmk::embassy_futures::yield_now().await;
             }
         }
     }

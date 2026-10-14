@@ -57,8 +57,7 @@ pub trait InputDevice: Runnable {
     /// The event type produced by this input device
     type Event;
 
-    /// Read the raw input event.
-    /// Internal loops must yield or return, including on spurious readiness and I/O errors.
+    /// Read the raw input event
     async fn read_event(&mut self) -> Self::Event;
 }
 

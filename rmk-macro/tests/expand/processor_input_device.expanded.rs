@@ -238,7 +238,6 @@ mod basic {
                             .await;
                     }
                 }
-                ::rmk::embassy_futures::yield_now().await;
             }
         }
     }
@@ -395,7 +394,6 @@ mod reversed {
                             .await;
                     }
                 }
-                ::rmk::embassy_futures::yield_now().await;
             }
         }
     }
@@ -597,7 +595,6 @@ mod polling {
                         <Self as ::rmk::processor::PollingProcessor>::update(self).await;
                     }
                 }
-                ::rmk::embassy_futures::yield_now().await;
             }
         }
     }
@@ -915,7 +912,6 @@ mod multi_event {
                             .await;
                     }
                 }
-                ::rmk::embassy_futures::yield_now().await;
             }
         }
     }
@@ -1287,7 +1283,6 @@ mod multi_event_polling {
                         <Self as ::rmk::processor::PollingProcessor>::update(self).await;
                     }
                 }
-                ::rmk::embassy_futures::yield_now().await;
             }
         }
     }
@@ -1482,7 +1477,6 @@ mod polling_without_subscription {
                         <Self as ::rmk::processor::PollingProcessor>::update(self).await;
                     }
                 }
-                ::rmk::embassy_futures::yield_now().await;
             }
         }
     }
@@ -1676,7 +1670,6 @@ mod polling_without_subscription {
                         <Self as ::rmk::processor::PollingProcessor>::update(self).await;
                     }
                 }
-                ::rmk::embassy_futures::yield_now().await;
             }
         }
     }

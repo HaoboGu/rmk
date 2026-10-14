@@ -101,7 +101,6 @@ pub fn generate_runnable(
             loop {
                 let event = self.read_event().await;
                 publish_event_async(event).await;
-                ::rmk::embassy_futures::yield_now().await;
             }
         });
     }
@@ -157,7 +156,6 @@ pub fn generate_runnable(
         loop {
             let select_result = { ::rmk::futures::select_biased! { #(#select_arms),* } };
             match select_result { #(#match_arms)* }
-            ::rmk::embassy_futures::yield_now().await;
         }
     })
 }
