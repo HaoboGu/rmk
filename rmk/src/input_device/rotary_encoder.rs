@@ -23,7 +23,7 @@ pub struct RotaryEncoder<
 > {
     pin_a: A,
     pin_b: B,
-    state: u8,
+    state: Option<u8>,
     phase: P,
     /// The index of the rotary encoder
     id: u8,
@@ -152,7 +152,7 @@ impl<
         Self {
             pin_a,
             pin_b,
-            state: 0u8,
+            state: None,
             phase: DefaultPhase,
             id,
             last_action: None,
@@ -175,7 +175,7 @@ impl<
         Self {
             pin_a,
             pin_b,
-            state: 0u8,
+            state: None,
             phase: ResolutionPhase::new(resolution, reverse),
             id,
             last_action: None,
@@ -198,7 +198,7 @@ impl<
         Self {
             pin_a,
             pin_b,
-            state: 0u8,
+            state: None,
             phase,
             id,
             last_action: None,
@@ -217,7 +217,7 @@ impl<
     /// Call `update` to evaluate the next state of the encoder, propagates errors from `InputPin` read
     pub fn update(&mut self) -> Direction {
         // use mask to get previous state value
-        let mut s = self.state & 0b11;
+        let mut s = self.state.unwrap_or(0) & 0b11;
 
         let (a_is_low, b_is_low) = (self.pin_a.is_low(), self.pin_b.is_low());
 
@@ -234,10 +234,10 @@ impl<
         }
 
         // move new state in
-        self.state = s >> 2;
+        let previous = self.state.replace(s >> 2);
 
         // Use the phase implementation
-        self.phase.direction(s)
+        previous.map_or(Direction::None, |_| self.phase.direction(s))
     }
 
     /// Returns a reference to the first pin. Can be used to clear interrupt.
@@ -288,9 +288,15 @@ impl<
     /// Read a keyboard event from the rotary encoder.
     /// This method is called by the generated InputDevice implementation.
     async fn read_keyboard_event(&mut self) -> KeyboardEvent {
+        while self.state.is_none() {
+            self.update();
+            if self.state.is_none() {
+                embassy_time::Timer::after_millis(1).await;
+            }
+        }
         // Read until a valid rotary encoder event is detected
         if let Some(last_action) = self.last_action {
-            embassy_time::Timer::after_millis(5).await;
+            embassy_time::Timer::after_millis(1).await;
             self.last_action = None;
             return KeyboardEvent::rotary_encoder(self.id, last_action, false);
         }
@@ -298,8 +304,15 @@ impl<
         loop {
             #[cfg(feature = "async_matrix")]
             {
+                use embassy_futures::select::select;
+                let state = self.state.unwrap_or(0);
                 let (pin_a, pin_b) = self.pins();
-                embassy_futures::select::select(pin_a.wait_for_any_edge(), pin_b.wait_for_any_edge()).await;
+                match state {
+                    0 => select(pin_a.wait_for_low(), pin_b.wait_for_low()).await,
+                    1 => select(pin_a.wait_for_high(), pin_b.wait_for_low()).await,
+                    2 => select(pin_a.wait_for_low(), pin_b.wait_for_high()).await,
+                    _ => select(pin_a.wait_for_high(), pin_b.wait_for_high()).await,
+                };
             }
 
             let direction = self.update();
@@ -309,11 +322,7 @@ impl<
                 return KeyboardEvent::rotary_encoder(self.id, direction, true);
             }
 
-            #[cfg(not(feature = "async_matrix"))]
-            {
-                // Wait for 20ms to avoid busy loop
-                embassy_time::Timer::after_millis(20).await;
-            }
+            embassy_time::Timer::after_millis(1).await;
         }
     }
 }
@@ -321,6 +330,19 @@ impl<
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn first_sample_sets_baseline_without_a_step() {
+        use embedded_hal_mock::eh1::digital::{Mock, State, Transaction};
+        let mut encoder = RotaryEncoder::new(
+            Mock::new(&[Transaction::get(State::Low)]),
+            Mock::new(&[Transaction::get(State::High)]),
+            0,
+        );
+        assert_eq!(encoder.update(), Direction::None);
+        encoder.pin_a.done();
+        encoder.pin_b.done();
+    }
 
     #[test]
     fn test_resolutin_phase() {

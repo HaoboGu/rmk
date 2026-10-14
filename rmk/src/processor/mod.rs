@@ -35,6 +35,7 @@ pub trait Processor: Runnable {
         loop {
             let event = sub.next_event().await;
             self.process(event).await;
+            embassy_futures::yield_now().await;
         }
     }
 }
@@ -63,6 +64,7 @@ pub trait PollingProcessor: Processor {
                 Either::First(_) => self.update().await,
                 Either::Second(event) => self.process(event).await,
             }
+            embassy_futures::yield_now().await;
         }
     }
 }
@@ -92,6 +94,7 @@ pub trait DeadlineProcessor: Processor {
                 Either::First(_) => self.on_deadline().await,
                 Either::Second(event) => self.process(event).await,
             }
+            embassy_futures::yield_now().await;
         }
     }
 
@@ -111,6 +114,7 @@ pub trait DeadlineProcessor: Processor {
                 Either3::Second(_) => self.update().await,
                 Either3::Third(event) => self.process(event).await,
             }
+            embassy_futures::yield_now().await;
         }
     }
 }
@@ -176,6 +180,7 @@ mod tests {
             assert!(poll!(run.as_mut()).is_pending());
             for (at, expected) in [(50, (0, 0)), (100, (1, 1)), (120, (2, 1)), (200, (2, 2)), (220, (3, 2))] {
                 MockDriver::get().advance(Duration::from_millis(at - Instant::now().as_millis()));
+                assert!(poll!(run.as_mut()).is_pending());
                 assert!(poll!(run.as_mut()).is_pending());
                 assert_eq!((deadlines.get(), polls.get()), expected, "at {at} ms");
             }

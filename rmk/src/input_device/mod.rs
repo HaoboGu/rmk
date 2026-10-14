@@ -57,7 +57,8 @@ pub trait InputDevice: Runnable {
     /// The event type produced by this input device
     type Event;
 
-    /// Read the raw input event
+    /// Read the raw input event.
+    /// Internal loops must yield or return, including on spurious readiness and I/O errors.
     async fn read_event(&mut self) -> Self::Event;
 }
 
@@ -86,4 +87,27 @@ macro_rules! run_all {
             ),*
         )
     }};
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::event::KeyboardEvent;
+
+    #[rmk_macro::input_device(publish = KeyboardEvent)]
+    struct ReadyInput(u8);
+    impl ReadyInput {
+        async fn read_keyboard_event(&mut self) -> KeyboardEvent {
+            self.0 += 1;
+            assert!(self.0 <= 2, "input loop did not yield");
+            KeyboardEvent::key(0, 0, true)
+        }
+    }
+
+    #[test]
+    fn ready_input_yields_without_subscribers() {
+        let mut input = ReadyInput(0);
+        assert!(embassy_futures::poll_once(input.run()).is_pending());
+        assert_eq!(input.0, 1);
+    }
 }

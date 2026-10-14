@@ -8,6 +8,7 @@
 #![allow(async_fn_in_trait)]
 
 // Re-export futures for select_biased! macro usage
+pub use embassy_futures;
 pub use futures;
 
 /// Re-export select_biased! macro from futures crate

@@ -22,6 +22,40 @@ impl Default for BoardConfig {
 }
 
 impl BoardConfig {
+    pub(crate) fn validate_pointing_ids(&self) -> Result<(), String> {
+        let devices: Vec<_> = match self {
+            Self::UniBody(board) => vec![&board.input_device],
+            Self::Split(split) => std::iter::once(&split.central)
+                .chain(&split.peripheral)
+                .filter_map(|board| board.input_device.as_ref())
+                .collect(),
+        };
+        let mut used = std::collections::HashSet::new();
+        for device in devices {
+            let ids = device
+                .pmw3610
+                .iter()
+                .flatten()
+                .map(|d| d.id.unwrap_or(0))
+                .chain(device.pmw33xx.iter().flatten().map(|d| d.id.unwrap_or(0)))
+                .chain(device.iqs5xx.iter().flatten().map(|d| d.id.unwrap_or(0)))
+                .chain(
+                    device
+                        .joystick
+                        .iter()
+                        .flatten()
+                        .enumerate()
+                        .map(|(i, d)| d.id.unwrap_or(i as u8)),
+                );
+            for id in ids {
+                if !used.insert(id) {
+                    return Err(format!("Duplicate pointing device id {id}; set unique ids"));
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Get number of peripherals
     pub fn get_num_peripheral(&self) -> usize {
         match self {
@@ -248,6 +282,20 @@ mod tests {
             col_pins: Some(cols.iter().map(|s| s.to_string()).collect()),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn pointing_ids_must_be_unique() {
+        let mut board = super::UniBodyConfig::default();
+        board.input_device.pmw3610 = Some(vec![crate::Pmw3610Config::default()]);
+        board.input_device.joystick = Some(vec![crate::JoystickConfig::default()]);
+        assert!(
+            super::BoardConfig::UniBody(board.clone())
+                .validate_pointing_ids()
+                .is_err()
+        );
+        board.input_device.joystick.as_mut().unwrap()[0].id = Some(1);
+        assert!(super::BoardConfig::UniBody(board).validate_pointing_ids().is_ok());
     }
 
     #[test]

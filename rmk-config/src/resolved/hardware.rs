@@ -115,6 +115,7 @@ impl crate::KeyboardTomlConfig {
         let chip_config = self.get_chip_config();
         let communication = self.get_communication_config()?;
         let board = self.get_board_config()?;
+        board.validate_pointing_ids()?;
         let storage_toml = self.get_storage_config();
         let storage = if storage_toml.enabled {
             Some(Storage {
