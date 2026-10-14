@@ -191,8 +191,6 @@ impl<T: SplitReader + SplitWriter> PeripheralManager<T> {
     /// It also syncs the central's `ConnectionStatus` to the peripheral on every
     /// change as an informational signal
     pub(crate) async fn run(mut self) {
-        use core::sync::atomic::Ordering::Relaxed;
-
         use crate::event::EventSubscriber;
 
         let mut indicator_sub = crate::event::LedIndicatorEvent::subscriber();
@@ -210,17 +208,10 @@ impl<T: SplitReader + SplitWriter> PeripheralManager<T> {
         #[cfg(feature = "dfu_split")]
         let mut dfu_sub = DfuCmdEvent::subscriber();
 
-        // Send the current state once on startup so the peripheral matches us
-        // even when no transition has happened since the central booted.
+        // Send connection and lock LED state when the session starts.
         for message in [
             SplitMessage::ConnectionStatus(crate::state::current_connection_status()),
-            SplitMessage::Layer(crate::state::ACTIVE_LAYER.load(Relaxed)),
             SplitMessage::KeyboardIndicator(crate::keyboard::current_led_indicator().into_bits()),
-            SplitMessage::SleepState(crate::state::current_sleep_state()),
-            #[cfg(feature = "display")]
-            SplitMessage::Wpm(crate::processor::builtin::wpm::current_wpm()),
-            #[cfg(feature = "display")]
-            SplitMessage::Modifier(crate::state::HELD_MODIFIERS.load(Relaxed)),
         ] {
             if self.send(&message).await.is_err() {
                 return;

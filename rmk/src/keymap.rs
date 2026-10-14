@@ -226,7 +226,6 @@ impl KeyMapInner<'_> {
         // With no layer key held, the activated layer follows the default; a
         // held layer masks the change and observers see nothing.
         if before != after {
-            crate::state::ACTIVE_LAYER.store(after, core::sync::atomic::Ordering::Relaxed);
             publish_event(LayerChangeEvent::new(after));
         }
     }
@@ -387,7 +386,6 @@ impl KeyMapInner<'_> {
         if self.num_layer > 3 {
             self.layer_state[3] = self.layer_state[1] && self.layer_state[2];
             let layer = self.get_activated_layer();
-            crate::state::ACTIVE_LAYER.store(layer, core::sync::atomic::Ordering::Relaxed);
             publish_event(LayerChangeEvent::new(layer));
         }
     }
@@ -398,7 +396,6 @@ impl KeyMapInner<'_> {
                 self.layer_state[tri_layer[0] as usize] && self.layer_state[tri_layer[1] as usize];
         }
         let layer = self.get_activated_layer();
-        crate::state::ACTIVE_LAYER.store(layer, core::sync::atomic::Ordering::Relaxed);
         publish_event(LayerChangeEvent::new(layer));
     }
 
@@ -474,7 +471,6 @@ impl<'a> KeyMap<'a> {
         #[cfg(not(feature = "host"))]
         let macros = Macros::new(behavior.keyboard_macros, &mut [], false);
 
-        crate::state::ACTIVE_LAYER.store(behavior.default_layer, core::sync::atomic::Ordering::Relaxed);
         KeyMap {
             inner: RefCell::new(KeyMapInner {
                 row: ROW,

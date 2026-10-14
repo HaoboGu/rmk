@@ -1856,8 +1856,6 @@ impl<'a> Keyboard<'a> {
             if key.keycode == HidKeyCode::No {
                 // A modifier pressed after a fork fired is not suppressed by it.
                 self.fork_keep_mask |= key.mods;
-                crate::state::HELD_MODIFIERS
-                    .store(self.held_modifiers().into_bits(), core::sync::atomic::Ordering::Relaxed);
                 publish_event(ModifierEvent {
                     modifier: self.held_modifiers(),
                 });
@@ -1870,8 +1868,6 @@ impl<'a> Keyboard<'a> {
         let key = RegisteredKey::new(event.pos, key, mods);
         self.registered.retain(|k| !k.matches(&key));
         if key.keycode == HidKeyCode::No {
-            crate::state::HELD_MODIFIERS
-                .store(self.held_modifiers().into_bits(), core::sync::atomic::Ordering::Relaxed);
             publish_event(ModifierEvent {
                 modifier: self.held_modifiers(),
             });
@@ -2026,21 +2022,6 @@ mod test {
 
     fn create_test_keyboard() -> Keyboard<'static> {
         create_test_keyboard_with_config(BehaviorConfig::default())
-    }
-
-    #[test]
-    fn split_snapshots_follow_layers_and_modifiers() {
-        use core::sync::atomic::Ordering::Relaxed;
-        let mut keyboard = create_test_keyboard();
-        keyboard.keymap.activate_layer(1);
-        assert_eq!(crate::state::ACTIVE_LAYER.load(Relaxed), 1);
-        keyboard.keymap.deactivate_layer(1);
-        assert_eq!(crate::state::ACTIVE_LAYER.load(Relaxed), 0);
-        let event = KeyboardEvent::key(0, 0, true);
-        keyboard.register_key(HidKeyCode::LShift, ModifierCombination::new(), event);
-        assert_eq!(crate::state::HELD_MODIFIERS.load(Relaxed), 2);
-        keyboard.unregister_key(HidKeyCode::LShift, ModifierCombination::new(), event);
-        assert_eq!(crate::state::HELD_MODIFIERS.load(Relaxed), 0);
     }
 
     async fn force_timeout_first_hold(keyboard: &mut Keyboard<'static>) {

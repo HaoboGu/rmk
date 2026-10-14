@@ -1,14 +1,10 @@
 use core::cell::Cell;
-use core::sync::atomic::AtomicU8;
 
 use embassy_sync::blocking_mutex::Mutex;
 use rmk_types::ble::BleState;
 #[cfg(feature = "_ble")]
 use rmk_types::ble::BleStatus;
 use rmk_types::connection::{ConnectionStatus, ConnectionType, UsbState};
-
-pub(crate) static ACTIVE_LAYER: AtomicU8 = AtomicU8::new(0);
-pub(crate) static HELD_MODIFIERS: AtomicU8 = AtomicU8::new(0);
 
 use crate::RawMutex;
 use crate::event::{ConnectionStatusChangeEvent, publish_event};
