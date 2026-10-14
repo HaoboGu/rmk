@@ -13,7 +13,7 @@ use crate::channel::send_hid_report;
 use crate::event::{
     Axis, AxisEvent, AxisValType, PointingEvent, PointingProcessorEvent, PointingSetCpiEvent, SleepStateEvent,
 };
-use crate::hid::{KeyboardReport, MouseReport, Report};
+use crate::hid::{MouseReport, Report};
 use crate::keymap::KeyMap;
 
 pub const ALL_POINTING_DEVICES: u8 = 255;
@@ -822,7 +822,18 @@ impl<'a> PointingProcessor<'a> {
             PointingMode::Caret(caret_config) => {
                 if let Some((keycode, count)) = compute_caret_taps(x, y, &mut self.accumulator, &caret_config) {
                     for _ in 0..count {
-                        tap_key(keycode).await;
+                        let current = crate::channel::KEYBOARD_REPORT.lock().await;
+                        let mut report = (*current).unwrap_or_default();
+                        if !report.keycodes.contains(&(keycode as u8))
+                            && let Some(slot) = report.keycodes.iter_mut().find(|code| **code == 0)
+                        {
+                            *slot = keycode as u8;
+                            send_hid_report(Report::KeyboardReport(report)).await;
+                            Timer::after_millis(5).await;
+                            send_hid_report(Report::KeyboardReport((*current).unwrap_or_default())).await;
+                        }
+                        drop(current);
+                        Timer::after_millis(5).await;
                     }
                 }
             }
@@ -839,31 +850,6 @@ impl<'a> PointingProcessor<'a> {
             self.set_pointing_mode(event.mode);
         }
     }
-}
-
-/// Tap a key (press and release with a short delay) - used for caret mode
-/// NOTE: This is a basic implementation because at the current state Keyboard (in keyboard.rs) does not support
-/// sending in KeyActions from the processor layer. If that changes in the future, this can be updated to use KeyActions and support more complex behavior (e.g. modifiers, macros).
-/// For the time being, this sends only simple key taps without modifiers.
-async fn tap_key(keycode: HidKeyCode) {
-    // Press
-    send_hid_report(Report::KeyboardReport(KeyboardReport {
-        modifier: 0,
-        reserved: 0,
-        leds: 0,
-        keycodes: [keycode as u8, 0, 0, 0, 0, 0],
-    }))
-    .await;
-    Timer::after_millis(5).await;
-    // Release
-    send_hid_report(Report::KeyboardReport(KeyboardReport {
-        modifier: 0,
-        reserved: 0,
-        leds: 0,
-        keycodes: [0, 0, 0, 0, 0, 0],
-    }))
-    .await;
-    Timer::after_millis(5).await;
 }
 
 /// Pure function: given a (x, y) motion delta, decide whether caret mode

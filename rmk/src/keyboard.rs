@@ -272,6 +272,10 @@ impl<'a> Keyboard<'a> {
             return;
         }
 
+        let mut current = crate::channel::KEYBOARD_REPORT.lock().await;
+        if let Report::KeyboardReport(report) = &report {
+            *current = Some(*report);
+        }
         send_hid_report(report).await;
     }
 
