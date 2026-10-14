@@ -205,16 +205,14 @@ impl<T: SplitReader + SplitWriter> PeripheralManager<T> {
         #[cfg(feature = "dfu_split")]
         let mut dfu_sub = DfuCmdEvent::subscriber();
 
-        // Send the current state once on startup so the peripheral matches us
-        // even when no transition has happened since the central booted.
-        if self
-            .send(&SplitMessage::ConnectionStatus(
-                crate::state::current_connection_status(),
-            ))
-            .await
-            .is_err()
-        {
-            return;
+        // Send connection and lock LED state when the session starts.
+        for message in [
+            SplitMessage::ConnectionStatus(crate::state::current_connection_status()),
+            SplitMessage::KeyboardIndicator(crate::keyboard::current_led_indicator().into_bits()),
+        ] {
+            if self.send(&message).await.is_err() {
+                return;
+            }
         }
 
         #[cfg(feature = "dfu_split")]
