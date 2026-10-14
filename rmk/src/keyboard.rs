@@ -855,7 +855,7 @@ impl<'a> Keyboard<'a> {
             self.process_key_action_morse(&key_action, event, event_time).await;
         }
         // Restore the modifiers the fork suppressed
-        if self.try_finish_forks(original_key_action, event) {
+        if self.try_finish_forks(event) {
             self.send_keyboard_report_with_resolved_modifiers(false).await;
         }
     }
@@ -870,21 +870,12 @@ impl<'a> Keyboard<'a> {
         }
 
         if !event.pressed {
-            let fork_states = &self.fork_states;
-            let result = self.keymap.with_forks(|forks| {
-                for (i, fork) in forks.iter().enumerate() {
-                    if fork.trigger == *key_action
-                        && let Some(active) = fork_states[i]
-                    {
-                        // If the originating key of a fork is released, simply release the replacement key
-                        // (The fork deactivation is delayed, will happen after the release hid report is sent)
-                        debug!("replace input with fork action {:?}", active);
-                        return Some(active.replacement);
-                    }
-                }
-                None
-            });
-            return (result.unwrap_or(*key_action), false);
+            // Release the replacement; the fork is deactivated after the release report is sent
+            if let Some(active) = self.fork_states.iter().flatten().find(|active| active.pos == event.pos) {
+                debug!("replace input with fork action {:?}", active);
+                return (active.replacement, false);
+            }
+            return (*key_action, false);
         }
 
         let mut decision_state = StateBits {
@@ -965,6 +956,7 @@ impl<'a> Keyboard<'a> {
             self.fork_states[initial] = Some(ActiveFork {
                 replacement,
                 suppress: combined_suppress,
+                pos: event.pos,
             });
         }
 
@@ -983,18 +975,14 @@ impl<'a> Keyboard<'a> {
     // Release of forked key must deactivate the fork
     // (explicit modifier suppressing effect will be stopped only AFTER the release hid report is sent)
     // Returns whether the resolved modifiers changed
-    fn try_finish_forks(&mut self, original_key_action: &KeyAction, event: KeyboardEvent) -> bool {
+    fn try_finish_forks(&mut self, event: KeyboardEvent) -> bool {
         let modifiers_before = self.resolve_modifiers(false);
         if !event.pressed {
-            let fork_states = &mut self.fork_states;
-            self.keymap.with_forks(|forks| {
-                for (i, fork) in forks.iter().enumerate() {
-                    if fork_states[i].is_some() && fork.trigger == *original_key_action {
-                        // if the originating key of a fork is released the replacement decision is not valid anymore
-                        fork_states[i] = None;
-                    }
+            for fork_state in self.fork_states.iter_mut() {
+                if fork_state.is_some_and(|active| active.pos == event.pos) {
+                    *fork_state = None;
                 }
-            });
+            }
         }
         self.resolve_modifiers(false) != modifiers_before
     }

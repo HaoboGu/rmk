@@ -65,3 +65,16 @@ steps = [
   { release = [0, 0] },
 ]
 expect = [["LShift"], [], ["Kc2"], [], ["LShift"], ["LShift", "Kc1"], ["LShift"], []]
+
+[[test]]
+name = "review_layer_filtered_release_belongs_to_original_key"
+behavior.fork = { forks = [{ trigger = "Kc1", positive_output = "Kc2", negative_output = "Kc1", layers = [1], match_any = "LShift" }] }
+steps = [
+  { press = [0, 0] },   # LM(1, LShift): activate layer 1 and hold Shift
+  { press = [0, 4] },   # Kc1 from layer 0 through transparency; no fork
+  { press = [0, 5] },   # Kc1 from layer 1; fork emits Kc2 and suppresses Shift
+  { release = [0, 4] }, # Releasing the unrelated key must keep the fork active
+  { release = [0, 5] },
+  { release = [0, 0] },
+]
+expect = [["LShift"], ["LShift", "Kc1"], ["Kc1"], ["Kc1", "Kc2"], ["Kc2"], [], ["LShift"], []]
