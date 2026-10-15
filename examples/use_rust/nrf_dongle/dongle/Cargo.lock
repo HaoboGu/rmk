@@ -653,6 +653,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "embassy-crypto"
+version = "0.1.0"
+source = "git+https://github.com/embassy-rs/embassy.git?rev=bd35bd7a7d19147c8bcae9c2eda99b25e597294c#bd35bd7a7d19147c8bcae9c2eda99b25e597294c"
+dependencies = [
+ "unitrait 2.0.0",
+]
+
+[[package]]
 name = "embassy-embedded-hal"
 version = "0.6.0"
 source = "git+https://github.com/embassy-rs/embassy?rev=e7a576f22393edaf9070f29ee5f4f07f5f4d8782#e7a576f22393edaf9070f29ee5f4f07f5f4d8782"
@@ -682,7 +690,7 @@ dependencies = [
  "document-features",
  "embassy-executor-macros",
  "embassy-executor-timer-queue",
- "unitrait",
+ "unitrait 1.0.0",
 ]
 
 [[package]]
@@ -701,7 +709,7 @@ name = "embassy-executor-timer-queue"
 version = "0.1.1"
 source = "git+https://github.com/embassy-rs/embassy?rev=e7a576f22393edaf9070f29ee5f4f07f5f4d8782#e7a576f22393edaf9070f29ee5f4f07f5f4d8782"
 dependencies = [
- "unitrait",
+ "unitrait 1.0.0",
 ]
 
 [[package]]
@@ -1789,6 +1797,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_chacha"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb"
+dependencies = [
+ "ppv-lite86",
+ "rand_core 0.9.5",
+]
+
+[[package]]
 name = "rand_core"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1843,6 +1861,7 @@ dependencies = [
  "cortex-m",
  "defmt 1.1.1",
  "document-features",
+ "embassy-crypto",
  "embassy-embedded-hal",
  "embassy-futures",
  "embassy-nrf",
@@ -1858,6 +1877,7 @@ dependencies = [
  "heapless 0.9.3",
  "paste",
  "postcard",
+ "rand_chacha 0.9.0",
  "rmk-macro",
  "rmk-types",
  "sequential-storage",
@@ -2408,7 +2428,7 @@ dependencies = [
  "p256",
  "p256-cortex-m4",
  "rand",
- "rand_chacha",
+ "rand_chacha 0.3.1",
  "rand_core 0.6.4",
  "serde",
  "static_cell",
@@ -2465,6 +2485,24 @@ name = "unitrait"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b66b59b4e118746027256db08772826e9e0765e93b0bf15d2714a0ac0f940fbe"
+
+[[package]]
+name = "unitrait"
+version = "2.0.0"
+source = "git+https://github.com/embassy-rs/unitrait?rev=bb96601b3d293fa27d1ca2891f6ea148e534e433#bb96601b3d293fa27d1ca2891f6ea148e534e433"
+dependencies = [
+ "unitrait-macros",
+]
+
+[[package]]
+name = "unitrait-macros"
+version = "2.0.0"
+source = "git+https://github.com/embassy-rs/unitrait?rev=bb96601b3d293fa27d1ca2891f6ea148e534e433#bb96601b3d293fa27d1ca2891f6ea148e534e433"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "usb-device"

@@ -1,6 +1,6 @@
 #[cfg(feature = "subrating")]
 use bt_hci::cmd::le::LeSubrateRequest;
-use bt_hci::cmd::le::{LeReadLocalSupportedFeatures, LeSetPhy};
+use bt_hci::cmd::le::{LeRand, LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use bt_hci::param::Error as HciError;
 use embassy_futures::join::{join3, join4};
@@ -49,6 +49,7 @@ pub(crate) mod host;
 pub(crate) mod led;
 pub mod passkey;
 pub(crate) mod profile;
+pub(crate) mod rng;
 #[cfg(any(feature = "split", feature = "dongle"))]
 pub(crate) mod scan;
 pub(crate) mod sleep;
@@ -141,13 +142,23 @@ where
 #[cfg(not(feature = "split"))]
 impl<'a, C> Runnable for BleTransport<'a, C>
 where
-    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    C: Controller
+        + ControllerCmdAsync<LeSetPhy>
+        + ControllerCmdSync<LeReadLocalSupportedFeatures>
+        + ControllerCmdSync<LeRand>,
 {
     async fn run(&mut self) -> ! {
         // Load the preferred connection from storage
         let preferred = crate::state::load_preferred_connection().await;
         crate::state::set_preferred_connection(preferred);
 
+        // Seeding through a reference keeps the controller out of the future across the await.
+        if let Err(e) = rng::seed_from_hardware(self.controller.as_ref().expect("BleTransport::run called twice")).await
+        {
+            error!("[ble] failed to seed the RNG, rebooting: {:?}", e);
+            Timer::after_millis(100).await;
+            crate::boot::reboot_keyboard();
+        }
         let controller = self.controller.take().expect("BleTransport::run called twice");
         // Exactly one link — the host.
         let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
@@ -171,11 +182,13 @@ impl<
     #[cfg(not(feature = "subrating"))] C: Controller
         + ControllerCmdAsync<LeSetPhy>
         + ControllerCmdSync<LeReadLocalSupportedFeatures>
-        + ControllerCmdSync<bt_hci::cmd::le::LeSetScanParams>,
+        + ControllerCmdSync<bt_hci::cmd::le::LeSetScanParams>
+        + ControllerCmdSync<LeRand>,
     #[cfg(feature = "subrating")] C: Controller
         + ControllerCmdAsync<LeSetPhy>
         + ControllerCmdSync<LeReadLocalSupportedFeatures>
         + ControllerCmdSync<bt_hci::cmd::le::LeSetScanParams>
+        + ControllerCmdSync<LeRand>
         + ControllerCmdAsync<LeSubrateRequest>,
 > Runnable for BleTransport<'a, C>
 {
@@ -184,6 +197,13 @@ impl<
         let preferred = crate::state::load_preferred_connection().await;
         crate::state::set_preferred_connection(preferred);
 
+        // Seeding through a reference keeps the controller out of the future across the await.
+        if let Err(e) = rng::seed_from_hardware(self.controller.as_ref().expect("BleTransport::run called twice")).await
+        {
+            error!("[ble] failed to seed the RNG, rebooting: {:?}", e);
+            Timer::after_millis(100).await;
+            crate::boot::reboot_keyboard();
+        }
         let controller = self.controller.take().expect("BleTransport::run called twice");
 
         let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();

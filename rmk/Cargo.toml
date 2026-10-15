@@ -248,7 +248,7 @@ sf32lb52x_ble = ["_ble"]
 passkey_entry = ["_ble", "rmk-types/passkey_entry"]
 
 ## Enable feature if you want to use trouble BLE stack
-_ble = ["dep:trouble-host", "dep:bt-hci", "storage", "rmk-types/_ble"]
+_ble = ["dep:trouble-host", "dep:bt-hci", "dep:embassy-crypto", "dep:rand_chacha", "storage", "rmk-types/_ble"]
 
 [dependencies]
 rmk-macro = { version = "=0.8.0", path = "../rmk-macro" }
@@ -298,6 +298,8 @@ ssd1306 = { version = "0.10", optional = true, features = ["async"] }
 
 # Optional dependencies
 # BLE dependencies
+embassy-crypto = { git = "https://github.com/embassy-rs/embassy.git", rev = "bd35bd7a7d19147c8bcae9c2eda99b25e597294c", optional = true }
+rand_chacha = { version = "0.9", default-features = false, optional = true }
 bt-hci = { version = "0.10", optional = true }
 trouble-host = { version = "0.8", default-features = false, features = [
     "peripheral",
