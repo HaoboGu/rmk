@@ -214,7 +214,8 @@ impl<
         self
     }
 
-    /// Call `update` to evaluate the next state of the encoder, propagates errors from `InputPin` read
+    /// Sample both pins and return the rotation direction.
+    /// The first successful sample and pin read errors return [`Direction::None`].
     pub fn update(&mut self) -> Direction {
         // use mask to get previous state value
         let mut s = self.state.unwrap_or(0) & 0b11;
