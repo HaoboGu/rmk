@@ -149,16 +149,7 @@ impl<
 {
     /// Accepts two [`InputPin`](https://docs.rs/embedded-hal/latest/embedded_hal/digital/trait.InputPin.html)s, these will be read on every `update()`.
     pub fn new(pin_a: A, pin_b: B, id: u8) -> Self {
-        Self {
-            pin_a,
-            pin_b,
-            state: None,
-            phase: DefaultPhase,
-            id,
-            last_action: None,
-            last_event_time: None,
-            debounce_ms: 0,
-        }
+        Self::with_phase(pin_a, pin_b, DefaultPhase, id)
     }
 }
 
@@ -172,16 +163,7 @@ impl<
 {
     /// Creates a new encoder with the specified resolution
     pub fn with_resolution(pin_a: A, pin_b: B, resolution: u8, reverse: bool, id: u8) -> Self {
-        Self {
-            pin_a,
-            pin_b,
-            state: None,
-            phase: ResolutionPhase::new(resolution, reverse),
-            id,
-            last_action: None,
-            last_event_time: None,
-            debounce_ms: 0,
-        }
+        Self::with_phase(pin_a, pin_b, ResolutionPhase::new(resolution, reverse), id)
     }
 }
 
