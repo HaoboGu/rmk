@@ -23,7 +23,7 @@ use crate::ble::battery_service::BlePeripheralBatteryServer;
 use crate::ble::ble_server::{BleHidServer, Server};
 use crate::ble::device_info::{PnPID, VidSource};
 #[cfg(feature = "host")]
-use crate::ble::host::{HOST_WRITE_BUFFER_SIZE, HostGattHandler, HostWriteOutcome};
+use crate::ble::host::{HOST_WRITE_BUFFER_SIZE, HostGattHandler, HostRx, HostWriteOutcome};
 use crate::ble::led::BleLedReader;
 #[cfg(feature = "passkey_entry")]
 use crate::ble::passkey::{PasskeyInputState, next_gatt_event};
@@ -440,7 +440,11 @@ pub(crate) async fn ble_task<C: Controller, P: PacketPool, E: EventHandler>(mut 
 ///
 /// This function will handle the GATT events and process them.
 /// This is how we interact with read and write requests.
-async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, DefaultPacketPool>) -> Result<(), Error> {
+async fn gatt_events_task(
+    server: &Server<'_>,
+    conn: &GattConnection<'_, '_, DefaultPacketPool>,
+    #[cfg(feature = "host")] host_rx: &HostRx,
+) -> Result<(), Error> {
     let level = server.battery_service.level;
     #[cfg(feature = "split")]
     let peripheral_levels = server.peripheral_battery_services.levels;
@@ -455,7 +459,7 @@ async fn gatt_events_task(server: &Server<'_>, conn: &GattConnection<'_, '_, Def
     let mut passkey_state = PasskeyInputState::new();
 
     #[cfg(feature = "host")]
-    let mut host_gatt_handler = HostGattHandler::new(server);
+    let mut host_gatt_handler = HostGattHandler::new(server, host_rx);
 
     loop {
         #[cfg(feature = "passkey_entry")]
@@ -803,6 +807,8 @@ async fn serve_keyboard_connection<
 ) {
     let mut ble_hid_server = BleHidServer::new(server, conn);
     let mut ble_led_reader = BleLedReader;
+    #[cfg(feature = "host")]
+    let host_rx = HostRx::new();
     let mut ble_battery_server = config.enabled.then(|| BleBatteryServer::new(server, conn));
     #[cfg(feature = "split")]
     let mut ble_peripheral_battery_server = crate::SPLIT_BATTERY_PERIPHERAL_IDS
@@ -841,7 +847,12 @@ async fn serve_keyboard_connection<
 
     let communication_task = async {
         if let Either3::First(e) = select3(
-            gatt_events_task(server, conn),
+            gatt_events_task(
+                server,
+                conn,
+                #[cfg(feature = "host")]
+                &host_rx,
+            ),
             set_conn_params(stack, conn),
             battery_task,
         )
@@ -868,7 +879,7 @@ async fn serve_keyboard_connection<
             // Restart after a session-fatal TX error so Rynk survives the rest
             // of the connection.
             loop {
-                HostGattHandler::run(server, conn, service).await;
+                HostGattHandler::run(server, conn, service, &host_rx).await;
             }
         } else {
             core::future::pending::<()>().await;

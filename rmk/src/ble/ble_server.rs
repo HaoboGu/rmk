@@ -100,8 +100,8 @@ pub(crate) struct DongleEventService {
 /// `heapless::Vec` so each notify only spends MTU − 3 bytes for the bytes it
 /// actually carries (a fixed `[u8; N]` would always send N).
 ///
-/// `gatt_events_task` forwards `output_data` writes into
-/// [`crate::channel::RYNK_BLE_RX_PIPE`] for [`crate::ble::host::HostGattHandler::run`] to drain.
+/// `gatt_events_task` forwards `output_data` writes into the connection's
+/// [`crate::ble::host::HostRx`] for [`crate::ble::host::HostGattHandler::run`] to drain.
 #[cfg(feature = "rynk")]
 #[gatt_service(uuid = RYNK_SERVICE_UUID)]
 pub(crate) struct RynkGattService {
@@ -114,7 +114,7 @@ pub(crate) struct RynkGattService {
 }
 
 /// Rynk HID-over-GATT service.
-/// `gatt_events_task` feeds the payload into [`crate::channel::RYNK_BLE_RX_PIPE`],
+/// `gatt_events_task` feeds the payload into the connection's [`crate::ble::host::HostRx`],
 /// [`crate::ble::host::HostGattHandler::run`] drains the pipe to get data.
 #[cfg(feature = "rynk")]
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
@@ -139,7 +139,7 @@ pub(crate) struct RynkHidService {
 
 /// GATT service exposing the Vial-over-HID protocol. The keyboard writes replies via
 /// `input_data` notify; hosts push requests through `output_data`. `gatt_events_task`
-/// forwards `output_data` writes into [`crate::channel::VIAL_BLE_RX_CHANNEL`] for
+/// forwards `output_data` writes into the connection's [`crate::ble::host::HostRx`] for
 /// [`crate::ble::host::HostGattHandler::run`] to drain.
 #[cfg(feature = "vial")]
 #[gatt_service(uuid = service::HUMAN_INTERFACE_DEVICE)]
