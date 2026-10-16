@@ -1,5 +1,11 @@
 #[cfg(feature = "subrating")]
 use bt_hci::cmd::le::LeSubrateRequest;
+#[cfg(feature = "_ext_adv")]
+use bt_hci::cmd::le::{
+    LeAddDeviceToFilterAcceptList, LeClearAdvSets, LeClearFilterAcceptList, LeExtCreateConn,
+    LeReadNumberOfSupportedAdvSets, LeSetAdvSetRandomAddr, LeSetExtAdvData, LeSetExtAdvEnable, LeSetExtAdvParams,
+    LeSetExtScanEnable, LeSetExtScanParams, LeSetExtScanResponseData,
+};
 use bt_hci::cmd::le::{LeRand, LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use bt_hci::param::Error as HciError;
@@ -56,6 +62,47 @@ pub(crate) mod sleep;
 
 #[cfg(all(feature = "subrating", feature = "_no_subrating"))]
 compile_error!("You may not enable feature `subrating` on unsupported platforms!");
+
+/// Controller commands for extended advertising, scanning and connecting.
+#[cfg(feature = "_ext_adv")]
+pub(crate) trait ExtAdvCmds:
+    for<'t> ControllerCmdSync<LeSetExtAdvData<'t>>
+    + ControllerCmdSync<LeClearAdvSets>
+    + ControllerCmdSync<LeSetExtAdvParams>
+    + ControllerCmdSync<LeSetAdvSetRandomAddr>
+    + ControllerCmdSync<LeReadNumberOfSupportedAdvSets>
+    + for<'t> ControllerCmdSync<LeSetExtAdvEnable<'t>>
+    + for<'t> ControllerCmdSync<LeSetExtScanResponseData<'t>>
+    + ControllerCmdSync<LeSetExtScanParams>
+    + ControllerCmdSync<LeSetExtScanEnable>
+    + ControllerCmdSync<LeClearFilterAcceptList>
+    + ControllerCmdSync<LeAddDeviceToFilterAcceptList>
+    + ControllerCmdAsync<LeExtCreateConn>
+{
+}
+
+#[cfg(feature = "_ext_adv")]
+impl<T> ExtAdvCmds for T where
+    T: for<'t> ControllerCmdSync<LeSetExtAdvData<'t>>
+        + ControllerCmdSync<LeClearAdvSets>
+        + ControllerCmdSync<LeSetExtAdvParams>
+        + ControllerCmdSync<LeSetAdvSetRandomAddr>
+        + ControllerCmdSync<LeReadNumberOfSupportedAdvSets>
+        + for<'t> ControllerCmdSync<LeSetExtAdvEnable<'t>>
+        + for<'t> ControllerCmdSync<LeSetExtScanResponseData<'t>>
+        + ControllerCmdSync<LeSetExtScanParams>
+        + ControllerCmdSync<LeSetExtScanEnable>
+        + ControllerCmdSync<LeClearFilterAcceptList>
+        + ControllerCmdSync<LeAddDeviceToFilterAcceptList>
+        + ControllerCmdAsync<LeExtCreateConn>
+{
+}
+
+#[cfg(not(feature = "_ext_adv"))]
+pub(crate) trait ExtAdvCmds {}
+
+#[cfg(not(feature = "_ext_adv"))]
+impl<T> ExtAdvCmds for T {}
 
 /// Max number of connections of a keyboard's BLE stack; a dongle sizes its
 /// own — see [`crate::dongle::Dongle`].
@@ -145,7 +192,8 @@ where
     C: Controller
         + ControllerCmdAsync<LeSetPhy>
         + ControllerCmdSync<LeReadLocalSupportedFeatures>
-        + ControllerCmdSync<LeRand>,
+        + ControllerCmdSync<LeRand>
+        + ExtAdvCmds,
 {
     async fn run(&mut self) -> ! {
         // Load the preferred connection from storage
@@ -184,12 +232,14 @@ impl<
         + ControllerCmdAsync<LeSetPhy>
         + ControllerCmdSync<LeReadLocalSupportedFeatures>
         + ControllerCmdSync<bt_hci::cmd::le::LeSetScanParams>
-        + ControllerCmdSync<LeRand>,
+        + ControllerCmdSync<LeRand>
+        + ExtAdvCmds,
     #[cfg(feature = "subrating")] C: Controller
         + ControllerCmdAsync<LeSetPhy>
         + ControllerCmdSync<LeReadLocalSupportedFeatures>
         + ControllerCmdSync<bt_hci::cmd::le::LeSetScanParams>
         + ControllerCmdSync<LeRand>
+        + ExtAdvCmds
         + ControllerCmdAsync<LeSubrateRequest>,
 > Runnable for BleTransport<'a, C>
 {
@@ -243,7 +293,7 @@ impl<
 /// serves forever, joined with the stack runner and the sleep manager.
 async fn run_ble_keyboard<
     #[cfg(feature = "host")] 'r,
-    C: Controller + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
+    C: Controller + ExtAdvCmds + ControllerCmdAsync<LeSetPhy> + ControllerCmdSync<LeReadLocalSupportedFeatures>,
 >(
     stack: &Stack<'_, C, DefaultPacketPool>,
     device_config: &DeviceConfig<'static>,
