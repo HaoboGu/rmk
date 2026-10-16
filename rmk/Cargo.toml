@@ -226,7 +226,7 @@ nrf52832_ble = ["_nrf_ble", "_no_usb"]
 nrf52811_ble = ["_nrf_ble", "_no_usb"]
 ## Enable feature if you want to use nRF52810 with BLE.
 nrf52810_ble = ["_nrf_ble", "_no_usb"]
-_nrf_ble = ["_ble", "dep:embassy-nrf", "trouble-host?/security-p256-cortex-m4"]
+_nrf_ble = ["_ble", "dep:embassy-nrf"]
 
 ## Enable feature if you want to use ESP32C3 with BLE.
 esp32c3_ble = ["_esp_ble", "_no_usb"]
@@ -248,7 +248,7 @@ sf32lb52x_ble = ["_ble"]
 passkey_entry = ["_ble", "rmk-types/passkey_entry"]
 
 ## Enable feature if you want to use trouble BLE stack
-_ble = ["dep:trouble-host", "dep:bt-hci", "dep:embassy-crypto", "dep:rand_chacha", "storage", "rmk-types/_ble"]
+_ble = ["dep:trouble-host", "dep:bt-hci", "dep:embassy-crypto", "dep:embassy-crypto-rustcrypto", "dep:rand_chacha", "storage", "rmk-types/_ble"]
 
 [dependencies]
 rmk-macro = { version = "=0.8.0", path = "../rmk-macro" }
@@ -298,10 +298,11 @@ ssd1306 = { version = "0.10", optional = true, features = ["async"] }
 
 # Optional dependencies
 # BLE dependencies
+embassy-crypto-rustcrypto = { git = "https://github.com/embassy-rs/embassy.git", rev = "bd35bd7a7d19147c8bcae9c2eda99b25e597294c", optional = true, features = ["embassy-crypto-aes128-ecb", "embassy-crypto-aes128-cmac", "embassy-crypto-p256-ecdh"] }
 embassy-crypto = { git = "https://github.com/embassy-rs/embassy.git", rev = "bd35bd7a7d19147c8bcae9c2eda99b25e597294c", optional = true }
 rand_chacha = { version = "0.9", default-features = false, optional = true }
-bt-hci = { version = "0.10", optional = true }
-trouble-host = { version = "0.8", default-features = false, features = [
+bt-hci = { version = "0.11", optional = true }
+trouble-host = { git = "https://github.com/HaoboGu/trouble", branch = "rmk/multi-host", default-features = false, features = [
     "peripheral",
     "gatt",
     "derive",

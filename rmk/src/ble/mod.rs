@@ -161,7 +161,8 @@ where
         }
         let controller = self.controller.take().expect("BleTransport::run called twice");
         // Exactly one link — the host.
-        let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
+        let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, 1, BOND_SLOTS> =
+            HostResources::new();
         let stack = trouble_host::new(controller, &mut resources)
             .set_random_address(Address::random(self.address))
             .build();
@@ -206,7 +207,8 @@ impl<
         }
         let controller = self.controller.take().expect("BleTransport::run called twice");
 
-        let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
+        let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX, 1, BOND_SLOTS> =
+            HostResources::new();
         let stack = trouble_host::new(controller, &mut resources)
             .set_random_address(Address::random(self.address))
             .build();
@@ -530,6 +532,9 @@ async fn gatt_events_task(
             GattConnectionEvent::Encrypted { security_level, .. } => {
                 info!("[gatt] encrypted: {:?}", security_level);
                 set_ble_state(BleState::Connected);
+            }
+            GattConnectionEvent::PhyUpdateFailed { .. } | GattConnectionEvent::ConnectionParamsUpdateFailed { .. } => {
+                warn!("[gatt] link parameter update failed");
             }
             GattConnectionEvent::Gatt { event: gatt_event } => {
                 let mut cccd_updated = false;

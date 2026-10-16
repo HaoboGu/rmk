@@ -8,6 +8,8 @@ use core::cell::RefCell;
 use bt_hci::cmd;
 use bt_hci::cmd::le::LeRand;
 use bt_hci::controller::ControllerCmdSync;
+// Link the software AES-128 and P-256 drivers.
+use embassy_crypto_rustcrypto as _;
 use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use rand_chacha::ChaCha12Rng;
