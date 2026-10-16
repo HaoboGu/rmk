@@ -5,6 +5,9 @@ use bt_hci::controller::ControllerCmdSync;
 use embassy_time::{Duration, Timer};
 use trouble_host::prelude::*;
 
+#[cfg(feature = "_ext_adv")]
+use crate::ble::ExtAdvCmds;
+
 /// Split central: the radio is shared with the host link and the peripheral
 /// connections, so it can spare only 30ms of every 100ms.
 #[cfg(feature = "split")]
@@ -42,6 +45,26 @@ pub(crate) async fn start_scan<'a, C: Controller + ControllerCmdSync<LeSetScanPa
     loop {
         let mut central = stack.central();
         match Scanner::new(&mut central).scan(&config).await {
+            Ok(session) => return session,
+            Err(_) => Timer::after_millis(500).await,
+        }
+    }
+}
+
+/// Extended-command counterpart of [`start_scan`], with the same stop and retry behavior.
+#[cfg(feature = "_ext_adv")]
+pub(crate) async fn start_scan_ext<'a, C: Controller + ExtAdvCmds>(
+    stack: &'a Stack<'_, C, DefaultPacketPool>,
+    window: Duration,
+    filter_accept_list: &[Address],
+) -> ScanSession<'a, true> {
+    let config = ScanConfig {
+        filter_accept_list,
+        ..scan_config(window)
+    };
+    loop {
+        let mut central = stack.central();
+        match Scanner::new(&mut central).scan_ext(&config).await {
             Ok(session) => return session,
             Err(_) => Timer::after_millis(500).await,
         }
