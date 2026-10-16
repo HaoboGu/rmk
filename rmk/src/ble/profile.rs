@@ -27,6 +27,13 @@ pub(crate) const DONGLE_PROFILE: u8 = NUM_BLE_PROFILE as u8;
 /// dedicated dongle slot on `dongle` builds.
 pub(crate) const BOND_SLOTS: usize = NUM_BLE_PROFILE + cfg!(feature = "dongle") as usize;
 
+/// A fixed profile address that preserves the base address's random-address type bits.
+pub(crate) fn profile_address(base: [u8; 6], profile: u8) -> [u8; 6] {
+    let mut addr = base;
+    addr[3] = addr[3].wrapping_add(profile);
+    addr
+}
+
 /// BLE profile info
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -351,8 +358,33 @@ mod tests {
 
     use super::{
         DefaultPacketPool, HostResources, LongTermKey, ProfileInfo, ProfileManager, UPDATED_PROFILES, bond_info_of,
+        profile_address,
     };
     use crate::test_support::{drain_flash_channel, test_block_on};
+
+    #[test]
+    fn profile_zero_uses_the_base_address() {
+        let base = [1, 2, 3, 4, 5, 0xC6];
+        assert_eq!(profile_address(base, 0), base);
+    }
+
+    #[test]
+    fn only_addr3_changes() {
+        assert_eq!(profile_address([1, 2, 3, 4, 5, 0xC6], 2), [1, 2, 3, 6, 5, 0xC6]);
+    }
+
+    #[test]
+    fn profile_addresses_are_distinct() {
+        for byte in [0, 0xFF] {
+            let base = [1, 2, 3, byte, 5, 0xC6];
+            for profile in 0..=crate::NUM_BLE_PROFILE as u8 {
+                for other in 0..profile {
+                    assert_ne!(profile_address(base, profile), profile_address(base, other));
+                }
+            }
+        }
+        assert_eq!(profile_address([1, 2, 3, 0xFF, 5, 0xC6], 1), [1, 2, 3, 0, 5, 0xC6]);
+    }
 
     struct TestTransport;
 
