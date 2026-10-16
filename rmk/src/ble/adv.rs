@@ -6,6 +6,9 @@ use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
 
+#[cfg(feature = "_ext_adv")]
+use crate::ble::ExtAdvCmds;
+
 /// Company identifier marking an advertisement as RMK's own.
 const RMK_ADV_COMPANY_ID: u16 = 0x5253;
 
@@ -22,10 +25,19 @@ pub(crate) enum Adv<'a> {
     Directed(Address),
     /// Any BLE host, which finds us as a standard HID keyboard.
     Host { name: &'a str },
+    /// A bonded host reconnecting without HID discovery data.
+    HostReconnect,
     /// The split central that owns peripheral `id`.
     SplitPeripheral { id: u8 },
     /// An RMK dongle whose pairing window is open.
     DongleSeeking,
+}
+
+/// The advertisement and local address selected for a profile.
+pub(crate) struct AdvRequest<'a> {
+    pub(crate) adv: Adv<'a>,
+    pub(crate) profile: u8,
+    pub(crate) addr: [u8; 6],
 }
 
 impl Adv<'_> {
@@ -42,6 +54,7 @@ impl Adv<'_> {
                     data: &KEYBOARD.to_le_bytes(),
                 },
             ],
+            Self::HostReconnect => &[AdStructure::Flags(BR_EDR_NOT_SUPPORTED)],
             // The two kinds below name themselves to another RMK device and nothing
             // else, undiscoverable: only RMK should act on these, and no host should
             // list them.
@@ -60,9 +73,9 @@ impl Adv<'_> {
                 },
             ],
         };
-        AdStructure::encode_slice(adv_data, &mut buf[..])?;
+        let len = AdStructure::encode_slice(adv_data, &mut buf[..])?;
         Ok(Advertisement::ConnectableScannableUndirected {
-            adv_data: &buf[..],
+            adv_data: &buf[..len],
             scan_data: &[],
         })
     }
@@ -92,11 +105,10 @@ impl Adv<'_> {
         }
     }
 
-    /// A host link can afford a slow interval and gains from 2M; every other
-    /// peer is RMK's own hardware, where reaching it fast matters more.
+    /// All variants use legacy PDUs, which require the 1M primary PHY.
     fn params(&self) -> AdvertisementParameters {
         let (phy, interval) = match self {
-            Self::Host { .. } => (PhyKind::Le2M, Duration::from_millis(200)),
+            Self::Host { .. } | Self::HostReconnect => (PhyKind::Le1M, Duration::from_millis(200)),
             _ => (PhyKind::Le1M, Duration::from_millis(50)),
         };
         AdvertisementParameters {
@@ -108,6 +120,33 @@ impl Adv<'_> {
             ..Default::default()
         }
     }
+}
+
+#[cfg(feature = "_ext_adv")]
+fn advertisement_set<'b>(req: &AdvRequest<'_>, buf: &'b mut [u8; 31]) -> Result<AdvertisementSet<'b>, Error> {
+    Ok(AdvertisementSet {
+        params: req.adv.params(),
+        data: req.adv.build(buf)?,
+        address: Some(BdAddr::new(req.addr)),
+    })
+}
+
+/// Advertise using the profile's local address and return its incoming connection.
+#[cfg(feature = "_ext_adv")]
+pub(crate) async fn advertise_profile<'a, 'b, C: Controller + ExtAdvCmds, const ATT: usize, const CONN: usize>(
+    peripheral: &mut Peripheral<'a, C, DefaultPacketPool>,
+    server: &'b AttributeServer<'_, NoopRawMutex, DefaultPacketPool, ATT, CONN>,
+    req: &AdvRequest<'_>,
+    timeout: Duration,
+) -> Result<GattConnection<'a, 'b, DefaultPacketPool>, BleHostError<C::Error>> {
+    let mut buf = [0; 31];
+    let sets = [advertisement_set(req, &mut buf)?];
+    let mut handles = AdvertisementSet::handles(&sets);
+    let advertiser = peripheral.advertise_ext(&sets, &mut handles).await?;
+    let conn = with_timeout(timeout, advertiser.accept())
+        .await
+        .map_err(|_| Error::Timeout)??;
+    Ok(conn.with_attribute_server(server)?)
 }
 
 /// Broadcast `adv` and hand back the connection a central makes on it, or
@@ -141,6 +180,7 @@ mod tests {
     fn every_advertisement_fits_the_legacy_budget() {
         assert!(fits(Adv::SplitPeripheral { id: 0xFF }));
         assert!(fits(Adv::DongleSeeking));
+        assert!(fits(Adv::HostReconnect));
         // Where BLE_ADV_NAME_MAX_LEN comes from: this name fills the budget exactly.
         const LONGEST_NAME: &str = "0123456789abcdef";
         assert_eq!(LONGEST_NAME.len(), BLE_ADV_NAME_MAX_LEN);
@@ -148,6 +188,43 @@ mod tests {
         assert!(!fits(Adv::Host {
             name: "0123456789abcdefg"
         }));
+    }
+
+    #[test]
+    fn host_reconnect_has_only_flags() {
+        let mut buf = [0; 31];
+        let trouble_host::prelude::Advertisement::ConnectableScannableUndirected { adv_data, scan_data } =
+            Adv::HostReconnect.build(&mut buf).unwrap()
+        else {
+            panic!("reconnection must use undirected advertising");
+        };
+        assert_eq!(adv_data, [0x02, 0x01, 0x04]);
+        assert!(scan_data.is_empty());
+    }
+
+    #[cfg(feature = "_ext_adv")]
+    #[test]
+    fn advertisement_set_uses_profile_address() {
+        use embassy_time::Duration;
+        use trouble_host::prelude::{Address, BdAddr, PhyKind};
+
+        let addr = [1, 2, 3, 4, 5, 0xC6];
+        for (adv, interval_ms) in [
+            (Adv::Host { name: "RMK" }, 200),
+            (Adv::HostReconnect, 200),
+            (Adv::Directed(Address::random([6, 5, 4, 3, 2, 0xC1])), 50),
+            (Adv::SplitPeripheral { id: 0 }, 50),
+            (Adv::DongleSeeking, 50),
+        ] {
+            let req = super::AdvRequest { adv, profile: 1, addr };
+            let mut buf = [0; 31];
+            let set = super::advertisement_set(&req, &mut buf).unwrap();
+            assert_eq!(set.address, Some(BdAddr::new(addr)));
+            assert_eq!(set.params.primary_phy, PhyKind::Le1M);
+            assert_eq!(set.params.secondary_phy, PhyKind::Le1M);
+            assert_eq!(set.params.interval_min, Duration::from_millis(interval_ms));
+            assert_eq!(set.params.interval_max, Duration::from_millis(interval_ms));
+        }
     }
 
     #[test]
