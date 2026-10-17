@@ -36,8 +36,6 @@ pub(crate) fn expand_matrix_config(
                     async_matrix,
                     matrix.direct_pin_low_active,
                 ));
-                // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
-                // So we need to declare them in advance.
                 let direct_pins = matrix.direct_pins.as_ref().unwrap();
                 let rows = direct_pins.len();
                 let cols = direct_pins.first().map_or(0, |row| row.len());

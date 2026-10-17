@@ -450,8 +450,6 @@ fn expand_split_peripheral(
                 async_matrix,
                 peripheral_config.matrix.direct_pin_low_active,
             ));
-            // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
-            // So we need to declaring them in advance.
             let size = row * col;
             let low_active = peripheral_config.matrix.direct_pin_low_active;
 
