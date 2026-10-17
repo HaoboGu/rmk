@@ -1023,6 +1023,7 @@ pub(crate) struct ForkConfig {
     pub match_none: Option<String>,
     pub kept_modifiers: Option<String>,
     pub bindable: Option<bool>,
+    pub layers: Option<Vec<u8>>,
 }
 
 /// Configurations for morse keys

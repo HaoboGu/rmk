@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **BREAKING**: Use bare `#[register_processor]` to run the type's `Runnable`. See [processor migration](https://rmk.rs/docs/migration/v09_v10#processors).
 - **BREAKING**: Keyboard macros are reworked around `MacroOp` lists.
-- **BREAKING**: Bump Rynk protocol version to 0.2: now `GetMacro`/`SetMacro` read and write a whole macro by index, and `BleStatus` gained a `bonded` field, changing its wire format and that of `ConnectionStatus`.
+- **BREAKING**: Bump Rynk protocol version to 0.2: now `GetMacro`/`SetMacro` read and write a whole macro by index, `BleStatus` gained a `bonded` field, changing its wire format and that of `ConnectionStatus`, and `Fork` gained a `layers` field.
 - **BREAKING**: Serial numbers no longer contain the RMK version, so they stay the same across upgrades. USB, BLE, and Rynk report a protocol marker followed by a configured device serial ID or one derived from the hardware UID. `DeviceConfig.serial_number` now owns the complete string built by `build_serial_number`; `DeviceConfig` is `Clone` rather than `Copy`. `RMK_BUILD_INFO` is removed. See [serial number migration](https://rmk.rs/docs/migration/v09_v10#serial-numbers).
 
 ### Added
@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `dfu_ext` feature for DFU writes to external SPI flash (e.g. W25Q64), so boards with limited internal flash can store the new firmware image externally.
 - Expose whether the active BLE profile is bonded via `BleStatus::bonded`, so LEDs and displays can tell a paired-but-disconnected profile from an empty slot.
 - Make `rmk::state::current_ble_status()` and `current_connection_status()` public, so user code can read the current status without subscribing to `ConnectionStatusChangeEvent`.
+- Forks accept a `layers` filter, so they only fire for keys from those layers.
 
 ### Fixed
 

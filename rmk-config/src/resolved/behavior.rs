@@ -79,6 +79,7 @@ pub struct Fork {
     pub match_none: Option<String>,
     pub kept_modifiers: Option<String>,
     pub bindable: bool,
+    pub layers: u32,
 }
 
 pub struct Morse {
@@ -167,6 +168,9 @@ impl crate::KeyboardTomlConfig {
                     match_none: fork.match_none,
                     kept_modifiers: fork.kept_modifiers,
                     bindable: fork.bindable.unwrap_or(false),
+                    layers: fork.layers.map_or(u32::MAX, |layers| {
+                        layers.iter().fold(0, |mask, &layer| mask | 1 << layer)
+                    }),
                 })
                 .collect(),
         });
@@ -299,7 +303,7 @@ mod tests {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use crate::KeyboardTomlConfig;
+    use crate::{BehaviorConfig, KeyboardTomlConfig};
 
     #[test]
     fn morse_profile_enable_flow_tap_resolves_as_override() {
@@ -384,5 +388,60 @@ hold_timeout = "300ms"
             Err(e) => e,
         };
         assert!(err.contains("morse_profile_max_num"), "unexpected error: {err}");
+    }
+
+    /// A two-layer keyboard with the given `forks = [...]` list.
+    fn config_with_forks(forks: &str) -> KeyboardTomlConfig {
+        let mut config: KeyboardTomlConfig = toml::from_str(
+            r#"
+[layout]
+rows = 1
+cols = 1
+map = "(0,0)"
+
+[keymap]
+layers = 2
+
+[[keymap.layer]]
+keys = "A"
+"#,
+        )
+        .unwrap();
+        config.behavior = Some(BehaviorConfig {
+            fork: Some(toml::from_str(forks).unwrap()),
+            ..Default::default()
+        });
+        config
+    }
+
+    #[test]
+    fn fork_layers_resolve_to_a_mask() {
+        let config = config_with_forks(
+            r#"forks = [
+              { trigger = "A", positive_output = "B", negative_output = "A", layers = [1], match_any = "LShift" },
+              { trigger = "A", positive_output = "B", negative_output = "A", match_any = "LShift" },
+            ]"#,
+        );
+
+        let forks = config.behavior().unwrap().forks.unwrap().forks;
+        assert_eq!(forks[0].layers, 0b10);
+        assert_eq!(forks[1].layers, u32::MAX);
+    }
+
+    #[test]
+    fn invalid_fork_layers_are_errors() {
+        for (forks, message) in [
+            (
+                r#"forks = [{ trigger = "A", positive_output = "B", negative_output = "A", layers = [], match_any = "LShift" }]"#,
+                "layers list",
+            ),
+            (
+                r#"forks = [{ trigger = "A", positive_output = "B", negative_output = "A", layers = [2], match_any = "LShift" }]"#,
+                "must be below",
+            ),
+        ] {
+            let err = config_with_forks(forks).behavior().err().unwrap();
+            assert!(err.contains(message), "unexpected error: {err}");
+        }
     }
 }

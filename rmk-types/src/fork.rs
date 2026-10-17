@@ -93,6 +93,8 @@ pub struct Fork {
     /// Whether this fork's output is checked against other forks that have not
     /// yet triggered, allowing chained replacements.
     pub bindable: bool,
+    /// Bitmask of layers the trigger must come from. `u32::MAX` means all layers.
+    pub layers: u32,
 }
 
 impl Default for Fork {
@@ -119,6 +121,7 @@ impl Fork {
             match_none,
             kept_modifiers,
             bindable,
+            layers: u32::MAX,
         }
     }
 

@@ -333,6 +333,28 @@ impl KeyMapInner<'_> {
         self.behavior.default_layer
     }
 
+    fn cached_layer(&self, pos: KeyboardEventPos) -> Option<u8> {
+        let cache = match pos {
+            KeyboardEventPos::Key(key_pos) => {
+                let ci = self.cache_index(key_pos.row as usize, key_pos.col as usize);
+                self.layer_cache.get(ci)
+            }
+            KeyboardEventPos::RotaryEncoder(encoder_pos) if encoder_pos.direction != Direction::None => {
+                let ci = self.encoder_cache_index(encoder_pos.id as usize, encoder_pos.direction as usize);
+                self.encoder_layer_cache.get(ci)
+            }
+            KeyboardEventPos::Touch(touch_pos) => {
+                let ci = self.touch_cache_index(touch_pos.id as usize, touch_pos.gesture);
+                self.touch_layer_cache.get(ci)
+            }
+            KeyboardEventPos::RotaryEncoder(_)
+            | KeyboardEventPos::Combo(_)
+            | KeyboardEventPos::Macro
+            | KeyboardEventPos::Virtual(_) => None,
+        };
+        cache.copied()
+    }
+
     fn replace_layer_cache(&mut self, pos: KeyboardEventPos, layer: u8) -> u8 {
         let default_layer = self.behavior.default_layer;
         let cache = match pos {
@@ -525,6 +547,12 @@ impl<'a> KeyMap<'a> {
 
     pub(crate) fn get_action_at(&self, pos: KeyboardEventPos, layer: usize) -> KeyAction {
         self.inner.borrow().get_action_at(pos, layer)
+    }
+
+    /// The layer a held key came from. Combos and macros use the top active layer.
+    pub(crate) fn pressed_layer(&self, pos: KeyboardEventPos) -> u8 {
+        let inner = self.inner.borrow();
+        inner.cached_layer(pos).unwrap_or_else(|| inner.get_activated_layer())
     }
 
     /// Read the action currently bound to a `(layer, row, col)` position.
