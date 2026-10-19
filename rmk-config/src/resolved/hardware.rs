@@ -120,7 +120,7 @@ impl crate::KeyboardTomlConfig {
         let storage = if storage_toml.enabled {
             Some(Storage {
                 start_addr: storage_toml.start_addr.unwrap_or(0),
-                num_sectors: if self.get_dfu_config().is_some() {
+                num_sectors: if self.dfu.is_some() {
                     if self.storage_user_set {
                         storage_toml.num_sectors.unwrap_or(8)
                     } else {
@@ -221,11 +221,11 @@ impl crate::KeyboardTomlConfig {
                 .and_then(|p| p.dfu.as_ref())
             {
                 Some(d) => self.resolve_dfu(Some(d), &format!("[split.peripheral[{id}].dfu]")),
-                None => self.resolve_dfu(self.get_dfu_config().as_ref(), "[dfu]"),
+                None => self.resolve_dfu(self.dfu.as_ref(), "[dfu]"),
             },
             None => match self.split.as_ref().and_then(|s| s.central.dfu.as_ref()) {
                 Some(d) => self.resolve_dfu(Some(d), "[split.central.dfu]"),
-                None => self.resolve_dfu(self.get_dfu_config().as_ref(), "[dfu]"),
+                None => self.resolve_dfu(self.dfu.as_ref(), "[dfu]"),
             },
         }
     }
