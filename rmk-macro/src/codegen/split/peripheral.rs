@@ -76,6 +76,7 @@ pub(crate) fn parse_split_peripheral_mod(
             const KEYBOARD_DEVICE_CONFIG: ::rmk::config::DeviceConfig = ::rmk::config::DeviceConfig {
                 vid: #vid,
                 pid: #pid,
+                bcd_version: 0x0010,
                 manufacturer: #manufacturer,
                 product_name: #product_name,
                 serial_number: #serial_number_tokens,

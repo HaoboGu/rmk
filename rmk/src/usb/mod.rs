@@ -196,6 +196,7 @@ pub(crate) fn new_usb_builder<'d, D: Driver<'d>>(
     config_descriptor: &'d mut [u8],
 ) -> Builder<'d, D> {
     let mut usb_config = embassy_usb::Config::new(keyboard_config.vid, keyboard_config.pid);
+    usb_config.device_release = keyboard_config.bcd_version;
     usb_config.manufacturer = Some(keyboard_config.manufacturer);
     usb_config.product = Some(keyboard_config.product_name);
     // Informational tag (visible in `lsusb` & co); host discovery keys on the

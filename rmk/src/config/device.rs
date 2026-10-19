@@ -5,6 +5,8 @@ pub struct DeviceConfig<'a> {
     pub vid: u16,
     /// Product id
     pub pid: u16,
+    /// USB device release number (bcdDevice), encoded in binary-coded decimal.
+    pub bcd_version: u16,
     /// Manufacturer
     pub manufacturer: &'a str,
     /// Product name
@@ -30,6 +32,7 @@ impl Default for DeviceConfig<'_> {
         Self {
             vid: 0x4c4b,
             pid: 0x4643,
+            bcd_version: 0x0010,
             manufacturer: "RMK",
             product_name: "RMK Keyboard",
             serial_number: RMK_BUILD_INFO,
