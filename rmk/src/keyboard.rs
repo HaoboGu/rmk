@@ -1203,7 +1203,7 @@ impl<'a> Keyboard<'a> {
             self.process_key_action(&key.action, key.event, key.press_time).await;
         }
 
-        // Reset triggered combo states
+        // Keep triggered combos intact so their releases can still be matched.
         self.keymap.with_combos_mut(|combos| {
             combos
                 .iter_mut()
