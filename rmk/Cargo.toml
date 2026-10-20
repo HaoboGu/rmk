@@ -301,11 +301,11 @@ ssd1306 = { version = "0.10", optional = true, features = ["async"] }
 
 # Optional dependencies
 # BLE dependencies
-embassy-crypto-rustcrypto = { git = "https://github.com/embassy-rs/embassy.git", rev = "bd35bd7a7d19147c8bcae9c2eda99b25e597294c", optional = true, features = ["embassy-crypto-aes128-ecb", "embassy-crypto-aes128-cmac", "embassy-crypto-p256-ecdh"] }
-embassy-crypto = { git = "https://github.com/embassy-rs/embassy.git", rev = "bd35bd7a7d19147c8bcae9c2eda99b25e597294c", optional = true }
-rand_chacha = { version = "0.9", default-features = false, optional = true }
 bt-hci = { version = "0.11", optional = true }
-trouble-host = { git = "https://github.com/HaoboGu/trouble", branch = "rmk/multi-host", default-features = false, features = [
+embassy-crypto = { git = "https://github.com/embassy-rs/embassy.git", rev = "bd35bd7a7d19147c8bcae9c2eda99b25e597294c", optional = true }
+embassy-crypto-rustcrypto = { git = "https://github.com/embassy-rs/embassy.git", rev = "bd35bd7a7d19147c8bcae9c2eda99b25e597294c", optional = true, features = ["embassy-crypto-aes128-ecb", "embassy-crypto-aes128-cmac", "embassy-crypto-p256-ecdh"] }
+rand_chacha = { version = "0.9", default-features = false, optional = true }
+trouble-host = { git = "https://github.com/HaoboGu/trouble", rev = "daf8d3cad4919c06c82ab3aae18f13d36faf984c", default-features = false, features = [
     "peripheral",
     "gatt",
     "derive",

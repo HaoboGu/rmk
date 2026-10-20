@@ -2479,7 +2479,7 @@ dependencies = [
 [[package]]
 name = "trouble-host"
 version = "0.8.0"
-source = "git+https://github.com/HaoboGu/trouble?branch=rmk%2Fmulti-host#7dd6842d893f7bea75c81453672b4ed4412629e2"
+source = "git+https://github.com/HaoboGu/trouble?rev=daf8d3cad4919c06c82ab3aae18f13d36faf984c#daf8d3cad4919c06c82ab3aae18f13d36faf984c"
 dependencies = [
  "bt-hci",
  "defmt 1.1.1",
@@ -2499,7 +2499,7 @@ dependencies = [
 [[package]]
 name = "trouble-host-macros"
 version = "0.6.0"
-source = "git+https://github.com/HaoboGu/trouble?branch=rmk%2Fmulti-host#7dd6842d893f7bea75c81453672b4ed4412629e2"
+source = "git+https://github.com/HaoboGu/trouble?rev=daf8d3cad4919c06c82ab3aae18f13d36faf984c#daf8d3cad4919c06c82ab3aae18f13d36faf984c"
 dependencies = [
  "convert_case 0.8.0",
  "darling 0.20.11",
