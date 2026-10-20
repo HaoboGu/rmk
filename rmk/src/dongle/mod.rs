@@ -213,7 +213,7 @@ where
         self.profiles.load_bonded_devices().await;
         self.profiles.update_stack_bonds();
 
-        let bonded = self.profiles.active_bond_info().map(|b| b.info.identity.addr);
+        let bonded = self.profiles.bond_info(BOND_SLOT).map(|b| b.info.identity.addr);
         self.scan.bonded_addr.lock(|a| a.set(bonded.map(|addr| addr.addr)));
         // The only chance to pair while a bond exists: one window at boot, so a
         // keyboard the user already set seeking can replace the bonded one.
@@ -225,7 +225,7 @@ where
         }
 
         loop {
-            let bonded = self.profiles.active_bond_info().map(|b| b.info.identity.addr);
+            let bonded = self.profiles.bond_info(BOND_SLOT).map(|b| b.info.identity.addr);
             self.scan.bonded_addr.lock(|a| a.set(bonded.map(|addr| addr.addr)));
 
             if let Some(addr) = bonded {
