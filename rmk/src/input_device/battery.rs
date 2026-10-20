@@ -215,6 +215,7 @@ mod tests {
             for second in 1..=8 {
                 MockDriver::get().advance(Duration::from_secs(1));
                 assert!(poll!(run.as_mut()).is_pending());
+                assert!(poll!(run.as_mut()).is_pending());
                 if matches!(second, 2 | 7) {
                     assert_eq!(
                         current_battery_status(),

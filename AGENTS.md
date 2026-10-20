@@ -38,6 +38,12 @@ Run format test from root:
 bash scripts/format_all.sh
 ```
 
+Dependencies in every `Cargo.toml` are alphabetised with `cargo sort --grouped`: keys
+inside each blank-line-separated group are sorted, groups stay in place. Local path
+dependencies sit in their own first group; the examples order `rmk` first, then
+`esp-*`/`nrf-*`/`embassy-*`, then the rest. Apply it after editing dependencies with:
+`cargo sort --grouped $(git ls-files '*Cargo.toml')`.
+
 Behavioral test suite (RMK feature rows are defined by `RMK_TEST_FEATURESETS` in `.github/ci/_lib.sh`):
 ```bash
 bash scripts/test_all.sh

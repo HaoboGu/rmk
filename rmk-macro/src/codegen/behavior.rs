@@ -462,18 +462,27 @@ fn expand_forks(
         Some(forks) => {
             let forks_def = forks.forks.iter().map(|fork| {
                 let trigger = parse_key(fork.trigger.to_owned(), profiles);
-                let negative_output = parse_key(fork.negative_output.to_owned(), profiles);
+                let negative_output = fork.negative_output.as_ref().map_or(
+                    quote! { ::rmk::types::action::KeyAction::Transparent },
+                    |k| parse_key(k.to_owned(), profiles),
+                );
                 let positive_output = parse_key(fork.positive_output.to_owned(), profiles);
                 let match_any  = fork.match_any.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
                 let match_none = fork.match_none.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
                 let kept = fork.kept_modifiers.as_ref().map(|s| parse_state_combination(s)).unwrap_or_default();
                 let bindable = fork.bindable;
+                let layers = fork.layers;
 
                 if match_any.is_empty() && match_none.is_empty() {
                     panic!("\n❌ keyboard.toml: fork configuration missing match conditions!");
                 }
 
-                quote! { ::rmk::types::fork::Fork::new(#trigger, #negative_output, #positive_output, #match_any, #match_none, #kept.modifiers, #bindable) }
+                quote! {
+                    ::rmk::types::fork::Fork {
+                        layers: #layers,
+                        ..::rmk::types::fork::Fork::new(#trigger, #negative_output, #positive_output, #match_any, #match_none, #kept.modifiers, #bindable)
+                    }
+                }
             });
 
             quote! {

@@ -303,7 +303,7 @@ impl KeyMapInner<'_> {
 
     fn get_action_with_layer_cache(&mut self, event: KeyboardEvent) -> KeyAction {
         if !event.pressed {
-            let layer = self.pop_layer_from_cache(event.pos);
+            let layer = self.replace_layer_cache(event.pos, self.behavior.default_layer);
             return self.get_action_at(event.pos, layer as usize);
         }
 
@@ -313,7 +313,7 @@ impl KeyMapInner<'_> {
                 if action == KeyAction::Transparent {
                     continue;
                 }
-                self.save_layer_cache(event.pos, layer_idx as u8);
+                self.replace_layer_cache(event.pos, layer_idx as u8);
                 return action;
             }
             if layer_idx as u8 == self.behavior.default_layer {
@@ -322,7 +322,7 @@ impl KeyMapInner<'_> {
         }
 
         // Keep release on the same transparent default-layer action as press.
-        self.save_layer_cache(event.pos, self.behavior.default_layer);
+        self.replace_layer_cache(event.pos, self.behavior.default_layer);
         KeyAction::No
     }
 
@@ -335,7 +335,7 @@ impl KeyMapInner<'_> {
         self.behavior.default_layer
     }
 
-    fn pop_layer_from_cache(&mut self, pos: KeyboardEventPos) -> u8 {
+    fn replace_layer_cache(&mut self, pos: KeyboardEventPos, layer: u8) -> u8 {
         let default_layer = self.behavior.default_layer;
         let cache = match pos {
             KeyboardEventPos::Key(key_pos) => {
@@ -355,33 +355,7 @@ impl KeyMapInner<'_> {
             | KeyboardEventPos::Macro
             | KeyboardEventPos::Virtual { .. } => None,
         };
-        cache.map_or(default_layer, |cache| core::mem::replace(cache, default_layer))
-    }
-
-    fn save_layer_cache(&mut self, pos: KeyboardEventPos, layer_num: u8) {
-        match pos {
-            KeyboardEventPos::Key(key_pos) => {
-                let ci = self.cache_index(key_pos.row as usize, key_pos.col as usize);
-                if let Some(cache) = self.layer_cache.get_mut(ci) {
-                    *cache = layer_num;
-                }
-            }
-            KeyboardEventPos::RotaryEncoder(encoder_pos) => {
-                if encoder_pos.direction != Direction::None {
-                    let ci = self.encoder_cache_index(encoder_pos.id as usize, encoder_pos.direction as usize);
-                    if let Some(cache) = self.encoder_layer_cache.get_mut(ci) {
-                        *cache = layer_num;
-                    }
-                }
-            }
-            KeyboardEventPos::Touch(touch_pos) => {
-                let ci = self.touch_cache_index(touch_pos.id as usize, touch_pos.gesture);
-                if let Some(cache) = self.touch_layer_cache.get_mut(ci) {
-                    *cache = layer_num;
-                }
-            }
-            KeyboardEventPos::Combo(_) | KeyboardEventPos::Macro | KeyboardEventPos::Virtual { .. } => {}
-        }
+        cache.map_or(default_layer, |cache| core::mem::replace(cache, layer))
     }
 
     fn update_fn_layer_state(&mut self) {
@@ -553,6 +527,30 @@ impl<'a> KeyMap<'a> {
 
     pub(crate) fn get_action_at(&self, pos: KeyboardEventPos, layer: usize) -> KeyAction {
         self.inner.borrow().get_action_at(pos, layer)
+    }
+
+    /// The layer a held key came from. Combos and macros use the top active layer.
+    pub(crate) fn pressed_layer(&self, pos: KeyboardEventPos) -> u8 {
+        let inner = self.inner.borrow();
+        let cache = match pos {
+            KeyboardEventPos::Key(key_pos) => {
+                let ci = inner.cache_index(key_pos.row as usize, key_pos.col as usize);
+                inner.layer_cache.get(ci)
+            }
+            KeyboardEventPos::RotaryEncoder(encoder_pos) if encoder_pos.direction != Direction::None => {
+                let ci = inner.encoder_cache_index(encoder_pos.id as usize, encoder_pos.direction as usize);
+                inner.encoder_layer_cache.get(ci)
+            }
+            KeyboardEventPos::Touch(touch_pos) => {
+                let ci = inner.touch_cache_index(touch_pos.id as usize, touch_pos.gesture);
+                inner.touch_layer_cache.get(ci)
+            }
+            KeyboardEventPos::RotaryEncoder(_)
+            | KeyboardEventPos::Combo(_)
+            | KeyboardEventPos::Macro
+            | KeyboardEventPos::Virtual { .. } => None,
+        };
+        cache.copied().unwrap_or_else(|| inner.get_activated_layer())
     }
 
     /// Read the action currently bound to a `(layer, row, col)` position.

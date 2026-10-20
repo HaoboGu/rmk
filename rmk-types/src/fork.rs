@@ -80,7 +80,7 @@ impl StateBits {
 pub struct Fork {
     /// The key action that activates this fork. Should not be `KeyAction::Transparent`.
     pub trigger: KeyAction,
-    /// Output when the state condition is NOT met.
+    /// Output when the state condition is NOT met. `Transparent` leaves the key alone.
     pub negative_output: KeyAction,
     /// Output when the state condition IS met.
     pub positive_output: KeyAction,
@@ -93,6 +93,8 @@ pub struct Fork {
     /// Whether this fork's output is checked against other forks that have not
     /// yet triggered, allowing chained replacements.
     pub bindable: bool,
+    /// Bitmask of layers the trigger must come from. `u32::MAX` means all layers.
+    pub layers: u32,
 }
 
 impl Default for Fork {
@@ -119,6 +121,7 @@ impl Fork {
             match_none,
             kept_modifiers,
             bindable,
+            layers: u32::MAX,
         }
     }
 
