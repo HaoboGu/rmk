@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING**: Rename `KeyboardEventPos` to `KeyboardEventSource` and `KeyboardEvent::pos` to `source`.
 - **BREAKING**: Use bare `#[register_processor]` to run the type's `Runnable`. See [processor migration](https://rmk.rs/docs/migration/v09_v10#processors).
 - **BREAKING**: Keyboard macros are reworked around `MacroOp` lists.
 - **BREAKING**: Bump Rynk protocol version to 0.2: now `GetMacro`/`SetMacro` read and write a whole macro by index, `BleStatus` gained a `bonded` field, changing its wire format and that of `ConnectionStatus`, and `Fork` gained a `layers` field.
@@ -20,10 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `KeyboardEvent::keycode` executes a direct keycode without keymap, combo or fork lookup; `Virtual(u8)` remains a software keymap position.
 - Pointer acceleration in `PointingProcessor` for every pointing device: motion faster than a threshold is scaled up in proportion to its speed, up to a maximum, in cursor mode (`acceleration = { from, max }` in `keyboard.toml`) and scroll mode (`scroll_acceleration`). Off by default.
 - Fractional cursor speed: `CursorConfig::divisor_x`/`divisor_y` divide cursor motion, carrying the remainder between motions, so a cursor slower than the sensor loses no movement and still accelerates.
 - `TouchEvent`: raw multi-touch scans from touchpads, where up to five contacts are, by slot. They stay on the board the touchpad is on. `Iqs5xxMode::RawTouch` publishes them in place of cursor motion.
-- Touchpad gestures as keymap positions: a `KeyboardEvent` at `KeyboardEventPos::Touch` presses a `TouchGesture` of a touchpad, whose action comes from the keymap's touch map (`KeymapData::with_touch`), per layer like encoders. A gesture a layer leaves transparent takes its action from the layer below.
+- Touchpad gestures as keymap positions: a `KeyboardEvent` at `KeyboardEventSource::Touch` presses a `TouchGesture` of a touchpad, whose action comes from the keymap's touch map (`KeymapData::with_touch`), per layer like encoders. A gesture a layer leaves transparent takes its action from the layer below.
 - `PointingProcessor` turns a pointing device's own `H`/`V` axes into wheel and pan in every mode, scaled by `PointingProcessorConfig::device_scroll`. `ScrollConfig` is now `{ wheel, pan }`, one `ScrollAxis` each, so the same type serves scroll mode and device scrolling.
 - Add timer-only processors and combine polling with resettable deadlines through `#[processor]`. Both TOML and Rust projects implement `DeadlineProcessor::deadline()` and `on_deadline()` directly.
 - Macro operations accept any single action (`WM`, `MO`, `OSM`, ...) without the `vial` feature, and a new `pause_for_release` operation (`MacroOp::PauseForRelease`) runs the rest of the macro when the macro key is released
@@ -39,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Caret taps preserve held keys and modifiers by executing through Keyboard. Overlapping direct presses of the same keycode remain held until the last release.
 - Re-pairing a cleared BLE profile with the same host no longer leaves the profile marked as removed.
 - Apply processor registration conditions to both construction and execution.
 - Reject zero processor polling intervals at compile time.

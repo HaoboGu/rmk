@@ -823,9 +823,9 @@ impl<'a> PointingProcessor<'a> {
             PointingMode::Caret(caret_config) => {
                 if let Some((keycode, count)) = compute_caret_taps(x, y, &mut self.accumulator, &caret_config) {
                     for _ in 0..count {
-                        publish_event_async(KeyboardEvent::virtual_key(event.device_id, keycode, true)).await;
+                        publish_event_async(KeyboardEvent::keycode(keycode, true)).await;
                         Timer::after_millis(5).await;
-                        publish_event_async(KeyboardEvent::virtual_key(event.device_id, keycode, false)).await;
+                        publish_event_async(KeyboardEvent::keycode(keycode, false)).await;
                         Timer::after_millis(5).await;
                     }
                 }
@@ -1869,6 +1869,17 @@ mod tests {
                     expect_keyboard_report(2, &[HidKeyCode::A, HidKeyCode::Right]).await;
                     expect_keyboard_report(2, &[HidKeyCode::A, HidKeyCode::Right]).await;
                     publish_event_async(KeyboardEvent::key(0, 2, false)).await;
+                    expect_keyboard_report(2, &[HidKeyCode::A]).await;
+
+                    // Two devices can hold the same direct keycode at once.
+                    let mut second = PointingProcessor::new(&keymap, PointingProcessorConfig::default());
+                    second.set_pointing_mode(PointingMode::Caret(CaretConfig::default()));
+                    join(pointing.on_pointing_event(motion), async {
+                        Timer::after_millis(2).await;
+                        second.on_pointing_event(PointingEvent { device_id: 1, ..motion }).await;
+                    })
+                    .await;
+                    expect_keyboard_report(2, &[HidKeyCode::A, HidKeyCode::Right]).await;
                     expect_keyboard_report(2, &[HidKeyCode::A]).await;
 
                     // A modifier released during a tap takes effect before the tap ends.
