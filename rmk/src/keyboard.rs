@@ -417,15 +417,18 @@ impl<'a> Keyboard<'a> {
             self.fire_held_keys(decision_for_current_key, decisions).await;
 
         // Process current key action after all held keys are resolved
+        let key_action = if updated_decision_for_cur_key != KeyBehaviorDecision::Buffer
+            && keyboard_state_updated
+            && event.source.is_physical()
+        {
+            // The key_action needs to be updated due to the morse key might be triggered
+            &self.keymap.get_action_with_layer_cache(event)
+        } else {
+            key_action
+        };
         match updated_decision_for_cur_key {
             KeyBehaviorDecision::CleanBuffer | KeyBehaviorDecision::Release => {
                 debug!("Clean buffer, then process current key normally");
-                let key_action = if keyboard_state_updated && event.source.is_physical() {
-                    // The key_action needs to be updated due to the morse key might be triggered
-                    &self.keymap.get_action_with_layer_cache(event)
-                } else {
-                    key_action
-                };
                 self.process_key_action_inner(key_action, event, event_time).await
             }
             KeyBehaviorDecision::Buffer => {
@@ -447,20 +450,9 @@ impl<'a> Keyboard<'a> {
             KeyBehaviorDecision::Ignore => {
                 debug!("Current key is ignored or not buffered, process normally: {:?}", event);
                 // Process current key normally
-                let key_action = if keyboard_state_updated && event.source.is_physical() {
-                    // The key_action needs to be updated due to the morse key might be triggered
-                    &self.keymap.get_action_with_layer_cache(event)
-                } else {
-                    key_action
-                };
                 self.process_key_action_inner(key_action, event, event_time).await
             }
             KeyBehaviorDecision::FlowTap => {
-                let key_action = if keyboard_state_updated && event.source.is_physical() {
-                    &self.keymap.get_action_with_layer_cache(event)
-                } else {
-                    key_action
-                };
                 if !key_action.is_morse() || !Self::is_flow_tap_enabled(self.keymap, key_action) {
                     self.process_key_action_inner(key_action, event, event_time).await;
                     return;
