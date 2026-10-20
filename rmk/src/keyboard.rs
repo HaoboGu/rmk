@@ -214,9 +214,6 @@ pub struct Keyboard<'a> {
     /// Current registered keys, ordered by the press time
     registered: Vec<RegisteredKey, 16>,
 
-    /// Balanced direct-keycode inputs, including consumer/system aliases.
-    direct_key_presses: Vec<DirectKeyPress, 16>,
-
     /// Mouse state (report, acceleration, repeat counters, repeat deadlines)
     mouse: MouseState,
 
@@ -256,7 +253,6 @@ impl<'a> Keyboard<'a> {
             fork_keep_mask: ModifierCombination::default(),
             held_buffer: HeldBuffer::new(),
             registered: Vec::new(),
-            direct_key_presses: Vec::new(),
             mouse: MouseState::new(),
             media_report: MediaKeyboardReport { usage_id: 0 },
             system_control_report: SystemControlReport { usage_id: 0 },
@@ -389,42 +385,7 @@ impl<'a> Keyboard<'a> {
         report_activity();
 
         if let KeyboardEventSource::KeyCode(keycode) = event.source {
-            let resolved_keycode =
-                if let Some(i) = self.direct_key_presses.iter().position(|held| held.keycode == keycode) {
-                    let count = &mut self.direct_key_presses[i].count;
-                    if event.pressed {
-                        *count = count.saturating_add(1);
-                        return;
-                    }
-                    *count -= 1;
-                    if *count != 0 {
-                        return;
-                    }
-                    self.direct_key_presses.remove(i).resolved_keycode
-                } else {
-                    if !event.pressed {
-                        return;
-                    }
-                    let resolved_keycode = if keycode == HidKeyCode::Again {
-                        self.last_key_code
-                    } else {
-                        keycode
-                    };
-                    if self
-                        .direct_key_presses
-                        .push(DirectKeyPress {
-                            keycode,
-                            resolved_keycode,
-                            count: 1,
-                        })
-                        .is_err()
-                    {
-                        warn!("Too many held direct keycodes");
-                        return;
-                    }
-                    resolved_keycode
-                };
-            self.process_key_action_normal(Action::Key(KeyCode::Hid(resolved_keycode)), event)
+            self.process_key_action_normal(Action::Key(KeyCode::Hid(keycode)), event)
                 .await;
             return;
         }
@@ -1942,13 +1903,6 @@ impl<'a> Keyboard<'a> {
     }
 }
 
-struct DirectKeyPress {
-    keycode: HidKeyCode,
-    // Again must release the key chosen on press, even if another key has since fired.
-    resolved_keycode: HidKeyCode,
-    count: u16,
-}
-
 #[derive(Clone, Copy, Debug)]
 struct RegisteredKey {
     /// The source of the registered key.
@@ -2216,12 +2170,11 @@ mod test {
                 .process_inner(KeyboardEvent::keycode(HidKeyCode::Up, false))
                 .await;
             assert!(keyboard.registered.is_empty());
-            assert!(keyboard.direct_key_presses.is_empty());
         });
     }
 
     #[test]
-    fn direct_keycodes_balance_overlaps_without_releasing_physical_keys() {
+    fn repeated_direct_presses_do_not_release_physical_keys() {
         block_on(async {
             let mut keyboard = create_test_keyboard();
             for keycode in [HidKeyCode::Right, HidKeyCode::LShift] {
@@ -2232,12 +2185,8 @@ mod test {
                 );
                 keyboard.process_inner(KeyboardEvent::key(0, 0, true)).await;
                 keyboard.process_inner(KeyboardEvent::key(0, 0, true)).await;
-                for _ in 0..256 {
-                    keyboard.process_inner(KeyboardEvent::keycode(keycode, true)).await;
-                }
-                for _ in 0..255 {
-                    keyboard.process_inner(KeyboardEvent::keycode(keycode, false)).await;
-                }
+                keyboard.process_inner(KeyboardEvent::keycode(keycode, true)).await;
+                keyboard.process_inner(KeyboardEvent::keycode(keycode, true)).await;
                 assert_eq!(keyboard.registered.len(), 2);
                 keyboard.process_inner(KeyboardEvent::keycode(keycode, false)).await;
                 assert_eq!(keyboard.registered.len(), 1);
@@ -2246,33 +2195,13 @@ mod test {
                 assert_eq!(keyboard.registered.len(), 1);
                 keyboard.process_inner(KeyboardEvent::key(0, 0, false)).await;
                 assert!(keyboard.registered.is_empty());
-                assert!(keyboard.direct_key_presses.is_empty());
             }
-        });
-    }
-
-    #[test]
-    fn direct_repeat_releases_the_key_it_pressed() {
-        block_on(async {
-            let mut keyboard = create_test_keyboard();
-            for (keycode, pressed) in [
-                (HidKeyCode::A, true),
-                (HidKeyCode::A, false),
-                (HidKeyCode::Again, true),
-                (HidKeyCode::AudioVolUp, true),
-                (HidKeyCode::AudioVolUp, false),
-                (HidKeyCode::Again, false),
-            ] {
-                keyboard.process_inner(KeyboardEvent::keycode(keycode, pressed)).await;
-            }
-            assert!(keyboard.registered.is_empty());
-            assert!(keyboard.direct_key_presses.is_empty());
         });
     }
 
     #[cfg(not(feature = "_no_usb"))]
     #[test]
-    fn direct_keycodes_consume_oneshot_and_balance_consumer_aliases() {
+    fn direct_keycodes_use_normal_oneshot_and_consumer_execution() {
         use rmk_types::connection::UsbState;
         use rmk_types::keycode::ConsumerKey;
 
@@ -2309,20 +2238,12 @@ mod test {
             };
             assert_eq!({ report.usage_id }, u16::from(ConsumerKey::VolumeIncrement));
             keyboard
-                .process_inner(KeyboardEvent::keycode(HidKeyCode::AudioVolUp, true))
-                .await;
-            keyboard
-                .process_inner(KeyboardEvent::keycode(HidKeyCode::AudioVolUp, false))
-                .await;
-            assert!(USB_REPORT_CHANNEL.try_receive().is_err());
-            keyboard
                 .process_inner(KeyboardEvent::keycode(HidKeyCode::AudioVolUp, false))
                 .await;
             let Report::MediaKeyboardReport(report) = USB_REPORT_CHANNEL.try_receive().unwrap() else {
                 panic!()
             };
             assert_eq!({ report.usage_id }, 0);
-            assert!(keyboard.direct_key_presses.is_empty());
         });
     }
 

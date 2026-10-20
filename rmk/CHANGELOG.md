@@ -41,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Caret taps preserve held keys and modifiers by executing through Keyboard. Overlapping direct presses of the same keycode remain held until the last release.
+- Caret taps preserve held keys and modifiers by executing through Keyboard.
 - Re-pairing a cleared BLE profile with the same host no longer leaves the profile marked as removed.
 - Apply processor registration conditions to both construction and execution.
 - Reject zero processor polling intervals at compile time.

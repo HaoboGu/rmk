@@ -1871,17 +1871,6 @@ mod tests {
                     publish_event_async(KeyboardEvent::key(0, 2, false)).await;
                     expect_keyboard_report(2, &[HidKeyCode::A]).await;
 
-                    // Two devices can hold the same direct keycode at once.
-                    let mut second = PointingProcessor::new(&keymap, PointingProcessorConfig::default());
-                    second.set_pointing_mode(PointingMode::Caret(CaretConfig::default()));
-                    join(pointing.on_pointing_event(motion), async {
-                        Timer::after_millis(2).await;
-                        second.on_pointing_event(PointingEvent { device_id: 1, ..motion }).await;
-                    })
-                    .await;
-                    expect_keyboard_report(2, &[HidKeyCode::A, HidKeyCode::Right]).await;
-                    expect_keyboard_report(2, &[HidKeyCode::A]).await;
-
                     // A modifier released during a tap takes effect before the tap ends.
                     join(pointing.on_pointing_event(motion), async {
                         Timer::after_millis(2).await;

@@ -102,7 +102,7 @@ Caret mode accumulates movement until it exceeds `threshold`, then sends the con
 
 ::: note
 
-Caret mode preserves held keys and modifiers, so holding Shift or Ctrl also modifies the arrow key taps. The configured keycodes bypass keymap, combo, and fork lookup. If multiple devices overlap on the same keycode, it stays held until the last release; overlapping taps do not create separate key-down transitions.
+Caret mode preserves held keys and modifiers, so holding Shift or Ctrl also modifies the arrow key taps. The configured keycodes bypass keymap, combo, and fork lookup. Direct inputs of the same keycode share press/release state.
 
 :::
 

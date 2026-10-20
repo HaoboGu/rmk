@@ -62,8 +62,7 @@ impl KeyboardEvent {
     }
 
     /// A direct keycode, bypassing keymap, combo and fork lookup.
-    /// Every press must have a matching release. Overlaps execute only the first
-    /// press and last release; up to 16 distinct direct keycodes may be held.
+    /// Direct inputs of the same keycode share press/release state.
     pub fn keycode(keycode: HidKeyCode, pressed: bool) -> Self {
         Self {
             pressed,
@@ -87,7 +86,7 @@ pub enum KeyboardEventSource {
     Macro,
     /// A software keymap position, independent of the action assigned to it.
     Virtual(u8),
-    /// A direct keycode. Balanced presses share a count until the last release.
+    /// A direct keycode, independent of the active layer.
     KeyCode(HidKeyCode),
 }
 
