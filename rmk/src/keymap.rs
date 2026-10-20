@@ -11,7 +11,7 @@ use {
 };
 
 use crate::config::{BehaviorConfig, Hand, MouseKeyConfig, OneShotModifiersConfig, PositionalConfig};
-use crate::event::{KeyboardEvent, KeyboardEventPos, LayerChangeEvent, publish_event};
+use crate::event::{KeyboardEvent, KeyboardEventSource, LayerChangeEvent, publish_event};
 use crate::input_device::rotary_encoder::Direction;
 use crate::keyboard::combo::Combo;
 use crate::keyboard::macros::Macros;
@@ -230,9 +230,9 @@ impl KeyMapInner<'_> {
         }
     }
 
-    fn get_action_at(&self, pos: KeyboardEventPos, layer_num: usize) -> KeyAction {
-        match pos {
-            KeyboardEventPos::Key(key_pos) => {
+    fn get_action_at(&self, source: KeyboardEventSource, layer_num: usize) -> KeyAction {
+        match source {
+            KeyboardEventSource::Key(key_pos) => {
                 let row = key_pos.row as usize;
                 let col = key_pos.col as usize;
                 if row >= self.row || col >= self.col || layer_num >= self.num_layer {
@@ -242,7 +242,7 @@ impl KeyMapInner<'_> {
                 }
                 self.layers[self.layer_index(layer_num, row, col)]
             }
-            KeyboardEventPos::RotaryEncoder(encoder_pos) => {
+            KeyboardEventSource::RotaryEncoder(encoder_pos) => {
                 if let Some(encoders) = &self.encoders
                     && encoder_pos.direction != Direction::None
                 {
@@ -257,20 +257,23 @@ impl KeyMapInner<'_> {
                 }
                 KeyAction::No
             }
-            KeyboardEventPos::Touch(touch_pos) => {
+            KeyboardEventSource::Touch(touch_pos) => {
                 let id = touch_pos.id as usize;
                 if id >= self.num_touchpad || layer_num >= self.num_layer {
                     return KeyAction::No;
                 }
                 self.touchpads[self.touch_index(layer_num, id)].get(touch_pos.gesture)
             }
-            KeyboardEventPos::Combo(_) | KeyboardEventPos::Macro | KeyboardEventPos::Virtual(_) => KeyAction::No,
+            KeyboardEventSource::Combo(_)
+            | KeyboardEventSource::Macro
+            | KeyboardEventSource::Virtual(_)
+            | KeyboardEventSource::KeyCode(_) => KeyAction::No,
         }
     }
 
-    fn set_action_at(&mut self, pos: KeyboardEventPos, layer_num: usize, action: KeyAction) {
-        match pos {
-            KeyboardEventPos::Key(key_pos) => {
+    fn set_action_at(&mut self, source: KeyboardEventSource, layer_num: usize, action: KeyAction) {
+        match source {
+            KeyboardEventSource::Key(key_pos) => {
                 let row = key_pos.row as usize;
                 let col = key_pos.col as usize;
                 if row >= self.row || col >= self.col || layer_num >= self.num_layer {
@@ -280,7 +283,7 @@ impl KeyMapInner<'_> {
                 let idx = self.layer_index(layer_num, row, col);
                 self.layers[idx] = action;
             }
-            KeyboardEventPos::RotaryEncoder(encoder_pos) => {
+            KeyboardEventSource::RotaryEncoder(encoder_pos) => {
                 let idx = self.encoder_index(layer_num, encoder_pos.id as usize);
                 if let Some(encoders) = &mut self.encoders
                     && let Some(encoder_action) = encoders.get_mut(idx)
@@ -292,26 +295,27 @@ impl KeyMapInner<'_> {
                     }
                 }
             }
-            KeyboardEventPos::Touch(_)
-            | KeyboardEventPos::Combo(_)
-            | KeyboardEventPos::Macro
-            | KeyboardEventPos::Virtual(_) => {}
+            KeyboardEventSource::Touch(_)
+            | KeyboardEventSource::Combo(_)
+            | KeyboardEventSource::Macro
+            | KeyboardEventSource::Virtual(_)
+            | KeyboardEventSource::KeyCode(_) => {}
         }
     }
 
     fn get_action_with_layer_cache(&mut self, event: KeyboardEvent) -> KeyAction {
         if !event.pressed {
-            let layer = self.replace_layer_cache(event.pos, self.behavior.default_layer);
-            return self.get_action_at(event.pos, layer as usize);
+            let layer = self.replace_layer_cache(event.source, self.behavior.default_layer);
+            return self.get_action_at(event.source, layer as usize);
         }
 
         for layer_idx in (0..self.num_layer).rev() {
             if self.layer_state[layer_idx] || layer_idx as u8 == self.behavior.default_layer {
-                let action = self.get_action_at(event.pos, layer_idx);
+                let action = self.get_action_at(event.source, layer_idx);
                 if action == KeyAction::Transparent {
                     continue;
                 }
-                self.replace_layer_cache(event.pos, layer_idx as u8);
+                self.replace_layer_cache(event.source, layer_idx as u8);
                 return action;
             }
             if layer_idx as u8 == self.behavior.default_layer {
@@ -320,7 +324,7 @@ impl KeyMapInner<'_> {
         }
 
         // Keep release on the same transparent default-layer action as press.
-        self.replace_layer_cache(event.pos, self.behavior.default_layer);
+        self.replace_layer_cache(event.source, self.behavior.default_layer);
         KeyAction::No
     }
 
@@ -333,25 +337,26 @@ impl KeyMapInner<'_> {
         self.behavior.default_layer
     }
 
-    fn replace_layer_cache(&mut self, pos: KeyboardEventPos, layer: u8) -> u8 {
+    fn replace_layer_cache(&mut self, source: KeyboardEventSource, layer: u8) -> u8 {
         let default_layer = self.behavior.default_layer;
-        let cache = match pos {
-            KeyboardEventPos::Key(key_pos) => {
+        let cache = match source {
+            KeyboardEventSource::Key(key_pos) => {
                 let ci = self.cache_index(key_pos.row as usize, key_pos.col as usize);
                 self.layer_cache.get_mut(ci)
             }
-            KeyboardEventPos::RotaryEncoder(encoder_pos) if encoder_pos.direction != Direction::None => {
+            KeyboardEventSource::RotaryEncoder(encoder_pos) if encoder_pos.direction != Direction::None => {
                 let ci = self.encoder_cache_index(encoder_pos.id as usize, encoder_pos.direction as usize);
                 self.encoder_layer_cache.get_mut(ci)
             }
-            KeyboardEventPos::Touch(touch_pos) => {
+            KeyboardEventSource::Touch(touch_pos) => {
                 let ci = self.touch_cache_index(touch_pos.id as usize, touch_pos.gesture);
                 self.touch_layer_cache.get_mut(ci)
             }
-            KeyboardEventPos::RotaryEncoder(_)
-            | KeyboardEventPos::Combo(_)
-            | KeyboardEventPos::Macro
-            | KeyboardEventPos::Virtual(_) => None,
+            KeyboardEventSource::RotaryEncoder(_)
+            | KeyboardEventSource::Combo(_)
+            | KeyboardEventSource::Macro
+            | KeyboardEventSource::Virtual(_)
+            | KeyboardEventSource::KeyCode(_) => None,
         };
         cache.map_or(default_layer, |cache| core::mem::replace(cache, layer))
     }
@@ -523,30 +528,31 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow_mut().get_action_with_layer_cache(event)
     }
 
-    pub(crate) fn get_action_at(&self, pos: KeyboardEventPos, layer: usize) -> KeyAction {
-        self.inner.borrow().get_action_at(pos, layer)
+    pub(crate) fn get_action_at(&self, source: KeyboardEventSource, layer: usize) -> KeyAction {
+        self.inner.borrow().get_action_at(source, layer)
     }
 
     /// The layer a held key came from. Combos and macros use the top active layer.
-    pub(crate) fn pressed_layer(&self, pos: KeyboardEventPos) -> u8 {
+    pub(crate) fn pressed_layer(&self, source: KeyboardEventSource) -> u8 {
         let inner = self.inner.borrow();
-        let cache = match pos {
-            KeyboardEventPos::Key(key_pos) => {
+        let cache = match source {
+            KeyboardEventSource::Key(key_pos) => {
                 let ci = inner.cache_index(key_pos.row as usize, key_pos.col as usize);
                 inner.layer_cache.get(ci)
             }
-            KeyboardEventPos::RotaryEncoder(encoder_pos) if encoder_pos.direction != Direction::None => {
+            KeyboardEventSource::RotaryEncoder(encoder_pos) if encoder_pos.direction != Direction::None => {
                 let ci = inner.encoder_cache_index(encoder_pos.id as usize, encoder_pos.direction as usize);
                 inner.encoder_layer_cache.get(ci)
             }
-            KeyboardEventPos::Touch(touch_pos) => {
+            KeyboardEventSource::Touch(touch_pos) => {
                 let ci = inner.touch_cache_index(touch_pos.id as usize, touch_pos.gesture);
                 inner.touch_layer_cache.get(ci)
             }
-            KeyboardEventPos::RotaryEncoder(_)
-            | KeyboardEventPos::Combo(_)
-            | KeyboardEventPos::Macro
-            | KeyboardEventPos::Virtual(_) => None,
+            KeyboardEventSource::RotaryEncoder(_)
+            | KeyboardEventSource::Combo(_)
+            | KeyboardEventSource::Macro
+            | KeyboardEventSource::Virtual(_)
+            | KeyboardEventSource::KeyCode(_) => None,
         };
         cache.copied().unwrap_or_else(|| inner.get_activated_layer())
     }
@@ -560,7 +566,7 @@ impl<'a> KeyMap<'a> {
     pub fn action_at_pos(&self, layer: usize, row: u8, col: u8) -> KeyAction {
         self.inner
             .borrow()
-            .get_action_at(KeyboardEventPos::key_pos(col, row), layer)
+            .get_action_at(KeyboardEventSource::key_pos(col, row), layer)
     }
 
     /// Active layer index (after layer-toggle/momentary updates).
@@ -568,8 +574,8 @@ impl<'a> KeyMap<'a> {
         self.inner.borrow().get_activated_layer()
     }
 
-    pub(crate) fn set_action_at(&self, pos: KeyboardEventPos, layer: usize, action: KeyAction) {
-        self.inner.borrow_mut().set_action_at(pos, layer, action);
+    pub(crate) fn set_action_at(&self, source: KeyboardEventSource, layer: usize, action: KeyAction) {
+        self.inner.borrow_mut().set_action_at(source, layer, action);
     }
 
     pub(crate) fn activate_layer(&self, layer_num: u8) {
@@ -984,7 +990,7 @@ mod test {
         use rmk_types::action::KeyAction;
 
         use crate::config::{BehaviorConfig, PositionalConfig};
-        use crate::event::KeyboardEventPos;
+        use crate::event::KeyboardEventSource;
         use crate::keymap::{KeyMap, KeymapData};
 
         // One key per layer: layer 0 holds A, layer 1 holds B.
@@ -994,20 +1000,29 @@ mod test {
         let keymap = KeyMap::build(&mut data, &mut behavior, &positional);
 
         // Positive control: a valid position resolves normally.
-        assert_eq!(keymap.get_action_at(KeyboardEventPos::key_pos(0, 0), 0), k!(A));
+        assert_eq!(keymap.get_action_at(KeyboardEventSource::key_pos(0, 0), 0), k!(A));
 
         // Out-of-range col and layer read as No instead of panicking.
-        assert_eq!(keymap.get_action_at(KeyboardEventPos::key_pos(1, 0), 0), KeyAction::No);
-        assert_eq!(keymap.get_action_at(KeyboardEventPos::key_pos(0, 0), 2), KeyAction::No);
+        assert_eq!(
+            keymap.get_action_at(KeyboardEventSource::key_pos(1, 0), 0),
+            KeyAction::No
+        );
+        assert_eq!(
+            keymap.get_action_at(KeyboardEventSource::key_pos(0, 0), 2),
+            KeyAction::No
+        );
 
         // Out-of-range row: the flat index would wrap into layer 1's [0][0],
         // which holds B. The bounds check must return No, not the wrapped action.
-        assert_eq!(keymap.get_action_at(KeyboardEventPos::key_pos(0, 1), 0), KeyAction::No);
+        assert_eq!(
+            keymap.get_action_at(KeyboardEventSource::key_pos(0, 1), 0),
+            KeyAction::No
+        );
 
         // Out-of-range writes are dropped without panicking or corrupting
         // the wrapped slot.
-        keymap.set_action_at(KeyboardEventPos::key_pos(0, 1), 0, k!(C));
-        assert_eq!(keymap.get_action_at(KeyboardEventPos::key_pos(0, 0), 1), k!(B));
+        keymap.set_action_at(KeyboardEventSource::key_pos(0, 1), 0, k!(C));
+        assert_eq!(keymap.get_action_at(KeyboardEventSource::key_pos(0, 0), 1), k!(B));
     }
 
     #[test]

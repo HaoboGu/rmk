@@ -35,7 +35,7 @@ use rmk::config::RmkConfig;
 use rmk::config::StorageConfig;
 use rmk::config::{BehaviorConfig, Hand, PositionalConfig};
 use rmk::core_traits::Runnable;
-use rmk::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEvent, KeyboardEventPos};
+use rmk::event::{AsyncEventPublisher, AsyncPublishableEvent, KeyboardEvent, KeyboardEventSource};
 use rmk::hid::{KeyboardReport, Report};
 use rmk::input_device::rotary_encoder::Direction;
 use rmk::keyboard::Keyboard;
@@ -409,7 +409,7 @@ impl SimKeyboard {
 /// the host end of the link the caller's session runs on.
 async fn run_steps(steps: Vec<SimStep>, to_device: &Link, from_device: &Link) {
     let sender = KeyboardEvent::publisher_async().expect("free publisher slot for the scenario driver");
-    let mut pressed_inputs = Vec::<KeyboardEventPos>::new();
+    let mut pressed_inputs = Vec::<KeyboardEventSource>::new();
     // Codegen queues one step per `expect` entry, in order, so the nth
     // expectation played is the scenario's `expect[n]`.
     let mut expects = 0usize;
@@ -420,18 +420,18 @@ async fn run_steps(steps: Vec<SimStep>, to_device: &Link, from_device: &Link) {
             SimStep::Event(event) => {
                 if event.pressed {
                     assert!(
-                        !pressed_inputs.contains(&event.pos),
+                        !pressed_inputs.contains(&event.source),
                         "input {} was pressed twice without a release",
-                        input(event.pos)
+                        input(event.source)
                     );
-                    pressed_inputs.push(event.pos);
+                    pressed_inputs.push(event.source);
                 } else {
-                    let Some(pos) = pressed_inputs.iter().position(|pressed| *pressed == event.pos) else {
-                        panic!("input {} was released without a matching press", input(event.pos));
+                    let Some(pos) = pressed_inputs.iter().position(|pressed| *pressed == event.source) else {
+                        panic!("input {} was released without a matching press", input(event.source));
                     };
                     pressed_inputs.swap_remove(pos);
                 }
-                let waiting = format!("publishing {} blocked for {TIMEOUT_SECS}s", input(event.pos));
+                let waiting = format!("publishing {} blocked for {TIMEOUT_SECS}s", input(event.source));
                 with_timeout(sender.publish_async(event), &waiting).await;
             }
             SimStep::Delay(duration) => Timer::after(duration).await,
@@ -621,14 +621,15 @@ fn summary(report: &Report) -> String {
 }
 
 /// An input position in the `[row, col]` vocabulary a scenario's steps write.
-fn input(pos: KeyboardEventPos) -> String {
+fn input(pos: KeyboardEventSource) -> String {
     match pos {
-        KeyboardEventPos::Key(key) => format!("key [{}, {}]", key.row, key.col),
-        KeyboardEventPos::RotaryEncoder(pos) => format!("encoder {} {:?}", pos.id, pos.direction),
-        KeyboardEventPos::Touch(pos) => format!("touchpad {} {:?}", pos.id, pos.gesture),
-        KeyboardEventPos::Combo(idx) => format!("combo {idx}"),
-        KeyboardEventPos::Macro => "macro".to_string(),
-        KeyboardEventPos::Virtual(idx) => format!("virtual {idx}"),
+        KeyboardEventSource::Key(key) => format!("key [{}, {}]", key.row, key.col),
+        KeyboardEventSource::RotaryEncoder(pos) => format!("encoder {} {:?}", pos.id, pos.direction),
+        KeyboardEventSource::Touch(pos) => format!("touchpad {} {:?}", pos.id, pos.gesture),
+        KeyboardEventSource::Combo(idx) => format!("combo {idx}"),
+        KeyboardEventSource::Macro => "macro".to_string(),
+        KeyboardEventSource::Virtual(id) => format!("virtual {id}"),
+        KeyboardEventSource::KeyCode(keycode) => format!("keycode {keycode:?}"),
     }
 }
 

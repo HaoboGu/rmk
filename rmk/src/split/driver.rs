@@ -15,7 +15,7 @@ use crate::event::DfuCmdEvent;
 #[cfg(feature = "_ble")]
 use crate::event::{BatteryStatusEvent, PeripheralBatteryEvent};
 use crate::event::{
-    KeyboardEvent, KeyboardEventPos, PeripheralConnectedEvent, SubscribableEvent, publish_event, publish_event_async,
+    KeyboardEvent, KeyboardEventSource, PeripheralConnectedEvent, SubscribableEvent, publish_event, publish_event_async,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -278,8 +278,8 @@ impl<T: SplitReader + SplitWriter> PeripheralManager<T> {
     async fn process_peripheral_message(&self, split_message: SplitMessage) {
         trace!("Got message from peripheral: {:?}", split_message);
         match split_message {
-            SplitMessage::Key(e) => match e.pos {
-                KeyboardEventPos::Key(key_pos) => {
+            SplitMessage::Key(e) => match e.source {
+                KeyboardEventSource::Key(key_pos) => {
                     // Verify the row/col
                     if key_pos.row >= self.matrix_config.rows || key_pos.col >= self.matrix_config.cols {
                         error!("Invalid peripheral row/col: {} {}", key_pos.row, key_pos.col);
