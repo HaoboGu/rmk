@@ -1891,28 +1891,6 @@ mod tests {
     }
 
     #[test]
-    fn test_pointing_processor_mode_selection() {
-        // Test that the processor correctly selects the mode based on current layer
-        let modes = [
-            PointingMode::Cursor(CursorConfig::default()),
-            PointingMode::Scroll(ScrollConfig::default()),
-            PointingMode::Sniper(SniperConfig {
-                multiplier: 1,
-                divisor: 4,
-                invert_x: false,
-                invert_y: false,
-            }),
-            PointingMode::Caret(CaretConfig::default()),
-            PointingMode::Cursor(CursorConfig::default()),
-        ];
-
-        // Verify all modes are correctly stored
-        for (i, expected_mode) in modes.iter().enumerate() {
-            assert_eq!(&modes[i], expected_mode);
-        }
-    }
-
-    #[test]
     fn test_pointing_scroll_mode_zero_motion_prevention() {
         let mut acc = MotionAccumulator::default();
         let config = ScrollConfig {
