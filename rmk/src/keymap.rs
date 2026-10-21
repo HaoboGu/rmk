@@ -55,20 +55,7 @@ pub struct KeymapData<
 impl<const ROW: usize, const COL: usize, const NUM_LAYER: usize> KeymapData<ROW, COL, NUM_LAYER, 0> {
     /// Create keymap data for a keyboard without encoders.
     pub const fn new(keymap: [[[KeyAction; COL]; ROW]; NUM_LAYER]) -> Self {
-        Self {
-            keymap,
-            encoder_map: [const { [] }; NUM_LAYER],
-            touch_map: [const { [] }; NUM_LAYER],
-            layer_state: [false; NUM_LAYER],
-            layer_cache: [[0; COL]; ROW],
-            encoder_layer_cache: [],
-            touch_layer_cache: [],
-            layout_option: 0,
-            #[cfg(feature = "host")]
-            macros: [0; crate::MACRO_SPACE_SIZE],
-            #[cfg(feature = "host")]
-            macros_stored: false,
-        }
+        Self::new_with_encoder(keymap, [const { [] }; NUM_LAYER])
     }
 }
 
