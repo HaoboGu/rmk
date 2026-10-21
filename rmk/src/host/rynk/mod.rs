@@ -4,7 +4,7 @@
 //! [`run_session`](RynkService::run_session) creates its own authorization gate
 //! ([`HostLock`]) and topic subscriptions, so transports never share either.
 
-mod handlers;
+pub(crate) mod handlers;
 mod topics;
 
 use embassy_futures::select::{Either, select};
@@ -80,20 +80,20 @@ impl<'a> RynkService<'a> {
     async fn dispatch(&self, locker: &HostLock<'_>, msg: &mut RynkMessage<'_>) -> Result<(), RynkError> {
         let cmd = msg.header().cmd;
 
-        if self.requires_unlock(cmd) && !locker.is_unlocked() {
+        if self.requires_unlock(cmd) && !locker.take_unlock() {
             return Err(RynkError::Locked);
         }
 
         match cmd {
-            Cmd::GetVersion => serve::<command::GetVersion, _>(self, msg).await,
+            Cmd::GetVersion => serve::<command::GetVersion, _>(&self.device, msg).await,
             Cmd::GetCapabilities => serve::<command::GetCapabilities, _>(self, msg).await,
-            Cmd::Reboot => serve::<command::Reboot, _>(self, msg).await,
-            Cmd::BootloaderJump => serve::<command::BootloaderJump, _>(self, msg).await,
+            Cmd::Reboot => serve::<command::Reboot, _>(&self.device, msg).await,
+            Cmd::BootloaderJump => serve::<command::BootloaderJump, _>(&self.device, msg).await,
             Cmd::StorageReset => serve::<command::StorageReset, _>(self, msg).await,
             Cmd::GetLockStatus => serve::<command::GetLockStatus, _>(locker, msg).await,
             Cmd::UnlockPoll => serve::<command::UnlockPoll, _>(locker, msg).await,
             Cmd::Lock => serve::<command::Lock, _>(locker, msg).await,
-            Cmd::GetDeviceInfo => serve::<command::GetDeviceInfo, _>(self, msg).await,
+            Cmd::GetDeviceInfo => serve::<command::GetDeviceInfo, _>(&self.device, msg).await,
 
             Cmd::GetKeyAction => serve::<command::GetKeyAction, _>(self, msg).await,
             Cmd::SetKeyAction => serve::<command::SetKeyAction, _>(self, msg).await,
@@ -141,7 +141,7 @@ impl<'a> RynkService<'a> {
             Cmd::GetSleepState => serve::<command::GetSleepState, _>(self, msg).await,
             Cmd::GetLedIndicator => serve::<command::GetLedIndicator, _>(self, msg).await,
 
-            Cmd::GetLayout => serve::<command::GetLayout, _>(self, msg).await,
+            Cmd::GetLayout => serve::<command::GetLayout, _>(&self.ctx.layout_blob(), msg).await,
 
             _ => Err(RynkError::UnknownCmd),
         }
@@ -406,17 +406,18 @@ mod tests {
 
         let mut chunks = VecDeque::new();
         chunks.push_back(req(Cmd::UnlockPoll.raw(), 0));
-        chunks.push_back(req(Cmd::GetMatrixState.raw(), 1));
+        chunks.push_back(req(Cmd::GetLockStatus.raw(), 1));
         let mut rx = ChunkRead { chunks };
         let mut tx = VecWrite { captured: Vec::new() };
         block_on(service.run_session(&mut rx, &mut tx));
 
         let resp = decode_frames(&tx.captured);
         assert!(
-            postcard::from_bytes::<Result<MatrixState, RynkError>>(&resp[1].2)
+            !postcard::from_bytes::<Result<LockStatus, RynkError>>(&resp[1].2)
                 .unwrap()
-                .is_ok(),
-            "gated command served once unlocked"
+                .unwrap()
+                .locked,
+            "the first session ends with an unused authorization"
         );
 
         let mut chunks2 = VecDeque::new();
