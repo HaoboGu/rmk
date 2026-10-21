@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use embassy_time::Instant;
 use embedded_io_async::{Read, Write};
-use rmk_types::protocol::vial::{VIA_FIRMWARE_VERSION, VIA_PROTOCOL_VERSION, ViaCommand, ViaKeyboardInfo};
+use rmk_types::protocol::vial::{VIA_FIRMWARE_VERSION, ViaCommand, ViaKeyboardInfo};
 use vial::process_vial;
 
 use crate::config::{RmkConfig, VialConfig};
@@ -9,16 +9,15 @@ use crate::hid::ViaReport;
 use crate::host::context::KeyboardContext;
 use crate::host::via::keycode_convert::{from_via_keycode, to_via_keycode};
 use crate::keymap::KeyMap;
-use crate::{MACRO_MAX_NUM, MACRO_SPACE_SIZE, boot};
+use crate::{MACRO_MAX_NUM, MACRO_SPACE_SIZE};
 
 pub(crate) mod keycode_convert;
+pub(crate) mod system;
 mod vial;
 
 pub struct VialService<'a> {
     ctx: KeyboardContext<'a>,
     vial_config: VialConfig<'static>,
-    #[cfg(feature = "host_lock")]
-    locker: crate::host::lock::HostLock<'a>,
 }
 
 impl<'a> VialService<'a> {
@@ -26,26 +25,27 @@ impl<'a> VialService<'a> {
         Self {
             ctx: KeyboardContext::new(keymap),
             vial_config: config.vial_config,
-            // Vial's poll cadence is ~100 ms (`VialCommand::UnlockPoll`).
-            #[cfg(feature = "host_lock")]
-            locker: crate::host::lock::HostLock::new(
-                config.vial_config.unlock_keys,
-                keymap,
-                config.vial_config.insecure,
-                embassy_time::Duration::from_millis(100),
-            ),
         }
     }
 
-    async fn process_via_packet(&self, report: &mut ViaReport) {
+    async fn process_via_packet(
+        &self,
+        report: &mut ViaReport,
+        #[cfg(feature = "host_lock")] locker: &crate::host::lock::HostLock<'_>,
+    ) {
+        if system::process_system_packet(
+            report,
+            &self.vial_config,
+            #[cfg(feature = "host_lock")]
+            locker,
+        ) {
+            return;
+        }
         let command_id = report.output_data[0];
 
         // Caller pre-fills `input_data` from `output_data`, so individual arms
         // only need to overwrite the bytes they actually change.
         match command_id.into() {
-            ViaCommand::GetProtocolVersion => {
-                BigEndian::write_u16(&mut report.input_data[1..3], VIA_PROTOCOL_VERSION);
-            }
             ViaCommand::GetKeyboardValue => {
                 // Check the second u8
                 match report.output_data[1].try_into() {
@@ -63,7 +63,7 @@ impl<'a> VialService<'a> {
                             error!("It is not secure to use matrix tester without vial lock");
                         }
                         #[cfg(feature = "host_lock")]
-                        ViaKeyboardInfo::SwitchMatrixState if self.locker.is_unlocked() => {
+                        ViaKeyboardInfo::SwitchMatrixState if locker.is_unlocked() => {
                             let bitmap = &mut report.input_data[2..];
                             self.ctx.read_matrix_state(bitmap);
                             // Vial wants each row's bytes big-endian (QMK matrix_row_t order).
@@ -141,10 +141,6 @@ impl<'a> VialService<'a> {
                 warn!("Resetting storage..");
                 self.ctx.reset_storage().await;
                 // TODO: Reboot after a eeprom reset?
-            }
-            ViaCommand::BootloaderJump => {
-                warn!("Bootloader jumping");
-                boot::jump_to_bootloader();
             }
             ViaCommand::DynamicKeymapMacroGetCount => {
                 report.input_data[1] = MACRO_MAX_NUM as u8;
@@ -248,17 +244,8 @@ impl<'a> VialService<'a> {
             ViaCommand::DynamicKeymapSetEncoder => {
                 warn!("Keymap set encoder -- not supported");
             }
-            ViaCommand::Vial => {
-                process_vial(
-                    report,
-                    &self.vial_config,
-                    #[cfg(feature = "host_lock")]
-                    &self.locker,
-                    &self.ctx,
-                )
-                .await
-            }
-            ViaCommand::Unhandled => {
+            ViaCommand::Vial => process_vial(report, &self.ctx).await,
+            ViaCommand::Unhandled | ViaCommand::GetProtocolVersion | ViaCommand::BootloaderJump => {
                 info!("Unknown cmd: {:?}", report.output_data);
                 report.input_data[0] = ViaCommand::Unhandled as u8
             }
@@ -271,6 +258,13 @@ impl VialService<'_> {
     /// response, processed in place). Returns on any read/write error;
     /// transport-specific reconnect lives in the caller.
     pub async fn run_session<R: Read, T: Write>(&self, rx: &mut R, tx: &mut T) {
+        #[cfg(feature = "host_lock")]
+        let locker = crate::host::lock::HostLock::new(
+            self.vial_config.unlock_keys,
+            self.ctx.keymap,
+            self.vial_config.insecure,
+            embassy_time::Duration::from_millis(100),
+        );
         let mut buf = [0u8; 32];
         loop {
             if rx.read_exact(&mut buf).await.is_err() {
@@ -280,7 +274,12 @@ impl VialService<'_> {
                 input_data: buf,
                 output_data: buf,
             };
-            self.process_via_packet(&mut report).await;
+            self.process_via_packet(
+                &mut report,
+                #[cfg(feature = "host_lock")]
+                &locker,
+            )
+            .await;
             if tx.write_all(&report.input_data).await.is_err() {
                 return;
             }
@@ -311,8 +310,19 @@ mod tests {
     /// These tests run no storage task, so writes that wait for one would never be
     /// answered; the stand-in answers them.
     fn process(service: &mut VialService, report: &mut ViaReport) {
+        #[cfg(feature = "host_lock")]
+        let locker = crate::host::lock::HostLock::new(
+            service.vial_config.unlock_keys,
+            service.ctx.keymap,
+            service.vial_config.insecure,
+            embassy_time::Duration::from_millis(100),
+        );
         block_on(embassy_futures::select::select(
-            service.process_via_packet(report),
+            service.process_via_packet(
+                report,
+                #[cfg(feature = "host_lock")]
+                &locker,
+            ),
             crate::test_support::drain_flash_channel(),
         ));
     }
@@ -328,6 +338,39 @@ mod tests {
             input_data: output_data,
             output_data,
         }
+    }
+
+    #[cfg(feature = "host_lock")]
+    #[test]
+    fn central_bootloader_jump_requires_unlock_in_the_current_session() {
+        use core::sync::atomic::Ordering;
+
+        use crate::event::KeyboardEvent;
+        let mut data = KeymapData::new([[[KeyAction::No; 2]; 2]]);
+        let mut behavior = BehaviorConfig::default();
+        let positional = PositionalConfig::<2, 2>::default();
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+        let mut config = RmkConfig::default();
+        config.vial_config.unlock_keys = &[(0, 0), (0, 1)];
+        let service = VialService::new(&keymap, &config);
+        keymap.update_matrix_state(&KeyboardEvent::key(0, 0, true));
+        keymap.update_matrix_state(&KeyboardEvent::key(0, 1, true));
+        let commands = [[0x0b, 0], [0xfe, 6], [0xfe, 7], [0xfe, 5], [0x0b, 0]];
+        let mut input = [0u8; 32 * 5];
+        for (packet, cmd) in input.chunks_mut(32).zip(commands) {
+            packet[..2].copy_from_slice(&cmd);
+        }
+        let mut replies = [0u8; 32 * 5];
+        block_on(service.run_session(&mut input.as_slice(), &mut replies.as_mut_slice()));
+        assert_eq!(replies[0], 0xff);
+        assert_eq!(replies[3 * 32], 1);
+        assert_eq!(crate::boot::BOOTLOADER_JUMPS.load(Ordering::Relaxed), 1);
+
+        // The same service survives USB unplug on a battery-powered keyboard.
+        let mut replies = [0u8; 32];
+        block_on(service.run_session(&mut &input[..32], &mut replies.as_mut_slice()));
+        assert_eq!(replies[0], 0xff);
+        assert_eq!(crate::boot::BOOTLOADER_JUMPS.load(Ordering::Relaxed), 1);
     }
 
     // `output_data` is [u8; 32], so the handler slices `output_data[4..4 + size]`.
