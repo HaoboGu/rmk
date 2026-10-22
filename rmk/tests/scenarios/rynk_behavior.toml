@@ -211,7 +211,7 @@ steps = [
 [[test]]
 name = "fork_write_changes_the_key"
 steps = [
-  { rynk = { cmd = "SetFork", payload = { index = 0, config = { trigger = { Single = { Key = { Hid = "A" } } }, negative_output = { Single = { Key = { Hid = "B" } } }, positive_output = { Single = { Key = { Hid = "C" } } }, match_any = { modifiers = { left_shift = true }, leds = {}, mouse = {} }, match_none = { modifiers = {}, leds = {}, mouse = {} }, kept_modifiers = {}, bindable = true } } } },
+  { rynk = { cmd = "SetFork", payload = { index = 0, config = { trigger = { Single = { Key = { Hid = "A" } } }, negative_output = { Single = { Key = { Hid = "B" } } }, positive_output = { Single = { Key = { Hid = "C" } } }, match_any = { modifiers = { left_shift = true }, leds = {}, mouse = {} }, match_none = { modifiers = {}, leds = {}, mouse = {} }, kept_modifiers = {}, bindable = true, layers = 0xFFFFFFFF } } } },
   { tap = { pos = [0, 0], duration = 10 } },
 ]
 expect = [["B"], []]
@@ -219,12 +219,12 @@ expect = [["B"], []]
 [[test]]
 name = "fork_read_returns_what_was_written"
 steps = [
-  { rynk = { cmd = "SetFork", payload = { index = 0, config = { trigger = { Single = { Key = { Hid = "A" } } }, negative_output = { Single = { Key = { Hid = "B" } } }, positive_output = { Single = { Key = { Hid = "C" } } }, match_any = { modifiers = { left_shift = true }, leds = {}, mouse = {} }, match_none = { modifiers = {}, leds = {}, mouse = {} }, kept_modifiers = {}, bindable = true } } } },
-  { rynk = { cmd = "GetFork", payload = 0, reply = { trigger = { Single = { Key = { Hid = "A" } } }, negative_output = { Single = { Key = { Hid = "B" } } }, positive_output = { Single = { Key = { Hid = "C" } } }, match_any = { modifiers = { left_shift = true }, leds = {}, mouse = {} }, match_none = { modifiers = {}, leds = {}, mouse = {} }, kept_modifiers = {}, bindable = true } } },
+  { rynk = { cmd = "SetFork", payload = { index = 0, config = { trigger = { Single = { Key = { Hid = "A" } } }, negative_output = { Single = { Key = { Hid = "B" } } }, positive_output = { Single = { Key = { Hid = "C" } } }, match_any = { modifiers = { left_shift = true }, leds = {}, mouse = {} }, match_none = { modifiers = {}, leds = {}, mouse = {} }, kept_modifiers = {}, bindable = true, layers = 0xFFFFFFFF } } } },
+  { rynk = { cmd = "GetFork", payload = 0, reply = { trigger = { Single = { Key = { Hid = "A" } } }, negative_output = { Single = { Key = { Hid = "B" } } }, positive_output = { Single = { Key = { Hid = "C" } } }, match_any = { modifiers = { left_shift = true }, leds = {}, mouse = {} }, match_none = { modifiers = {}, leds = {}, mouse = {} }, kept_modifiers = {}, bindable = true, layers = 0xFFFFFFFF } } },
   # Every field differs from the first write, including the match state and the
   # bindable flag, so a read that dropped one would not agree twice.
-  { rynk = { cmd = "SetFork", payload = { index = 0, config = { trigger = { Single = { Key = { Hid = "B" } } }, negative_output = { Single = { Key = { Hid = "Z" } } }, positive_output = { Single = { Key = { Hid = "Y" } } }, match_any = { modifiers = { right_shift = true }, leds = { caps_lock = true }, mouse = {} }, match_none = { modifiers = { left_ctrl = true }, leds = {}, mouse = {} }, kept_modifiers = { right_shift = true }, bindable = false } } } },
-  { rynk = { cmd = "GetFork", payload = 0, reply = { trigger = { Single = { Key = { Hid = "B" } } }, negative_output = { Single = { Key = { Hid = "Z" } } }, positive_output = { Single = { Key = { Hid = "Y" } } }, match_any = { modifiers = { right_shift = true }, leds = { caps_lock = true }, mouse = {} }, match_none = { modifiers = { left_ctrl = true }, leds = {}, mouse = {} }, kept_modifiers = { right_shift = true }, bindable = false } } },
+  { rynk = { cmd = "SetFork", payload = { index = 0, config = { trigger = { Single = { Key = { Hid = "B" } } }, negative_output = { Single = { Key = { Hid = "Z" } } }, positive_output = { Single = { Key = { Hid = "Y" } } }, match_any = { modifiers = { right_shift = true }, leds = { caps_lock = true }, mouse = {} }, match_none = { modifiers = { left_ctrl = true }, leds = {}, mouse = {} }, kept_modifiers = { right_shift = true }, bindable = false, layers = 2 } } } },
+  { rynk = { cmd = "GetFork", payload = 0, reply = { trigger = { Single = { Key = { Hid = "B" } } }, negative_output = { Single = { Key = { Hid = "Z" } } }, positive_output = { Single = { Key = { Hid = "Y" } } }, match_any = { modifiers = { right_shift = true }, leds = { caps_lock = true }, mouse = {} }, match_none = { modifiers = { left_ctrl = true }, leds = {}, mouse = {} }, kept_modifiers = { right_shift = true }, bindable = false, layers = 2 } } },
 ]
 
 # Reading near the end of the table keeps the page short: 8 slots, so a run from
@@ -285,7 +285,7 @@ steps = [
   { rynk = { cmd = "GetMorse", payload = 8, error = "Invalid" } },
   { rynk = { cmd = "SetMorse", payload = { index = 8, config = { profile = { mode = "Normal", hold_timeout_ms = 80, gap_timeout_ms = 80 }, actions = [[2, { Key = { Hid = "A" } }]] } }, error = "Invalid" } },
   { rynk = { cmd = "GetFork", payload = 8, error = "Invalid" } },
-  { rynk = { cmd = "SetFork", payload = { index = 8, config = { trigger = { Single = { Key = { Hid = "A" } } }, negative_output = { Single = { Key = { Hid = "B" } } }, positive_output = { Single = { Key = { Hid = "C" } } }, match_any = { modifiers = { left_shift = true }, leds = {}, mouse = {} }, match_none = { modifiers = {}, leds = {}, mouse = {} }, kept_modifiers = {}, bindable = true } }, error = "Invalid" } },
+  { rynk = { cmd = "SetFork", payload = { index = 8, config = { trigger = { Single = { Key = { Hid = "A" } } }, negative_output = { Single = { Key = { Hid = "B" } } }, positive_output = { Single = { Key = { Hid = "C" } } }, match_any = { modifiers = { left_shift = true }, leds = {}, mouse = {} }, match_none = { modifiers = {}, leds = {}, mouse = {} }, kept_modifiers = {}, bindable = true, layers = 0xFFFFFFFF } }, error = "Invalid" } },
 ]
 
 # A bulk write is validated whole before any slot is touched, so a page that runs

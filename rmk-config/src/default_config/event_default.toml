@@ -74,6 +74,13 @@ channel_size = 8
 pubs = 4
 subs = 2
 
+# Raw multi-touch scans from touchpads, which stay on their board. No subscribers
+# by default; a touch processor would subscribe.
+[event.touch]
+channel_size = 4
+pubs = 2
+subs = 0
+
 # Split events
 [event.peripheral_connected]
 channel_size = 1

@@ -84,8 +84,8 @@ pub const RYNK_INPUT_CHAR_UUID: u128 = 0x80f9319b_0c74_43a5_9738_c59d6dda3db9;
 /// Rynk `output_data` characteristic UUID.
 pub const RYNK_OUTPUT_CHAR_UUID: u128 = 0x19802524_6f90_4346_93c2_63dbc509ab55;
 
-/// Informational marker the `rynk` firmware prepends to its USB serial number.
-/// Host discovery keys on the vendor interface triple below, not on this.
+/// Serial number prefix for Rynk keyboards and dongles without Vial.
+/// USB discovery uses the vendor interface below.
 pub const RYNK_MAGIC: &str = "rynk:";
 
 /// Class of the Rynk vendor-specific USB bulk interface.

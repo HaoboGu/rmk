@@ -69,11 +69,13 @@
 //!   scroll, zoom/pinch
 //! * raw per-channel count/delta data (§8.10.6)
 //!
-//! This driver currently requests only the 10-byte motion block at 0x000C
+//! By default this driver requests only the 10-byte motion block at 0x000C
 //! (previous cycle time, gesture events, system info, number of fingers,
-//! relative XY) and publishes relative XY as cursor movement. Gestures are
-//! left disabled on the IC; absolute finger data and raw channel data are
-//! not read.
+//! relative XY) and publishes relative XY as cursor movement. In
+//! [`Iqs5xxMode::RawTouch`] it also reads the absolute data of all five fingers
+//! and publishes where they are as [`TouchEvent`]s instead, for a touch processor
+//! on the same board to recognize gestures from. The IC's own gestures stay
+//! disabled either way; raw channel data is not read.
 //!
 //! # Configuration
 //!
@@ -95,14 +97,16 @@ use embedded_hal_async::digital::Wait;
 use embedded_hal_async::i2c::I2c;
 use rmk_macro::input_device;
 
-use crate::event::{AxisEvent, PointingEvent};
+use crate::event::{
+    Axis, AxisEvent, AxisValType, PointingEvent, TOUCH_MAX_CONTACTS, TouchContact, TouchEvent, TouchpadEvent,
+};
 use crate::fmt::Debug;
 
 const I2C_ADDR: u8 = 0x74; // default I2C bus address according to §8.2.
 
 const END_SESSION: [u8; 2] = [0xEE, 0xEE]; // §8.7. Address + dummy data byte; a zero-data write doesn't actually trigger end-of-comms.
 
-#[input_device(publish = PointingEvent)]
+#[input_device(publish = TouchpadEvent)]
 pub struct Iqs5xx<I, RDY>
 where
     I: I2c,
@@ -117,6 +121,32 @@ where
     window_detection: WindowDetection<RDY>,
 
     initialized: bool,
+
+    /// What the device publishes.
+    mode: Iqs5xxMode,
+
+    /// The resolution set at init: the largest position, as `TouchEvent::max`.
+    max: (u16, u16),
+
+    /// Whether the last published touch frame had a finger, so lifting publishes one
+    /// empty frame rather than one per cycle.
+    touching: bool,
+}
+
+/// The motion block at 0x000C, then 7 bytes for each of the five fingers.
+const MOTION_LEN: usize = 10;
+const FINGER_LEN: usize = 7;
+const MOTION_BLOCK_LEN: usize = MOTION_LEN + TOUCH_MAX_CONTACTS * FINGER_LEN;
+
+/// What an [`Iqs5xx`] publishes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Iqs5xxMode {
+    /// The IC's single-finger motion, as [`PointingEvent`]s.
+    #[default]
+    Pointing,
+    /// Where each finger is, as [`TouchEvent`]s, for a touch processor on the same
+    /// board to turn into cursor motion, scrolling and gestures.
+    RawTouch,
 }
 
 /// Manner of detecting a "communication window" between cycles.
@@ -192,7 +222,16 @@ where
             },
             initialized: false,
             pointing_device_id: rmk_id,
+            mode: Iqs5xxMode::Pointing,
+            max: (0, 0),
+            touching: false,
         }
+    }
+
+    /// Publish `mode`'s events. [`Iqs5xxMode::Pointing`] by default.
+    pub fn with_mode(mut self, mode: Iqs5xxMode) -> Self {
+        self.mode = mode;
+        self
     }
 
     /// Initialize the device.
@@ -226,6 +265,7 @@ where
         // is (channels - 1) * 256.
         let x_resolution = u16::from(channels[0].saturating_sub(1)) * 256;
         let y_resolution = u16::from(channels[1].saturating_sub(1)) * 256;
+        self.max = (x_resolution, y_resolution);
 
         let (system_config_0, system_config_1, i2c_timeout_ms, active_interval_ms) = match &mut self.window_detection {
             WindowDetection::Rdy(_) => (0b01100100, 0b00001111, 30, 9),
@@ -313,11 +353,18 @@ where
         Ok(())
     }
 
-    async fn read_motion(&mut self) -> Result<PointingEvent, Error<I::Error>> {
+    /// Read one cycle's data block, checking the system info for a reset.
+    async fn read_motion(&mut self) -> Result<[u8; MOTION_BLOCK_LEN], Error<I::Error>> {
         // Motion block at 0x000C..0x0015 per table 8.1: previous cycle time
         // (§4.1.1), gesture events 0/1 (§8.10.1-§8.10.2), system info 0/1
-        // (§8.10.3-§8.10.4), number of fingers (§5.2.1), relative XY (§5.2.2).
-        let mut data = [0u8; 10];
+        // (§8.10.3-§8.10.4), number of fingers (§5.2.1), relative XY (§5.2.2),
+        // then absolute X/Y, strength and area of fingers 1 to 5 (§5.2.3-§5.2.6),
+        // 7 bytes each from 0x0016. Those are only read for touch frames.
+        let mut data = [0u8; MOTION_BLOCK_LEN];
+        let len = match self.mode {
+            Iqs5xxMode::Pointing => MOTION_LEN,
+            Iqs5xxMode::RawTouch => data.len(),
+        };
         let mut operations = [
             // In theory, it's possible to skip the initial address selection
             // write if the last window closed cleanly and RMK has previously
@@ -326,7 +373,7 @@ where
             // it's probably unwise to use this in combination with the watchdog.
             // Let's be conservative and select the address each cycle.
             Operation::Write(&[0x00, 0x0C]),
-            Operation::Read(&mut data),
+            Operation::Read(&mut data[..len]),
             Operation::Write(&END_SESSION[..]),
         ];
         match self.window_detection {
@@ -351,7 +398,6 @@ where
         let number_of_fingers = data[5];
         let dx = i16::from_be_bytes(unwrap!(data[6..8].try_into()));
         let dy = i16::from_be_bytes(unwrap!(data[8..10].try_into()));
-
         // §8.10.3: system_info_0.
         let charging_mode = match system_info_0 & 0b111 {
             0b000 => "active",
@@ -384,29 +430,10 @@ where
             dx,
             dy,
         );
-        Ok(PointingEvent {
-            device_id: self.pointing_device_id,
-            axes: [
-                AxisEvent {
-                    typ: crate::event::AxisValType::Rel,
-                    axis: crate::event::Axis::X,
-                    value: dx,
-                },
-                AxisEvent {
-                    typ: crate::event::AxisValType::Rel,
-                    axis: crate::event::Axis::Y,
-                    value: dy,
-                },
-                AxisEvent {
-                    typ: crate::event::AxisValType::Rel,
-                    axis: crate::event::Axis::Z,
-                    value: 0,
-                },
-            ],
-        })
+        Ok(data)
     }
 
-    async fn read_pointing_event(&mut self) -> PointingEvent {
+    async fn read_touchpad_event(&mut self) -> TouchpadEvent {
         loop {
             // Check initialization status on each iteration because the device
             // can reset and require re-initialization.
@@ -421,13 +448,53 @@ where
                 continue;
             }
             match self.read_motion().await {
-                Ok(e) => {
-                    if e.axes.iter().any(|axis| axis.value != 0) {
-                        return e;
+                Ok(data) if self.mode == Iqs5xxMode::RawTouch => {
+                    // A finger is in a slot while it has touch strength; it keeps the
+                    // slot while others land or lift (§5.2.6).
+                    let contacts: [_; TOUCH_MAX_CONTACTS] = core::array::from_fn(|i| {
+                        let f = &data[MOTION_LEN + i * FINGER_LEN..][..FINGER_LEN];
+                        (f[4] != 0 || f[5] != 0).then(|| TouchContact {
+                            x: u16::from_be_bytes([f[0], f[1]]),
+                            y: u16::from_be_bytes([f[2], f[3]]),
+                        })
+                    });
+                    let touching = contacts.iter().any(Option::is_some);
+                    if !touching && !self.touching {
+                        continue;
+                    }
+                    self.touching = touching;
+                    return TouchpadEvent::Touch(TouchEvent {
+                        device_id: self.pointing_device_id,
+                        max: self.max,
+                        contacts,
+                    });
+                }
+                Ok(data) => {
+                    let dx = i16::from_be_bytes([data[6], data[7]]);
+                    let dy = i16::from_be_bytes([data[8], data[9]]);
+                    if dx != 0 || dy != 0 {
+                        let rel = |axis, value| AxisEvent {
+                            typ: AxisValType::Rel,
+                            axis,
+                            value,
+                        };
+                        return TouchpadEvent::Pointing(PointingEvent {
+                            device_id: self.pointing_device_id,
+                            axes: [rel(Axis::X, dx), rel(Axis::Y, dy), rel(Axis::Z, 0)],
+                        });
                     }
                 }
                 Err(e) => {
                     error!("iqs5xx {} failure: {:?}", self.pointing_device_id, e);
+                    // A reset mid-touch must not leave a gesture going: lift every finger.
+                    if self.touching {
+                        self.touching = false;
+                        return TouchpadEvent::Touch(TouchEvent {
+                            device_id: self.pointing_device_id,
+                            max: self.max,
+                            contacts: [None; TOUCH_MAX_CONTACTS],
+                        });
+                    }
                     Timer::after_millis(5).await;
                 }
             }

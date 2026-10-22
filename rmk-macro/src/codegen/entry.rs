@@ -3,7 +3,7 @@ use quote::{format_ident, quote};
 use rmk_config::SplitConnection;
 use rmk_config::resolved::hardware::{BoardConfig, CommunicationConfig};
 use rmk_config::resolved::{Behavior, Hardware, Host};
-use syn::{ItemFn, ItemMod};
+use syn::ItemMod;
 
 use super::override_helper::Overwritten;
 use crate::codegen::chip::flash::expand_dfu_interface;
@@ -21,45 +21,27 @@ pub(crate) fn expand_rmk_entry(
     watchdog_task: Option<TokenStream2>,
 ) -> TokenStream2 {
     // If there is a function with `#[Overwritten(entry)]`, override the entry
-    if let Some((_, items)) = &item_mod.content {
-        items
-            .iter()
-            .find_map(|item| {
-                if let syn::Item::Fn(item_fn) = &item
-                    && let Some(Ok(Overwritten::Entry)) =
-                        super::override_helper::find_overwritten(item_fn)
-                {
-                    return Some(override_rmk_entry(item_fn));
-                }
-                None
-            })
-            .unwrap_or(rmk_entry_select(
-                hardware,
-                host,
-                behavior,
-                devices,
-                processors,
-                registered_processors,
-                watchdog_task,
-            ))
-    } else {
-        rmk_entry_select(
-            hardware,
-            host,
-            behavior,
-            devices,
-            processors,
-            registered_processors,
-            watchdog_task,
-        )
-    }
-}
-
-fn override_rmk_entry(item_fn: &ItemFn) -> TokenStream2 {
-    let content = &item_fn.block.stmts;
-    quote! {
-        #(#content)*
-    }
+    let entry_override = item_mod.content.as_ref().and_then(|(_, items)| {
+        items.iter().find_map(|item| {
+            if let syn::Item::Fn(item_fn) = item
+                && let Some(Ok(Overwritten::Entry)) =
+                    super::override_helper::find_overwritten(item_fn)
+            {
+                let content = &item_fn.block.stmts;
+                return Some(quote! { #(#content)* });
+            }
+            None
+        })
+    });
+    entry_override.unwrap_or(rmk_entry_select(
+        hardware,
+        host,
+        behavior,
+        devices,
+        processors,
+        registered_processors,
+        watchdog_task,
+    ))
 }
 
 pub(crate) fn rmk_entry_select(
@@ -305,24 +287,16 @@ fn transport_setup(
     };
 
     let dfu_split_enabled = is_feature_enabled(&get_rmk_features(), "dfu_split");
-    let usb_prelude = if dfu_split_enabled && !dfu_interface.is_empty() {
-        quote! {
-            #dfu_interface
-            let mut usb_transport = ::rmk::usb::UsbTransport::new(
-                driver,
-                rmk_config.device_config,
-                #num_peripherals,
-            )#with_host;
-        }
-    } else if !dfu_interface.is_empty() {
-        quote! {
-            #dfu_interface
-            let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config)#with_host;
-        }
+    let usb_device_config = if matches!(communication, CommunicationConfig::Both(_, _)) {
+        quote! { rmk_config.device_config.clone() }
     } else {
-        quote! {
-            let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, rmk_config.device_config)#with_host;
-        }
+        quote! { rmk_config.device_config }
+    };
+    let dfu_split_arg =
+        (dfu_split_enabled && !dfu_interface.is_empty()).then(|| quote! { , #num_peripherals });
+    let usb_prelude = quote! {
+        #dfu_interface
+        let mut usb_transport = ::rmk::usb::UsbTransport::new(driver, #usb_device_config #dfu_split_arg)#with_host;
     };
     let ble_prelude = quote! {
         let mut ble_transport = ::rmk::ble::BleTransport::new(ble_controller, ble_addr, rmk_config #split_peripheral_matrices) #with_host;

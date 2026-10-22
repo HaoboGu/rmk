@@ -73,12 +73,13 @@ pub struct Forks {
 
 pub struct Fork {
     pub trigger: String,
-    pub negative_output: String,
+    pub negative_output: Option<String>,
     pub positive_output: String,
     pub match_any: Option<String>,
     pub match_none: Option<String>,
     pub kept_modifiers: Option<String>,
     pub bindable: bool,
+    pub layers: u32,
 }
 
 pub struct Morse {
@@ -160,15 +161,21 @@ impl crate::KeyboardTomlConfig {
         let forks = toml_behavior.fork.map(|f| Forks {
             forks: f
                 .forks
-                .into_iter()
-                .map(|fork| Fork {
-                    trigger: fork.trigger,
-                    negative_output: fork.negative_output,
-                    positive_output: fork.positive_output,
-                    match_any: fork.match_any,
-                    match_none: fork.match_none,
-                    kept_modifiers: fork.kept_modifiers,
-                    bindable: fork.bindable.unwrap_or(false),
+                .iter()
+                .flat_map(|fork| {
+                    let layers = fork.layers.as_ref().map_or(u32::MAX, |layers| {
+                        layers.iter().fold(0, |mask, &layer| mask | 1 << layer)
+                    });
+                    fork.trigger.keys().iter().map(move |trigger| Fork {
+                        trigger: trigger.clone(),
+                        negative_output: fork.negative_output.clone(),
+                        positive_output: fork.positive_output.clone().unwrap_or_else(|| trigger.clone()),
+                        match_any: fork.match_any.clone(),
+                        match_none: fork.match_none.clone(),
+                        kept_modifiers: fork.kept_modifiers.clone(),
+                        bindable: fork.bindable.unwrap_or(false),
+                        layers,
+                    })
                 })
                 .collect(),
         });
@@ -305,7 +312,7 @@ mod tests {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use crate::KeyboardTomlConfig;
+    use crate::{BehaviorConfig, KeyboardTomlConfig};
 
     #[test]
     fn morse_profile_enable_flow_tap_resolves_as_override() {
@@ -471,5 +478,94 @@ hold_timeout = "300ms"
             Err(e) => e,
         };
         assert!(err.contains("morse_profile_max_num"), "unexpected error: {err}");
+    }
+
+    /// A two-layer keyboard with the given `forks = [...]` list.
+    fn config_with_forks(forks: &str) -> KeyboardTomlConfig {
+        let mut config: KeyboardTomlConfig = toml::from_str(
+            r#"
+[layout]
+rows = 1
+cols = 1
+map = "(0,0)"
+
+[keymap]
+layers = 2
+
+[[keymap.layer]]
+keys = "A"
+"#,
+        )
+        .unwrap();
+        config.behavior = Some(BehaviorConfig {
+            fork: Some(toml::from_str(forks).unwrap()),
+            ..Default::default()
+        });
+        config
+    }
+
+    #[test]
+    fn fork_layers_resolve_to_a_mask() {
+        let config = config_with_forks(
+            r#"forks = [
+              { trigger = "A", positive_output = "B", negative_output = "A", layers = [1], match_any = "LShift" },
+              { trigger = "A", positive_output = "B", negative_output = "A", match_any = "LShift" },
+            ]"#,
+        );
+
+        let forks = config.behavior().unwrap().forks.unwrap().forks;
+        assert_eq!(forks[0].layers, 0b10);
+        assert_eq!(forks[1].layers, u32::MAX);
+    }
+
+    #[test]
+    fn invalid_fork_layers_are_errors() {
+        for (forks, message) in [
+            (
+                r#"forks = [{ trigger = "A", positive_output = "B", negative_output = "A", layers = [], match_any = "LShift" }]"#,
+                "layers list",
+            ),
+            (
+                r#"forks = [{ trigger = "A", positive_output = "B", negative_output = "A", layers = [2], match_any = "LShift" }]"#,
+                "must be below",
+            ),
+        ] {
+            let err = config_with_forks(forks).behavior().err().unwrap();
+            assert!(err.contains(message), "unexpected error: {err}");
+        }
+    }
+
+    #[test]
+    fn fork_trigger_list_expands() {
+        let config = config_with_forks(
+            r#"forks = [
+              { trigger = ["A", "B"], match_any = "LShift" },
+              { trigger = "C", positive_output = "D", negative_output = "E", match_any = "LShift" },
+            ]"#,
+        );
+
+        let forks = config.behavior().unwrap().forks.unwrap().forks;
+        assert_eq!(forks.len(), 3);
+        for (fork, key) in forks.iter().zip(["A", "B"]) {
+            assert_eq!(fork.trigger, key);
+            assert_eq!(fork.positive_output, key);
+            assert_eq!(fork.negative_output, None);
+        }
+        assert_eq!(forks[2].positive_output, "D");
+        assert_eq!(forks[2].negative_output.as_deref(), Some("E"));
+    }
+
+    #[test]
+    fn invalid_fork_trigger_lists_are_errors() {
+        let err = config_with_forks(r#"forks = [{ trigger = [], match_any = "LShift" }]"#)
+            .behavior()
+            .err()
+            .unwrap();
+        assert!(err.contains("trigger list"), "unexpected error: {err}");
+
+        let mut config = config_with_forks(r#"forks = [{ trigger = ["A", "B"], match_any = "LShift" }]"#);
+        config.rmk.fork_max_num = 1;
+        let err = config.behavior().err().unwrap();
+        assert!(err.contains("fork_max_num"), "unexpected error: {err}");
     }
 }

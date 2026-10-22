@@ -2,7 +2,7 @@ use embassy_time::Instant;
 use rmk_types::action::{Action, KeyAction};
 use rmk_types::morse::MorsePattern;
 
-use crate::event::{KeyboardEvent, KeyboardEventPos};
+use crate::event::{KeyboardEvent, KeyboardEventSource};
 
 /// The buffer of held keys.
 #[derive(Debug, Default, Clone)]
@@ -32,14 +32,14 @@ impl HeldBuffer {
         self.keys.iter().find(|x| x.action == *action)
     }
 
-    /// Find a held key by the KeyboardEventPos
-    pub fn find_pos(&self, pos: KeyboardEventPos) -> Option<&HeldKey> {
-        self.keys.iter().find(|x| x.event.pos == pos)
+    /// Find a held key by the KeyboardEventSource
+    pub fn find_source(&self, source: KeyboardEventSource) -> Option<&HeldKey> {
+        self.keys.iter().find(|x| x.event.source == source)
     }
 
-    /// Find a mutable held key by the KeyboardEventPos
-    pub fn find_pos_mut(&mut self, pos: KeyboardEventPos) -> Option<&mut HeldKey> {
-        self.keys.iter_mut().find(|x| x.event.pos == pos)
+    /// Find a mutable held key by the KeyboardEventSource
+    pub fn find_source_mut(&mut self, source: KeyboardEventSource) -> Option<&mut HeldKey> {
+        self.keys.iter_mut().find(|x| x.event.source == source)
     }
 
     /// Remove a held key from the buffer, keep the order

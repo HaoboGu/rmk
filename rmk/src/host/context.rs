@@ -17,7 +17,7 @@ use rmk_types::protocol::rynk::{
 
 #[cfg(feature = "rynk")]
 use crate::config::HoldTriggerPositions;
-use crate::event::KeyboardEventPos;
+use crate::event::KeyboardEventSource;
 use crate::keyboard::combo::Combo;
 use crate::keymap::KeyMap;
 #[cfg(feature = "storage")]
@@ -39,7 +39,7 @@ impl<'a> KeyboardContext<'a> {
 
     pub fn get_action(&self, layer: u8, row: u8, col: u8) -> KeyAction {
         self.keymap
-            .get_action_at(KeyboardEventPos::key_pos(col, row), layer as usize)
+            .get_action_at(KeyboardEventSource::key_pos(col, row), layer as usize)
     }
 
     pub fn get_action_flat(&self, index: usize) -> KeyAction {
@@ -58,7 +58,7 @@ impl<'a> KeyboardContext<'a> {
 
     pub async fn set_action(&self, layer: u8, row: u8, col: u8, action: KeyAction) -> Result<(), ()> {
         self.keymap
-            .set_action_at(KeyboardEventPos::key_pos(col, row), layer as usize, action);
+            .set_action_at(KeyboardEventSource::key_pos(col, row), layer as usize, action);
         #[cfg(feature = "storage")]
         store(StorageItem::Keymap {
             layer,
