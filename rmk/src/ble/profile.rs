@@ -261,14 +261,20 @@ where
         self.save_pending().await;
     }
 
+    /// Persist the latest snapshot.
+    ///
+    /// Called before every wait, so a write cancelled by a profile switch or a
+    /// new connection is resumed by the next call. A storage error is not
+    /// retried: repeating the same write cannot make it succeed, and retrying
+    /// would keep this future from ever handling the next profile action.
     async fn save_pending(&mut self) {
-        while let Some(info) = &self.pending_save {
-            if store(StorageItem::BondInfo(info.clone())).await.is_ok() {
-                self.pending_save = None;
-            } else {
-                error!("Failed to save BLE profile");
-                embassy_time::Timer::after_millis(100).await;
-            }
+        let Some(info) = self.pending_save.clone() else {
+            return;
+        };
+        let result = store(StorageItem::BondInfo(info)).await;
+        self.pending_save = None;
+        if result.is_err() {
+            error!("Failed to save BLE profile");
         }
     }
 
@@ -548,6 +554,36 @@ mod tests {
             assert_eq!(crate::state::current_profile(), 0);
             assert_eq!(manager.bond_info(0).unwrap().cccd_table.as_slice(), &[2]);
             assert_eq!(manager.bond_info(1).unwrap().cccd_table.as_slice(), &[3]);
+        });
+    }
+
+    #[test]
+    fn failed_save_is_dropped_instead_of_retried() {
+        use crate::config::StorageConfig;
+        use crate::core_traits::Runnable;
+        use crate::storage::{Storage, async_flash_wrapper};
+        use crate::test_support::{InMemoryFlash, clear_flash_channel};
+        use embassy_futures::select::{Either3, select3};
+        use embassy_time::Timer;
+
+        with_manager::<1>(|manager| {
+            clear_flash_channel();
+            test_block_on(async {
+                let flash = InMemoryFlash::<16_384, 4_096, 1>::new();
+                let control = flash.clone();
+                let mut storage = Box::pin(Storage::new(async_flash_wrapper(flash), &StorageConfig::default())).await;
+                // The schema write above landed; reject only the bond write below.
+                control.fail_writes(true);
+                let save = manager.add_profile_info(ProfileInfo::default());
+                assert!(
+                    matches!(
+                        select3(save, storage.run(), Timer::after_millis(1_000)).await,
+                        Either3::First(())
+                    ),
+                    "a rejected flash write must not keep save_pending retrying"
+                );
+            });
+            assert!(manager.pending_save.is_none());
         });
     }
 }
