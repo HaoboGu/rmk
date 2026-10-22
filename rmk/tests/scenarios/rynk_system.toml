@@ -41,12 +41,12 @@ steps = [
   } } },
 ]
 
-# `rmk_version` and `serial_number` carry the crate version, so a release bump
-# lands here. Updating the two literals is the whole fix.
+# `rmk_version` carries the crate version, so a release bump
+# lands here. The simulator has no hardware UID, so the serial falls back to `RMK`.
 [[test]]
 name = "device_info_reports_the_identity"
 steps = [
-  { rynk = { cmd = "GetDeviceInfo", reply = { rmk_version = { major = 0, minor = 9, patch = 0 }, vendor_id = 19531, product_id = 17987, manufacturer = "RMK", product_name = "RMK Keyboard", serial_number = "rmk:0.9.0" } } },
+  { rynk = { cmd = "GetDeviceInfo", reply = { rmk_version = { major = 0, minor = 9, patch = 0 }, vendor_id = 19531, product_id = 17987, manufacturer = "RMK", product_name = "RMK Keyboard", serial_number = "rynk:RMK" } } },
 ]
 
 [[test]]

@@ -156,6 +156,7 @@ impl crate::KeyboardTomlConfig {
             battery_adc,
             charging_state,
             pointing,
+            touch,
             peripheral_connected,
             central_connected,
             peripheral_battery,

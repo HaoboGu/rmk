@@ -11,6 +11,7 @@ keywords = ["keyboard", "firmware", "rmk", "protocol", "usb"]
 
 [dependencies]
 rynk = { path = "..", version = "0.3" }
+
 async-hid = { version = "0.5.3", default-features = false, features = ["tokio", "win32"] }
 futures-util.workspace = true
 

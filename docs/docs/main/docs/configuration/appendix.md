@@ -12,7 +12,8 @@ product_name = "RMK Keyboard" # USB product string and BLE device name, defaults
 vendor_id = 0x4c4b
 product_id = 0x4643
 manufacturer = "haobo"
-serial_number = "vial:f64c2b3c:000001"
+# (Optional) Device Serial ID
+# serial_number = "board-0001"
 # The chip or existing board used in keyboard
 # Either "board" or "chip" can be set, but not both
 chip = "rp2040"

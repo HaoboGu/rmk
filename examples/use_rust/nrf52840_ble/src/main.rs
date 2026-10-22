@@ -212,7 +212,8 @@ async fn main(spawner: Spawner) {
     let mut batt_proc = BatteryProcessor::new(2000, 2806);
     let mut charging = rmk::input_device::battery::ChargingStateReader::new(is_charging_pin, true);
 
-    let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
+    let mut usb_transport =
+        UsbTransport::new(driver, rmk_config.device_config.clone()).with_host_service(&host_service);
     let mut ble_transport = BleTransport::new(sdc, ble_addr(), rmk_config).with_host_service(&host_service);
     let mut wpm_processor = WpmProcessor::new();
 

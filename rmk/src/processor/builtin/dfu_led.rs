@@ -26,19 +26,11 @@ impl<P: StatefulOutputPin> DfuLedProcessor<P> {
                 self.blink = false;
                 self.pin.deactivate();
             }
-            DfuStatus::Started => {
+            DfuStatus::Started | DfuStatus::Error | DfuStatus::LockWaiting => {
                 self.blink = false;
                 self.pin.activate();
             }
             DfuStatus::Downloading => self.pin.toggle(),
-            DfuStatus::Error => {
-                self.blink = false;
-                self.pin.activate();
-            }
-            DfuStatus::LockWaiting => {
-                self.blink = false;
-                self.pin.activate();
-            }
             DfuStatus::LockUnlocked => {
                 self.blink = true;
             }

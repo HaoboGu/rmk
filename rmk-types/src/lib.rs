@@ -57,6 +57,9 @@ pub mod protocol;
 #[cfg(feature = "steno")]
 pub mod steno;
 
+/// Maximum device information string length in bytes, including serial number markers.
+pub const DEVICE_INFO_STRING_MAX_LEN: usize = 32;
+
 /// Compute the maximum varint-encoded length for a given max value.
 /// Mirrors `postcard`'s internal `varint_size`.
 pub(crate) const fn varint_max_size(max_n: usize) -> usize {

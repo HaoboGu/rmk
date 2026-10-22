@@ -1,6 +1,5 @@
 //! System handlers — handshake, device identity, reboot, bootloader jump, storage reset.
 
-use rmk_types::constants;
 use rmk_types::protocol::rynk::command::{
     BootloaderJump, GetBuildInfo, GetCapabilities, GetDeviceInfo, GetLockStatus, GetVersion, Lock,
     PeripheralBootloaderJump, Reboot, StorageReset, UnlockPoll,
@@ -9,6 +8,7 @@ use rmk_types::protocol::rynk::{
     BuildInfo, DeviceCapabilities, DeviceInfo, LockStatus, MAX_BULK_ITEMS, MAX_BULK_KEYS, ProtocolVersion,
     RYNK_MAX_PAYLOAD_SIZE, RynkError, StorageResetMode,
 };
+use rmk_types::constants;
 
 use super::super::{RMK_VERSION, RynkService, truncated};
 use super::Handle;
@@ -125,7 +125,7 @@ impl Handle<GetDeviceInfo> for RynkService<'_> {
             product_id: self.device.pid,
             manufacturer: truncated(self.device.manufacturer),
             product_name: truncated(self.device.product_name),
-            serial_number: truncated(self.device.serial_number),
+            serial_number: self.device.serial_number.clone(),
         })
     }
 }

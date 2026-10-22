@@ -105,6 +105,10 @@ async fn main(_spawner: Spawner) {
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]);
 
     let rmk_config = RmkConfig {
+        device_config: rmk::config::DeviceConfig {
+            serial_number: rmk::config::build_serial_number(&embassy_stm32::uid::uid()),
+            ..Default::default()
+        },
         vial_config,
         ..Default::default()
     };

@@ -662,7 +662,7 @@ pub(crate) struct BehaviorConfig {
 
 impl From<&config::BehaviorConfig> for BehaviorConfig {
     fn from(behavior: &config::BehaviorConfig) -> Self {
-        // default_layer persists under its own key (restored in `read_keymap`), not here.
+        // default_layer persists under its own key (restored in `read_layout`), not here.
         Self {
             prior_idle_time: behavior.morse.prior_idle_time.as_millis() as u16,
             morse_default_profile: behavior.morse.default_profile,
@@ -680,11 +680,8 @@ pub fn async_flash_wrapper<F: NorFlash>(flash: F) -> BlockingAsync<F> {
 
 /// Storage for the firmwares that hold no keymap of their own, a split peripheral and a dongle.
 #[cfg(any(feature = "split", feature = "dongle"))]
-pub async fn new_storage_without_keymap<F: AsyncNorFlash>(
-    flash: F,
-    storage_config: StorageConfig,
-) -> Storage<F, 0, 0, 0, 0> {
-    Storage::<F, 0, 0, 0, 0>::new(flash, &storage_config).await
+pub async fn new_storage_without_keymap<F: AsyncNorFlash>(flash: F, storage_config: StorageConfig) -> Storage<F> {
+    Storage::new(flash, &storage_config).await
 }
 
 /// The FNV-1a offset basis, the seed [`SCHEMA_HASH`] folds its byte runs into.
@@ -717,13 +714,7 @@ pub(crate) const SCHEMA_HASH: u32 = {
     hash
 };
 
-pub struct Storage<
-    F: AsyncNorFlash,
-    const ROW: usize,
-    const COL: usize,
-    const NUM_LAYER: usize,
-    const NUM_ENCODER: usize = 0,
-> {
+pub struct Storage<F: AsyncNorFlash> {
     pub(crate) flash: MapStorage<
         StorageKey,
         F,
@@ -734,9 +725,7 @@ pub struct Storage<
     pub(crate) clear_layout: bool,
 }
 
-impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>
-{
+impl<F: AsyncNorFlash> Storage<F> {
     pub(crate) async fn fetch(&mut self, key: StorageKey) -> Result<Option<StorageValue>, ()> {
         self.flash
             .fetch_item(&mut self.buffer, &key)
@@ -829,9 +818,15 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     /// Overwrite every item the layout owns with the compiled-in defaults, so a value a host
     /// wrote earlier stops shadowing what was flashed. Only `clear_layout` reaches here.
     #[cfg(feature = "host")]
-    pub(crate) async fn write_layout(
+    pub(crate) async fn write_layout<
+        const ROW: usize,
+        const COL: usize,
+        const NUM_LAYER: usize,
+        const NUM_ENCODER: usize,
+        const NUM_TOUCHPAD: usize,
+    >(
         &mut self,
-        data: &mut crate::keymap::KeymapData<ROW, COL, NUM_LAYER, NUM_ENCODER>,
+        data: &mut crate::keymap::KeymapData<ROW, COL, NUM_LAYER, NUM_ENCODER, NUM_TOUCHPAD>,
         behavior: &config::BehaviorConfig,
     ) {
         let mut put = async |item| {
@@ -1247,9 +1242,7 @@ impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usiz
     }
 }
 
-impl<F: AsyncNorFlash, const ROW: usize, const COL: usize, const NUM_LAYER: usize, const NUM_ENCODER: usize>
-    crate::core_traits::Runnable for Storage<F, ROW, COL, NUM_LAYER, NUM_ENCODER>
-{
+impl<F: AsyncNorFlash> crate::core_traits::Runnable for Storage<F> {
     async fn run(&mut self) -> ! {
         #[cfg(all(feature = "lighting", feature = "rynk"))]
         let mut scene_write = LightingTableWrite::new();
@@ -1482,15 +1475,12 @@ mod tests {
     }
 
     // Boxed: the flash part is 16 KB by value and the `new` future copies it several times.
-    async fn new_storage(flash: TestFlash) -> Storage<TestFlash, 1, 1, 1, 0> {
+    async fn new_storage(flash: TestFlash) -> Storage<TestFlash> {
         new_storage_configured(flash, &RuntimeStorageConfig::default()).await
     }
 
-    async fn new_storage_configured(
-        flash: TestFlash,
-        storage_config: &RuntimeStorageConfig,
-    ) -> Storage<TestFlash, 1, 1, 1, 0> {
-        Box::pin(Storage::<TestFlash, 1, 1, 1, 0>::new(flash, storage_config)).await
+    async fn new_storage_configured(flash: TestFlash, storage_config: &RuntimeStorageConfig) -> Storage<TestFlash> {
+        Box::pin(Storage::new(flash, storage_config)).await
     }
 
     /// A config item written by some other firmware.
@@ -1676,7 +1666,7 @@ mod tests {
             let (flash, _) = storage.flash.destroy();
             let mut storage = new_storage(flash).await;
             let mut data = KeymapData::new([[[b]]]);
-            storage.read_keymap(&mut data, &mut behavior).await.unwrap();
+            storage.read_layout(&mut data, &mut behavior).await.unwrap();
             assert_eq!(data.keymap[0][0][0], a);
 
             // `clear_layout` hands the compiled-in layout the win, and keeps the pairing.
@@ -1690,7 +1680,7 @@ mod tests {
             storage.write_layout(&mut KeymapData::new([[[b]]]), &behavior).await;
 
             let mut data = KeymapData::new([[[a]]]);
-            storage.read_keymap(&mut data, &mut behavior).await.unwrap();
+            storage.read_layout(&mut data, &mut behavior).await.unwrap();
             assert_eq!(data.keymap[0][0][0], b);
             assert!(matches!(
                 storage.fetch(StorageKey::ConnectionType).await,
@@ -1898,7 +1888,7 @@ mod tests {
         }
     }
 
-    // A stored LayoutOption must reach the Vial GUI after a power cycle: `read_keymap` restores it
+    // A stored LayoutOption must reach the Vial GUI after a power cycle: `read_layout` restores it
     // into `KeymapData`, `KeyMap::new` copies it where `GetKeyboardValue` reads. Drop either, get 0.
     #[cfg(feature = "vial")]
     #[test]
@@ -1917,7 +1907,7 @@ mod tests {
 
             let mut data = KeymapData::new([[[KeyAction::No]]]);
             let mut behavior = BehaviorConfig::default();
-            storage.read_keymap(&mut data, &mut behavior).await.unwrap();
+            storage.read_layout(&mut data, &mut behavior).await.unwrap();
 
             let positional = crate::config::PositionalConfig::<1, 1>::default();
             let keymap = KeyMap::new(&mut data, &mut behavior, &positional).await;
@@ -2071,7 +2061,7 @@ mod tests {
     /// Loaded scene cells as `(policy, red values)`, the value marking which
     /// rewrite a cell came from.
     #[cfg(all(feature = "lighting", feature = "rynk"))]
-    async fn loaded_scenes(storage: &mut Storage<TestFlash, 1, 1, 1, 0>) -> (Option<LightingLayerPolicy>, Vec<u8>) {
+    async fn loaded_scenes(storage: &mut Storage<TestFlash>) -> (Option<LightingLayerPolicy>, Vec<u8>) {
         use rmk_types::protocol::rynk::LightingEffect;
         let mut cells = heapless::Vec::<LightingSceneCell, 32>::new();
         let policy = storage.read_lighting_scenes(&mut cells).await;

@@ -37,7 +37,7 @@ GetDeviceInfo reply Ok(DeviceInfo{1.2.3,4,5,RMK,..})                            
 GetDeviceInfo request ()                                                        02 0a 02 01 00
 GetEncoderAction reply Ok(EncoderAction{Morse(3),No})                           04 05 01 01 03 05 03 01 00
 GetEncoderAction request GetEncoderRequest{1,2}                                 06 05 01 01 01 02 00
-GetFork reply Ok(Fork{Single(A),No,Morse(2)})                                   04 01 05 01 03 02 01 02 04 06 05 02 01 02 01 01 01 03 02 01 00
+GetFork reply Ok(Fork{Single(A),No,Morse(2)})                                   04 01 05 01 03 02 01 02 04 06 05 02 01 02 01 01 01 08 02 01 ff ff ff ff 0f 00
 GetFork request 2                                                               05 01 05 01 02 00
 GetKeyAction reply Ok(Morse(7))                                                 04 01 01 01 03 05 07 00
 GetKeyAction request KeyPosition{0,5,13}                                        04 01 01 01 03 05 0d 00
@@ -83,7 +83,7 @@ SetDefaultLayer request 2                                                       
 SetEncoderAction reply Ok(())                                                   04 06 01 01 01 00
 SetEncoderAction request SetEncoderRequest{1,2,{Morse(3),No}}                   08 06 01 01 01 02 05 03 01 00
 SetFork reply Ok(())                                                            04 02 05 01 01 00
-SetFork request SetForkRequest{2,fork}                                          07 02 05 01 02 02 01 02 04 06 05 02 01 02 01 01 01 03 02 01 00
+SetFork request SetForkRequest{2,fork}                                          07 02 05 01 02 02 01 02 04 06 05 02 01 02 01 01 01 08 02 01 ff ff ff ff 0f 00
 SetKeyAction reply Err(Invalid)                                                 06 02 01 01 01 05 00
 SetKeyAction reply Ok(())                                                       04 02 01 01 01 00
 SetKeyAction request SetKeyRequest{{0,5,13},Morse(7)}                           04 02 01 01 05 05 0d 05 07 00

@@ -46,13 +46,28 @@ impl crate::KeyboardTomlConfig {
                 // Default macros are checked by the const assert the codegen emits.
                 behavior.macros = behavior.macros.or(default.macros);
                 behavior.fork = behavior.fork.or(default.fork);
-                if let Some(fork) = &behavior.fork
-                    && fork.forks.len() > self.rmk.fork_max_num
-                {
-                    return Err(
-                        "keyboard.toml: number of forks is greater than fork_max_num configured under [rmk] section"
-                            .to_string(),
-                    );
+                if let Some(fork) = &behavior.fork {
+                    let count: usize = fork.forks.iter().map(|f| f.trigger.keys().len()).sum();
+                    if count > self.rmk.fork_max_num {
+                        return Err(
+                            "keyboard.toml: number of forks is greater than fork_max_num configured under [rmk] section"
+                                .to_string(),
+                        );
+                    }
+                    for (i, f) in fork.forks.iter().enumerate() {
+                        if f.trigger.keys().is_empty() {
+                            return Err(format!("keyboard.toml: trigger list in fork #{i} is empty"));
+                        }
+                        let Some(layers) = &f.layers else { continue };
+                        if layers.is_empty() {
+                            return Err(format!("keyboard.toml: layers list in fork #{i} is empty"));
+                        }
+                        if layers.iter().any(|&l| l >= num_layers.min(32)) {
+                            return Err(format!(
+                                "keyboard.toml: layer in fork #{i} must be below [keymap].layers and 32"
+                            ));
+                        }
+                    }
                 }
                 behavior.auto_mouse_layer = behavior.auto_mouse_layer.or(default.auto_mouse_layer);
                 if let Some(entries) = &behavior.auto_mouse_layer {

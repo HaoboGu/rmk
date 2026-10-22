@@ -37,15 +37,23 @@ Cursor mode can also accelerate: `PointingProcessorConfig::acceleration`, or `ac
 Maps X to horizontal pan and Y to vertical wheel scrolling.
 
 ```rust
-rmk::input_device::pointing::ScrollConfig {
-    multiplier_x: 1, // scales X delta before divisor
-    divisor_x: 8,    // divides X motion. 0 disables X.
-    multiplier_y: 1, // scales Y delta before divisor
-    divisor_y: 8,    // divides Y motion. 0 disables Y.
-    invert_x: false,
-    invert_y: false, // when false, sensor +Y → wheel -1 (scroll up)
+use rmk::input_device::pointing::{ScrollAxis, ScrollConfig};
+
+ScrollConfig {
+    wheel: ScrollAxis {
+        multiplier: 1,
+        divisor: 8,
+        invert: false,
+    },
+    pan: ScrollAxis {
+        multiplier: 1,
+        divisor: 8,
+        invert: false,
+    },
 }
 ```
+
+Set an output's multiplier or divisor to `0` to disable it. By default, positive Y produces a negative wheel delta, and positive X produces a positive pan delta. Set `invert` to `true` to reverse an output.
 
 Scroll mode keeps motion between samples. It computes `total = remainder + delta * multiplier`, emits `total / divisor`, and keeps the remainder for the next sample. A larger divisor requires more movement for each scroll step:
 
@@ -94,17 +102,15 @@ Caret mode accumulates movement until it exceeds `threshold`, then sends the con
 
 ::: note
 
-Caret mode sends unmodified arrow key taps, even when modifiers such as Shift or Ctrl are held.
+Caret mode preserves held keys and modifiers, so holding Shift or Ctrl also modifies the arrow key taps. The configured keycodes bypass keymap, combo, and fork lookup. Direct inputs of the same keycode share press/release state.
 
 :::
 
 ## Mode switching
 
-To change modes when a layer or key changes, create a controller that receives those events and publishes `PointingProcessorEvent`.
+To change modes when a layer or key changes, create a controller that receives those events and publishes `PointingProcessorEvent`. Set the event's `device_id` to match the sensor's ID. The example below targets device `0`; change it if your sensor uses another ID.
 
 Add the following module to your project. It selects Cursor on layer 0, Sniper on layer 1, Scroll on layer 2, and Caret on layer 3. Pressing a key bound to `User0` also selects Caret.
-
-The example uses `device_id = 255` with the default pointing processor. If your processor is configured for a specific device ID, use that same ID in these events.
 
 ::: note
 
@@ -119,7 +125,7 @@ subs = 1
 
 ```rust title="src/pointing_processor_controller.rs"
 use rmk::event::{ActionEvent, LayerChangeEvent, PointingProcessorEvent, publish_event};
-use rmk::input_device::pointing::PointingMode;
+use rmk::input_device::pointing::{PointingMode, ScrollAxis, ScrollConfig};
 use rmk::macros::processor;
 use rmk::types::action::Action;
 use rmk::types::keycode::HidKeyCode;
@@ -136,13 +142,13 @@ impl PointingProcessorController {
         match event.0 {
             0 => {
                 publish_event(PointingProcessorEvent {
-                    device_id: 255,
+                    device_id: 0,
                     mode: PointingMode::Cursor(rmk::input_device::pointing::CursorConfig::default()),
                 });
             }
             1 => {
                 publish_event(PointingProcessorEvent {
-                    device_id: 255,
+                    device_id: 0,
                     mode: PointingMode::Sniper(rmk::input_device::pointing::SniperConfig {
                         multiplier: 1, // scales sensor delta before divisor
                         divisor: 8, // divides motion for precision aiming
@@ -153,20 +159,22 @@ impl PointingProcessorController {
             }
             2 => {
                 publish_event(PointingProcessorEvent {
-                    device_id: 255,
-                    mode: PointingMode::Scroll(rmk::input_device::pointing::ScrollConfig {
-                        multiplier_x: 1, // scales X delta before divisor
-                        divisor_x: 16, // divides X motion for scrolling precision
-                        multiplier_y: 1, // scales Y delta before divisor
-                        divisor_y: 16, // divides Y motion for scrolling precision
-                        invert_x: false,
-                        invert_y: false,
+                    device_id: 0,
+                    mode: PointingMode::Scroll(ScrollConfig {
+                        wheel: ScrollAxis {
+                            divisor: 16,
+                            ..Default::default()
+                        },
+                        pan: ScrollAxis {
+                            divisor: 16,
+                            ..Default::default()
+                        },
                     }),
                 });
             }
             3 => {
                 publish_event(PointingProcessorEvent {
-                    device_id: 255,
+                    device_id: 0,
                     mode: PointingMode::Caret(rmk::input_device::pointing::CaretConfig {
                         disable_x: false, // disable horizontal caret taps
                         disable_y: false, // disable vertical caret taps
@@ -188,7 +196,7 @@ impl PointingProcessorController {
     async fn on_action_event(&mut self, event: ActionEvent) {
         if event.keyboard_event.pressed && event.action == Action::User(0) {
             publish_event(PointingProcessorEvent {
-                device_id: 255,
+                device_id: 0,
                 mode: PointingMode::Caret(rmk::input_device::pointing::CaretConfig::default()),
             });
         }

@@ -112,7 +112,7 @@ impl<'a> RynkService<'a> {
         ctx.layout_blob = config.layout_blob;
         Self {
             ctx,
-            device: config.device_config,
+            device: config.device_config.clone(),
             lock_config: config.lock_config,
             #[cfg(feature = "lighting")]
             lighting: None,
@@ -537,11 +537,11 @@ mod tests {
     use embedded_io_async::{ErrorKind, ErrorType, Read, Write};
     use rmk_types::action::KeyAction;
     use rmk_types::protocol::rynk::{
-        LockStatus, MatrixState, ProtocolVersion, RYNK_HEADER_SIZE, RynkHeader, encode_frame,
+        DeviceInfo, LockStatus, MatrixState, ProtocolVersion, RYNK_HEADER_SIZE, RynkHeader, encode_frame,
     };
 
     use super::*;
-    use crate::config::{BehaviorConfig, LockConfig, PositionalConfig, RmkConfig};
+    use crate::config::{BehaviorConfig, LockConfig, PositionalConfig, RmkConfig, build_serial_number};
     use crate::event::KeyboardEvent;
     use crate::keymap::{KeyMap, KeymapData};
     use crate::test_support::test_block_on as block_on;
@@ -628,6 +628,41 @@ mod tests {
             ));
         }
         out
+    }
+
+    #[test]
+    fn device_info_reports_each_configured_serial() {
+        let mut behavior = BehaviorConfig::default();
+        let positional: PositionalConfig<1, 1> = PositionalConfig::default();
+        let mut data: KeymapData<1, 1, 1, 0> = KeymapData::new([[[KeyAction::No]]]);
+        let keymap = block_on(KeyMap::new(&mut data, &mut behavior, &positional));
+
+        for (serial_number, expected) in [
+            (build_serial_number("vial:f64c2b3c;board-1"), "rynk:board-1"),
+            (build_serial_number(&[0x01, 0x23, 0xab]), "rynk:0123ab"),
+        ] {
+            let config = RmkConfig {
+                device_config: DeviceConfig {
+                    serial_number,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            assert_eq!(config.device_config.serial_number, expected);
+            let service = RynkService::new(&keymap, &config);
+            let mut rx = ChunkRead {
+                chunks: VecDeque::from([req(Cmd::GetDeviceInfo.raw(), 0)]),
+            };
+            let mut tx = VecWrite { captured: Vec::new() };
+            block_on(service.run_session(&mut rx, &mut tx));
+
+            let frames = decode_frames(&tx.captured);
+            assert_eq!(frames.len(), 1);
+            let info = postcard::from_bytes::<Result<DeviceInfo, RynkError>>(&frames[0].2)
+                .unwrap()
+                .unwrap();
+            assert_eq!(info.serial_number, config.device_config.serial_number);
+        }
     }
 
     /// A second session over the same service starts locked again. The gate

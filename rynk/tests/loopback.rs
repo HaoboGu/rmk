@@ -68,7 +68,7 @@ async fn client_against_run_session() {
     let mut behavior = BehaviorConfig::default();
     let positional: PositionalConfig<2, 2> = PositionalConfig::default();
     let mut data: KeymapData<2, 2, 2, 0> = KeymapData::new([[[KeyAction::No; 2]; 2]; 2]);
-    let mut storage = rmk::storage::Storage::<_, 2, 2, 2, 0>::new(
+    let mut storage = rmk::storage::Storage::new(
         rmk::storage::async_flash_wrapper(rmk::test_support::InMemoryFlash::<16384, 4096, 4>::new()),
         &rmk::config::StorageConfig::default(),
     )
