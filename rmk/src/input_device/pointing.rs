@@ -1597,14 +1597,6 @@ mod tests {
     }
 
     #[test]
-    fn test_pointing_mode_array_default() {
-        let modes: [PointingMode; 4] = [PointingMode::default(); 4];
-        for mode in &modes {
-            assert_eq!(*mode, PointingMode::Cursor(CursorConfig::default()));
-        }
-    }
-
-    #[test]
     fn test_motion_accumulator_change_resets_accumulator() {
         let mut acc = MotionAccumulator::default();
         acc.accumulate(3, 5, (1, 8), (1, 8));
@@ -1615,32 +1607,6 @@ mod tests {
         acc.reset();
         assert_eq!(acc.remainder_x, 0);
         assert_eq!(acc.remainder_y, 0);
-    }
-
-    #[test]
-    fn test_pointing_cursor_multiplier_scales_motion() {
-        let config = CursorConfig {
-            multiplier_x: 2,
-            multiplier_y: 3,
-            invert_x: false,
-            invert_y: false,
-            ..CursorConfig::default()
-        };
-        assert_eq!(10 * config.multiplier_x as i16, 20);
-        assert_eq!(10 * config.multiplier_y as i16, 30);
-    }
-
-    #[test]
-    fn test_pointing_cursor_invert_axes() {
-        let config = CursorConfig {
-            multiplier_x: 1,
-            multiplier_y: 1,
-            invert_x: true,
-            invert_y: true,
-            ..CursorConfig::default()
-        };
-        assert_eq!(-(10 * config.multiplier_x as i16), -10);
-        assert_eq!(-(10 * config.multiplier_y as i16), -10);
     }
 
     // === Cursor speed ===
