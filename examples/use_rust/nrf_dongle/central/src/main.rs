@@ -167,7 +167,8 @@ async fn main(spawner: Spawner) {
     let host_service = HostService::new(&keymap, &rmk_config);
     let mut wpm_processor = WpmProcessor::new();
 
-    let mut usb_transport = UsbTransport::new(driver, rmk_config.device_config).with_host_service(&host_service);
+    let mut usb_transport =
+        UsbTransport::new(driver, rmk_config.device_config.clone()).with_host_service(&host_service);
     // Peripheral half: 2x2 at row offset 5 (keymap rows 5..7).
     let mut ble_transport = BleTransport::new(
         sdc,

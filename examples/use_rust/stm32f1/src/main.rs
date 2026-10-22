@@ -49,7 +49,13 @@ async fn main(_spawner: Spawner) {
         config_matrix_pins_stm32!(peripherals: p, input: [PA9, PB8, PB13, PB12], output: [PA13, PA14, PA15]);
 
     // Keyboard config
-    let rmk_config = RmkConfig { ..Default::default() };
+    let rmk_config = RmkConfig {
+        device_config: rmk::config::DeviceConfig {
+            serial_number: rmk::config::build_serial_number(&embassy_stm32::uid::uid()),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
 
     // Initialize the storage and keymap
     let mut keymap_data = KeymapData::new(keymap::get_default_keymap());

@@ -36,15 +36,6 @@ mod multi_event {
 
     #[input_device(publish = NrfAdcEvent)]
     pub struct NrfAdc<'a, const PIN_NUM: usize, const EVENT_NUM: usize> {
-        saadc: Saadc<'a, PIN_NUM>,
-        polling_interval: Duration,
-        light_sleep: Option<Duration>,
-        buf: [[i16; PIN_NUM]; 2],
-        event_type: [AnalogEventType; EVENT_NUM],
-        event_state: u8,
-        channel_state: u8,
-        buf_state: bool,
-        adc_state: AdcState,
-        active_instant: Instant,
+        samples: &'a [[i16; PIN_NUM]; EVENT_NUM],
     }
 }

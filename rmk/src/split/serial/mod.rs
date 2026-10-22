@@ -4,14 +4,9 @@ use super::driver::SplitDriverError;
 use crate::split::driver::{PeripheralManager, SplitReader, SplitWriter, set_peripheral_connected};
 use crate::split::{SPLIT_MESSAGE_MAX_SIZE, SplitMessage};
 
-/// Receive split message from peripheral via serial and process it
+/// Run a split peripheral manager over an asynchronous serial port.
 ///
-/// Generic parameters:
-/// - `const ROW`: row number of the peripheral's matrix
-/// - `const COL`: column number of the peripheral's matrix
-/// - `const ROW_OFFSET`: row offset of the peripheral's matrix in the whole matrix
-/// - `const COL_OFFSET`: column offset of the peripheral's matrix in the whole matrix
-/// - `S`: a serial port that implements `Read` and `Write` trait in embedded-io-async
+/// `matrix_config` describes the peripheral's matrix size and its position in the central's keymap.
 pub(crate) async fn run_serial_peripheral_manager<S: Read + Write>(
     id: usize,
     receiver: S,

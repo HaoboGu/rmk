@@ -6,7 +6,9 @@
 //! - Pointing device events (mouse, trackball, etc.)
 
 use postcard::experimental::max_size::MaxSize;
-use rmk_macro::event;
+use rmk_macro::{Event, event};
+use rmk_types::action::TouchGesture;
+use rmk_types::keycode::HidKeyCode;
 use rmk_types::modifier::ModifierCombination;
 use serde::{Deserialize, Serialize};
 
@@ -16,11 +18,7 @@ use crate::input_device::rotary_encoder::Direction;
 // Keyboard Events
 // ============================================================================
 
-/// `KeyboardEvent` is the event whose `KeyAction` is stored in the keymap.
-///
-/// `KeyboardEvent` is different from events from pointing devices,
-/// events from pointing devices are processed directly by the corresponding processors,
-/// while `KeyboardEvent` is processed by the keyboard with the keymap.
+/// A press or release from a keymap position or a software-generated keycode.
 #[event(
     channel_size = crate::KEYBOARD_EVENT_CHANNEL_SIZE,
     pubs = crate::KEYBOARD_EVENT_PUB_SIZE,
@@ -30,53 +28,73 @@ use crate::input_device::rotary_encoder::Direction;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct KeyboardEvent {
     pub pressed: bool,
-    pub pos: KeyboardEventPos,
+    pub source: KeyboardEventSource,
 }
 
 impl KeyboardEvent {
     pub fn key(row: u8, col: u8, pressed: bool) -> Self {
         Self {
             pressed,
-            pos: KeyboardEventPos::Key(KeyPos { row, col }),
+            source: KeyboardEventSource::Key(KeyPos { row, col }),
         }
     }
 
     pub fn rotary_encoder(id: u8, direction: Direction, pressed: bool) -> Self {
         Self {
             pressed,
-            pos: KeyboardEventPos::RotaryEncoder(RotaryEncoderPos { id, direction }),
+            source: KeyboardEventSource::RotaryEncoder(RotaryEncoderPos { id, direction }),
         }
     }
 
     pub(crate) fn combo(idx: u8, pressed: bool) -> Self {
         Self {
             pressed,
-            pos: KeyboardEventPos::Combo(idx),
+            source: KeyboardEventSource::Combo(idx),
+        }
+    }
+
+    /// A software keymap position.
+    pub fn virtual_key(id: u8, pressed: bool) -> Self {
+        Self {
+            pressed,
+            source: KeyboardEventSource::Virtual(id),
+        }
+    }
+
+    /// A direct keycode, bypassing keymap, combo and fork lookup.
+    /// Direct inputs of the same keycode share press/release state.
+    pub fn keycode(keycode: HidKeyCode, pressed: bool) -> Self {
+        Self {
+            pressed,
+            source: KeyboardEventSource::KeyCode(keycode),
         }
     }
 }
 
-/// The position of the keyboard event.
-///
-/// A physical position is a key (row, col) or a rotary encoder (id, direction).
-/// A synthesized position names the behavior that produced the event.
+/// The source of a keyboard event: a keymap position, a behavior's output,
+/// or a direct keycode.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum KeyboardEventPos {
+pub enum KeyboardEventSource {
     Key(KeyPos),
     RotaryEncoder(RotaryEncoderPos),
+    /// A gesture on a touchpad.
+    Touch(TouchPos),
     /// Output of the combo at this index.
     Combo(u8),
     /// A macro op. A macro's keys belong to no macro in particular.
     Macro,
-    /// A software source of events rather than a key, indexed by a u8.
+    /// A software keymap position, independent of the action assigned to it.
     Virtual(u8),
+    /// A direct keycode, independent of the active layer.
+    KeyCode(HidKeyCode),
 }
 
-impl KeyboardEventPos {
-    /// A key or encoder the user pressed, as opposed to a behavior's synthesized output.
+impl KeyboardEventSource {
+    /// A key, encoder or touchpad gesture the user made, as opposed to a behavior's
+    /// synthesized output.
     pub(crate) fn is_physical(self) -> bool {
-        matches!(self, Self::Key(_) | Self::RotaryEncoder(_))
+        matches!(self, Self::Key(_) | Self::RotaryEncoder(_) | Self::Touch(_))
     }
 
     pub(crate) fn key_pos(col: u8, row: u8) -> Self {
@@ -103,6 +121,15 @@ pub struct RotaryEncoderPos {
     pub id: u8,
     /// The direction of the rotary encoder
     pub direction: Direction,
+}
+
+/// A gesture on a touchpad
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, MaxSize, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct TouchPos {
+    /// The index of the touchpad in the touch map
+    pub id: u8,
+    pub gesture: TouchGesture,
 }
 
 // ============================================================================
@@ -167,6 +194,47 @@ pub enum Axis {
     // .. More is allowed
 }
 
+/// Contacts a [`TouchEvent`] carries.
+pub const TOUCH_MAX_CONTACTS: usize = 5;
+
+/// One scan of a multi-touch device such as a trackpad: where each contact is.
+///
+/// Raw data, local to the board the device is on: a touch processor there turns it
+/// into pointing events and gestures, and only those cross the split link. A device
+/// publishes one per scan while something touches, and one without contacts when
+/// the last lifts. Contacts are kept by slot, as in Linux's multi-touch protocol B.
+#[event(
+    channel_size = crate::TOUCH_EVENT_CHANNEL_SIZE,
+    pubs = crate::TOUCH_EVENT_PUB_SIZE,
+    subs = crate::TOUCH_EVENT_SUB_SIZE
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct TouchEvent {
+    /// The id of the pointing device that produced this scan.
+    pub device_id: u8,
+    /// The largest x and y the device reports.
+    pub max: (u16, u16),
+    /// Contacts by slot. A contact keeps its slot until it lifts.
+    pub contacts: [Option<TouchContact>; TOUCH_MAX_CONTACTS],
+}
+
+/// Where a contact is on a touch device, from its top-left corner.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct TouchContact {
+    pub x: u16,
+    pub y: u16,
+}
+
+/// What a touchpad publishes: cursor motion it computes itself, or raw
+/// [`TouchEvent`]s for a touch processor to turn into motion and gestures.
+#[derive(Event, Clone, Debug)]
+pub enum TouchpadEvent {
+    Pointing(PointingEvent),
+    Touch(TouchEvent),
+}
+
 /// Set the CPI (Resolution) of the pointing device
 /// TODO: Make the channel size configurable
 #[event(channel_size = 8, pubs = 2, subs = 2)]
@@ -185,4 +253,28 @@ pub struct PointingSetCpiEvent {
 pub struct PointingProcessorEvent {
     pub device_id: u8,
     pub mode: PointingMode,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keyboard_sources_preserve_existing_wire_tags() {
+        let mut bytes = [0; KeyboardEvent::POSTCARD_MAX_SIZE];
+        assert_eq!(
+            postcard::to_slice(&KeyboardEvent::key(2, 3, true), &mut bytes).unwrap(),
+            &[1, 0, 2, 3]
+        );
+        assert_eq!(
+            postcard::to_slice(&KeyboardEvent::virtual_key(7, false), &mut bytes).unwrap(),
+            &[0, 5, 7]
+        );
+        for pressed in [false, true] {
+            let event = KeyboardEvent::keycode(HidKeyCode::RShift, pressed);
+            let encoded = postcard::to_slice(&event, &mut bytes).unwrap();
+            assert_eq!(encoded[1], 6);
+            assert_eq!(postcard::from_bytes::<KeyboardEvent>(encoded).unwrap(), event);
+        }
+    }
 }

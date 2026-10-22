@@ -13,14 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING**: Rename `KeyboardEventPos` to `KeyboardEventSource` and `KeyboardEvent::pos` to `source`.
 - **BREAKING**: Use bare `#[register_processor]` to run the type's `Runnable`. See [processor migration](https://rmk.rs/docs/migration/v09_v10#processors).
 - **BREAKING**: Keyboard macros are reworked around `MacroOp` lists.
-- **BREAKING**: Bump Rynk protocol version to 0.2: now `GetMacro`/`SetMacro` read and write a whole macro by index, and `BleStatus` gained a `bonded` field, changing its wire format and that of `ConnectionStatus`.
+- **BREAKING**: Bump Rynk protocol version to 0.2: now `GetMacro`/`SetMacro` read and write a whole macro by index, `BleStatus` gained a `bonded` field, changing its wire format and that of `ConnectionStatus`, and `Fork` gained a `layers` field.
+- **BREAKING**: Serial numbers no longer contain the RMK version, so they stay the same across upgrades. USB, BLE, and Rynk report a protocol marker followed by a configured device serial ID or one derived from the hardware UID. `DeviceConfig.serial_number` now owns the complete string built by `build_serial_number`; `DeviceConfig` is `Clone` rather than `Copy`. `RMK_BUILD_INFO` is removed. See [serial number migration](https://rmk.rs/docs/migration/v09_v10#serial-numbers).
 
 ### Added
 
+- `KeyboardEvent::keycode` executes a direct keycode without keymap, combo or fork lookup; `Virtual(u8)` remains a software keymap position.
 - Pointer acceleration in `PointingProcessor` for every pointing device: motion faster than a threshold is scaled up in proportion to its speed, up to a maximum, in cursor mode (`acceleration = { from, max }` in `keyboard.toml`) and scroll mode (`scroll_acceleration`). Off by default.
 - Fractional cursor speed: `CursorConfig::divisor_x`/`divisor_y` divide cursor motion, carrying the remainder between motions, so a cursor slower than the sensor loses no movement and still accelerates.
+- `TouchEvent`: raw multi-touch scans from touchpads, where up to five contacts are, by slot. They stay on the board the touchpad is on. `Iqs5xxMode::RawTouch` publishes them in place of cursor motion.
+- Touchpad gestures as keymap positions: a `KeyboardEvent` at `KeyboardEventSource::Touch` presses a `TouchGesture` of a touchpad, whose action comes from the keymap's touch map (`KeymapData::with_touch`), per layer like encoders. A gesture a layer leaves transparent takes its action from the layer below.
+- `PointingProcessor` turns a pointing device's own `H`/`V` axes into wheel and pan in every mode, scaled by `PointingProcessorConfig::device_scroll`. `ScrollConfig` is now `{ wheel, pan }`, one `ScrollAxis` each, so the same type serves scroll mode and device scrolling.
 - Add timer-only processors and combine polling with resettable deadlines through `#[processor]`. Both TOML and Rust projects implement `DeadlineProcessor::deadline()` and `on_deadline()` directly.
 - Macro operations accept any single action (`WM`, `MO`, `OSM`, ...) without the `vial` feature, and a new `pause_for_release` operation (`MacroOp::PauseForRelease`) runs the rest of the macro when the macro key is released
 - PMW3610 `force_awake` now follows the keyboard's sleep state, ZMK style: the sensor is held in RUN while the keyboard is awake and released to its REST modes when the idle sleep starts. `PointingDriver` gained a default-implemented `set_low_power` hint and `PointingDevice` subscribes to `SleepStateEvent`; each sensor in `keyboard.toml` reserves its subscriber slot automatically.
@@ -30,9 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `dfu_ext` feature for DFU writes to external SPI flash (e.g. W25Q64), so boards with limited internal flash can store the new firmware image externally.
 - Expose whether the active BLE profile is bonded via `BleStatus::bonded`, so LEDs and displays can tell a paired-but-disconnected profile from an empty slot.
 - Make `rmk::state::current_ble_status()` and `current_connection_status()` public, so user code can read the current status without subscribing to `ConnectionStatusChangeEvent`.
+- Forks accept a `layers` filter, so they only fire for keys from those layers.
+- Forks accept a list of triggers, and their outputs are optional: an omitted `positive_output` is the trigger, and an omitted `negative_output` leaves the key alone.
 
 ### Fixed
 
+- Caret taps preserve held keys and modifiers by executing through Keyboard.
 - Re-pairing a cleared BLE profile with the same host no longer leaves the profile marked as removed.
 - Apply processor registration conditions to both construction and execution.
 - Reject zero processor polling intervals at compile time.

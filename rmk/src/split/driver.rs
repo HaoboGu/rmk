@@ -15,7 +15,7 @@ use crate::event::DfuCmdEvent;
 #[cfg(feature = "_ble")]
 use crate::event::{BatteryStatusEvent, PeripheralBatteryEvent};
 use crate::event::{
-    KeyboardEvent, KeyboardEventPos, PeripheralConnectedEvent, SubscribableEvent, publish_event, publish_event_async,
+    KeyboardEvent, KeyboardEventSource, PeripheralConnectedEvent, SubscribableEvent, publish_event, publish_event_async,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -130,11 +130,8 @@ mod tests {
     }
 }
 
-/// PeripheralManager runs in central.
-/// It reads split message from peripheral and updates key matrix cache of the peripheral.
-///
-/// When the central scans the matrix, the scanning thread sends sync signal and gets key state cache back.
-///
+/// PeripheralManager runs on the central and manages communication with one split peripheral.
+/// It publishes input events from that peripheral and sends the central's state changes back.
 pub(crate) struct PeripheralManager<T: SplitReader + SplitWriter> {
     /// Receiver
     pub(crate) transceiver: T,
@@ -214,16 +211,15 @@ impl<T: SplitReader + SplitWriter> PeripheralManager<T> {
         let mut app_link = crate::split_app::LinkGuard::new();
         app_link.mark_up();
 
-        // Send the current state once on startup so the peripheral matches us
-        // even when no transition has happened since the central booted.
-        if self
-            .send(&SplitMessage::ConnectionStatus(
-                crate::state::current_connection_status(),
-            ))
-            .await
-            .is_err()
-        {
-            return;
+        // Send the current state when the session starts.
+        for message in [
+            SplitMessage::ConnectionStatus(crate::state::current_connection_status()),
+            SplitMessage::KeyboardIndicator(crate::keyboard::current_led_indicator().into_bits()),
+            SplitMessage::SleepState(crate::state::current_sleep_state()),
+        ] {
+            if self.send(&message).await.is_err() {
+                return;
+            }
         }
 
         #[cfg(feature = "dfu_split")]
@@ -290,8 +286,8 @@ impl<T: SplitReader + SplitWriter> PeripheralManager<T> {
     async fn process_peripheral_message(&self, split_message: SplitMessage) {
         trace!("Got message from peripheral: {:?}", split_message);
         match split_message {
-            SplitMessage::Key(e) => match e.pos {
-                KeyboardEventPos::Key(key_pos) => {
+            SplitMessage::Key(e) => match e.source {
+                KeyboardEventSource::Key(key_pos) => {
                     // Verify the row/col
                     if key_pos.row >= self.matrix_config.rows || key_pos.col >= self.matrix_config.cols {
                         error!("Invalid peripheral row/col: {} {}", key_pos.row, key_pos.col);

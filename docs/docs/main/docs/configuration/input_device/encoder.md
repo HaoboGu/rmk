@@ -93,7 +93,7 @@ encoders = [...]
 #   - Encoder 0: CW -> AudioVolUp, CCW -> AudioVolDown
 #   - Encoder 1: CW -> PageDown, CCW -> PageUp
 # Layer 1:
-#   - Encoder 0: No action ("_")
+#   - Encoder 0: No action ("No")
 #   - Encoder 1: CW -> BrightnessUp, CCW -> BrightnessDown
 
 [[keymap.layer]]  # Layer 0
@@ -102,12 +102,13 @@ encoders = [["AudioVolUp", "AudioVolDown"], ["PageDown", "PageUp"]]
 
 [[keymap.layer]]  # Layer 1
 # ... keys ...
-encoders = [["_", "_"], ["BrightnessUp", "BrightnessDown"]]
+encoders = [["No", "No"], ["BrightnessUp", "BrightnessDown"]]
 ```
 
 **Notes:**
 
-- A layer must list actions for **every** encoder, or omit the `encoders` field entirely. Listing only some of the board's encoders is rejected, because the unlisted ones would silently stop working on that layer. To keep an encoder inactive on a given layer, give it an explicit `["_", "_"]` (transparent) or `["No", "No"]` entry — as shown for encoder 0 on layer 1 above.
+- A layer must list actions for **every** encoder, or omit the `encoders` field entirely. Listing only some of the board's encoders is rejected, because the unlisted ones would silently stop working on that layer.
+- Use `["No", "No"]` to keep an encoder inactive on a given layer, as shown for encoder 0 on layer 1 above. Use `["_", "_"]` (transparent) to inherit actions from lower active layers.
 - When `encoders` is omitted from a layer, every encoder defaults to no action on that layer.
 - The number of encoder entries must match the number of physical encoders defined in `[[input_device.encoder]]`. On split keyboards this is the total across all halves, in the order they are defined (central first, then each peripheral).
 

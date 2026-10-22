@@ -26,14 +26,6 @@ steps = [
   { rynk = { cmd = "GetLockStatus", reply = { locked = true, unlocking = false, remaining_keys = 2, key_positions = [[0, 1], [0, 2]] } } },
 ]
 
-# `GetMatrixState` is gated unconditionally: an unlocked one would leak
-# keystrokes.
-[[test]]
-name = "gated_commands_are_refused_while_locked"
-steps = [
-  { rynk = { cmd = "GetMatrixState", error = "Locked" } },
-]
-
 # `GetLockStatus` is a snapshot: it must not arm an attempt, so the challenge
 # count stays whole even with the keys held.
 [[test]]

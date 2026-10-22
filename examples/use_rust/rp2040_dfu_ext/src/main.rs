@@ -42,7 +42,8 @@ type ExternalFlash = W25qNorFlash<spi::Spi<'static, peripherals::SPI0, spi::Asyn
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
     info!("RMK DFU ext start!");
-    let p = embassy_rp::init(Default::default());
+    let mut p = embassy_rp::init(Default::default());
+    let serial_number = rmk::config::rp2040_serial_number(p.FLASH.reborrow());
 
     let driver = Driver::new(p.USB, Irqs);
 
@@ -85,11 +86,11 @@ async fn main(_spawner: Spawner) {
         rmk::processor::builtin::dfu_led::DfuLedProcessor::new(Output::new(p.PIN_25, Level::Low), false);
 
     let keyboard_device_config = DeviceConfig {
+        serial_number,
         vid: 0x4c4b,
         pid: 0x4643,
         manufacturer: "Haobo",
         product_name: "RMK Keyboard RP2040 DFU ext",
-        serial_number: "vial:f64c2b3c:000001",
     };
 
     let vial_config = VialConfig::new(VIAL_KEYBOARD_ID, VIAL_KEYBOARD_DEF, &[(0, 0), (1, 1)]);
