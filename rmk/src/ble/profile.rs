@@ -526,12 +526,13 @@ mod tests {
 
     #[test]
     fn failed_save_is_dropped_instead_of_retried() {
+        use embassy_futures::select::{Either3, select3};
+        use embassy_time::Timer;
+
         use crate::config::StorageConfig;
         use crate::core_traits::Runnable;
         use crate::storage::{Storage, async_flash_wrapper};
         use crate::test_support::{InMemoryFlash, clear_flash_channel};
-        use embassy_futures::select::{Either3, select3};
-        use embassy_time::Timer;
 
         with_manager::<1>(|manager| {
             clear_flash_channel();
