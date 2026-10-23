@@ -27,7 +27,8 @@ pub enum MorseMode {
     /// When another key is pressed and released during the current morse key is held,
     /// the hold action of current morse key will be triggered
     PermissiveHold,
-    /// Trigger hold immediately if any other non-morse key is pressed when the current morse key is held
+    /// Trigger hold immediately when another key is pressed while the current morse key is held,
+    /// including when the other key is a morse key.
     HoldOnOtherPress,
     /// Normal mode, the decision is made when timeout
     Normal,
