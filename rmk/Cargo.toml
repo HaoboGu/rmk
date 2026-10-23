@@ -251,7 +251,7 @@ passkey_entry = ["_ble", "rmk-types/passkey_entry"]
 _ble = ["dep:trouble-host", "dep:bt-hci", "dep:embassy-crypto", "dep:embassy-crypto-rustcrypto", "dep:rand_chacha", "storage", "rmk-types/_ble"]
 
 ## Internal support for extended advertising, scanning and connecting.
-_ext_adv = ["trouble-host?/extended-advertising"]
+_ext_adv = ["trouble-host?/per-connection-address"]
 
 [dependencies]
 rmk-macro = { version = "=0.8.0", path = "../rmk-macro" }
@@ -305,7 +305,7 @@ bt-hci = { version = "0.11", optional = true }
 embassy-crypto = { git = "https://github.com/embassy-rs/embassy.git", rev = "bd35bd7a7d19147c8bcae9c2eda99b25e597294c", optional = true }
 embassy-crypto-rustcrypto = { git = "https://github.com/embassy-rs/embassy.git", rev = "bd35bd7a7d19147c8bcae9c2eda99b25e597294c", optional = true, features = ["embassy-crypto-aes128-ecb", "embassy-crypto-aes128-cmac", "embassy-crypto-p256-ecdh"] }
 rand_chacha = { version = "0.9", default-features = false, optional = true }
-trouble-host = { git = "https://github.com/HaoboGu/trouble", rev = "daf8d3cad4919c06c82ab3aae18f13d36faf984c", default-features = false, features = [
+trouble-host = { git = "https://github.com/embassy-rs/trouble", rev = "8cca99e5c217e7b4d5da0f12c9725b93623dc4d3", default-features = false, features = [
     "peripheral",
     "gatt",
     "derive",
