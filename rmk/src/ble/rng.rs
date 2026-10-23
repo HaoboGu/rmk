@@ -71,6 +71,8 @@ impl embassy_crypto::driver::Rng for Driver {
     }
 }
 
+// The std self-dependency must not register a second driver in the unit-test binary.
+#[cfg(any(not(feature = "std"), test))]
 embassy_crypto::rng_impl!(Driver);
 
 #[cfg(test)]
