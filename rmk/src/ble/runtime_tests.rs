@@ -35,6 +35,7 @@ struct Radio {
 }
 
 impl Radio {
+    #[cfg(feature = "_ext_adv")]
     async fn wait_for_disconnects(&self, expected: &[u16]) {
         with_timeout(Duration::from_secs(1), async {
             while self.disconnects.borrow().len() < expected.len() {
@@ -487,6 +488,103 @@ fn runtime_cancels_pairing_on_switch_and_timeout_and_refuses_bond_loss() {
                 radio.disconnect(3).await;
                 radio.wait_for_advertisements(11).await;
             }
+        };
+        assert!(matches!(
+            select3(run, storage.run(), scenario).await,
+            Either3::Third(())
+        ));
+    });
+}
+
+#[cfg(feature = "_ext_adv")]
+#[test]
+fn runtime_background_policy_preserves_active_and_waits_for_draining_slots() {
+    if super::HOST_LINKS < 3 {
+        return;
+    }
+    test_block_on(async {
+        clear_flash_channel();
+        BLE_PROFILE_CHANNEL.clear();
+        super::rng::seed([7; 32]);
+        let radio = Radio {
+            events: Channel::new(),
+            address: Cell::new([0; 6]),
+            extended: Cell::new(false),
+            advertisements: RefCell::new(Vec::new()),
+            disconnects: RefCell::new(Vec::new()),
+            changed: Signal::new(),
+        };
+        let mut resources = HostResources::<DefaultPacketPool, 4, 16, 1, 4>::new();
+        let base = [1, 2, 3, 4, 5, 0xc6];
+        let stack = trouble_host::new(MockController(&radio), &mut resources)
+            .set_random_address(Address::random(base))
+            .build();
+        let flash = async_flash_wrapper(InMemoryFlash::<16_384, 4_096, 1>::new());
+        let mut storage = Box::pin(Storage::new(flash, &StorageConfig::default())).await;
+        let device = DeviceConfig {
+            vid: 1,
+            pid: 1,
+            manufacturer: "RMK",
+            product_name: "RMK",
+            serial_number: heapless::String::new(),
+        };
+        let battery = BleBatteryConfig::disabled();
+        let run = super::run_ble_keyboard(
+            &stack,
+            base,
+            &device,
+            &battery,
+            #[cfg(feature = "host")]
+            None,
+        );
+        let scenario = async {
+            radio.wait_for_advertisements(1).await;
+            let count = 1;
+            for profile in 0..3 {
+                BLE_PROFILE_CHANNEL.send(BleProfileAction::Switch(profile)).await;
+                radio.wait_for_advertisements(count + profile as usize).await;
+                radio.connect(profile).await;
+            }
+            assert_eq!(stack.connections().count(), 3);
+            BLE_PROFILE_CHANNEL
+                .send(BleProfileAction::SetBackgroundConnections(false))
+                .await;
+            radio.wait_for_disconnects(&[0, 1]).await;
+            assert_eq!(crate::state::current_profile(), 2);
+            assert!(matches!(
+                read(StorageKey::BleBackgroundConnections).await.unwrap(),
+                Some(StorageValue::BleBackgroundConnections(false))
+            ));
+            radio.disconnect(0).await;
+            radio.disconnect(1).await;
+            Timer::after_millis(2).await;
+            assert_eq!(stack.connections().count(), 1);
+
+            BLE_PROFILE_CHANNEL
+                .send(BleProfileAction::SetBackgroundConnections(true))
+                .await;
+            Timer::after_millis(2).await;
+            assert_eq!(radio.advertisements.borrow().len(), count + 2);
+            assert_eq!(radio.disconnects.borrow().as_slice(), &[0, 1]);
+            BLE_PROFILE_CHANNEL.send(BleProfileAction::Switch(0)).await;
+            radio.wait_for_advertisements(count + 3).await;
+            radio.connect(0).await;
+            assert_eq!(stack.connections().count(), 2);
+
+            BLE_PROFILE_CHANNEL
+                .send(BleProfileAction::SetBackgroundConnections(false))
+                .await;
+            radio.wait_for_disconnects(&[0, 1, 2]).await;
+            BLE_PROFILE_CHANNEL.send(BleProfileAction::Switch(1)).await;
+            radio.wait_for_disconnects(&[0, 1, 2, 0]).await;
+            // Single-link mode must wait for every previous slot to be reclaimed.
+            assert_eq!(radio.advertisements.borrow().len(), count + 3);
+            radio.disconnect(2).await;
+            Timer::after_millis(2).await;
+            assert_eq!(radio.advertisements.borrow().len(), count + 3);
+            radio.disconnect(0).await;
+            radio.wait_for_advertisements(count + 4).await;
+            assert_eq!(radio.address.get(), [1, 2, 3, 5, 5, 0xc6]);
         };
         assert!(matches!(
             select3(run, storage.run(), scenario).await,

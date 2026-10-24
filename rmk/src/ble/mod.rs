@@ -459,7 +459,8 @@ async fn run_ble_keyboard<
                 }
             }
             let bond = profile_manager.bond_info(profile);
-            let request = advertising_request(profile, &links, now, deadline, bond.as_ref(), address, product_name);
+            let request = advertising_request(profile, &links, now, deadline, bond.as_ref(), address, product_name)
+                .filter(|_| profile_manager.background_connections || links.iter().all(Option::is_none));
             if request.is_some() {
                 set_ble_state(BleState::Advertising);
             }
@@ -542,6 +543,26 @@ async fn run_ble_keyboard<
                     let current = crate::state::current_profile();
                     let clear = matches!(action, BleProfileAction::ClearBond | BleProfileAction::ClearSlot(_));
                     let target = match action {
+                        BleProfileAction::SetBackgroundConnections(enabled) => {
+                            let enabled = enabled && HOST_LINKS > 1;
+                            profile_manager.background_connections = enabled;
+                            if !enabled {
+                                for (profile, conn) in links.iter().enumerate() {
+                                    if profile != current as usize
+                                        && let Some(conn) = conn
+                                    {
+                                        conn.disconnect();
+                                    }
+                                }
+                            }
+                            if crate::storage::store(crate::storage::StorageItem::BleBackgroundConnections(enabled))
+                                .await
+                                .is_err()
+                            {
+                                error!("Failed to save background connection setting");
+                            }
+                            continue;
+                        }
                         BleProfileAction::Switch(n) | BleProfileAction::Pair(n) | BleProfileAction::ClearSlot(n) => n,
                         BleProfileAction::ClearBond => current,
                         BleProfileAction::Previous => {
@@ -572,7 +593,7 @@ async fn run_ble_keyboard<
                             disconnect_profile(pairing, &mut links, &completed).await;
                             profile_manager.set_pairing(None).await;
                         }
-                        if HOST_LINKS == 1
+                        if !profile_manager.background_connections
                             && let Some(conn) = &links[current as usize]
                         {
                             conn.disconnect();
