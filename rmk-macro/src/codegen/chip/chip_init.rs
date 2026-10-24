@@ -128,6 +128,13 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                     SDC_MEM_UNIBODY
                 }
             };
+            let sdc_mem_size = if cfg!(feature = "_ext_adv") && peripheral_id.is_none() {
+                quote! { { ::rmk::ble::nrf_sdc_memory_size(
+                    #sdc_mem_size, #peri_num, L2CAP_MTU, L2CAP_TXQ, L2CAP_RXQ,
+                ) } }
+            } else {
+                quote! { #sdc_mem_size }
+            };
             let ble_init = match &communication {
                 CommunicationConfig::Ble(_) | CommunicationConfig::Both(_, _) => quote! {
                     // Initialize nrf-sdc and ble stack
@@ -242,6 +249,25 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
             } else {
                 quote! {}
             };
+            let ble_config = if cfg!(feature = "_ext_adv") && peripheral_id.is_none() {
+                let (minimum, activities) = match chip.chip.as_str() {
+                    "esp32c3" | "esp32s3" => (6usize, 1usize + usize::from(peri_num > 0)),
+                    _ => (2usize, 0usize),
+                };
+                let capacity = if activities == 0 {
+                    quote! { ::rmk::ble::CONNECTIONS_MAX }
+                } else {
+                    quote! { ::rmk::ble::CONNECTIONS_MAX + #activities }
+                };
+                quote! {
+                    ::esp_radio::ble::Config::default().with_max_connections(
+                        ::core::cmp::max(#minimum, #capacity)
+                            .try_into().expect("too many BLE controller activities")
+                    )
+                }
+            } else {
+                quote! { Default::default() }
+            };
             quote! {
                 ::esp_println::logger::init_logger_from_env();
                 let p = ::esp_hal::init(::esp_hal::Config::default().with_cpu_clock(::esp_hal::clock::CpuClock::max()));
@@ -249,7 +275,7 @@ pub(crate) fn chip_init_default(hardware: &Hardware, peripheral_id: Option<usize
                 let timg0 = ::esp_hal::timer::timg::TimerGroup::new(p.TIMG0);
                 ::esp_rtos::start(timg0.timer0, p.FROM_CPU_INTR0);
                 #adc_entropy_init
-                let connector = ::esp_radio::ble::controller::BleConnector::new(p.BT, Default::default()).unwrap();
+                let connector = ::esp_radio::ble::controller::BleConnector::new(p.BT, #ble_config).unwrap();
                 let ble_controller: ::bt_hci::controller::ExternalController<_, 64> = ::bt_hci::controller::ExternalController::new(connector);
                 let ble_addr = #ble_addr;
             }
@@ -332,6 +358,57 @@ mod tests {
     use rmk_config::KeyboardTomlConfig;
 
     use super::chip_init_default;
+
+    #[test]
+    fn ble_controller_capacity_follows_the_internal_feature() {
+        use crate::codegen::chip::bind_interrupt::expand_bind_interrupt;
+
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples/use_config");
+        let module = syn::parse_quote! { mod keyboard {} };
+        for board in ["nrf52840_ble", "nrf52840_ble_split"] {
+            let hardware =
+                KeyboardTomlConfig::new_from_toml_path(root.join(board).join("keyboard.toml"))
+                    .hardware()
+                    .unwrap();
+            let controller = expand_bind_interrupt(&hardware, &module, None).to_string();
+            assert!(controller.contains("HOST_LINKS"), "{controller}");
+            assert_eq!(
+                controller.contains("support_ext_adv"),
+                cfg!(feature = "_ext_adv")
+            );
+            assert_eq!(
+                controller.contains("support_ext_scan"),
+                cfg!(feature = "_ext_adv") && board.ends_with("split"),
+            );
+            assert_eq!(
+                controller.contains("support_ext_central"),
+                cfg!(feature = "_ext_adv") && board.ends_with("split"),
+            );
+            let init = chip_init_default(&hardware, None).to_string();
+            assert_eq!(
+                init.contains("nrf_sdc_memory_size"),
+                cfg!(feature = "_ext_adv")
+            );
+            if board.ends_with("split") {
+                let peripheral = chip_init_default(&hardware, Some(0)).to_string();
+                assert!(!peripheral.contains("nrf_sdc_memory_size"), "{peripheral}");
+            }
+        }
+        for board in ["esp32c3_ble", "esp32c6_ble", "esp32h2_ble"] {
+            let hardware =
+                KeyboardTomlConfig::new_from_toml_path(root.join(board).join("keyboard.toml"))
+                    .hardware()
+                    .unwrap();
+            let init = chip_init_default(&hardware, None).to_string();
+            assert_eq!(
+                init.contains("with_max_connections"),
+                cfg!(feature = "_ext_adv")
+            );
+            if cfg!(feature = "_ext_adv") {
+                assert!(init.contains("CONNECTIONS_MAX"), "{init}");
+            }
+        }
+    }
 
     /// The chip init generated for an nRF52833 keyboard whose `[chip.nrf52833]` holds `chip_section`.
     fn nrf52833_chip_init(name: &str, chip_section: &str) -> String {

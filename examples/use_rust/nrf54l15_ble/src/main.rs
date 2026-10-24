@@ -58,20 +58,25 @@ fn build_sdc<'d, const N: usize>(
     mpsl: &'d MultiprotocolServiceLayer,
     mem: &'d mut sdc::Mem<N>,
 ) -> Result<nrf_sdc::SoftdeviceController<'d>, nrf_sdc::Error> {
-    sdc::Builder::new()?
+    let builder = sdc::Builder::new()?
         .support_adv()
         .support_peripheral()
         // .support_dle_peripheral()
         // .support_phy_update_peripheral()
         // .support_le_2m_phy()
-        .peripheral_count(1)?
+        .peripheral_count(rmk::ble::HOST_LINKS as u8)?
         .buffer_cfg(
             DefaultPacketPool::MTU as u16,
             DefaultPacketPool::MTU as u16,
             L2CAP_TXQ,
             L2CAP_RXQ,
-        )?
-        .build(p, rng, mpsl, mem)
+        )?;
+    let builder = if rmk::ble::EXT_ADV_ENABLED {
+        builder.support_ext_adv()
+    } else {
+        builder
+    };
+    builder.build(p, rng, mpsl, mem)
 }
 
 fn ble_addr() -> [u8; 6] {
@@ -148,7 +153,9 @@ async fn main(spawner: Spawner) {
     );
 
     let mut rng = cracen::Cracen::new_blocking(p.CRACEN);
-    let mut sdc_mem = sdc::Mem::<SDC_MEM_SIZE>::new();
+    let mut sdc_mem = sdc::Mem::<
+        { rmk::ble::nrf_sdc_memory_size(SDC_MEM_SIZE, 0, DefaultPacketPool::MTU, L2CAP_TXQ, L2CAP_RXQ) },
+    >::new();
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
     info!("SDC built");
     info!("BLE stack ready");

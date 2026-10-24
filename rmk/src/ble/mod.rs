@@ -115,11 +115,39 @@ pub const HOST_LINKS: usize = if cfg!(feature = "_ext_adv") {
 } else {
     1
 };
+const _: () = core::assert!(HOST_LINKS <= u8::MAX as usize, "BLE host capacity must fit in u8");
 
 /// Max number of connections of a keyboard's BLE stack; a dongle sizes its
 /// own — see [`crate::dongle::Dongle`].
 #[doc(hidden)]
 pub const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + HOST_LINKS;
+
+/// Whether controller setup must enable extended advertising commands.
+#[doc(hidden)]
+pub const EXT_ADV_ENABLED: bool = cfg!(feature = "_ext_adv");
+
+/// Reserve additional SDC resources using the upper bounds in nrf-sdc a22ca716's sdc.h.
+/// Applies to RMK's default 31-byte advertisement and three scan buffers.
+#[doc(hidden)]
+pub const fn nrf_sdc_memory_size(
+    legacy_size: usize,
+    central_links: usize,
+    packet_size: usize,
+    tx_buffers: u8,
+    rx_buffers: u8,
+) -> usize {
+    if !EXT_ADV_ENABLED {
+        return legacy_size;
+    }
+    // SDC_MEM_PER_PERIPHERAL_LINK, including optional SDC_MEM_SUBRATING per link.
+    let per_link = 923 + (tx_buffers as usize + rx_buffers as usize) * (packet_size + 15) - 84
+        + if cfg!(feature = "subrating") { 60 } else { 0 };
+    let per_link = (per_link + 7) & !7;
+    let advertising = (5184 + 31 * 18) / 10; // SDC_MEM_PER_ADV_SET(31).
+    // SDC_MEM_SCAN_EXT(3) plus SDC_MEM_INITIATOR; retain the legacy allocation too.
+    let scanning = if central_links > 0 { 408 + 3 * 320 + 384 } else { 0 };
+    (legacy_size + HOST_LINKS.saturating_sub(1) * per_link + advertising + scanning + 7) & !7
+}
 
 /// Max simultaneous `active` receivers: one host task, one GATT write gate and
 /// one report router per connection.
