@@ -103,7 +103,7 @@ jobs:
       - run: .github/ci/host.sh
 
   qemu-rynk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -136,7 +136,7 @@ jobs:
   # Entries with bloat==true also compare binary sizes against the base branch.
   build:
     needs: discover
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       # Leave runner slots for format/check/test/build-esp.
