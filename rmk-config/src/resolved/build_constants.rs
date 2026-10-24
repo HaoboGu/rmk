@@ -170,6 +170,17 @@ impl crate::KeyboardTomlConfig {
         // Declarations live in subscriber_default.toml.
         apply_feature_subscriber_bumps(&mut events, active_features);
 
+        let host_links = if active_features.contains(&"_ext_adv") {
+            rmk.ble_profiles_num + usize::from(active_features.contains(&"dongle"))
+        } else {
+            1
+        };
+        if active_features.contains(&"_ble")
+            && let Some(event) = events.iter_mut().find(|event| event.name == "battery_status")
+        {
+            event.subs += host_links.saturating_sub(1);
+        }
+
         // Each PointingDevice subscribes to the sleep state. Devices built by
         // hand in Rust are declared under `[event.sleep_state]` instead.
         let pointing_devices = self.pointing_device_count();
@@ -202,7 +213,7 @@ impl crate::KeyboardTomlConfig {
             && active_features.contains(&"_ble")
             && let Some(event) = events.iter_mut().find(|event| event.name == "peripheral_battery")
         {
-            event.subs += 1;
+            event.subs += host_links;
         }
 
         // Only validate passkey settings when the build will emit passkey constants.
@@ -469,6 +480,36 @@ mod tests {
         };
 
         assert_eq!(subs(&split_ble), subs(&base) + 1);
+        for profiles in [1, 3, 5] {
+            config.rmk.ble_profiles_num = profiles;
+            let multi = config.build_constants(&["split", "_ble", "_ext_adv"]).unwrap();
+            assert_eq!(subs(&multi), subs(&base) + profiles);
+        }
+    }
+
+    #[test]
+    fn every_host_link_has_a_battery_subscription() {
+        let mut config: KeyboardTomlConfig = toml::from_str("").unwrap();
+        let subscriptions = |config: &KeyboardTomlConfig, features: &[&str]| {
+            config
+                .build_constants(features)
+                .unwrap()
+                .events
+                .into_iter()
+                .find(|event| event.name == "battery_status")
+                .unwrap()
+                .subs
+        };
+        let base = subscriptions(&config, &["_ble"]);
+        for profiles in [1, 3, 5] {
+            config.rmk.ble_profiles_num = profiles;
+            assert_eq!(subscriptions(&config, &["_ble"]), base);
+            assert_eq!(subscriptions(&config, &["_ble", "_ext_adv"]), base + profiles - 1);
+            assert_eq!(
+                subscriptions(&config, &["_ble", "_ext_adv", "dongle"]),
+                base + profiles + 1
+            );
+        }
     }
 
     #[test]
