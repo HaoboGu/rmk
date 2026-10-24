@@ -102,6 +102,7 @@ fn bond_info_of(bonded_devices: &[ProfileInfo], slot_num: u8) -> Option<&Profile
 pub(crate) enum BleProfileAction {
     Switch(u8),
     Pair(u8),
+    SetBackgroundConnections(bool),
     Previous,
     Next,
     ClearBond,
@@ -136,6 +137,7 @@ pub(crate) struct ProfileManager<
     /// Retained when the connection loop cancels a flash write.
     pending_save: Option<ProfileInfo>,
     pub(crate) repairing: Option<u8>,
+    pub(crate) background_connections: bool,
     /// BLE stack
     stack: &'b Stack<'s, C, P>,
 }
@@ -152,6 +154,7 @@ where
             bonded_devices: heapless::Vec::new(),
             pending_save: None,
             repairing: None,
+            background_connections: super::HOST_LINKS > 1,
             stack,
         }
     }
@@ -159,6 +162,11 @@ where
     /// Load stored bonding information
     #[cfg(feature = "storage")]
     pub(crate) async fn load_bonded_devices(&mut self) {
+        self.background_connections = super::HOST_LINKS > 1
+            && !matches!(
+                read(StorageKey::BleBackgroundConnections).await,
+                Ok(Some(StorageValue::BleBackgroundConnections(false)))
+            );
         self.bonded_devices.clear();
         for slot_num in 0..SLOTS {
             if let Ok(Some(StorageValue::BondInfo(info))) = read(StorageKey::BondInfo(slot_num as u8)).await
@@ -483,6 +491,33 @@ mod tests {
                     assert_eq!(crate::state::current_profile(), 0);
                 };
                 assert!(matches!(select(storage.run(), verify).await, Either::Second(())));
+            });
+        });
+    }
+
+    #[test]
+    fn background_policy_is_restored_within_controller_capacity() {
+        use crate::config::StorageConfig;
+        use crate::core_traits::Runnable;
+        use crate::storage::{Storage, StorageItem, async_flash_wrapper, store};
+        use crate::test_support::{InMemoryFlash, clear_flash_channel};
+
+        with_manager::<1>(|manager| {
+            clear_flash_channel();
+            test_block_on(async {
+                let flash = async_flash_wrapper(InMemoryFlash::<16_384, 4_096, 1>::new());
+                let mut storage = Box::pin(Storage::new(flash, &StorageConfig::default())).await;
+                let verify = async {
+                    manager.load_bonded_devices().await;
+                    assert_eq!(manager.background_connections, crate::ble::HOST_LINKS > 1);
+                    for enabled in [false, true] {
+                        store(StorageItem::BleBackgroundConnections(enabled)).await.unwrap();
+                        let mut restarted = TestManager::<1>::new(manager.stack);
+                        restarted.load_bonded_devices().await;
+                        assert_eq!(restarted.background_connections, enabled && crate::ble::HOST_LINKS > 1);
+                    }
+                };
+                assert!(matches!(select(storage.run(), verify).await, super::Either::Second(())));
             });
         });
     }
