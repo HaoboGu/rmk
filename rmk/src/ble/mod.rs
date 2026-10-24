@@ -1,3 +1,5 @@
+use core::cell::Cell;
+
 #[cfg(feature = "subrating")]
 use bt_hci::cmd::le::LeSubrateRequest;
 #[cfg(feature = "_ext_adv")]
@@ -14,11 +16,13 @@ use embassy_futures::select::{Either, select, select3};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::signal::Signal;
+use embassy_sync::watch::{Receiver, Watch};
 use embassy_time::{Duration, Instant, Timer};
 use rmk_types::ble::BleState;
 use rmk_types::connection::ConnectionType;
 use rmk_types::led_indicator::LedIndicator;
 use trouble_host::prelude::*;
+use usbd_hid::descriptor::{MediaKeyboardReport, SystemControlReport};
 
 use crate::ble::adv::{Adv, advertise};
 use crate::ble::battery_service::BleBatteryServer;
@@ -37,7 +41,7 @@ use crate::channel::{BLE_REPORT_CHANNEL, LED_SIGNAL};
 use crate::config::{BleBatteryConfig, DeviceConfig, RmkConfig};
 use crate::core_traits::Runnable;
 use crate::event::SubscribableEvent;
-use crate::hid::{HidWriterTrait, run_led_reader};
+use crate::hid::{HidWriterTrait, Report, run_led_reader};
 #[cfg(feature = "split")]
 use crate::split::PeripheralMatrixConfig;
 #[cfg(feature = "split")]
@@ -54,7 +58,7 @@ pub(crate) mod led;
 pub mod passkey;
 pub(crate) mod profile;
 pub(crate) mod rng;
-#[cfg(all(test, feature = "_ext_adv"))]
+#[cfg(test)]
 mod runtime_tests;
 #[cfg(any(feature = "split", feature = "dongle"))]
 pub(crate) mod scan;
@@ -116,6 +120,10 @@ pub const HOST_LINKS: usize = if cfg!(feature = "_ext_adv") {
 /// own — see [`crate::dongle::Dongle`].
 #[doc(hidden)]
 pub const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + HOST_LINKS;
+
+/// Max simultaneous `active` receivers: one host task, one GATT write gate and
+/// one report router per connection.
+pub(crate) const ACTIVE_RECEIVERS: usize = HOST_LINKS;
 
 /// Max number of L2CAP channels
 const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
@@ -346,10 +354,14 @@ async fn run_ble_keyboard<
     if crate::ble::passkey::passkey_entry_enabled() {
         stack.set_io_capabilities(IoCapabilities::KeyboardOnly);
     }
+    // The active profile is broadcast to every connection; each connection
+    // creates its receivers when it starts serving.
+    let active: Watch<NoopRawMutex, u8, ACTIVE_RECEIVERS> = Watch::new();
     let mut profile_manager: ProfileManager<_, _, BOND_SLOTS> = ProfileManager::new(stack);
     // Load the bonded devices from storage
     profile_manager.load_bonded_devices().await;
     profile_manager.update_stack_bonds();
+    active.sender().send(crate::state::current_profile());
 
     let mut peripheral = stack.peripheral();
     let runner = stack.runner();
@@ -378,6 +390,7 @@ async fn run_ble_keyboard<
                 config,
                 #[cfg(feature = "host")]
                 host_service,
+                &active,
             )
             .await;
             drop(conn);
@@ -418,7 +431,7 @@ async fn run_ble_keyboard<
 
             match select(
                 advertise(&mut peripheral, &server.server, adv, timeout),
-                profile_manager.update_profile(),
+                profile_manager.update_profile(&active),
             )
             .await
             {
@@ -457,7 +470,7 @@ async fn run_ble_keyboard<
                         })
                         .await;
                     if let Either::Second(clear_slot) =
-                        select(completed.receive(), profile_manager.update_profile()).await
+                        select(completed.receive(), profile_manager.update_profile(&active)).await
                     {
                         control.disconnect();
                         completed.receive().await;
@@ -562,6 +575,7 @@ async fn gatt_events_task(
     conn: &GattConnection<'_, '_, DefaultPacketPool>,
     profile: u8,
     mut profile_info: Option<ProfileInfo>,
+    led: &Cell<LedIndicator>,
 ) {
     let level = server.battery_service.level;
     #[cfg(feature = "split")]
@@ -620,7 +634,9 @@ async fn gatt_events_task(
             }
             GattConnectionEvent::Encrypted { security_level, .. } => {
                 info!("[gatt] encrypted: {:?}", security_level);
-                set_ble_state(BleState::Connected);
+                if profile == crate::state::current_profile() {
+                    set_ble_state(BleState::Connected);
+                }
             }
             GattConnectionEvent::PhyUpdateFailed { .. } | GattConnectionEvent::ConnectionParamsUpdateFailed { .. } => {
                 warn!("[gatt] link parameter update failed");
@@ -665,7 +681,10 @@ async fn gatt_events_task(
                             if data_len == 1 {
                                 let led_indicator = LedIndicator::from_bits(data[0]);
                                 debug!("Got keyboard state: {:?}", led_indicator);
-                                LED_SIGNAL.signal(led_indicator);
+                                led.set(led_indicator);
+                                if profile == crate::state::current_profile() {
+                                    LED_SIGNAL.signal(led_indicator);
+                                }
                             } else {
                                 warn!("Wrong keyboard state data: {:?}", data);
                             }
@@ -720,7 +739,7 @@ async fn gatt_events_task(
                             debug!("Write GATT Event to Unknown: {:?}", event.handle());
                         }
 
-                        if control_point_write {
+                        if control_point_write && profile == crate::state::current_profile() {
                             info!("Write GATT Event to Control Point: {:?}", event.handle());
                             // Forward an HID Control Point write to sleep management.
                             // HID Class spec opcodes for the HID Control Point characteristic:
@@ -919,6 +938,7 @@ pub(crate) async fn set_conn_params<
 }
 
 /// Serve one host connection until its GATT Disconnected event.
+#[allow(clippy::too_many_arguments)]
 async fn serve_keyboard_connection<
     'a,
     'b,
@@ -932,8 +952,11 @@ async fn serve_keyboard_connection<
     bond_info: Option<ProfileInfo>,
     config: &BleBatteryConfig,
     #[cfg(feature = "host")] host_service: Option<&'r crate::host::HostService<'r>>,
+    active: &Watch<NoopRawMutex, u8, ACTIVE_RECEIVERS>,
 ) {
     let mut ble_hid_server = BleHidServer::new(server, conn);
+    let led = Cell::new(LedIndicator::default());
+    let mut report_active = active.receiver().expect("active receiver slots exhausted");
     let mut ble_battery_server = config.enabled.then(|| BleBatteryServer::new(server, conn));
     #[cfg(feature = "split")]
     let mut ble_peripheral_battery_server = crate::SPLIT_BATTERY_PERIPHERAL_IDS
@@ -975,7 +998,7 @@ async fn serve_keyboard_connection<
             set_conn_params(stack, conn).await;
         };
         select3(
-            gatt_events_task(server, conn, profile, bond_info),
+            gatt_events_task(server, conn, profile, bond_info, &led),
             connection_params,
             battery_task,
         )
@@ -984,10 +1007,12 @@ async fn serve_keyboard_connection<
 
     let writer_task = async {
         loop {
-            let report = BLE_REPORT_CHANNEL.receive().await;
-            if let Err(e) = ble_hid_server.write_report(&report).await {
-                error!("Failed to send report: {:?}", e);
+            report_active.get_and(|&p| p == profile).await;
+            if conn.raw().security_level().is_ok_and(|level| level.encrypted()) {
+                set_ble_state(BleState::Connected);
             }
+            LED_SIGNAL.signal(led.get());
+            write_active_reports(profile, &mut ble_hid_server, &mut report_active).await;
         }
     };
 
@@ -1019,6 +1044,34 @@ async fn serve_keyboard_connection<
 
     let inner = join3(writer_task, host_task, dongle_event_task);
     select(communication_task, inner).await;
+}
+
+/// Send this profile's reports until it loses active, then release its held inputs.
+async fn write_active_reports<W: HidWriterTrait<ReportType = Report>>(
+    profile: u8,
+    writer: &mut W,
+    active: &mut Receiver<'_, NoopRawMutex, u8, ACTIVE_RECEIVERS>,
+) {
+    loop {
+        match select(active.changed_and(|&p| p != profile), BLE_REPORT_CHANNEL.receive()).await {
+            Either::First(_) => break,
+            Either::Second(report) => {
+                if let Err(e) = writer.write_report(&report).await {
+                    error!("Failed to send report: {:?}", e);
+                }
+            }
+        }
+    }
+    for report in [
+        Report::KeyboardReport(Default::default()),
+        Report::MouseReport(Default::default()),
+        Report::MediaKeyboardReport(MediaKeyboardReport { usage_id: 0 }),
+        Report::SystemControlReport(SystemControlReport { usage_id: 0 }),
+        #[cfg(feature = "steno")]
+        Report::StenoReport(Default::default()),
+    ] {
+        let _ = writer.write_report(&report).await;
+    }
 }
 
 // Set the connection PHY.
@@ -1108,6 +1161,7 @@ mod tests {
     use crate::state::{current_ble_status, set_ble_profile, set_ble_state};
     use crate::test_support::test_block_on as block_on;
 
+    #[cfg(feature = "_ext_adv")]
     #[test]
     fn battery_subscriber_budget_covers_all_host_links_and_config_sessions() {
         use super::HOST_LINKS;
@@ -1115,6 +1169,80 @@ mod tests {
 
         let count = HOST_LINKS + 1 + if cfg!(feature = "rynk") { 2 } else { 0 };
         let _subscribers: Vec<_> = (0..count).map(|_| BatteryStatusEvent::subscriber()).collect();
+    }
+
+    #[cfg(feature = "_ext_adv")]
+    #[test]
+    fn active_report_routing_releases_old_host_and_leaves_background_idle() {
+        use core::future::Future;
+        use core::pin::pin;
+        use core::task::{Context, Waker};
+
+        use super::{ACTIVE_RECEIVERS, NoopRawMutex, Watch, write_active_reports};
+        use crate::channel::BLE_REPORT_CHANNEL;
+        use crate::hid::{HidError, HidWriterTrait, KeyboardReport, Report};
+
+        struct Writer(Vec<Report>);
+        impl HidWriterTrait for Writer {
+            type ReportType = Report;
+
+            async fn write_report(&mut self, report: &Report) -> Result<usize, HidError> {
+                self.0.push(report.clone());
+                Ok(1)
+            }
+        }
+
+        BLE_REPORT_CHANNEL.clear();
+        let active = Watch::<NoopRawMutex, u8, ACTIVE_RECEIVERS>::new();
+        active.sender().send(0);
+        let mut a = active.receiver().unwrap();
+        let mut b = active.receiver().unwrap();
+        let mut old = Writer(Vec::new());
+        let mut new = Writer(Vec::new());
+        {
+            let mut a_task = pin!(async {
+                a.get_and(|&p| p == 0).await;
+                write_active_reports(0, &mut old, &mut a).await;
+            });
+            let mut b_task = pin!(async {
+                b.get_and(|&p| p == 1).await;
+                write_active_reports(1, &mut new, &mut b).await;
+            });
+            let mut cx = Context::from_waker(Waker::noop());
+            BLE_REPORT_CHANNEL
+                .try_send(Report::KeyboardReport(KeyboardReport {
+                    modifier: 2,
+                    keycodes: [4, 0, 0, 0, 0, 0],
+                    ..Default::default()
+                }))
+                .unwrap();
+            assert!(b_task.as_mut().poll(&mut cx).is_pending());
+            assert!(!BLE_REPORT_CHANNEL.is_empty());
+            assert!(a_task.as_mut().poll(&mut cx).is_pending());
+            assert!(BLE_REPORT_CHANNEL.is_empty());
+
+            active.sender().send(1);
+            assert!(a_task.as_mut().poll(&mut cx).is_ready());
+            BLE_REPORT_CHANNEL
+                .try_send(Report::KeyboardReport(KeyboardReport {
+                    keycodes: [5, 0, 0, 0, 0, 0],
+                    ..Default::default()
+                }))
+                .unwrap();
+            assert!(b_task.as_mut().poll(&mut cx).is_pending());
+        }
+        assert_eq!(old.0.len(), 5 + usize::from(cfg!(feature = "steno")));
+        assert!(matches!(&old.0[0], Report::KeyboardReport(r) if r.modifier == 2 && r.keycodes[0] == 4));
+        assert!(matches!(&old.0[1], Report::KeyboardReport(r) if r.modifier == 0 && r.keycodes == [0; 6]));
+        assert!(
+            matches!(&old.0[2], Report::MouseReport(r) if r.buttons == 0 && r.x == 0 && r.y == 0 && r.wheel == 0 && r.pan == 0)
+        );
+        assert!(matches!(&old.0[3], Report::MediaKeyboardReport(r) if r.usage_id == 0));
+        assert!(matches!(&old.0[4], Report::SystemControlReport(r) if r.usage_id == 0));
+        #[cfg(feature = "steno")]
+        assert!(matches!(&old.0[5], Report::StenoReport(r) if r.keys == [0; 8]));
+        assert_eq!(new.0.len(), 1);
+        assert!(matches!(&new.0[0], Report::KeyboardReport(r) if r.keycodes[0] == 5));
     }
 
     #[cfg(all(feature = "dongle", feature = "custom_message"))]
@@ -1153,7 +1281,7 @@ mod tests {
     fn set_ble_state_preserves_current_profile() {
         let _guard = ble_status_test_lock().lock().unwrap();
 
-        set_ble_profile(2, true);
+        set_ble_profile(2, true, BleState::Inactive);
         set_ble_state(BleState::Advertising);
 
         assert_eq!(
@@ -1167,12 +1295,12 @@ mod tests {
     }
 
     #[test]
-    fn set_ble_profile_resets_state_when_profile_changes() {
+    fn selecting_an_unconnected_profile_sets_inactive() {
         let _guard = ble_status_test_lock().lock().unwrap();
 
-        set_ble_profile(1, false);
+        set_ble_profile(1, false, BleState::Inactive);
         set_ble_state(BleState::Connected);
-        set_ble_profile(3, true);
+        set_ble_profile(3, true, BleState::Inactive);
 
         assert_eq!(
             current_ble_status(),

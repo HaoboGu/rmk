@@ -88,13 +88,12 @@ pub(crate) fn set_ble_state(s: BleState) {
     update_status(|c| c.ble.state = s);
 }
 
-/// Switching profiles always drops the BLE state back to `Inactive`; the
-/// connection loop re-advertises and updates state from there. `bonded` is the bond
-/// presence of `profile`, the slot being switched to, not of the outgoing one.
-pub(crate) fn set_ble_profile(profile: u8, bonded: bool) {
+/// Change the selected profile and its readiness atomically, so an already
+/// encrypted target does not briefly hand input to another transport.
+pub(crate) fn set_ble_profile(profile: u8, bonded: bool, state: BleState) {
     update_status(|c| {
         c.ble.profile = profile;
-        c.ble.state = BleState::Inactive;
+        c.ble.state = state;
         c.ble.bonded = bonded;
     });
 }
@@ -251,7 +250,7 @@ mod tests {
         reset_state();
         let mut sub = ConnectionStatusChangeEvent::subscriber();
 
-        set_ble_profile(1, true);
+        set_ble_profile(1, true, BleState::Inactive);
 
         assert_eq!(
             block_on(sub.next_event()).0.ble,
@@ -262,7 +261,7 @@ mod tests {
             }
         );
 
-        set_ble_profile(2, false);
+        set_ble_profile(2, false, BleState::Inactive);
 
         assert_eq!(
             block_on(sub.next_event()).0.ble,
@@ -276,12 +275,30 @@ mod tests {
 
     #[cfg(feature = "_ble")]
     #[test]
+    fn switching_to_a_connected_profile_keeps_ble_as_the_active_transport() {
+        use rmk_types::ble::BleState;
+
+        let _guard = state_test_lock().lock().unwrap();
+        reset_state();
+        set_usb_state(UsbState::Configured);
+        set_preferred_connection(ConnectionType::Ble);
+        set_ble_profile(0, true, BleState::Connected);
+        let mut sub = ConnectionStatusChangeEvent::subscriber();
+        set_ble_profile(1, true, BleState::Connected);
+        let event = block_on(sub.next_event()).0;
+        assert_eq!(event.ble.profile, 1);
+        assert_eq!(event.ble.state, BleState::Connected);
+        assert_eq!(event.decide_active(), Some(ConnectionType::Ble));
+    }
+
+    #[cfg(feature = "_ble")]
+    #[test]
     fn ble_bond_update_publishes_status_event_and_preserves_profile_and_state() {
         use rmk_types::ble::{BleState, BleStatus};
 
         let _guard = state_test_lock().lock().unwrap();
         reset_state();
-        set_ble_profile(2, true);
+        set_ble_profile(2, true, BleState::Inactive);
         set_ble_state(BleState::Connected);
         let mut sub = ConnectionStatusChangeEvent::subscriber();
 

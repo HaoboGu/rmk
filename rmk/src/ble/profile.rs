@@ -3,7 +3,10 @@
 #[cfg(feature = "_ble")]
 use bt_hci::{cmd::le::LeSetPhy, controller::ControllerCmdAsync};
 use embassy_futures::select::{Either, select, select_array};
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::signal::Signal;
+use embassy_sync::watch::Watch;
+use rmk_types::ble::BleState;
 use trouble_host::prelude::*;
 use trouble_host::{BondInformation, LongTermKey};
 
@@ -173,7 +176,7 @@ where
                 0
             };
         let profile = if usize::from(profile) < SLOTS { profile } else { 0 };
-        set_ble_profile(profile, self.is_bonded(profile));
+        set_ble_profile(profile, self.is_bonded(profile), BleState::Inactive);
     }
 
     fn is_bonded(&self, slot_num: u8) -> bool {
@@ -307,7 +310,10 @@ where
     }
 
     /// Save snapshots and switch profiles; return a slot to clear after the connection stops.
-    pub(crate) async fn update_profile(&mut self) -> Option<u8> {
+    pub(crate) async fn update_profile(
+        &mut self,
+        active: &Watch<NoopRawMutex, u8, { crate::ble::ACTIVE_RECEIVERS }>,
+    ) -> Option<u8> {
         loop {
             self.save_pending().await;
             match select(
@@ -338,8 +344,12 @@ where
                         BleProfileAction::ClearSlot(slot) => return Some(slot),
                     };
                     if profile != current {
-                        set_ble_profile(profile, self.is_bonded(profile));
+                        set_ble_profile(profile, self.is_bonded(profile), BleState::Inactive);
                         self.update_stack_bonds();
+                        // Wake the old active host task so it releases the
+                        // shared config state before the new profile starts.
+                        active.sender().send(profile);
+                        crate::channel::BLE_REPORT_CHANNEL.clear();
                         #[cfg(feature = "storage")]
                         if store(StorageItem::ActiveBleProfile(profile)).await.is_err() {
                             error!("Failed to save active profile");
@@ -449,6 +459,38 @@ mod tests {
     }
 
     #[test]
+    fn switching_profiles_discards_reports_before_persisting() {
+        use core::future::Future;
+        use core::pin::pin;
+        use core::task::{Context, Waker};
+
+        use super::{BleProfileAction, NoopRawMutex, Watch};
+        use crate::channel::{BLE_PROFILE_CHANNEL, BLE_REPORT_CHANNEL};
+        use crate::hid::{KeyboardReport, Report};
+        use crate::state::set_ble_profile;
+
+        with_manager::<2>(|manager| {
+            set_ble_profile(0, false, rmk_types::ble::BleState::Inactive);
+            BLE_REPORT_CHANNEL.clear();
+            BLE_PROFILE_CHANNEL.clear();
+            let active = Watch::<NoopRawMutex, u8, { crate::ble::ACTIVE_RECEIVERS }>::new();
+            active.sender().send(0);
+            BLE_REPORT_CHANNEL
+                .try_send(Report::KeyboardReport(KeyboardReport {
+                    keycodes: [4, 0, 0, 0, 0, 0],
+                    ..Default::default()
+                }))
+                .unwrap();
+            BLE_PROFILE_CHANNEL.try_send(BleProfileAction::Switch(1)).unwrap();
+            let mut update = pin!(manager.update_profile(&active));
+            let mut cx = Context::from_waker(Waker::noop());
+            let _ = update.as_mut().poll(&mut cx);
+            assert_eq!(active.try_get(), Some(1));
+            assert!(BLE_REPORT_CHANNEL.is_empty());
+        });
+    }
+
+    #[test]
     fn cleared_profile_can_be_paired_again_with_same_bond_information() {
         with_manager::<1>(|manager| {
             let profile_info = ProfileInfo::default();
@@ -523,6 +565,11 @@ mod tests {
         use crate::test_support::{InMemoryFlash, clear_flash_channel};
 
         with_manager::<2>(|manager| {
+            let active = embassy_sync::watch::Watch::<
+                embassy_sync::blocking_mutex::raw::NoopRawMutex,
+                u8,
+                { crate::ble::ACTIVE_RECEIVERS },
+            >::new();
             clear_flash_channel();
             assert_eq!(crate::state::current_profile(), 0);
             let mut existing = ProfileInfo {
@@ -546,7 +593,7 @@ mod tests {
                 let mut read = pin!(read(StorageKey::StorageConfig));
                 let mut cx = Context::from_waker(Waker::noop());
                 assert!(read.as_mut().poll(&mut cx).is_pending());
-                let mut update = pin!(manager.update_profile());
+                let mut update = pin!(manager.update_profile(&active));
                 assert!(update.as_mut().poll(&mut cx).is_pending());
             }
             let mut latest = manager.bond_info(1).unwrap();
@@ -571,7 +618,7 @@ mod tests {
                     assert_eq!(info.cccd_table.as_slice(), &[2]);
                 };
                 assert!(matches!(
-                    select3(manager.update_profile(), storage.run(), verify).await,
+                    select3(manager.update_profile(&active), storage.run(), verify).await,
                     Either3::Third(())
                 ));
             });
