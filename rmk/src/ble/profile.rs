@@ -101,6 +101,7 @@ fn bond_info_of(bonded_devices: &[ProfileInfo], slot_num: u8) -> Option<&Profile
 #[derive(Debug)]
 pub(crate) enum BleProfileAction {
     Switch(u8),
+    Pair(u8),
     Previous,
     Next,
     ClearBond,
@@ -134,6 +135,7 @@ pub(crate) struct ProfileManager<
     bonded_devices: heapless::Vec<ProfileInfo, SLOTS>,
     /// Retained when the connection loop cancels a flash write.
     pending_save: Option<ProfileInfo>,
+    pub(crate) repairing: Option<u8>,
     /// BLE stack
     stack: &'b Stack<'s, C, P>,
 }
@@ -149,6 +151,7 @@ where
         Self {
             bonded_devices: heapless::Vec::new(),
             pending_save: None,
+            repairing: None,
             stack,
         }
     }
@@ -186,7 +189,23 @@ where
     /// Cached bond info for `profile`, cloned to free the caller from borrow
     /// conflicts with concurrent `next_action()`.
     pub(crate) fn bond_info(&self, profile: u8) -> Option<ProfileInfo> {
+        if self.repairing == Some(profile) {
+            return None;
+        }
         bond_info_of(&self.bonded_devices, profile).cloned()
+    }
+
+    /// Change pairing mode after the slot's previous connection has finished.
+    pub(crate) async fn set_pairing(&mut self, profile: Option<u8>) {
+        self.save_pending().await;
+        // A completed connection may still have a final bond/CCCD snapshot queued.
+        if let Some(slot) = profile.or(self.repairing)
+            && let Some(info) = UPDATED_PROFILES[slot as usize].try_take()
+        {
+            self.add_profile_info(info).await;
+        }
+        self.repairing = profile.filter(|&slot| self.is_bonded(slot));
+        self.update_stack_bonds();
     }
 
     /// Check if the `identity` is the bonded dongle's identity.
@@ -234,13 +253,14 @@ where
 
     /// Add/update bonding information
     pub(crate) async fn add_profile_info(&mut self, profile_info: ProfileInfo) {
+        let pairing_complete = self.repairing == Some(profile_info.slot_num);
         let bond_changed = if let Some(info) = self
             .bonded_devices
             .iter_mut()
             .find(|info| info.slot_num == profile_info.slot_num)
         {
             let bond_changed = info.removed || info.info != profile_info.info;
-            if !bond_changed && info.cccd_table == profile_info.cccd_table {
+            if !bond_changed && info.cccd_table == profile_info.cccd_table && !pairing_complete {
                 debug!("Skip saving unchanged profile");
                 return;
             }
@@ -258,7 +278,10 @@ where
             true
         };
 
-        if bond_changed {
+        if pairing_complete {
+            self.repairing = None;
+        }
+        if bond_changed || pairing_complete {
             self.update_stack_bonds();
         }
         self.pending_save = Some(profile_info);
@@ -285,6 +308,10 @@ where
     /// Clear bonding information of the specified slot
     pub(crate) async fn clear_bond(&mut self, slot_num: u8) {
         info!("Clearing bonding information on profile: {}", slot_num);
+
+        if self.repairing == Some(slot_num) {
+            self.repairing = None;
+        }
 
         if let Some(signal) = UPDATED_PROFILES.get(slot_num as usize) {
             signal.reset();
@@ -548,6 +575,62 @@ mod tests {
             add_profile(manager, new_host);
             assert_eq!(manager.bonded_devices[0].info.ltk, LongTermKey(1));
             assert_eq!(manager.bonded_devices.len(), 1);
+        });
+    }
+
+    #[test]
+    fn pairing_keeps_the_stored_bond_until_a_replacement_arrives() {
+        use crate::config::StorageConfig;
+        use crate::core_traits::Runnable;
+        use crate::storage::{Storage, StorageKey, StorageValue, async_flash_wrapper, read};
+        use crate::test_support::{InMemoryFlash, clear_flash_channel};
+
+        with_manager::<1>(|manager| {
+            clear_flash_channel();
+            test_block_on(async {
+                let flash = async_flash_wrapper(InMemoryFlash::<16_384, 4_096, 1>::new());
+                let mut storage = Box::pin(Storage::new(flash, &StorageConfig::default())).await;
+                let verify = async {
+                    let old = ProfileInfo::default();
+                    manager.add_profile_info(old.clone()).await;
+                    manager.set_pairing(Some(0)).await;
+                    assert!(manager.bond_info(0).is_none());
+                    assert!(manager.stack.with_bond_information(|bonds| bonds.is_empty()));
+                    let Some(StorageValue::BondInfo(stored)) = read(StorageKey::BondInfo(0)).await.unwrap() else {
+                        panic!("pairing must keep the previous bond in flash");
+                    };
+                    assert_eq!(stored.info, old.info);
+                    assert!(!stored.removed);
+
+                    manager.set_pairing(None).await;
+                    assert_eq!(manager.bond_info(0).unwrap().info, old.info);
+                    assert!(manager.stack.with_bond_information(|bonds| bonds[0] == old.info));
+
+                    manager.set_pairing(Some(0)).await;
+                    let mut replacement = old;
+                    replacement.info.ltk = LongTermKey(42);
+                    manager.add_profile_info(replacement.clone()).await;
+                    assert!(manager.repairing.is_none());
+                    assert_eq!(manager.bond_info(0).unwrap().info, replacement.info);
+
+                    manager.set_pairing(Some(0)).await;
+                    replacement.info.ltk = LongTermKey(43);
+                    // Preserve a successful pairing even if a switch wins the action wait.
+                    UPDATED_PROFILES[0].signal(replacement.clone());
+                    manager.set_pairing(None).await;
+                    assert_eq!(manager.bond_info(0).unwrap().info, replacement.info);
+                    let Some(StorageValue::BondInfo(stored)) = read(StorageKey::BondInfo(0)).await.unwrap() else {
+                        panic!("the replacement bond must be persisted");
+                    };
+                    assert_eq!(stored.info, replacement.info);
+                    assert!(
+                        manager
+                            .stack
+                            .with_bond_information(|bonds| bonds[0] == replacement.info)
+                    );
+                };
+                assert!(matches!(select(storage.run(), verify).await, super::Either::Second(())));
+            });
         });
     }
 

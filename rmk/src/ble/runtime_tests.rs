@@ -35,6 +35,17 @@ struct Radio {
 }
 
 impl Radio {
+    async fn wait_for_disconnects(&self, expected: &[u16]) {
+        with_timeout(Duration::from_secs(1), async {
+            while self.disconnects.borrow().len() < expected.len() {
+                self.changed.wait().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(self.disconnects.borrow().as_slice(), expected);
+    }
+
     async fn wait_for_advertisements(&self, count: usize) {
         with_timeout(Duration::from_secs(1), async {
             while self.advertisements.borrow().len() < count {
@@ -96,6 +107,11 @@ impl Controller for MockController<'_> {
     async fn read<'a>(&self, buf: &'a mut Self::Buffer<'_>) -> Result<ControllerToHostPacket<'a>, Self::Error> {
         let event = self.0.events.receive().await;
         buf[..event.len()].copy_from_slice(&event);
+        if event[0] == 0x02 {
+            return Ok(ControllerToHostPacket::Acl(
+                AclPacket::from_hci_bytes_complete(&buf[1..event.len()]).unwrap(),
+            ));
+        }
         Ok(ControllerToHostPacket::Event(
             EventPacket::from_hci_bytes_complete(&buf[..event.len()]).unwrap(),
         ))
@@ -335,6 +351,142 @@ fn runtime_keeps_background_links_and_waits_for_disconnection_before_clearing() 
                 panic!("the cleared profile must be persisted");
             };
             assert!(info.removed);
+        };
+        assert!(matches!(
+            select3(run, storage.run(), scenario).await,
+            Either3::Third(())
+        ));
+    });
+}
+
+#[cfg(feature = "_ext_adv")]
+#[test]
+fn runtime_cancels_pairing_on_switch_and_timeout_and_refuses_bond_loss() {
+    use super::profile::ProfileInfo;
+    use crate::storage::{StorageItem, store};
+
+    test_block_on(async {
+        clear_flash_channel();
+        BLE_PROFILE_CHANNEL.clear();
+        super::rng::seed([7; 32]);
+        let radio = Radio {
+            events: Channel::new(),
+            address: Cell::new([0; 6]),
+            extended: Cell::new(false),
+            advertisements: RefCell::new(Vec::new()),
+            disconnects: RefCell::new(Vec::new()),
+            changed: Signal::new(),
+        };
+        let mut resources = HostResources::<DefaultPacketPool, 4, 16, 1, 4>::new();
+        let base = [1, 2, 3, 4, 5, 0xc6];
+        let stack = trouble_host::new(MockController(&radio), &mut resources)
+            .set_random_address(Address::random(base))
+            .build();
+        let flash = async_flash_wrapper(InMemoryFlash::<16_384, 4_096, 1>::new());
+        let mut storage = Box::pin(Storage::new(flash, &StorageConfig::default())).await;
+        let device = DeviceConfig {
+            vid: 1,
+            pid: 1,
+            manufacturer: "RMK",
+            product_name: "RMK",
+            serial_number: heapless::String::new(),
+        };
+        let ready = Signal::<NoopRawMutex, ()>::new();
+        let run = async {
+            ready.wait().await;
+            super::run_ble_keyboard(
+                &stack,
+                base,
+                &device,
+                &BleBatteryConfig::disabled(),
+                #[cfg(feature = "host")]
+                None,
+            )
+            .await;
+        };
+        let scenario = async {
+            let mut old = ProfileInfo::default();
+            old.info.identity.addr = Address::random([0, 2, 3, 4, 5, 0xc1]);
+            old.info.is_bonded = true;
+            store(StorageItem::BondInfo(old.clone())).await.unwrap();
+            #[cfg(feature = "dongle")]
+            {
+                let mut dongle = old.clone();
+                dongle.slot_num = super::profile::DONGLE_PROFILE;
+                dongle.info.identity.addr = Address::random([3, 2, 3, 4, 5, 0xc1]);
+                store(StorageItem::BondInfo(dongle)).await.unwrap();
+            }
+            ready.signal(());
+            radio.wait_for_advertisements(1).await;
+            radio.connect(0).await;
+            assert!(!stack.connections().next().unwrap().bondable().unwrap());
+
+            BLE_PROFILE_CHANNEL.send(BleProfileAction::Pair(0)).await;
+            radio.wait_for_disconnects(&[0]).await;
+            assert!(stack.with_bond_information(|bonds| bonds[0] == old.info));
+            assert_eq!(radio.advertisements.borrow().len(), 1);
+            radio.disconnect(0).await;
+            radio.wait_for_advertisements(2).await;
+            assert!(stack.with_bond_information(|bonds| bonds.is_empty()));
+            radio.connect(1).await;
+            assert!(stack.connections().next().unwrap().bondable().unwrap());
+
+            // Releasing the held key must not cancel pairing on the same profile.
+            BLE_PROFILE_CHANNEL.send(BleProfileAction::Switch(0)).await;
+            Timer::after_millis(2).await;
+            assert_eq!(radio.disconnects.borrow().as_slice(), &[0]);
+            BLE_PROFILE_CHANNEL.send(BleProfileAction::Switch(1)).await;
+            radio.wait_for_disconnects(&[0, 1]).await;
+            radio.disconnect(1).await;
+            radio.wait_for_advertisements(3).await;
+            BLE_PROFILE_CHANNEL.send(BleProfileAction::Switch(0)).await;
+            radio.wait_for_advertisements(4).await;
+            assert!(stack.with_bond_information(|bonds| bonds[0] == old.info));
+
+            BLE_PROFILE_CHANNEL.send(BleProfileAction::Pair(0)).await;
+            radio.wait_for_advertisements(5).await;
+            radio.connect(2).await;
+            MockDriver::get().advance(Duration::from_secs(301));
+            radio.wait_for_disconnects(&[0, 1, 2]).await;
+            radio.disconnect(2).await;
+            Timer::after_millis(2).await;
+            assert!(stack.with_bond_information(|bonds| bonds[0] == old.info));
+            assert_eq!(radio.advertisements.borrow().len(), 5);
+            let Some(StorageValue::BondInfo(stored)) = read(StorageKey::BondInfo(0)).await.unwrap() else {
+                panic!("cancelled pairing must keep the old bond");
+            };
+            assert_eq!(stored.info, old.info);
+
+            BLE_PROFILE_CHANNEL.send(BleProfileAction::Switch(1)).await;
+            radio.wait_for_advertisements(6).await;
+            BLE_PROFILE_CHANNEL.send(BleProfileAction::Switch(0)).await;
+            radio.wait_for_advertisements(7).await;
+            radio.connect(0).await;
+            // An SMP Pairing Request from a bonded peer reports BondLost.
+            radio
+                .events
+                .send(vec![0x02, 0, 0x20, 11, 0, 7, 0, 6, 0, 1, 3, 0, 9, 16, 3, 3])
+                .await;
+            radio.wait_for_disconnects(&[0, 1, 2, 0]).await;
+            assert_eq!(radio.advertisements.borrow().len(), 7);
+            radio.disconnect(0).await;
+            radio.wait_for_advertisements(8).await;
+
+            // A different peer cannot replace a bonded profile without Pair.
+            radio.connect(3).await;
+            radio.wait_for_disconnects(&[0, 1, 2, 0, 3]).await;
+            radio.disconnect(3).await;
+            radio.wait_for_advertisements(9).await;
+            #[cfg(feature = "dongle")]
+            {
+                // The bonded dongle cannot enter even an empty host profile.
+                BLE_PROFILE_CHANNEL.send(BleProfileAction::Switch(1)).await;
+                radio.wait_for_advertisements(10).await;
+                radio.connect(3).await;
+                radio.wait_for_disconnects(&[0, 1, 2, 0, 3, 3]).await;
+                radio.disconnect(3).await;
+                radio.wait_for_advertisements(11).await;
+            }
         };
         assert!(matches!(
             select3(run, storage.run(), scenario).await,

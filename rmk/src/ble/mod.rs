@@ -445,6 +445,10 @@ async fn run_ble_keyboard<
             if now < deadline {
                 wake_subscribers = None;
             } else if wake_subscribers.is_none() {
+                if let Some(pairing) = profile_manager.repairing {
+                    disconnect_profile(pairing, &mut links, &completed).await;
+                    profile_manager.set_pairing(None).await;
+                }
                 wake_subscribers = Some((
                     crate::event::KeyboardEvent::subscriber(),
                     crate::event::PointingEvent::subscriber(),
@@ -511,8 +515,10 @@ async fn run_ble_keyboard<
                         disconnect(&conn).await;
                         continue;
                     }
-                    if let Err(e) = conn.raw().set_bondable(true) {
+                    if let Err(e) = conn.raw().set_bondable(bond_info.is_none()) {
                         error!("Set bondable error: {:?}", e);
+                        disconnect(&conn).await;
+                        continue;
                     }
                     links[profile as usize] = Some(conn.raw().clone());
                     incoming
@@ -536,7 +542,7 @@ async fn run_ble_keyboard<
                     let current = crate::state::current_profile();
                     let clear = matches!(action, BleProfileAction::ClearBond | BleProfileAction::ClearSlot(_));
                     let target = match action {
-                        BleProfileAction::Switch(n) | BleProfileAction::ClearSlot(n) => n,
+                        BleProfileAction::Switch(n) | BleProfileAction::Pair(n) | BleProfileAction::ClearSlot(n) => n,
                         BleProfileAction::ClearBond => current,
                         BleProfileAction::Previous => {
                             if current == 0 {
@@ -554,24 +560,18 @@ async fn run_ble_keyboard<
                             }
                         }
                     };
-                    if usize::from(target) >= BOND_SLOTS || (!clear && target == current) {
+                    let pair =
+                        matches!(action, BleProfileAction::Pair(_)) && profile_manager.bond_info(target).is_some();
+                    if usize::from(target) >= BOND_SLOTS || (!clear && !pair && target == current) {
                         continue;
                     }
                     report_activity();
                     deadline = Instant::now() + Duration::from_secs(300);
-                    if clear {
-                        if let Some(conn) = &links[target as usize] {
-                            conn.disconnect();
+                    if !clear && target != current {
+                        if let Some(pairing) = profile_manager.repairing {
+                            disconnect_profile(pairing, &mut links, &completed).await;
+                            profile_manager.set_pairing(None).await;
                         }
-                        while links[target as usize].is_some() {
-                            let ended = completed.receive().await;
-                            links[ended as usize].take();
-                            if ended == current {
-                                set_ble_state(BleState::Inactive);
-                            }
-                        }
-                        profile_manager.clear_bond(target).await;
-                    } else {
                         if HOST_LINKS == 1
                             && let Some(conn) = &links[current as usize]
                         {
@@ -586,6 +586,14 @@ async fn run_ble_keyboard<
                             BleState::Inactive
                         };
                         profile_manager.switch_profile(target, state, &active).await;
+                    }
+                    if clear || pair {
+                        disconnect_profile(target, &mut links, &completed).await;
+                        if clear {
+                            profile_manager.clear_bond(target).await;
+                        } else {
+                            profile_manager.set_pairing(Some(target)).await;
+                        }
                     }
                 }
                 Either4::Third(profile) => {
@@ -967,11 +975,34 @@ async fn gatt_events_task(
                 #[cfg(not(feature = "passkey_entry"))]
                 warn!("[gatt] PassKeyInput event, should not happen")
             }
-            GattConnectionEvent::BondLost => warn!("[gatt] BondLost"),
+            GattConnectionEvent::BondLost => {
+                warn!("[gatt] BondLost");
+                if profile_info.is_some() {
+                    conn.raw().disconnect();
+                }
+            }
             GattConnectionEvent::OobRequest => warn!("[gatt] OobRequest"),
         }
     }
     info!("[gatt] task finished");
+}
+
+/// Reclaim the slot only after its worker has consumed Disconnected.
+async fn disconnect_profile(
+    profile: u8,
+    links: &mut [Option<Connection<'_, DefaultPacketPool>>; BOND_SLOTS],
+    completed: &Channel<NoopRawMutex, u8, HOST_LINKS>,
+) {
+    if let Some(conn) = &links[profile as usize] {
+        conn.disconnect();
+    }
+    while links[profile as usize].is_some() {
+        let ended = completed.receive().await;
+        links[ended as usize].take();
+        if ended == crate::state::current_profile() {
+            set_ble_state(BleState::Inactive);
+        }
+    }
 }
 
 /// Drop the link and wait for it to actually go down.
