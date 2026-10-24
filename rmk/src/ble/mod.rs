@@ -104,9 +104,18 @@ pub(crate) trait ExtAdvCmds {}
 #[cfg(not(feature = "_ext_adv"))]
 impl<T> ExtAdvCmds for T {}
 
+/// Host and dongle connections: one per profile in extended mode.
+#[doc(hidden)]
+pub const HOST_LINKS: usize = if cfg!(feature = "_ext_adv") {
+    crate::ble::profile::BOND_SLOTS
+} else {
+    1
+};
+
 /// Max number of connections of a keyboard's BLE stack; a dongle sizes its
 /// own — see [`crate::dongle::Dongle`].
-const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + 1;
+#[doc(hidden)]
+pub const CONNECTIONS_MAX: usize = crate::SPLIT_PERIPHERALS_NUM + HOST_LINKS;
 
 /// Max number of L2CAP channels
 const L2CAP_CHANNELS_MAX: usize = CONNECTIONS_MAX * 4; // Signal + att + smp + hid
@@ -1066,6 +1075,15 @@ mod tests {
     use crate::event::{Axis, AxisEvent, AxisValType, KeyboardEvent, PointingEvent, SubscribableEvent, publish_event};
     use crate::state::{current_ble_status, set_ble_profile, set_ble_state};
     use crate::test_support::test_block_on as block_on;
+
+    #[test]
+    fn battery_subscriber_budget_covers_all_host_links_and_config_sessions() {
+        use super::HOST_LINKS;
+        use crate::event::BatteryStatusEvent;
+
+        let count = HOST_LINKS + 1 + if cfg!(feature = "rynk") { 2 } else { 0 };
+        let _subscribers: Vec<_> = (0..count).map(|_| BatteryStatusEvent::subscriber()).collect();
+    }
 
     #[cfg(all(feature = "dongle", feature = "custom_message"))]
     #[test]

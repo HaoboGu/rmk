@@ -172,6 +172,7 @@ where
                 debug!("Loaded default active profile",);
                 0
             };
+        let profile = if usize::from(profile) < SLOTS { profile } else { 0 };
         set_ble_profile(profile, self.is_bonded(profile));
     }
 
@@ -367,6 +368,30 @@ mod tests {
         profile_address,
     };
     use crate::test_support::{drain_flash_channel, test_block_on};
+
+    #[test]
+    fn reducing_profile_count_falls_back_to_the_first_profile() {
+        use embassy_futures::select::Either;
+
+        use crate::config::StorageConfig;
+        use crate::core_traits::Runnable;
+        use crate::storage::{Storage, StorageItem, async_flash_wrapper, store};
+        use crate::test_support::{InMemoryFlash, clear_flash_channel};
+
+        with_manager::<1>(|manager| {
+            clear_flash_channel();
+            test_block_on(async {
+                let flash = async_flash_wrapper(InMemoryFlash::<16_384, 4_096, 1>::new());
+                let mut storage = Box::pin(Storage::new(flash, &StorageConfig::default())).await;
+                let verify = async {
+                    store(StorageItem::ActiveBleProfile(2)).await.unwrap();
+                    manager.load_bonded_devices().await;
+                    assert_eq!(crate::state::current_profile(), 0);
+                };
+                assert!(matches!(select(storage.run(), verify).await, Either::Second(())));
+            });
+        });
+    }
 
     #[test]
     fn profile_zero_uses_the_base_address() {
