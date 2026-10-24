@@ -106,3 +106,16 @@ steps = [
   { release = [0, 1] },
   { release = [0, 2] },
 ]
+
+[[test]]
+name = "background_connection_changes_follow_the_write_lock"
+features = ["_ble"]
+steps = [
+  { rynk = { cmd = "SetBleBackgroundConnections", payload = false, error = "Locked" } },
+  { press = [0, 1] },
+  { press = [0, 2] },
+  { rynk = { cmd = "UnlockPoll", reply = { locked = false, unlocking = false, remaining_keys = 0, key_positions = [[0, 1], [0, 2]] } } },
+  { release = [0, 1] },
+  { release = [0, 2] },
+  { rynk = { cmd = "SetBleBackgroundConnections", payload = false } },
+]

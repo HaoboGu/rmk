@@ -20,7 +20,7 @@ unlock_keys = [[0, 1]]
 [[test]]
 name = "version_is_the_frozen_handshake"
 steps = [
-  { rynk = { cmd = "GetVersion", reply = { major = 0, minor = 2 } } },
+  { rynk = { cmd = "GetVersion", reply = { major = 0, minor = 3 } } },
 ]
 
 # `rmk_version` carries the crate version, so a release bump
