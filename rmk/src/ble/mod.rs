@@ -9,11 +9,9 @@ use bt_hci::cmd::le::{
 use bt_hci::cmd::le::{LeRand, LeReadLocalSupportedFeatures, LeSetPhy};
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use bt_hci::param::Error as HciError;
-use embassy_futures::join::{join3, join4};
-use embassy_futures::select::{Either, Either3, select, select3};
-#[cfg(feature = "split")]
+use embassy_futures::join::{join_array, join3, join5};
+use embassy_futures::select::{Either, select, select3};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-#[cfg(feature = "split")]
 use embassy_sync::channel::Channel;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Timer};
@@ -56,6 +54,8 @@ pub(crate) mod led;
 pub mod passkey;
 pub(crate) mod profile;
 pub(crate) mod rng;
+#[cfg(all(test, feature = "_ext_adv"))]
+mod runtime_tests;
 #[cfg(any(feature = "split", feature = "dongle"))]
 pub(crate) mod scan;
 pub(crate) mod sleep;
@@ -354,6 +354,36 @@ async fn run_ble_keyboard<
     let mut peripheral = stack.peripheral();
     let runner = stack.runner();
 
+    struct Link<'a, 'b> {
+        conn: GattConnection<'a, 'b, DefaultPacketPool>,
+        profile: u8,
+        bond_info: Option<ProfileInfo>,
+    }
+
+    let incoming: Channel<NoopRawMutex, Link<'_, '_>, 1> = Channel::new();
+    let completed: Channel<NoopRawMutex, u8, HOST_LINKS> = Channel::new();
+    let workers = join_array(core::array::from_fn::<_, HOST_LINKS, _>(|_| async {
+        loop {
+            let Link {
+                conn,
+                profile,
+                bond_info,
+            } = incoming.receive().await;
+            serve_keyboard_connection(
+                server,
+                &conn,
+                stack,
+                profile,
+                bond_info,
+                config,
+                #[cfg(feature = "host")]
+                host_service,
+            )
+            .await;
+            drop(conn);
+            completed.send(profile).await;
+        }
+    }));
     let profile_manager = &mut profile_manager;
 
     let connection_loop = async {
@@ -418,26 +448,23 @@ async fn run_ble_keyboard<
                         disconnect(&conn).await;
                         continue;
                     }
-                    if let Either::Second(clear_slot) = select(
-                        serve_keyboard_connection(
-                            server,
-                            &conn,
-                            stack,
+                    let control = conn.raw().clone();
+                    incoming
+                        .send(Link {
+                            conn,
                             profile,
                             bond_info,
-                            config,
-                            #[cfg(feature = "host")]
-                            host_service,
-                        ),
-                        profile_manager.update_profile(),
-                    )
-                    .await
+                        })
+                        .await;
+                    if let Either::Second(clear_slot) =
+                        select(completed.receive(), profile_manager.update_profile()).await
                     {
+                        control.disconnect();
+                        completed.receive().await;
+                        // Clear only after the old connection has stopped publishing profile updates.
                         if let Some(slot) = clear_slot {
                             profile_manager.clear_bond(slot).await;
                         }
-                        // When the profile changes, manually disconnect from the current host
-                        disconnect(&conn).await;
                     }
                 }
                 Either::First(Err(BleHostError::BleHost(Error::Timeout))) => {
@@ -485,9 +512,12 @@ async fn run_ble_keyboard<
     // The sleep manager lives here because this is the single always-present
     // BLE task: split or not, connected or not, it keeps running, so the
     // sleep state can never get stuck.
-    join3(
+    let mut ble_led_reader = BleLedReader;
+    join5(
         ble_task(runner, &event_handler),
         connection_loop,
+        workers,
+        run_led_reader(&mut ble_led_reader, ConnectionType::Ble),
         sleep::run_sleep_manager(),
     )
     .await;
@@ -532,7 +562,7 @@ async fn gatt_events_task(
     conn: &GattConnection<'_, '_, DefaultPacketPool>,
     profile: u8,
     mut profile_info: Option<ProfileInfo>,
-) -> Result<(), Error> {
+) {
     let level = server.battery_service.level;
     #[cfg(feature = "split")]
     let peripheral_levels = server.peripheral_battery_services.levels;
@@ -600,7 +630,10 @@ async fn gatt_events_task(
                 let result = match &gatt_event {
                     GattEvent::Read(event) => {
                         debug!("Read GATT Event: {:?}", event.handle());
-                        if conn.raw().security_level()?.encrypted() {
+                        let Ok(security_level) = conn.raw().security_level() else {
+                            continue;
+                        };
+                        if security_level.encrypted() {
                             server.refresh_battery_level(event.handle());
                             None
                         } else {
@@ -612,7 +645,10 @@ async fn gatt_events_task(
                         let is_custom_message = event.handle() == server.dongle_event_service.custom_to_keyboard.handle;
                         #[cfg(not(all(feature = "dongle", feature = "custom_message")))]
                         let is_custom_message = false;
-                        let encrypted = conn.raw().security_level()?.encrypted();
+                        let Ok(security_level) = conn.raw().security_level() else {
+                            continue;
+                        };
+                        let encrypted = security_level.encrypted();
 
                         // trouble-host 0.7 exposes written bytes via a closure; copy them out
                         // once so the dispatch below (which awaits) can use them freely.
@@ -830,7 +866,6 @@ async fn gatt_events_task(
         }
     }
     info!("[gatt] task finished");
-    Ok(())
 }
 
 /// Drop the link and wait for it to actually go down.
@@ -883,7 +918,7 @@ pub(crate) async fn set_conn_params<
     core::future::pending::<()>().await;
 }
 
-/// Serve one host keyboard connection.
+/// Serve one host connection until its GATT Disconnected event.
 async fn serve_keyboard_connection<
     'a,
     'b,
@@ -899,7 +934,6 @@ async fn serve_keyboard_connection<
     #[cfg(feature = "host")] host_service: Option<&'r crate::host::HostService<'r>>,
 ) {
     let mut ble_hid_server = BleHidServer::new(server, conn);
-    let mut ble_led_reader = BleLedReader;
     let mut ble_battery_server = config.enabled.then(|| BleBatteryServer::new(server, conn));
     #[cfg(feature = "split")]
     let mut ble_peripheral_battery_server = crate::SPLIT_BATTERY_PERIPHERAL_IDS
@@ -929,23 +963,23 @@ async fn serve_keyboard_connection<
     } else {
         PhyKind::Le2M
     };
-    update_ble_phy(stack, conn.raw(), host_phy).await;
-
     #[cfg(not(feature = "split"))]
     let battery_task = ble_battery_server.run();
     #[cfg(feature = "split")]
     let battery_task = embassy_futures::join::join(ble_battery_server.run(), ble_peripheral_battery_server.run());
 
     let communication_task = async {
-        if let Either3::First(e) = select3(
+        // PHY negotiation must not delay GATT disconnection or input routing.
+        let connection_params = async {
+            update_ble_phy(stack, conn.raw(), host_phy).await;
+            set_conn_params(stack, conn).await;
+        };
+        select3(
             gatt_events_task(server, conn, profile, bond_info),
-            set_conn_params(stack, conn),
+            connection_params,
             battery_task,
         )
-        .await
-        {
-            error!("[gatt_events_task] end: {:?}", e)
-        }
+        .await;
     };
 
     let writer_task = async {
@@ -956,8 +990,6 @@ async fn serve_keyboard_connection<
             }
         }
     };
-
-    let led_task = run_led_reader(&mut ble_led_reader, ConnectionType::Ble);
 
     #[cfg(feature = "host")]
     let host_task = async {
@@ -985,7 +1017,7 @@ async fn serve_keyboard_connection<
     #[cfg(not(feature = "dongle"))]
     let dongle_event_task = core::future::pending::<()>();
 
-    let inner = join4(writer_task, led_task, host_task, dongle_event_task);
+    let inner = join3(writer_task, host_task, dongle_event_task);
     select(communication_task, inner).await;
 }
 
