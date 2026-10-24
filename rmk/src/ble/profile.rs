@@ -184,7 +184,7 @@ where
     }
 
     /// Cached bond info for `profile`, cloned to free the caller from borrow
-    /// conflicts with concurrent `update_profile()`.
+    /// conflicts with concurrent `next_action()`.
     pub(crate) fn bond_info(&self, profile: u8) -> Option<ProfileInfo> {
         bond_info_of(&self.bonded_devices, profile).cloned()
     }
@@ -309,11 +309,26 @@ where
         self.save_pending().await;
     }
 
-    /// Save snapshots and switch profiles; return a slot to clear after the connection stops.
-    pub(crate) async fn update_profile(
+    /// Apply a selected profile outside the cancellable action wait.
+    pub(crate) async fn switch_profile(
         &mut self,
+        profile: u8,
+        state: BleState,
         active: &Watch<NoopRawMutex, u8, { crate::ble::ACTIVE_RECEIVERS }>,
-    ) -> Option<u8> {
+    ) {
+        set_ble_profile(profile, self.is_bonded(profile), state);
+        self.update_stack_bonds();
+        active.sender().send(profile);
+        crate::channel::BLE_REPORT_CHANNEL.clear();
+        #[cfg(feature = "storage")]
+        if store(StorageItem::ActiveBleProfile(profile)).await.is_err() {
+            error!("Failed to save active profile");
+        }
+        info!("Switched to BLE profile: {}", profile);
+    }
+
+    /// Persist profile snapshots while waiting for the next requested action.
+    pub(crate) async fn next_action(&mut self) -> BleProfileAction {
         loop {
             self.save_pending().await;
             match select(
@@ -322,46 +337,8 @@ where
             )
             .await
             {
-                Either::First(action) => {
-                    let current = current_profile();
-                    let profile = match action {
-                        BleProfileAction::Switch(profile) if profile == current => continue,
-                        BleProfileAction::Switch(profile) => profile,
-                        BleProfileAction::Previous => {
-                            if current == 0 {
-                                NUM_BLE_PROFILE as u8 - 1
-                            } else {
-                                current - 1
-                            }
-                        }
-                        BleProfileAction::Next => {
-                            // Cycling stays within the host profiles. The dongle slot sits past
-                            // the last one, so wrap there too instead of landing on profile 1.
-                            let next = current + 1;
-                            if next >= NUM_BLE_PROFILE as u8 { 0 } else { next }
-                        }
-                        BleProfileAction::ClearBond => return Some(current),
-                        BleProfileAction::ClearSlot(slot) => return Some(slot),
-                    };
-                    if profile != current {
-                        set_ble_profile(profile, self.is_bonded(profile), BleState::Inactive);
-                        self.update_stack_bonds();
-                        // Wake the old active host task so it releases the
-                        // shared config state before the new profile starts.
-                        active.sender().send(profile);
-                        crate::channel::BLE_REPORT_CHANNEL.clear();
-                        #[cfg(feature = "storage")]
-                        if store(StorageItem::ActiveBleProfile(profile)).await.is_err() {
-                            error!("Failed to save active profile");
-                        }
-                        info!("Switched to BLE profile: {}", profile);
-                    }
-                    info!("Update profile done");
-                    return None;
-                }
-                Either::Second((profile_info, _)) => {
-                    self.add_profile_info(profile_info).await;
-                }
+                Either::First(action) => return action,
+                Either::Second((profile_info, _)) => self.add_profile_info(profile_info).await,
             }
         }
     }
@@ -378,30 +355,6 @@ mod tests {
         profile_address,
     };
     use crate::test_support::{drain_flash_channel, test_block_on};
-
-    #[test]
-    fn reducing_profile_count_falls_back_to_the_first_profile() {
-        use embassy_futures::select::Either;
-
-        use crate::config::StorageConfig;
-        use crate::core_traits::Runnable;
-        use crate::storage::{Storage, StorageItem, async_flash_wrapper, store};
-        use crate::test_support::{InMemoryFlash, clear_flash_channel};
-
-        with_manager::<1>(|manager| {
-            clear_flash_channel();
-            test_block_on(async {
-                let flash = async_flash_wrapper(InMemoryFlash::<16_384, 4_096, 1>::new());
-                let mut storage = Box::pin(Storage::new(flash, &StorageConfig::default())).await;
-                let verify = async {
-                    store(StorageItem::ActiveBleProfile(2)).await.unwrap();
-                    manager.load_bonded_devices().await;
-                    assert_eq!(crate::state::current_profile(), 0);
-                };
-                assert!(matches!(select(storage.run(), verify).await, Either::Second(())));
-            });
-        });
-    }
 
     #[test]
     fn profile_zero_uses_the_base_address() {
@@ -459,20 +412,68 @@ mod tests {
     }
 
     #[test]
+    fn action_wait_does_not_apply_the_profile_switch() {
+        use super::{BleProfileAction, BleState, NoopRawMutex, Watch};
+        use crate::channel::BLE_PROFILE_CHANNEL;
+        use crate::state::{current_ble_status, current_profile, set_ble_profile};
+
+        with_manager::<2>(|manager| {
+            set_ble_profile(0, false, BleState::Inactive);
+            BLE_PROFILE_CHANNEL.clear();
+            BLE_PROFILE_CHANNEL.try_send(BleProfileAction::Switch(1)).unwrap();
+            assert!(matches!(
+                test_block_on(manager.next_action()),
+                BleProfileAction::Switch(1)
+            ));
+            assert_eq!(current_profile(), 0);
+            let active = Watch::<NoopRawMutex, u8, { crate::ble::ACTIVE_RECEIVERS }>::new();
+            test_block_on(select(
+                manager.switch_profile(1, BleState::Connected, &active),
+                drain_flash_channel(),
+            ));
+            assert_eq!(current_ble_status().profile, 1);
+            assert_eq!(current_ble_status().state, BleState::Connected);
+        });
+    }
+
+    #[test]
+    fn reducing_profile_count_falls_back_to_the_first_profile() {
+        use embassy_futures::select::Either;
+
+        use crate::config::StorageConfig;
+        use crate::core_traits::Runnable;
+        use crate::storage::{Storage, StorageItem, async_flash_wrapper, store};
+        use crate::test_support::{InMemoryFlash, clear_flash_channel};
+
+        with_manager::<1>(|manager| {
+            clear_flash_channel();
+            test_block_on(async {
+                let flash = async_flash_wrapper(InMemoryFlash::<16_384, 4_096, 1>::new());
+                let mut storage = Box::pin(Storage::new(flash, &StorageConfig::default())).await;
+                let verify = async {
+                    store(StorageItem::ActiveBleProfile(2)).await.unwrap();
+                    manager.load_bonded_devices().await;
+                    assert_eq!(crate::state::current_profile(), 0);
+                };
+                assert!(matches!(select(storage.run(), verify).await, Either::Second(())));
+            });
+        });
+    }
+
+    #[test]
     fn switching_profiles_discards_reports_before_persisting() {
         use core::future::Future;
         use core::pin::pin;
         use core::task::{Context, Waker};
 
-        use super::{BleProfileAction, NoopRawMutex, Watch};
-        use crate::channel::{BLE_PROFILE_CHANNEL, BLE_REPORT_CHANNEL};
+        use super::{BleState, NoopRawMutex, Watch};
+        use crate::channel::BLE_REPORT_CHANNEL;
         use crate::hid::{KeyboardReport, Report};
         use crate::state::set_ble_profile;
 
         with_manager::<2>(|manager| {
-            set_ble_profile(0, false, rmk_types::ble::BleState::Inactive);
+            set_ble_profile(0, false, BleState::Inactive);
             BLE_REPORT_CHANNEL.clear();
-            BLE_PROFILE_CHANNEL.clear();
             let active = Watch::<NoopRawMutex, u8, { crate::ble::ACTIVE_RECEIVERS }>::new();
             active.sender().send(0);
             BLE_REPORT_CHANNEL
@@ -481,8 +482,7 @@ mod tests {
                     ..Default::default()
                 }))
                 .unwrap();
-            BLE_PROFILE_CHANNEL.try_send(BleProfileAction::Switch(1)).unwrap();
-            let mut update = pin!(manager.update_profile(&active));
+            let mut update = pin!(manager.switch_profile(1, BleState::Inactive, &active));
             let mut cx = Context::from_waker(Waker::noop());
             let _ = update.as_mut().poll(&mut cx);
             assert_eq!(active.try_get(), Some(1));
@@ -565,11 +565,6 @@ mod tests {
         use crate::test_support::{InMemoryFlash, clear_flash_channel};
 
         with_manager::<2>(|manager| {
-            let active = embassy_sync::watch::Watch::<
-                embassy_sync::blocking_mutex::raw::NoopRawMutex,
-                u8,
-                { crate::ble::ACTIVE_RECEIVERS },
-            >::new();
             clear_flash_channel();
             assert_eq!(crate::state::current_profile(), 0);
             let mut existing = ProfileInfo {
@@ -593,7 +588,7 @@ mod tests {
                 let mut read = pin!(read(StorageKey::StorageConfig));
                 let mut cx = Context::from_waker(Waker::noop());
                 assert!(read.as_mut().poll(&mut cx).is_pending());
-                let mut update = pin!(manager.update_profile(&active));
+                let mut update = pin!(manager.next_action());
                 assert!(update.as_mut().poll(&mut cx).is_pending());
             }
             let mut latest = manager.bond_info(1).unwrap();
@@ -618,7 +613,7 @@ mod tests {
                     assert_eq!(info.cccd_table.as_slice(), &[2]);
                 };
                 assert!(matches!(
-                    select3(manager.update_profile(&active), storage.run(), verify).await,
+                    select3(manager.next_action(), storage.run(), verify).await,
                     Either3::Third(())
                 ));
             });

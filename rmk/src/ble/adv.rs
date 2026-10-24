@@ -1,13 +1,15 @@
 //! Every advertisement RMK sends, in one place.
 
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-use embassy_time::{Duration, with_timeout};
+use embassy_time::{Duration, Instant, with_timeout};
 use trouble_host::prelude::appearance::human_interface_device::KEYBOARD;
 use trouble_host::prelude::service::{BATTERY, HUMAN_INTERFACE_DEVICE};
 use trouble_host::prelude::*;
 
 #[cfg(feature = "_ext_adv")]
 use crate::ble::ExtAdvCmds;
+use crate::ble::HOST_LINKS;
+use crate::ble::profile::{ProfileInfo, profile_address};
 
 /// Company identifier marking an advertisement as RMK's own.
 const RMK_ADV_COMPANY_ID: u16 = 0x5253;
@@ -38,6 +40,44 @@ pub(crate) struct AdvRequest<'a> {
     pub(crate) adv: Adv<'a>,
     pub(crate) profile: u8,
     pub(crate) addr: [u8; 6],
+}
+
+/// Select the active profile's advertisement while its slot and session are available.
+/// Only occupancy matters here; connection handles stay owned by the accept loop.
+pub(crate) fn advertising_request<'a, L>(
+    profile: u8,
+    links: &[Option<L>],
+    now: Instant,
+    deadline: Instant,
+    bond: Option<&ProfileInfo>,
+    base: [u8; 6],
+    name: &'a str,
+) -> Option<AdvRequest<'a>> {
+    if now >= deadline
+        || links.get(profile as usize).is_none_or(Option::is_some)
+        || links.iter().flatten().count() >= HOST_LINKS
+    {
+        return None;
+    }
+    let adv = match bond {
+        Some(_) => Adv::HostReconnect,
+        None => Adv::Host { name },
+    };
+    #[cfg(feature = "dongle")]
+    let adv = if profile == crate::ble::profile::DONGLE_PROFILE {
+        bond.map_or(Adv::DongleSeeking, |bond| Adv::Directed(bond.info.identity.addr))
+    } else {
+        adv
+    };
+    Some(AdvRequest {
+        adv,
+        profile,
+        addr: if cfg!(feature = "_ext_adv") {
+            profile_address(base, profile)
+        } else {
+            base
+        },
+    })
 }
 
 impl Adv<'_> {
@@ -169,7 +209,73 @@ pub(crate) async fn advertise<'a, 'b, C: Controller, const ATT: usize, const CON
 mod tests {
     use rmk_types::ble::BLE_ADV_NAME_MAX_LEN;
 
-    use super::Adv;
+    use super::{Adv, Duration, HOST_LINKS, Instant, ProfileInfo, advertising_request};
+
+    #[test]
+    fn background_disconnect_does_not_advertise_an_already_connected_active_profile() {
+        let now = Instant::from_millis(0);
+        let deadline = Instant::from_millis(300_000);
+        let mut links = [Some(()), Some(()), None];
+        let base = [1, 2, 3, 4, 5, 0xC6];
+        assert!(advertising_request(0, &links, now, deadline, None, base, "RMK").is_none());
+        links[1] = None;
+        assert!(advertising_request(0, &links, now, deadline, None, base, "RMK").is_none());
+        links[0] = None;
+        assert!(advertising_request(0, &links, now, deadline, None, base, "RMK").is_some());
+    }
+
+    #[test]
+    fn advertising_waits_for_capacity_and_captures_the_selected_profile() {
+        let now = Instant::from_millis(0);
+        let deadline = Instant::from_millis(300_000);
+        let mut links = [Some(()), None, None];
+        let base = [1, 2, 3, 4, 5, 0xC6];
+        assert_eq!(
+            advertising_request(1, &links, now, deadline, None, base, "RMK").is_some(),
+            HOST_LINKS > 1,
+        );
+        links[0] = None;
+        let req = advertising_request(1, &links, now, deadline, None, base, "RMK").unwrap();
+        assert_eq!(req.profile, 1);
+        assert_eq!(req.adv, Adv::Host { name: "RMK" });
+        assert_eq!(
+            req.addr,
+            if cfg!(feature = "_ext_adv") {
+                [1, 2, 3, 5, 5, 0xC6]
+            } else {
+                base
+            }
+        );
+        assert!(advertising_request(3, &links, now, deadline, None, base, "RMK").is_none());
+    }
+
+    #[test]
+    fn expired_sessions_stop_reconnect_advertising() {
+        let now = Instant::from_millis(300_000);
+        let links = [None::<()>; 3];
+        let bond = ProfileInfo::default();
+        let base = [1, 2, 3, 4, 5, 0xC6];
+        assert!(advertising_request(0, &links, now, now, Some(&bond), base, "RMK").is_none());
+        let req =
+            advertising_request(0, &links, now, now + Duration::from_secs(300), Some(&bond), base, "RMK").unwrap();
+        assert_eq!(req.adv, Adv::HostReconnect);
+    }
+
+    #[cfg(feature = "dongle")]
+    #[test]
+    fn dongle_profile_uses_its_own_advertising_kind() {
+        use crate::ble::profile::{BOND_SLOTS, DONGLE_PROFILE};
+
+        let links = [None::<()>; BOND_SLOTS];
+        let base = [1, 2, 3, 4, 5, 0xC6];
+        let now = Instant::from_millis(0);
+        let deadline = Instant::from_millis(300_000);
+        let seeking = advertising_request(DONGLE_PROFILE, &links, now, deadline, None, base, "RMK").unwrap();
+        assert_eq!(seeking.adv, Adv::DongleSeeking);
+        let bond = ProfileInfo::default();
+        let directed = advertising_request(DONGLE_PROFILE, &links, now, deadline, Some(&bond), base, "RMK").unwrap();
+        assert_eq!(directed.adv, Adv::Directed(bond.info.identity.addr));
+    }
 
     /// Overrunning the 31-byte legacy advertisement only fails at runtime.
     fn fits(adv: Adv<'_>) -> bool {

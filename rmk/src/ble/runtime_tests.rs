@@ -11,6 +11,8 @@ use embassy_futures::select::{Either3, select3};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::signal::Signal;
+#[cfg(feature = "_ext_adv")]
+use embassy_time::MockDriver;
 use embassy_time::{Duration, Timer, with_timeout};
 use trouble_host::prelude::*;
 
@@ -18,6 +20,8 @@ use super::profile::BleProfileAction;
 use crate::channel::BLE_PROFILE_CHANNEL;
 use crate::config::{BleBatteryConfig, DeviceConfig, StorageConfig};
 use crate::core_traits::Runnable;
+#[cfg(feature = "_ext_adv")]
+use crate::event::{Axis, AxisEvent, AxisValType, PointingEvent, publish_event};
 use crate::storage::{Storage, StorageKey, StorageValue, async_flash_wrapper, read};
 use crate::test_support::{InMemoryFlash, clear_flash_channel, test_block_on};
 
@@ -179,6 +183,7 @@ fn workers_wait_for_disconnection_before_releasing_the_profile() {
         let battery = BleBatteryConfig::disabled();
         let run = super::run_ble_keyboard(
             &stack,
+            base,
             &device,
             &battery,
             #[cfg(feature = "host")]
@@ -209,6 +214,127 @@ fn workers_wait_for_disconnection_before_releasing_the_profile() {
             radio.disconnect(1).await;
             radio.wait_for_advertisements(3).await;
             assert_eq!(stack.connections().count(), 0);
+        };
+        assert!(matches!(
+            select3(run, storage.run(), scenario).await,
+            Either3::Third(())
+        ));
+    });
+}
+
+#[cfg(feature = "_ext_adv")]
+#[test]
+fn runtime_keeps_background_links_and_waits_for_disconnection_before_clearing() {
+    if super::HOST_LINKS < 3 {
+        return;
+    }
+    test_block_on(async {
+        clear_flash_channel();
+        BLE_PROFILE_CHANNEL.clear();
+        super::rng::seed([7; 32]);
+        let radio = Radio {
+            events: Channel::new(),
+            address: Cell::new([0; 6]),
+            extended: Cell::new(false),
+            advertisements: RefCell::new(Vec::new()),
+            disconnects: RefCell::new(Vec::new()),
+            changed: Signal::new(),
+        };
+        let mut resources = HostResources::<DefaultPacketPool, 4, 16, 1, 4>::new();
+        let base = [1, 2, 3, 4, 5, 0xc6];
+        let stack = trouble_host::new(MockController(&radio), &mut resources)
+            .set_random_address(Address::random(base))
+            .build();
+        let flash = async_flash_wrapper(InMemoryFlash::<16_384, 4_096, 1>::new());
+        let mut storage = Box::pin(Storage::new(flash, &StorageConfig::default())).await;
+        let device = DeviceConfig {
+            vid: 1,
+            pid: 1,
+            manufacturer: "RMK",
+            product_name: "RMK",
+            serial_number: heapless::String::new(),
+        };
+        let battery = BleBatteryConfig::disabled();
+        let run = super::run_ble_keyboard(
+            &stack,
+            base,
+            &device,
+            &battery,
+            #[cfg(feature = "host")]
+            None,
+        );
+        let scenario = async {
+            for profile in 0..3 {
+                if profile != 0 {
+                    BLE_PROFILE_CHANNEL.send(BleProfileAction::Switch(profile)).await;
+                }
+                radio.wait_for_advertisements(profile as usize + 1).await;
+                assert_eq!(radio.address.get(), [1, 2, 3, 4 + profile, 5, 0xc6]);
+                radio.connect(profile).await;
+                assert_eq!(stack.connections().count(), profile as usize + 1);
+            }
+            BLE_PROFILE_CHANNEL.send(BleProfileAction::Switch(0)).await;
+            Timer::after_millis(2).await;
+            assert_eq!(radio.advertisements.borrow().len(), 3);
+            assert!(radio.disconnects.borrow().is_empty());
+            radio.disconnect(2).await;
+            Timer::after_millis(2).await;
+            assert_eq!(stack.connections().count(), 2);
+            assert_eq!(radio.advertisements.borrow().len(), 3);
+
+            radio.disconnect(0).await;
+            radio.wait_for_advertisements(4).await;
+            assert_eq!(radio.address.get(), base);
+            MockDriver::get().advance(Duration::from_secs(301));
+            Timer::after_millis(2).await;
+            assert_eq!(stack.connections().count(), 1);
+            assert_eq!(radio.advertisements.borrow().len(), 4);
+
+            radio.disconnect(1).await;
+            // Queue the completion before publishing activity, so completion wins the select.
+            Timer::after_micros(1).await;
+            publish_event(PointingEvent {
+                device_id: 0,
+                axes: [
+                    AxisEvent {
+                        typ: AxisValType::Rel,
+                        axis: Axis::X,
+                        value: 1,
+                    },
+                    AxisEvent {
+                        typ: AxisValType::Rel,
+                        axis: Axis::Y,
+                        value: 0,
+                    },
+                    AxisEvent {
+                        typ: AxisValType::Rel,
+                        axis: Axis::Z,
+                        value: 0,
+                    },
+                ],
+            });
+            radio.wait_for_advertisements(5).await;
+            Timer::after_millis(2).await;
+            assert!(
+                radio.advertisements.borrow()[4..]
+                    .iter()
+                    .all(|address| *address == base)
+            );
+            radio.connect(3).await;
+            let count = radio.advertisements.borrow().len();
+            BLE_PROFILE_CHANNEL.send(BleProfileAction::ClearSlot(0)).await;
+            while radio.disconnects.borrow().is_empty() {
+                radio.changed.wait().await;
+            }
+            assert_eq!(*radio.disconnects.borrow(), [3]);
+            assert_eq!(radio.advertisements.borrow().len(), count);
+            assert!(read(StorageKey::BondInfo(0)).await.unwrap().is_none());
+            radio.disconnect(3).await;
+            radio.wait_for_advertisements(count + 1).await;
+            let Some(StorageValue::BondInfo(info)) = read(StorageKey::BondInfo(0)).await.unwrap() else {
+                panic!("the cleared profile must be persisted");
+            };
+            assert!(info.removed);
         };
         assert!(matches!(
             select3(run, storage.run(), scenario).await,
