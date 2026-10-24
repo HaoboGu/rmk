@@ -41,7 +41,16 @@ async fn main(_s: Spawner) {
     esp_rtos::start(timg0.timer0, peripherals.FROM_CPU_INTR0);
     let _trng_source = TrngSource::new(peripherals.RNG, peripherals.ADC1);
 
-    let connector = BleConnector::new(peripherals.BT, Default::default()).unwrap();
+    let ble_config = if rmk::ble::EXT_ADV_ENABLED {
+        esp_radio::ble::Config::default().with_max_connections(
+            core::cmp::max(2, rmk::ble::CONNECTIONS_MAX)
+                .try_into()
+                .expect("too many BLE controller activities"),
+        )
+    } else {
+        Default::default()
+    };
+    let connector = BleConnector::new(peripherals.BT, ble_config).unwrap();
     let controller: ExternalController<_, 64> = ExternalController::new(connector);
     let central_addr = [0x18, 0xe2, 0x21, 0x80, 0xc0, 0xc7];
 

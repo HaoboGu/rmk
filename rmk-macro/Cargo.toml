@@ -16,6 +16,8 @@ doctest = false
 [features]
 ## Enable hardware watchdog code generation
 watchdog = []
+## Generate controller resources for internal extended-advertising builds.
+_ext_adv = []
 ## Expose the `run_tests!` simulator-scenario macro (rmk test suite only)
 _simulator = ["dep:toml", "dep:serde", "dep:serde_json"]
 ## Base DFU code generation, pulled by `dfu_rp`/`dfu_nrf`

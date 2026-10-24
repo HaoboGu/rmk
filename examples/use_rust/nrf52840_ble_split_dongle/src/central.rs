@@ -74,7 +74,7 @@ fn build_sdc<'d, const N: usize>(
     mpsl: &'d MultiprotocolServiceLayer,
     mem: &'d mut sdc::Mem<N>,
 ) -> Result<nrf_sdc::SoftdeviceController<'d>, nrf_sdc::Error> {
-    sdc::Builder::new()?
+    let builder = sdc::Builder::new()?
         .support_scan()
         .support_central()
         .support_adv()
@@ -85,9 +85,14 @@ fn build_sdc<'d, const N: usize>(
         .support_phy_update_peripheral()
         .support_le_2m_phy()
         .central_count(2)? // The number of peripherals
-        .peripheral_count(1)?
-        .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?
-        .build(p, rng, mpsl, mem)
+        .peripheral_count(rmk::ble::HOST_LINKS as u8)?
+        .buffer_cfg(L2CAP_MTU as u16, L2CAP_MTU as u16, L2CAP_TXQ, L2CAP_RXQ)?;
+    let builder = if rmk::ble::EXT_ADV_ENABLED {
+        builder.support_ext_adv().support_ext_scan().support_ext_central()
+    } else {
+        builder
+    };
+    builder.build(p, rng, mpsl, mem)
 }
 
 /// Initializes the SAADC peripheral in single-ended mode on the given pin.
@@ -140,7 +145,7 @@ async fn main(spawner: Spawner) {
         p.PPI_CH27, p.PPI_CH28, p.PPI_CH29,
     );
     let mut rng = rng::Rng::new(p.RNG, Irqs);
-    let mut sdc_mem = sdc::Mem::<15472>::new();
+    let mut sdc_mem = sdc::Mem::<{ rmk::ble::nrf_sdc_memory_size(15472, 2, L2CAP_MTU, L2CAP_TXQ, L2CAP_RXQ) }>::new();
     let sdc = unwrap!(build_sdc(sdc_p, &mut rng, mpsl, &mut sdc_mem));
 
     // Initialize usb driver
