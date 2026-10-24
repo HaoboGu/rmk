@@ -93,8 +93,8 @@ fn payload<T: serde::de::DeserializeOwned>(json: &str, what: &str) -> T {
     serde_json::from_str(json).unwrap_or_else(|e| panic!("rynk {what} payload `{json}`: {e}"))
 }
 
-// Keep the shared handshake expectations typed so feature-dependent capability
-// fields can be asserted here alongside topic delivery.
+// Connection capacity depends on the feature set, so these handshake cases use
+// Rust expectations while the fixed endpoint payloads stay in TOML scenarios.
 #[cfg(all(feature = "storage", feature = "_ble", feature = "split"))]
 fn expected_capabilities(layers: u8) -> rmk_types::protocol::rynk::DeviceCapabilities {
     rmk_types::protocol::rynk::DeviceCapabilities {
@@ -116,6 +116,11 @@ fn expected_capabilities(layers: u8) -> rmk_types::protocol::rynk::DeviceCapabil
         num_split_peripherals: 1,
         ble_enabled: true,
         num_ble_profiles: 3,
+        max_ble_connections: if cfg!(feature = "_ext_adv") {
+            3 + u8::from(cfg!(feature = "dongle"))
+        } else {
+            1
+        },
         max_payload_size: 482,
         max_bulk_keys: 47,
         max_bulk_items: 7,
@@ -125,7 +130,7 @@ fn expected_capabilities(layers: u8) -> rmk_types::protocol::rynk::DeviceCapabil
 
 #[cfg(all(feature = "storage", feature = "_ble", feature = "split"))]
 #[test]
-fn capabilities_report_the_live_board() {
+fn capabilities_report_the_live_board_and_connection_capacity() {
     test_block_on(async {
         let mut keyboard = SimKeyboard::builder([[[k!(A), k!(No)]]]).build().await;
         keyboard
@@ -190,6 +195,32 @@ fn state_changes_are_pushed_after_the_handshake() {
             keyboard.rynk_publish(topic, payload).rynk_topic(topic, payload);
         }
         keyboard.run().await;
+    });
+}
+
+#[cfg(feature = "_ble")]
+#[test]
+fn background_connection_commands_respect_capacity_and_queue_changes() {
+    test_block_on(async {
+        let mut keyboard = SimKeyboard::builder([[[k!(A)]]]).build().await;
+        let initial = if cfg!(feature = "_ext_adv") { "true" } else { "false" };
+        let enable = if cfg!(feature = "_ext_adv") {
+            RynkReply::Ok("null")
+        } else {
+            RynkReply::Err(RynkError::Invalid)
+        };
+        keyboard
+            .rynk::<command::GetBleBackgroundConnections>("null", RynkReply::Ok(initial))
+            .rynk::<command::SetBleBackgroundConnections>("true", enable)
+            .rynk::<command::SetBleBackgroundConnections>("false", RynkReply::Ok("null"))
+            .run()
+            .await;
+        let expected = if cfg!(feature = "_ext_adv") {
+            vec!["SetBackgroundConnections(true)", "SetBackgroundConnections(false)"]
+        } else {
+            vec!["SetBackgroundConnections(false)"]
+        };
+        assert_eq!(keyboard.ble_profile_actions(), expected);
     });
 }
 
